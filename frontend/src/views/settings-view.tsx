@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Package, Target, Palette, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota } from '@/lib/api-types';
 import { useEffect, useRef } from 'react';
 
@@ -730,6 +731,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
 function CustomizationSection({ factionId }: { factionId: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const updateGlobalBrandColor = useAppStore((s) => s.setBrandColor);
 
   const { data: faction, isLoading } = useQuery({
     queryKey: ['faction-detail', factionId],
@@ -755,7 +757,10 @@ function CustomizationSection({ factionId }: { factionId: string }) {
     mutationFn: () =>
       factionsApi.update(factionId, { brandColor, customFields }),
     onSuccess: () => {
+      // Immediately update the global brand color in the store
+      updateGlobalBrandColor(brandColor);
       queryClient.invalidateQueries({ queryKey: ['faction-detail', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['faction-brand', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       toast({ title: 'Customization saved' });
     },

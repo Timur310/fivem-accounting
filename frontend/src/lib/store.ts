@@ -14,6 +14,8 @@ export type AppView =
   | 'admin-faction-detail'
   | 'reports';
 
+const DEFAULT_BRAND_COLOR = '#3b82f6';
+
 interface AppState {
   // Auth
   user: User | null;
@@ -26,6 +28,10 @@ interface AppState {
   // Selected faction
   selectedFactionId: string | null;
   setSelectedFactionId: (id: string | null) => void;
+
+  // Brand color
+  brandColor: string;
+  setBrandColor: (color: string) => void;
 
   // Admin detail view
   adminDetailFactionId: string | null;
@@ -45,7 +51,10 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentView: (view) => set({ currentView: view }),
 
   selectedFactionId: null,
-  setSelectedFactionId: (id) => set({ selectedFactionId: id }),
+  setSelectedFactionId: (id) => set({ selectedFactionId: id, brandColor: DEFAULT_BRAND_COLOR }),
+
+  brandColor: DEFAULT_BRAND_COLOR,
+  setBrandColor: (color) => set({ brandColor: color }),
 
   adminDetailFactionId: null,
   setAdminDetailFactionId: (id) => set({ adminDetailFactionId: id }),

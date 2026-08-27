@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppStore } from '@/lib/store';
-import { authApi } from '@/lib/api-client';
+import { authApi, factionsApi } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -41,7 +41,8 @@ import { AuditLogsView } from '@/views/audit-logs-view';
 import { ReportsView } from '@/views/reports-view';
 import { AdminFactionsView } from '@/views/admin-factions-view';
 import { AdminFactionDetailView } from '@/views/admin-faction-detail-view';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { AppView } from '@/lib/store';
 
 export function AppShell() {
@@ -50,11 +51,27 @@ export function AppShell() {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const selectedFactionId = useAppStore((s) => s.selectedFactionId);
   const setSelectedFactionId = useAppStore((s) => s.setSelectedFactionId);
+  const brandColor = useAppStore((s) => s.brandColor);
+  const setBrandColor = useAppStore((s) => s.setBrandColor);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setUser = useAppStore((s) => s.setUser);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // Fetch faction detail for brand color on faction switch
+  const { data: factionDetail } = useQuery({
+    queryKey: ['faction-brand', selectedFactionId],
+    queryFn: () => factionsApi.get(selectedFactionId!),
+    enabled: !!selectedFactionId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (factionDetail?.brandColor) {
+      setBrandColor(factionDetail.brandColor);
+    }
+  }, [factionDetail?.brandColor, setBrandColor]);
 
   const router = useRouter();
 
@@ -170,8 +187,15 @@ export function AppShell() {
     }
   };
 
+  // Inject brand color as CSS custom property on the root div
+  const brandStyle = {
+    '--brand-color': brandColor,
+    '--brand-color-light': `${brandColor}20`,
+    '--brand-color-medium': `${brandColor}40`,
+  } as React.CSSProperties;
+
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-background" style={brandStyle}>
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300 lg:relative lg:z-auto ${sidebarOpen ? 'w-64' : 'w-0 lg:w-16'}`}
@@ -180,12 +204,12 @@ export function AppShell() {
         <div className="flex h-16 items-center gap-2 border-b px-4">
           {sidebarOpen && (
             <div className="flex items-center gap-2 overflow-hidden">
-              <Coins className="h-6 w-6 shrink-0 text-primary" />
+              <Coins className="h-6 w-6 shrink-0" style={{ color: brandColor }} />
               <span className="font-bold text-lg truncate">Faction Accountant</span>
             </div>
           )}
           {!sidebarOpen && (
-            <Coins className="h-6 w-6 mx-auto text-primary" />
+            <Coins className="h-6 w-6 mx-auto" style={{ color: brandColor }} />
           )}
         </div>
 
@@ -202,7 +226,7 @@ export function AppShell() {
                   }
                 }}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full border-[var(--brand-color)]/30 focus:ring-[var(--brand-color)]/30">
                   <SelectValue placeholder="Select faction" />
                 </SelectTrigger>
                 <SelectContent>
@@ -211,7 +235,7 @@ export function AppShell() {
                       <span className="flex items-center gap-2">
                         <span>{f.factionName}</span>
                         {f.role === 'admin' && (
-                          <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">Admin</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}>Admin</span>
                         )}
                       </span>
                     </SelectItem>
@@ -242,7 +266,7 @@ export function AppShell() {
                 onClick={() => handleNavClick(item.view)}
                 className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                   active
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-[var(--brand-color)] text-white'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 } ${!sidebarOpen ? 'justify-center' : ''}`}
                 title={!sidebarOpen ? item.label : undefined}

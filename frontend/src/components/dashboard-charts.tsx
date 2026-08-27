@@ -15,6 +15,7 @@ import { chartsApi } from '@/lib/api-client';
 
 interface Props {
   factionId: string;
+  brandColor?: string;
 }
 
 const RANGE_OPTIONS = [
@@ -44,8 +45,20 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function DashboardCharts({ factionId }: Props) {
+export function DashboardCharts({ factionId, brandColor }: Props) {
   const [range, setRange] = useState('30d');
+
+  // Build a palette that starts with the brand color
+  const palette = [
+    brandColor || 'hsl(221, 83%, 53%)',
+    'hsl(142, 71%, 45%)',
+    'hsl(38, 92%, 50%)',
+    'hsl(0, 84%, 60%)',
+    'hsl(262, 83%, 58%)',
+    'hsl(199, 89%, 48%)',
+    'hsl(326, 100%, 74%)',
+    'hsl(47, 96%, 53%)',
+  ];
 
   const { data, isLoading } = useQuery({
     queryKey: ['charts', factionId, range],
@@ -133,7 +146,7 @@ export function DashboardCharts({ factionId }: Props) {
                     formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']}
                     contentStyle={{ borderRadius: '8px', fontSize: '13px' }}
                   />
-                  <Bar dataKey="total" fill="hsl(221, 83%, 53%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="total" fill={palette[0]} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -167,7 +180,7 @@ export function DashboardCharts({ factionId }: Props) {
                     labelLine={{ strokeWidth: 1 }}
                   >
                     {data.itemDistribution.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -212,7 +225,7 @@ export function DashboardCharts({ factionId }: Props) {
                   <Line
                     type="monotone"
                     dataKey="total"
-                    stroke="hsl(221, 83%, 53%)"
+                    stroke={palette[0]}
                     strokeWidth={2}
                     dot={data.range.days <= 30}
                     activeDot={{ r: 5 }}
@@ -243,7 +256,7 @@ export function DashboardCharts({ factionId }: Props) {
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   {itemTypes.map((it, i) => (
-                    <Bar key={it} dataKey={it} stackId="a" fill={COLORS[i % COLORS.length]} />
+                    <Bar key={it} dataKey={it} stackId="a" fill={palette[i % palette.length]} />
                   ))}
                 </BarChart>
               </ResponsiveContainer>

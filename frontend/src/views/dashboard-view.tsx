@@ -17,11 +17,12 @@ interface Props {
 
 export function DashboardView({ factionId }: Props) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const brandColor = useAppStore((s) => s.brandColor);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard', factionId],
     queryFn: () => dashboardApi.get(factionId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     refetchOnWindowFocus: true,
   });
 
@@ -29,7 +30,7 @@ export function DashboardView({ factionId }: Props) {
   const { data: quotasList = [] } = useQuery({
     queryKey: ['quotas', factionId],
     queryFn: () => quotasApi.list(factionId),
-    staleTime: 60 * 1000,
+    staleTime: 0,
   });
 
   if (isLoading) {
@@ -151,8 +152,8 @@ export function DashboardView({ factionId }: Props) {
                     </div>
                     <div className="h-3 bg-muted rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${met ? 'bg-green-500' : 'bg-primary'}`}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
+                        className={`h-full rounded-full transition-all ${met ? 'bg-green-500' : ''}`}
+                        style={{ width: `${Math.min(pct, 100)}%`, ...(!met ? { backgroundColor: brandColor } : {}) }}
                       />
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
@@ -273,8 +274,8 @@ export function DashboardView({ factionId }: Props) {
             <CardTitle className="flex items-center justify-between text-base">
               <span>Recent Activity</span>
               <Badge
-                variant="outline"
                 className="cursor-pointer"
+                style={{ backgroundColor: `${brandColor}15`, color: brandColor, borderColor: `${brandColor}30` }}
                 onClick={() => setCurrentView('entries')}
               >
                 View All
@@ -320,7 +321,7 @@ export function DashboardView({ factionId }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <DashboardCharts factionId={factionId} />
+          <DashboardCharts factionId={factionId} brandColor={brandColor} />
         </CardContent>
       </Card>
     </div>

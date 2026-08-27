@@ -115,6 +115,7 @@ export interface Entry {
   entryDate: string;
   createdAt: string;
   updatedAt: string | null;
+  customValues: Record<string, string> | null;
   userId: string;
   username: string;
   avatarUrl: string | null;
@@ -127,12 +128,14 @@ export interface CreateEntryInput {
   amount: string;
   description?: string;
   entryDate?: string;
+  customValues?: Record<string, string>;
 }
 
 export interface UpdateEntryInput {
   amount?: string;
   description?: string | null;
   entryDate?: string;
+  customValues?: Record<string, string>;
 }
 
 // ── Dashboard ──

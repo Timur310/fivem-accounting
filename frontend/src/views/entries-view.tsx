@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { entriesApi, itemTypesApi, exportApi } from '@/lib/api-client';
+import { entriesApi, itemTypesApi, exportApi, factionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -77,12 +77,21 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [searchInput]);
 
+  // Fetch faction detail for custom fields definition
+  const { data: factionDetail } = useQuery({
+    queryKey: ['faction-detail', factionId],
+    queryFn: () => factionsApi.get(factionId),
+    staleTime: 30 * 1000,
+  });
+  const customFields = factionDetail?.customFields ?? [];
+
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [newItemTypeId, setNewItemTypeId] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newCustomValues, setNewCustomValues] = useState<Record<string, string>>({});
 
   // Edit dialog
   const [editOpen, setEditOpen] = useState(false);
@@ -90,6 +99,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
   const [editAmount, setEditAmount] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [editCustomValues, setEditCustomValues] = useState<Record<string, string>>({});
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -107,7 +117,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
         date_to: dateTo || undefined,
         search: searchQuery || undefined,
       }),
-    staleTime: 30 * 1000,
+    staleTime: 0,
   });
 
   // Fetch item types for filter + form
@@ -127,10 +137,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
         amount: newAmount,
         description: newDescription || undefined,
         entryDate: newDate || undefined,
+        customValues: Object.keys(newCustomValues).length > 0 ? newCustomValues : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
       setCreateOpen(false);
       resetCreateForm();
       toast({ title: 'Entry logged successfully' });
@@ -151,10 +164,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
         amount: editAmount,
         description: editDescription || null,
         entryDate: editDate || undefined,
+        customValues: editCustomValues,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
       setEditOpen(false);
       toast({ title: 'Entry updated' });
     },
@@ -173,6 +189,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
       setDeleteOpen(false);
       toast({ title: 'Entry deleted' });
     },
@@ -190,6 +208,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
     setNewAmount('');
     setNewDescription('');
     setNewDate(new Date().toISOString().split('T')[0]);
+    setNewCustomValues({});
   };
 
   const openEditDialog = (entry: any) => {
@@ -197,6 +216,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
     setEditAmount(entry.amount);
     setEditDescription(entry.description || '');
     setEditDate(entry.entryDate);
+    setEditCustomValues(entry.customValues ?? {});
     setEditOpen(true);
   };
 
@@ -308,6 +328,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                       <TableHead>Item Type</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Description</TableHead>
+                      {customFields.length > 0 && <TableHead>Custom</TableHead>}
                       <TableHead>Date</TableHead>
                       {isAdmin && <TableHead className="w-[100px]">Actions</TableHead>}
                     </TableRow>
@@ -335,6 +356,21 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                         <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm">
                           {entry.description || '—'}
                         </TableCell>
+                        {customFields.length > 0 && (
+                          <TableCell className="max-w-[180px]">
+                            {entry.customValues && Object.keys(entry.customValues).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {Object.entries(entry.customValues).map(([k, v]) => (
+                                  <span key={k} className="text-xs bg-muted px-1.5 py-0.5 rounded" title={`${k}: ${v}`}>
+                                    {v.length > 15 ? v.slice(0, 15) + '...' : v}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell className="text-sm text-muted-foreground">{entry.entryDate}</TableCell>
                         {isAdmin && (
                           <TableCell>
@@ -433,12 +469,36 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                 rows={2}
               />
             </div>
+            {customFields.length > 0 && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Custom Fields</Label>
+                {customFields.map((field) => (
+                  <div key={field.name} className="space-y-1">
+                    <Label className="text-xs">
+                      {field.name}
+                      {field.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    <Input
+                      placeholder={field.required ? `Required` : `Optional`}
+                      value={newCustomValues[field.name] ?? ''}
+                      onChange={(e) =>
+                        setNewCustomValues((prev) => ({ ...prev, [field.name]: e.target.value }))
+                      }
+                      maxLength={500}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               onClick={() => createMutation.mutate()}
-              disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending}
+              disabled={
+                !newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending ||
+                customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())
+              }
             >
               {createMutation.isPending ? 'Logging...' : 'Log Entry'}
             </Button>
@@ -481,6 +541,26 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                 rows={2}
               />
             </div>
+            {customFields.length > 0 && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Custom Fields</Label>
+                {customFields.map((field) => (
+                  <div key={field.name} className="space-y-1">
+                    <Label className="text-xs">
+                      {field.name}
+                      {field.required && <span className="text-destructive ml-1">*</span>}
+                    </Label>
+                    <Input
+                      value={editCustomValues[field.name] ?? ''}
+                      onChange={(e) =>
+                        setEditCustomValues((prev) => ({ ...prev, [field.name]: e.target.value }))
+                      }
+                      maxLength={500}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>

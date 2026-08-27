@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { entries, itemTypes, users } from '../db/schema.js';
+import { entries, itemTypes, users, factions } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
@@ -24,6 +24,7 @@ const createEntrySchema = z.object({
   ),
   description: z.string().max(500).optional(),
   entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  customValues: z.record(z.string(), z.string().max(500)).optional(),
 });
 
 const updateEntrySchema = z.object({
@@ -33,6 +34,7 @@ const updateEntrySchema = z.object({
   ).optional(),
   description: z.string().max(500).nullable().optional(),
   entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  customValues: z.record(z.string(), z.string().max(500)).optional(),
 });
 
 const listEntriesQuerySchema = z.object({
@@ -62,7 +64,47 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const factionId = req.params.id as string;
-  const { itemTypeId, amount, description, entryDate } = parsed.data;
+  const { itemTypeId, amount, description, entryDate, customValues } = parsed.data;
+
+  // Validate custom fields against faction definition
+  let validatedCustomValues: Record<string, string> | null = null;
+  if (customValues && Object.keys(customValues).length > 0) {
+    const [faction] = await db
+      .select({ customFields: factions.customFields })
+      .from(factions)
+      .where(eq(factions.id, factionId))
+      .limit(1);
+    const fields = faction?.customFields ?? [];
+    const fieldNames = new Set(fields.map((f: { name: string }) => f.name));
+    // Only keep values that match defined custom fields
+    const filtered: Record<string, string> = {};
+    for (const [key, val] of Object.entries(customValues)) {
+      if (fieldNames.has(key) && val.trim()) {
+        filtered[key] = val.trim();
+      }
+    }
+    // Check required fields are present
+    for (const f of fields) {
+      if (f.required && !filtered[f.name]) {
+        error(res, 'VALIDATION_ERROR', `Required custom field "${f.name}" is missing`);
+        return;
+      }
+    }
+    validatedCustomValues = Object.keys(filtered).length > 0 ? filtered : null;
+  } else {
+    // Check if there are required custom fields with no values provided
+    const [faction] = await db
+      .select({ customFields: factions.customFields })
+      .from(factions)
+      .where(eq(factions.id, factionId))
+      .limit(1);
+    const requiredFields = (faction?.customFields ?? []).filter((f: { required: boolean }) => f.required);
+    if (requiredFields.length > 0) {
+      const missing = requiredFields.map((f: { name: string }) => f.name).join(', ');
+      error(res, 'VALIDATION_ERROR', `Required custom fields: ${missing}`);
+      return;
+    }
+  }
 
   // Validate item type belongs to this faction and is active
   const [itemType] = await db
@@ -97,6 +139,7 @@ router.post('/', async (req: Request, res: Response) => {
       amount: amount,
       description: description ?? null,
       entryDate: entryDate ?? new Date().toISOString().split('T')[0],
+      customValues: validatedCustomValues,
     })
     .returning();
 
@@ -111,7 +154,7 @@ router.post('/', async (req: Request, res: Response) => {
     action: 'create',
     entityType: 'entry',
     entityId: entry.id,
-    details: { itemTypeId, amount: Number(amount), description, entryDate },
+    details: { itemTypeId, amount: Number(amount), description, entryDate, customValues: validatedCustomValues },
     req,
   });
 
@@ -150,6 +193,7 @@ router.get('/', async (req: Request, res: Response) => {
         entryDate: entries.entryDate,
         createdAt: entries.createdAt,
         updatedAt: entries.updatedAt,
+        customValues: entries.customValues,
         userId: entries.userId,
         username: users.username,
         avatarUrl: users.avatarUrl,
@@ -198,6 +242,29 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
   if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.entryDate !== undefined) updates.entryDate = parsed.data.entryDate;
+  if (parsed.data.customValues !== undefined) {
+    // Validate custom values against faction definition
+    const [faction] = await db
+      .select({ customFields: factions.customFields })
+      .from(factions)
+      .where(eq(factions.id, factionId))
+      .limit(1);
+    const fields = faction?.customFields ?? [];
+    const fieldNames = new Set(fields.map((f: { name: string }) => f.name));
+    const filtered: Record<string, string> = {};
+    for (const [key, val] of Object.entries(parsed.data.customValues)) {
+      if (fieldNames.has(key) && val.trim()) {
+        filtered[key] = val.trim();
+      }
+    }
+    for (const f of fields) {
+      if (f.required && !filtered[f.name]) {
+        error(res, 'VALIDATION_ERROR', `Required custom field "${f.name}" is missing`);
+        return;
+      }
+    }
+    updates.customValues = Object.keys(filtered).length > 0 ? filtered : null;
+  }
 
   const [updated] = await db
     .update(entries)
@@ -212,7 +279,7 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
     entityType: 'entry',
     entityId: entryId,
     details: {
-      before: { amount: existing.amount, description: existing.description, entryDate: existing.entryDate },
+      before: { amount: existing.amount, description: existing.description, entryDate: existing.entryDate, customValues: existing.customValues },
       after: updates,
     },
     req,
