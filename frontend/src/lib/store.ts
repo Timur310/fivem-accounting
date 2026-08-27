@@ -11,7 +11,8 @@ export type AppView =
   | 'settings'
   | 'audit-logs'
   | 'admin-factions'
-  | 'admin-faction-detail';
+  | 'admin-faction-detail'
+  | 'reports';
 
 interface AppState {
   // Auth

@@ -25,6 +25,11 @@ const updateFactionSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
+  brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  customFields: z.array(z.object({
+    name: z.string().min(1).max(100),
+    required: z.boolean(),
+  })).optional(),
 });
 
 const listQuerySchema = z.object({
@@ -211,6 +216,15 @@ router.patch('/:id', async (req: Request, res: Response) => {
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
+  if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
+  if (parsed.data.customFields !== undefined) {
+    const names = parsed.data.customFields.map((f) => f.name);
+    if (new Set(names).size !== names.length) {
+      error(res, 'VALIDATION_ERROR', 'Custom field names must be unique');
+      return;
+    }
+    updates.customFields = parsed.data.customFields;
+  }
 
   const [updated] = await db
     .update(factions)

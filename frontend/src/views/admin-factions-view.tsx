@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { factionsApi } from '@/lib/api-client';
+import { factionsApi, adminAnalyticsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Eye, Search, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Search, Shield, ChevronLeft, ChevronRight, BarChart3, TrendingUp, Users, List } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import type { Faction } from '@/lib/api-types';
@@ -56,6 +56,13 @@ export function AdminFactionsView() {
     queryFn: () =>
       factionsApi.list({ page, page_size: 20, search: search || undefined }),
     staleTime: 30 * 1000,
+  });
+
+  // Superadmin analytics
+  const { data: analytics } = useQuery({
+    queryKey: ['admin-analytics'],
+    queryFn: () => adminAnalyticsApi.get(),
+    staleTime: 2 * 60 * 1000,
   });
 
   const factions = factionsData?.data ?? [];
@@ -155,6 +162,54 @@ export function AdminFactionsView() {
           Create Faction
         </Button>
       </div>
+
+      {/* System Analytics Overview */}
+      {analytics && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Shield className="h-3.5 w-3.5" /> Factions
+              </div>
+              <p className="text-2xl font-bold mt-1">{analytics.overview.totalFactions}</p>
+              <p className="text-xs text-muted-foreground">{analytics.overview.activeFactions} active</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Users className="h-3.5 w-3.5" /> Users
+              </div>
+              <p className="text-2xl font-bold mt-1">{analytics.overview.totalUsers}</p>
+              <p className="text-xs text-muted-foreground">{analytics.overview.totalMemberships} memberships</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <List className="h-3.5 w-3.5" /> Total Entries
+              </div>
+              <p className="text-2xl font-bold mt-1">{analytics.overview.totalEntries.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">{analytics.overview.entriesLast7d} last 7d &middot; {analytics.overview.entriesLast30d} last 30d</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <BarChart3 className="h-3.5 w-3.5" /> Top Faction
+              </div>
+              {analytics.topFactionsByAmount.length > 0 ? (
+                <>
+                  <p className="text-sm font-bold mt-1 truncate">{analytics.topFactionsByAmount[0].name}</p>
+                  <p className="text-xs text-muted-foreground">{analytics.topFactionsByAmount[0].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} total</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-1">No data yet</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

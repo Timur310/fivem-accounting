@@ -44,6 +44,8 @@ export interface Faction {
   id: string;
   name: string;
   description: string | null;
+  brandColor: string | null;
+  customFields: { name: string; required: boolean }[] | null;
   isActive: boolean;
   createdAt: string;
   memberCount: number;
@@ -65,6 +67,8 @@ export interface UpdateFactionInput {
   name?: string;
   description?: string | null;
   isActive?: boolean;
+  brandColor?: string;
+  customFields?: { name: string; required: boolean }[];
 }
 
 // ── Members ──
@@ -247,4 +251,107 @@ export interface ChartData {
     unit: string;
     total: number;
   }[];
+}
+
+// ── Admin Analytics ─────────────────────────────────
+
+export interface AdminAnalytics {
+  overview: {
+    totalFactions: number;
+    activeFactions: number;
+    totalUsers: number;
+    totalEntries: number;
+    entriesLast7d: number;
+    entriesLast30d: number;
+    totalMemberships: number;
+    activeQuotas: number;
+  };
+  recentSignups: {
+    id: string;
+    username: string;
+    avatarUrl: string | null;
+    role: string;
+    createdAt: string;
+  }[];
+  factionStats: {
+    factionId: string;
+    name: string;
+    isActive: boolean;
+    memberCount: number;
+    entryCount: number;
+    totalAmount: number;
+    itemTypeCount: number;
+  }[];
+  topFactionsByAmount: {
+    factionId: string;
+    name: string;
+    totalAmount: number;
+  }[];
+  dailySignupsTrend: { date: string; count: number; total: number }[];
+  dailyEntriesTrend: { date: string; count: number; total: number }[];
+}
+
+// ── Reports ──────────────────────────────────────────
+
+export interface ReportSummary {
+  period: string;
+  from: string;
+  to: string;
+  overview: {
+    totalAmount: number;
+    entryCount: number;
+    uniqueMembers: number;
+    avgPerEntry: number;
+  };
+  byType: {
+    itemTypeName: string;
+    unit: string;
+    total: number;
+    count: number;
+    avg: number;
+    max: number;
+  }[];
+  memberRanking: {
+    username: string;
+    avatarUrl: string | null;
+    total: number;
+    count: number;
+    avg: number;
+  }[];
+  dailyBreakdown: {
+    date: string;
+    total: number;
+    count: number;
+  }[];
+}
+
+export interface ReportComparison {
+  periodA: { label: string; from: string; to: string; total: number; count: number; members: number; byType: { itemTypeName: string; total: number; count: number }[] };
+  periodB: { label: string; from: string; to: string; total: number; count: number; members: number; byType: { itemTypeName: string; total: number; count: number }[] };
+  deltas: {
+    totalAmount: number;
+    totalAmountPercent: number;
+    entryCount: number;
+    memberActivity: number;
+  };
+}
+
+// ── Bulk Operations ───────────────────────────────────
+
+export interface BulkAddResult {
+  added: number;
+  skipped: {
+    notFound: string[];
+    alreadyMembers: number;
+  };
+}
+
+export interface BulkDeleteResult {
+  deletedCount: number;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
 }

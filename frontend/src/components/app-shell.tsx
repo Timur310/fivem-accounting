@@ -31,12 +31,14 @@ import {
   LogOut,
   ChevronLeft,
   Coins,
+  FileBarChart,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
 import { MembersView } from '@/views/members-view';
 import { SettingsView } from '@/views/settings-view';
 import { AuditLogsView } from '@/views/audit-logs-view';
+import { ReportsView } from '@/views/reports-view';
 import { AdminFactionsView } from '@/views/admin-factions-view';
 import { AdminFactionDetailView } from '@/views/admin-faction-detail-view';
 import { useState } from 'react';
@@ -107,6 +109,12 @@ export function AppShell() {
       adminOnly: true,
     },
     {
+      view: 'reports' as const,
+      label: 'Reports',
+      icon: FileBarChart,
+      adminOnly: true,
+    },
+    {
       view: 'admin-factions' as const,
       label: 'Faction Admin',
       icon: Shield,
@@ -151,6 +159,8 @@ export function AppShell() {
         return selectedFactionId ? <SettingsView factionId={selectedFactionId} /> : null;
       case 'audit-logs':
         return selectedFactionId ? <AuditLogsView factionId={selectedFactionId} /> : null;
+      case 'reports':
+        return selectedFactionId ? <ReportsView factionId={selectedFactionId} /> : null;
       case 'admin-factions':
         return <AdminFactionsView />;
       case 'admin-faction-detail':

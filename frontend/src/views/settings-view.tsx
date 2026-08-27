@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemTypesApi, quotasApi } from '@/lib/api-client';
+import { itemTypesApi, quotasApi, factionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,15 +23,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ItemType, Quota } from '@/lib/api-types';
+import { useEffect, useRef } from 'react';
 
 interface Props {
   factionId: string;
 }
 
-type SettingsTab = 'item-types' | 'quotas';
+type SettingsTab = 'item-types' | 'quotas' | 'customization';
 
 export function SettingsView({ factionId }: Props) {
   const queryClient = useQueryClient();
@@ -56,10 +57,18 @@ export function SettingsView({ factionId }: Props) {
           <Target className="mr-2 h-4 w-4" />
           Quotas
         </Button>
+        <Button
+          variant={activeTab === 'customization' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('customization')}
+        >
+          <Palette className="mr-2 h-4 w-4" />
+          Customization
+        </Button>
       </div>
 
       {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} />}
       {activeTab === 'quotas' && <QuotasSection factionId={factionId} />}
+      {activeTab === 'customization' && <CustomizationSection factionId={factionId} />}
     </div>
   );
 }
@@ -711,5 +720,159 @@ function QuotasSection({ factionId }: { factionId: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// Customization Section
+// ══════════════════════════════════════════════════════
+
+function CustomizationSection({ factionId }: { factionId: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: faction, isLoading } = useQuery({
+    queryKey: ['faction-detail', factionId],
+    queryFn: () => factionsApi.get(factionId),
+    staleTime: 30 * 1000,
+  });
+
+  const [brandColor, setBrandColor] = useState('#3b82f6');
+  const [customFields, setCustomFields] = useState<{ name: string; required: boolean }[]>([]);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (faction && !initialized.current) {
+      setBrandColor(faction.brandColor ?? '#3b82f6');
+      setCustomFields(faction.customFields ?? []);
+      initialized.current = true;
+    }
+  }, [faction]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      factionsApi.update(factionId, { brandColor, customFields }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['faction-detail', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
+      toast({ title: 'Customization saved' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Save failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    },
+  });
+
+  const addField = () => {
+    const name = newFieldName.trim();
+    if (!name) return;
+    if (customFields.some((f) => f.name.toLowerCase() === name.toLowerCase())) {
+      toast({ title: 'Field name already exists', variant: 'destructive' });
+      return;
+    }
+    setCustomFields([...customFields, { name, required: false }]);
+    setNewFieldName('');
+  };
+
+  const removeField = (idx: number) => {
+    setCustomFields(customFields.filter((_, i) => i !== idx));
+  };
+
+  const toggleRequired = (idx: number) => {
+    setCustomFields(customFields.map((f, i) => i === idx ? { ...f, required: !f.required } : f));
+  };
+
+  const handleSave = () => {
+    setSaving(true);
+    saveMutation.mutate(undefined, { onSettled: () => setSaving(false) });
+  };
+
+  if (isLoading) {
+    return <div className="p-6 space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Brand Color</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Set an accent color for this faction. Used for visual differentiation.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={brandColor}
+              onChange={(e) => setBrandColor(e.target.value)}
+              className="h-10 w-14 rounded cursor-pointer border"
+            />
+            <Input
+              value={brandColor}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (/^#[0-9a-fA-F]{6}$/.test(v)) setBrandColor(v);
+              }}
+              className="w-32"
+              maxLength={7}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Custom Entry Fields</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Define extra fields members fill when logging entries.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Field name (e.g. Location)"
+              value={newFieldName}
+              onChange={(e) => setNewFieldName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addField()}
+              className="flex-1"
+              maxLength={100}
+            />
+            <Button variant="outline" onClick={addField} disabled={!newFieldName.trim()}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          {customFields.length > 0 && (
+            <div className="space-y-2">
+              {customFields.map((field, idx) => (
+                <div key={idx} className="flex items-center gap-3 rounded-lg border p-3">
+                  <span className="flex-1 text-sm font-medium">{field.name}</span>
+                  <label className="flex items-center gap-2 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={() => toggleRequired(idx)}
+                      className="h-3.5 w-3.5 rounded"
+                    />
+                    Required
+                  </label>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeField(idx)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          {customFields.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No custom fields defined.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Button onClick={handleSave} disabled={saving || saveMutation.isPending}>
+        {saving ? 'Saving...' : 'Save Changes'}
+      </Button>
+    </div>
   );
 }

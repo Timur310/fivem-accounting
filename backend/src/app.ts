@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import { env } from './lib/env.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { readRateLimit, mutationRateLimit } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.js';
 import factionRoutes from './routes/factions.js';
 import memberRoutes from './routes/members.js';
@@ -13,6 +14,9 @@ import auditLogRoutes from './routes/auditLogs.js';
 import quotaRoutes from './routes/quotas.js';
 import chartRoutes from './routes/charts.js';
 import exportRoutes from './routes/export.js';
+import adminAnalyticsRoutes from './routes/adminAnalytics.js';
+import bulkRoutes from './routes/bulk.js';
+import reportRoutes from './routes/reports.js';
 
 const app = express();
 
@@ -40,6 +44,9 @@ app.use((req, _res, next) => {
 // Trust proxy for correct IP behind Caddy
 app.set('trust proxy', 1);
 
+// ── Rate limiting (applied globally) ─────────────────
+app.use('/api/v1', readRateLimit);
+
 // ── Health check ──────────────────────────────────────
 
 app.get('/api/v1/health', (_req, res) => {
@@ -50,6 +57,7 @@ app.get('/api/v1/health', (_req, res) => {
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/factions', factionRoutes);
+app.use('/api/v1/admin/analytics', adminAnalyticsRoutes);
 
 // Faction-scoped routes (nested under /factions/:id/...)
 app.use('/api/v1/factions/:id/members', memberRoutes);
@@ -60,6 +68,8 @@ app.use('/api/v1/factions/:id/audit-logs', auditLogRoutes);
 app.use('/api/v1/factions/:id/quotas', quotaRoutes);
 app.use('/api/v1/factions/:id/charts', chartRoutes);
 app.use('/api/v1/factions/:id/export', exportRoutes);
+app.use('/api/v1/factions/:id/reports', reportRoutes);
+app.use('/api/v1/factions/:id/bulk', bulkRoutes);
 
 // ── 404 handler ───────────────────────────────────────
 

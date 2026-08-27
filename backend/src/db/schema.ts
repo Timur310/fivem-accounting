@@ -36,12 +36,14 @@ export type NewUser = typeof users.$inferInsert;
 
 // ── factions ───────────────────────────────────────────
 export const factions = pgTable('factions', {
-  id:          uuid('id').defaultRandom().primaryKey(),
-  name:        varchar('name', { length: 100 }).notNull().unique(),
-  description: text('description'),
-  createdBy:   uuid('created_by').notNull().references(() => users.id),
-  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  isActive:    boolean('is_active').notNull().default(true),
+  id:           uuid('id').defaultRandom().primaryKey(),
+  name:         varchar('name', { length: 100 }).notNull().unique(),
+  description:  text('description'),
+  brandColor:   varchar('brand_color', { length: 7 }),
+  customFields: jsonb('custom_fields').$type<{ name: string; required: boolean }[]>(),
+  createdBy:    uuid('created_by').notNull().references(() => users.id),
+  createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  isActive:     boolean('is_active').notNull().default(true),
 });
 
 export const factionsRelations = relations(factions, ({ one, many }) => ({
@@ -101,7 +103,8 @@ export const entries = pgTable('entries', {
   userId:     uuid('user_id').notNull().references(() => users.id),
   itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id),
   amount:     decimal('amount', { precision: 15, scale: 2 }).notNull(),
-  description: text('description'),
+  description:  text('description'),
+  customValues: jsonb('custom_values').$type<Record<string, string>>(),
   entryDate:  date('entry_date').notNull().defaultNow(),
   createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp('updated_at', { withTimezone: true }),

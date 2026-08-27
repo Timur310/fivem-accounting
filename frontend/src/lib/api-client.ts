@@ -22,6 +22,12 @@ import type {
   CreateQuotaInput,
   UpdateQuotaInput,
   ChartData,
+  AdminAnalytics,
+  ReportSummary,
+  ReportComparison,
+  BulkAddResult,
+  BulkDeleteResult,
+  CsvImportResult,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -237,6 +243,50 @@ export const exportApi = {
 
   quotaReportUrl: (factionId: string) =>
     `${API_BASE}/api/v1/factions/${factionId}/export/quota-report`,
+};
+
+// ── Admin Analytics ──
+
+export const adminAnalyticsApi = {
+  get: () =>
+    api.get<ApiSuccessResponse<AdminAnalytics>>('/admin/analytics').then(unwrap),
+};
+
+// ── Reports ──
+
+export const reportsApi = {
+  summary: (factionId: string, period?: string) =>
+    api
+      .get<ApiSuccessResponse<ReportSummary>>(`/factions/${factionId}/reports/summary`, {
+        params: period ? { period } : undefined,
+      })
+      .then(unwrap),
+
+  comparison: (factionId: string, periodA?: string, periodB?: string) =>
+    api
+      .get<ApiSuccessResponse<ReportComparison>>(`/factions/${factionId}/reports/comparison`, {
+        params: { period_a: periodA, period_b: periodB },
+      })
+      .then(unwrap),
+};
+
+// ── Bulk Operations ──
+
+export const bulkApi = {
+  addMembers: (factionId: string, discordIds: string[]) =>
+    api
+      .post<ApiSuccessResponse<BulkAddResult>>(`/factions/${factionId}/bulk/members`, { discordIds })
+      .then(unwrap),
+
+  deleteEntries: (factionId: string, entryIds: string[]) =>
+    api
+      .post<ApiSuccessResponse<BulkDeleteResult>>(`/factions/${factionId}/bulk/entries/bulk-delete`, { entryIds })
+      .then(unwrap),
+
+  importCsv: (factionId: string, csv: string) =>
+    api
+      .post<ApiSuccessResponse<CsvImportResult>>(`/factions/${factionId}/bulk/entries/import`, { csv })
+      .then(unwrap),
 };
 
 export { api };
