@@ -4,6 +4,7 @@ import { factions, users, entries, factionMembers, itemTypes, quotas, auditLogs 
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
+import { toDateString } from '../lib/date.js';
 
 const router = Router();
 
@@ -14,11 +15,11 @@ router.get('/', async (_req: Request, res: Response) => {
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  const thirtyDaysAgoStr = toDateString(thirtyDaysAgo);
 
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+  const sevenDaysAgoStr = toDateString(sevenDaysAgo);
 
   const [
     totalFactions,
@@ -131,9 +132,9 @@ router.get('/', async (_req: Request, res: Response) => {
     const map = new Map(data.map((d) => [d.date, d]));
     const filled: { date: string; count: number; total: number }[] = [];
     const cursor = new Date(thirtyDaysAgoStr + 'T00:00:00');
-    const end = new Date(now.toISOString().split('T')[0] + 'T00:00:00');
+    const end = new Date(toDateString(now) + 'T00:00:00');
     while (cursor <= end) {
-      const ds = cursor.toISOString().split('T')[0];
+      const ds = toDateString(cursor);
       const existing = map.get(ds);
       filled.push({
         date: ds,

@@ -65,7 +65,7 @@ export function rateLimit(opts: RateLimitOptions = {}) {
 
     if (entry.timestamps.length >= maxRequests) {
       const retryAfter = Math.ceil(
-        (entry.timestamps[0] + windowMs - now) / 1000,
+        ((entry.timestamps[0] ?? now) + windowMs - now) / 1000,
       );
       res.setHeader('Retry-After', String(retryAfter));
       error(res, 'RATE_LIMITED', message, 429);

@@ -7,6 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { todayDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -171,7 +172,7 @@ router.post('/entries/import', async (req: Request, res: Response) => {
   }
 
   // Parse header to find columns
-  const header = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
+  const header = parseCSVLine(lines[0] ?? '').map((h) => h.trim().toLowerCase());
   const itemTypeIdx = header.findIndex((h) => h.includes('item type') || h.includes('item_type'));
   const amountIdx = header.findIndex((h) => h === 'amount');
   const dateIdx = header.findIndex((h) => h === 'date' || h === 'entry_date' || h.includes('entry date'));
@@ -187,12 +188,12 @@ router.post('/entries/import', async (req: Request, res: Response) => {
   const rows: { factionId: string; userId: string; itemTypeId: string; amount: string; description: string | null; entryDate: string }[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = parseCSVLine(lines[i]);
+    const cols = parseCSVLine(lines[i] ?? '');
     if (cols.length < 2) continue;
 
     const itemTypeName = (cols[itemTypeIdx] || '').trim().toLowerCase();
     const amountStr = (cols[amountIdx] || '').trim().replace(/[^0-9.]/g, '');
-    const dateVal = dateIdx >= 0 ? (cols[dateIdx] || '').trim() : new Date().toISOString().split('T')[0];
+    const dateVal = dateIdx >= 0 ? (cols[dateIdx] || '').trim() : todayDateString();
     const desc = descIdx >= 0 ? (cols[descIdx] || '').trim() : null;
     const memberName = usernameIdx >= 0 ? (cols[usernameIdx] || '').trim() : null;
 

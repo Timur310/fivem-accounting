@@ -5,6 +5,7 @@ import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
+import { toDateString, todayDateString, formatDateValue } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -69,7 +70,7 @@ router.get('/entries', async (req: Request, res: Response) => {
     .where(where)
     .orderBy(desc(entries.entryDate));
 
-  setCsvHeaders(res, `entries-${factionId.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.csv`);
+  setCsvHeaders(res, `entries-${factionId.slice(0, 8)}-${todayDateString()}.csv`);
 
   // Write header
   res.write('Member,Item Type,Amount,Description,Entry Date,Created At\n');
@@ -77,7 +78,7 @@ router.get('/entries', async (req: Request, res: Response) => {
   // Write rows
   for (const row of rows) {
     res.write(
-      `${csvEscape(row.username)},${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.amount).toFixed(2))},${csvEscape(row.description)},${csvEscape(row.entryDate)},${csvEscape(row.createdAt?.toISOString?.split('T')[0] ?? '')}\n`,
+      `${csvEscape(row.username)},${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.amount).toFixed(2))},${csvEscape(row.description)},${csvEscape(row.entryDate)},${csvEscape(formatDateValue(row.createdAt))}\n`,
     );
   }
 
@@ -111,7 +112,7 @@ router.get('/quota-report', async (req: Request, res: Response) => {
     itemUnit: string;
     targetAmount: string;
     periodType: string;
-    periodStart: Date;
+    periodStart: string;
     isActive: boolean;
     currentAmount: number;
     percentage: number;
@@ -174,14 +175,14 @@ router.get('/quota-report', async (req: Request, res: Response) => {
     });
   }
 
-  setCsvHeaders(res, `quota-report-${factionId.slice(0, 8)}-${new Date().toISOString().split('T')[0]}.csv`);
+  setCsvHeaders(res, `quota-report-${factionId.slice(0, 8)}-${todayDateString()}.csv`);
 
   res.write('Item Type,Target,Current,Percentage,Period Type,Period Start,Current Period Start,Current Period End,Status\n');
 
   for (const row of reportRows) {
     const status = !row.isActive ? 'Inactive' : row.percentage >= 100 ? 'Met' : 'In Progress';
     res.write(
-      `${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.targetAmount).toFixed(2))},${csvEscape(row.itemUnit + row.currentAmount.toFixed(2))},${row.percentage.toFixed(1)}%,${row.periodType},${csvEscape(row.periodStart?.toISOString?.split('T')[0] ?? '')},${csvEscape(row.periodRangeStart)},${csvEscape(row.periodRangeEnd)},${status}\n`,
+      `${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.targetAmount).toFixed(2))},${csvEscape(row.itemUnit + row.currentAmount.toFixed(2))},${row.percentage.toFixed(1)}%,${row.periodType},${csvEscape(formatDateValue(row.periodStart))},${csvEscape(row.periodRangeStart)},${csvEscape(row.periodRangeEnd)},${status}\n`,
     );
   }
 
@@ -201,8 +202,8 @@ function getPeriodRange(periodType: string, referenceDate: Date): { start: strin
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
     return {
-      start: monday.toISOString().split('T')[0],
-      end: sunday.toISOString().split('T')[0],
+      start: toDateString(monday),
+      end: toDateString(sunday),
     };
   }
 
@@ -211,8 +212,8 @@ function getPeriodRange(periodType: string, referenceDate: Date): { start: strin
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   return {
-    start: firstDay.toISOString().split('T')[0],
-    end: lastDay.toISOString().split('T')[0],
+    start: toDateString(firstDay),
+    end: toDateString(lastDay),
   };
 }
 

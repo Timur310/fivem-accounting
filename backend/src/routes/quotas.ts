@@ -7,6 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { toDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -31,8 +32,8 @@ function getPeriodRange(periodType: string, referenceDate: Date): { start: strin
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
     return {
-      start: monday.toISOString().split('T')[0],
-      end: sunday.toISOString().split('T')[0],
+      start: toDateString(monday),
+      end: toDateString(sunday),
     };
   }
 
@@ -42,8 +43,8 @@ function getPeriodRange(periodType: string, referenceDate: Date): { start: strin
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   return {
-    start: firstDay.toISOString().split('T')[0],
-    end: lastDay.toISOString().split('T')[0],
+    start: toDateString(firstDay),
+    end: toDateString(lastDay),
   };
 }
 
@@ -52,7 +53,7 @@ function getPeriodRange(periodType: string, referenceDate: Date): { start: strin
  * and compute the actual sum of entries for that period.
  */
 async function computeQuotaProgress(
-  quota: { itemTypeId: string; targetAmount: string; periodType: string; periodStart: Date; isActive: boolean },
+  quota: { itemTypeId: string; targetAmount: string; periodType: string; periodStart: string; isActive: boolean },
   factionId: string,
 ) {
   const today = new Date();

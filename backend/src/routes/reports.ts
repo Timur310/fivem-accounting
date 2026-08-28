@@ -6,6 +6,7 @@ import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { toDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -24,7 +25,7 @@ const comparisonQuerySchema = z.object({
 
 function getPeriodBounds(period: string): { from: string; to: string } {
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = toDateString(today);
 
   if (period === 'all') {
     return { from: '2000-01-01', to: '2099-12-31' };
@@ -33,13 +34,13 @@ function getPeriodBounds(period: string): { from: string; to: string } {
   if (period === 'last_30d') {
     const from = new Date(today);
     from.setDate(from.getDate() - 30);
-    return { from: from.toISOString().split('T')[0], to: todayStr };
+    return { from: toDateString(from), to: todayStr };
   }
 
   if (period === 'last_90d') {
     const from = new Date(today);
     from.setDate(from.getDate() - 90);
-    return { from: from.toISOString().split('T')[0], to: todayStr };
+    return { from: toDateString(from), to: todayStr };
   }
 
   // Weekly: Monday-based
@@ -50,7 +51,7 @@ function getPeriodBounds(period: string): { from: string; to: string } {
     monday.setDate(today.getDate() - diff);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    return { from: monday.toISOString().split('T')[0], to: sunday.toISOString().split('T')[0] };
+    return { from: toDateString(monday), to: toDateString(sunday) };
   }
 
   if (period === 'last_week') {
@@ -62,20 +63,20 @@ function getPeriodBounds(period: string): { from: string; to: string } {
     lastMonday.setDate(thisMonday.getDate() - 7);
     const lastSunday = new Date(thisMonday);
     lastSunday.setDate(thisMonday.getDate() - 1);
-    return { from: lastMonday.toISOString().split('T')[0], to: lastSunday.toISOString().split('T')[0] };
+    return { from: toDateString(lastMonday), to: toDateString(lastSunday) };
   }
 
   // Monthly
   if (period === 'this_month') {
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { from: firstDay.toISOString().split('T')[0], to: lastDay.toISOString().split('T')[0] };
+    return { from: toDateString(firstDay), to: toDateString(lastDay) };
   }
 
   // last_month
   const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
-  return { from: firstDay.toISOString().split('T')[0], to: lastDay.toISOString().split('T')[0] };
+  return { from: toDateString(firstDay), to: toDateString(lastDay) };
 }
 
 // ── GET /summary — periodic summary ─────────────────

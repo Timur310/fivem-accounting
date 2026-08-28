@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { buildWhere } from '../lib/query.js';
+import { todayDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -138,7 +139,7 @@ router.post('/', async (req: Request, res: Response) => {
       itemTypeId,
       amount: amount,
       description: description ?? null,
-      entryDate: entryDate ?? new Date().toISOString().split('T')[0],
+      entryDate: entryDate ?? todayDateString(),
       customValues: validatedCustomValues,
     })
     .returning();

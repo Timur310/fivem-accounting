@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/index.js';
 import { entries, itemTypes, users } from '../db/schema.js';
-import { eq, and, sql, gte, lte, desc, extract } from 'drizzle-orm';
+import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
+import { toDateString, todayDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -24,8 +25,8 @@ router.get('/', async (req: Request, res: Response) => {
   const dateFrom = new Date();
   dateFrom.setDate(dateFrom.getDate() - days);
   dateFrom.setHours(0, 0, 0, 0);
-  const dateFromStr = dateFrom.toISOString().split('T')[0];
-  const todayStr = new Date().toISOString().split('T')[0];
+  const dateFromStr = toDateString(dateFrom);
+  const todayStr = todayDateString();
 
   const baseWhere = and(
     eq(entries.factionId, factionId),
@@ -85,7 +86,7 @@ router.get('/', async (req: Request, res: Response) => {
   const cursor = new Date(dateFromStr + 'T00:00:00');
   const end = new Date(todayStr + 'T00:00:00');
   while (cursor <= end) {
-    const dateStr = cursor.toISOString().split('T')[0];
+    const dateStr = toDateString(cursor);
     const existing = trendMap.get(dateStr);
     filledTrend.push({
       date: dateStr,
