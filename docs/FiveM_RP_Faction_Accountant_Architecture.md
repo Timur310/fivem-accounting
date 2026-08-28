@@ -1,6 +1,6 @@
 # FiveM RP Faction Accountant — Architecture Document & Master Prompt
 
-> **Version:** 1.0 | **Date:** August 2026  
+> **Version:** 2.0 | **Date:** August 2026  
 > **Stack:** Node.js 22 LTS (TypeScript) + Express/Fastify + Next.js + PostgreSQL + Docker Compose  
 > **Auth:** Discord OAuth 2.0 | **Deployment:** Self-Hosted VPS  
 > **Purpose:** AI-readable architecture document and master prompt for autonomous development
@@ -20,7 +20,8 @@
 9. [Frontend Architecture](#9-frontend-architecture)
 10. [Deployment](#10-deployment)
 11. [Development Roadmap](#11-development-roadmap)
-12. [Master Prompt for AI-Assisted Development](#12-master-prompt-for-ai-assisted-development)
+12. [Phase 4-8 Detailed Specifications](#12-phase-4-8-detailed-specifications)
+13. [Master Prompt for AI-Assisted Development](#13-master-prompt-for-ai-assisted-development)
 
 ---
 
@@ -172,13 +173,21 @@ User 1---* FactionMember *---1 Faction
                                    |
                                    |-- 1---* ItemType
                                    |-- 1---* Entry
+                                   |-- 1---* Payout
                                    |-- 1---* Quota
                                    |-- 1---* AuditLog
+                                   |-- 1---* Announcement
+                                   |-- 1---* MemberNote
+                                   |-- 1---* Strike
 
 User 1---* Entry (created_by)
+User 1---* Payout (created_by / recipient)
 User 1---* AuditLog (acted_by)
+User 1---* Strike (issued_by / received_by)
 ItemType 1---* Entry
 ItemType 1---* Quota
+FactionMember 1---* Strike
+FactionMember 1---* MemberNote
 ```
 
 ### 5.2 Table Schemas
@@ -268,6 +277,68 @@ ItemType 1---* Quota
 | details | JSONB | NULLABLE | Before/after diff or action context |
 | ip_address | INET | NULLABLE | Requester IP |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When action occurred |
+
+#### payouts
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | Payout identifier |
+| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this payout belongs to |
+| recipient_user_id | UUID | FK -> users.id, NOT NULL | Member receiving the payout |
+| created_by | UUID | FK -> users.id, NOT NULL | Admin who created the payout |
+| item_type_id | UUID | FK -> item_types.id, NOT NULL | Type of resource being distributed |
+| amount | DECIMAL(15,2) | NOT NULL | Amount distributed |
+| description | TEXT | NULLABLE | Reason or note (e.g. "Weekly cut", "Job bonus") |
+| payout_date | DATE | NOT NULL, DEFAULT TODAY | Date the payout was issued |
+| status | VARCHAR(20) | NOT NULL, DEFAULT 'pending' | pending / approved / rejected / completed |
+| approved_by | UUID | FK -> users.id, NULLABLE | Admin who approved (if multi-admin) |
+| approved_at | TIMESTAMPTZ | NULLABLE | When it was approved |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Record creation time |
+| updated_at | TIMESTAMPTZ | NULLABLE | Last edit time |
+| is_deleted | BOOLEAN | NOT NULL, DEFAULT FALSE | Soft-delete flag |
+
+#### announcements
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | Announcement identifier |
+| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this belongs to |
+| author_id | UUID | FK -> users.id, NOT NULL | Admin who posted |
+| title | VARCHAR(200) | NOT NULL | Announcement headline |
+| body | TEXT | NOT NULL | Full announcement content (markdown) |
+| priority | VARCHAR(20) | NOT NULL, DEFAULT 'normal' | low / normal / high / urgent |
+| is_pinned | BOOLEAN | NOT NULL, DEFAULT FALSE | Show at top of feed |
+| expires_at | TIMESTAMPTZ | NULLABLE | Auto-hide after this time |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When posted |
+| updated_at | TIMESTAMPTZ | NULLABLE | Last edit time |
+| is_deleted | BOOLEAN | NOT NULL, DEFAULT FALSE | Soft-delete flag |
+
+#### member_notes
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | Note identifier |
+| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this note belongs to |
+| target_user_id | UUID | FK -> users.id, NOT NULL | Member this note is about |
+| author_id | UUID | FK -> users.id, NOT NULL | Admin who wrote the note |
+| category | VARCHAR(50) | NOT NULL, DEFAULT 'general' | general / performance / discipline / positive / promotion |
+| content | TEXT | NOT NULL | Note body |
+| is_flagged | BOOLEAN | NOT NULL, DEFAULT FALSE | Flagged for follow-up |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When written |
+
+#### strikes
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, DEFAULT gen_random_uuid() | Strike identifier |
+| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this strike belongs to |
+| target_user_id | UUID | FK -> users.id, NOT NULL | Member receiving the strike |
+| issued_by | UUID | FK -> users.id, NOT NULL | Admin who issued |
+| reason | TEXT | NOT NULL | Why the strike was given |
+| severity | VARCHAR(20) | NOT NULL | warning / minor / major |
+| status | VARCHAR(20) | NOT NULL, DEFAULT 'active' | active / appealed / expired / revoked |
+| expires_at | TIMESTAMPTZ | NULLABLE | When the strike auto-expires |
+| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When issued |
 
 ### 5.3 Drizzle Schema (src/db/schema.ts)
 
@@ -955,7 +1026,7 @@ crontab -e
 
 ## 11. Development Roadmap
 
-### Phase 1: MVP (Weeks 1-3)
+### Phase 1: MVP (Weeks 1-3) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -968,7 +1039,7 @@ crontab -e
 | 7 | Faction dashboard | Aggregated totals by type, recent entries, member count | High |
 | 8 | Audit logging | Log all CRUD ops with user, timestamp, entity details. Admin view | High |
 
-### Phase 2: Enhanced Features (Weeks 4-6)
+### Phase 2: Enhanced Features (Weeks 4-6) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -980,21 +1051,716 @@ crontab -e
 | 6 | Mobile responsive UI | Collapsible sidebar, touch-friendly forms | Medium |
 | 7 | Notifications | Toast notifications. Optional Discord webhook notifications | Medium |
 
-### Phase 3: Advanced Features (Weeks 7-9)
+### Phase 3: Advanced Features (Weeks 7-9) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
 | 1 | Superadmin analytics | System-wide dashboard: total factions, entries, engagement metrics | Medium |
 | 2 | Bulk operations | Batch add members, bulk delete entries, CSV import | Medium |
-| 3 | Faction customization | Branding, custom entry fields, notification preferences | Low |
+| 3 | Faction customization | Brand color (CSS variable injection), custom entry fields (JSONB per-entry values) | Medium |
 | 4 | Advanced reporting | Periodic summaries, comparison reports, performance rankings | Low |
-| 5 | Discord bot integration | Optional bot for member management and dashboard summaries from Discord | Low |
-| 6 | Rate limiting | Per-user and per-IP via Redis sliding window | Low |
-| 7 | i18n | Framework + English pack. Structure for community translations | Low |
+| 5 | Rate limiting | Per-user and per-IP sliding window | Low |
+
+### Phase 4: Treasury & Payouts (Weeks 10-12)
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Payout system | Record money/items distributed TO members. Deducts from treasury balance | Critical |
+| 2 | Treasury balance tracking | Running balance = total entries IN minus total payouts OUT, per item type | Critical |
+| 3 | Payout approval workflow | Multi-admin factions can require approval before payout completes | High |
+| 4 | Treasury dashboard | Dedicated view: balance by type, inflow vs outflow charts, net position | High |
+| 5 | Payout history & filtering | Full CRUD, filterable list with audit trail | Medium |
+| 6 | Quick-payout from dashboard | One-click "distribute even split" to all active members | Medium |
+
+### Phase 5: Member Tools & Discipline (Weeks 13-15)
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Custom faction ranks | Configurable rank hierarchy (Boss, Underboss, Capo, Soldier, Associate, etc.) | High |
+| 2 | Member profile pages | Per-member detail view: contribution history, payout history, stats, notes | High |
+| 3 | Admin notes on members | Private notes per member (performance, discipline, positive, promotion) | High |
+| 4 | Strike/warning system | Issue strikes with severity levels, auto-expiry, appeal tracking | High |
+| 5 | Inactivity detection | Flag members who haven't logged entries in X days. Dashboard alert | Medium |
+| 6 | Member join/leave history | Track when members joined, left, were kicked, or were reinstated | Medium |
+
+### Phase 6: Faction Communication (Weeks 16-18)
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Announcements system | Admin posts announcements with priority levels (normal, high, urgent) | High |
+| 2 | Pinned announcements | Pin important announcements to top of feed, auto-expire after set time | Medium |
+| 3 | Announcement read tracking | Track which members have read each announcement | Medium |
+| 4 | Markdown rendering | Announcements support full markdown with preview | Low |
+| 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline | Medium |
+
+### Phase 7: Advanced Analytics & Gamification (Weeks 19-21)
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Contribution heatmap | GitHub-style activity grid per member (daily contributions over time) | Medium |
+| 2 | Member performance score | Composite score based on: quota hit rate, consistency, total contributed, activity streak | Medium |
+| 3 | Streak tracking | Track consecutive days/weeks of logging. Display current and best streak | Medium |
+| 4 | Leaderboards | Per-faction and cross-faction leaderboards (total, this week, this month) | Low |
+| 5 | Growth metrics | Period-over-period comparisons: entries growth rate, new member rate, quota completion trends | Low |
+| 6 | Faction comparison | Superadmin view: side-by-side faction comparison on key metrics | Low |
+
+### Phase 8: Automation & Integrations (Weeks 22-24)
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Discord bot integration | Bot commands: /balance, /log <amount> <type>, /top, /quotas, /announce | High |
+| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings | High |
+| 3 | Webhook system | Outgoing webhooks on configurable events (entry logged, quota met, strike issued) | Medium |
+| 4 | API tokens | Faction-level API tokens for server-side scripts (FiveM in-game resource tracking) | Medium |
+| 5 | Data backup/restore | Full faction data export (JSON) and import. Superadmin can backup all data | Medium |
+| 6 | Faction templates | Preset configurations for common faction types (cartel, police, EMS, mechanic, etc.) | Low |
+| 7 | i18n framework | Translation infrastructure + community translation support | Low |
 
 ---
 
-## 12. Master Prompt for AI-Assisted Development
+## 12. Phase 4-8 Detailed Specifications
+
+### 12.1 Phase 4: Treasury & Payouts
+
+#### Why This Matters
+
+The current system only tracks money IN (contributions/deposits). In FiveM RP, factions are equally concerned with money OUT — paying members their cut, buying equipment, laundering fees, bribes, and operational costs. Without payout tracking, faction leaders have no idea what their actual treasury balance is. They cannot answer "how much money do we actually have in the stash?" without manually subtracting from a spreadsheet. This phase transforms the app from a "contribution tracker" into a full "treasury management system."
+
+#### 12.1.1 Payout Data Model
+
+```
+payouts
+  id              UUID PK
+  faction_id       FK -> factions
+  recipient_user_id FK -> users (who receives)
+  created_by       FK -> users (admin who created)
+  item_type_id    FK -> item_types (what resource)
+  amount          DECIMAL(15,2)
+  description     TEXT (reason: "Weekly cut", "Heist bonus", "Equipment restock")
+  payout_date     DATE
+  status          VARCHAR(20) -- pending / approved / rejected / completed
+  approved_by     FK -> users (nullable, for multi-admin approval)
+  approved_at     TIMESTAMPTZ
+  is_deleted      BOOLEAN
+  created_at      TIMESTAMPTZ
+  updated_at      TIMESTAMPTZ
+```
+
+#### 12.1.2 Treasury Balance Calculation
+
+The treasury balance is a **computed value**, not stored. This avoids drift and ensures accuracy:
+
+```
+Balance per item type = SUM(entries.amount WHERE is_deleted=false)
+                       - SUM(payouts.amount WHERE is_deleted=false AND status='completed')
+```
+
+Dashboard endpoint returns balances alongside existing totals. The treasury card shows:
+- Per-item-type balance with +/- indicators (green for positive, red for negative)
+- Total net balance across all types
+- Recent outflow trend (last 7/30 days of payouts)
+
+#### 12.1.3 Payout API
+
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| POST | `/api/v1/factions/{id}/payouts` | Admin | Create payout (recipient, item_type, amount, description, date) |
+| GET | `/api/v1/factions/{id}/payouts` | Admin | List payouts with filters (date, recipient, item type, status, pagination) |
+| PATCH | `/api/v1/factions/{id}/payouts/{pid}` | Admin | Update status (approve/reject/complete), edit amount/description |
+| DELETE | `/api/v1/factions/{id}/payouts/{pid}` | Admin | Soft-delete |
+| GET | `/api/v1/factions/{id}/treasury` | Member | Balance per item type, net total, inflow/outflow summary |
+
+#### 12.1.4 Payout Workflow
+
+1. Admin creates payout → status = `pending`
+2. If faction has multiple admins AND approval required:
+   - Other admins see pending payouts in a dedicated queue
+   - Approve → status = `approved`, rejected → status = `rejected`
+3. If no approval required (single admin or setting off): auto-complete
+4. `completed` payouts are counted against treasury balance
+5. `rejected` payouts do NOT affect balance
+
+#### 12.1.5 Quick Payout Feature
+
+"Distribute Even Split" button on treasury dashboard:
+- Select an item type and total amount
+- System calculates: `per_member = floor(total / active_member_count)`
+- Creates individual payout records for each active member
+- Single confirmation dialog, one audit log entry for the batch
+
+#### 12.1.6 Frontend Views
+
+- **Treasury tab** on dashboard (members see read-only, admins see full)
+- Balance cards per item type with trend sparklines
+- Payout management page (admin only, similar layout to entries view)
+- Payout create dialog with member selector, item type, amount
+- Pending approval queue (if approval workflow enabled)
+
+#### 12.1.7 Settings
+
+New faction setting (in `factions` table or `customFields` JSONB):
+- `payoutApprovalRequired` (BOOLEAN, default false)
+- When enabled, payouts created by one admin must be approved by another
+
+---
+
+### 12.2 Phase 5: Member Tools & Discipline
+
+#### Why This Matters
+
+In FiveM RP, faction leaders manage real people with real responsibilities. They need to know who's pulling their weight, who needs help, and who's breaking rules. The current system treats all members identically — just "admin" or "member". Real factions have complex hierarchies (Boss → Underboss → Capo → Soldier → Associate), and leaders need tools to document member performance, issue formal warnings, and track discipline history over time. Without this, leadership handovers lose all institutional knowledge about members.
+
+#### 12.2.1 Custom Faction Ranks
+
+Store a JSONB array on the `factions` table:
+
+```json
+[
+  { "name": "Boss", "level": 1, "permissions": ["all"] },
+  { "name": "Underboss", "level": 2, "permissions": ["entries", "payouts", "members"] },
+  { "name": "Capo", "level": 3, "permissions": ["entries"] },
+  { "name": "Soldier", "level": 4, "permissions": [] },
+  { "name": "Associate", "level": 5, "permissions": [] }
+]
+```
+
+The `faction_members.role` field remains `admin` or `member` for access control, but gains a `rank` field (VARCHAR, nullable) that stores the custom rank name. This keeps the permission system simple while allowing display-only rank names.
+
+#### 12.2.2 Member Profile Page
+
+New view: `/factions/{id}/members/{userId}`
+
+Displays:
+- Avatar, username, Discord ID, rank, join date
+- Contribution stats: total contributed, entries count, average per entry, most active item type
+- Payout stats: total received, payout count
+- Current quota completion (all active quotas)
+- Activity heatmap (Phase 7, shows empty state until built)
+- Streak info (current streak, best streak)
+- Admin notes list (admin-only visibility)
+- Strike history (admin-only, member sees own strikes)
+- Recent entries (last 20)
+- Recent payouts received (last 20)
+
+#### 12.2.3 Admin Notes
+
+```
+member_notes
+  id              UUID PK
+  faction_id       FK -> factions
+  target_user_id  FK -> users (member being noted)
+  author_id       FK -> users (admin writing)
+  category        VARCHAR(50) -- general / performance / discipline / positive / promotion
+  content         TEXT
+  is_flagged      BOOLEAN (for follow-up)
+  created_at      TIMESTAMPTZ
+```
+
+Categories help organize notes:
+- **general**: General observations
+- **performance**: "Consistently hits quota, great team player"
+- **discipline": "Late to 3 meetings, warned verbally"
+- **positive": "Led a successful heist, good leadership"
+- **promotion**: "Ready for Capo promotion, recommended by Underboss"
+
+API:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/factions/{id}/members/{userId}/notes` | Create note |
+| GET | `/api/v1/factions/{id}/members/{userId}/notes` | List notes for member |
+| PATCH | `/api/v1/factions/{id}/members/{userId}/notes/{noteId}` | Edit content or toggle flag |
+| DELETE | `/api/v1/factions/{id}/members/{userId}/notes/{noteId}` | Delete note |
+
+#### 12.2.4 Strike/Warning System
+
+```
+strikes
+  id              UUID PK
+  faction_id       FK -> factions
+  target_user_id  FK -> users (member receiving)
+  issued_by       FK -> users (admin issuing)
+  reason          TEXT
+  severity        VARCHAR(20) -- warning / minor / major
+  status          VARCHAR(20) -- active / appealed / expired / revoked
+  expires_at      TIMESTAMPTZ (nullable, auto-expire)
+  created_at      TIMESTAMPTZ
+```
+
+Severity levels:
+- **warning**: Verbal/formal warning, no consequences, but documented
+- **minor**: First formal strike, visible on profile, counts toward discipline threshold
+- **major**: Serious infraction, may trigger automatic demotion or kick consideration
+
+Auto-expiry: configurable per faction (default: warnings 30 days, minor 90 days, major never)
+
+API:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/factions/{id}/members/{userId}/strikes` | Issue strike |
+| GET | `/api/v1/factions/{id}/members/{userId}/strikes` | List strikes for member |
+| PATCH | `/api/v1/factions/{id}/members/{userId}/strikes/{sid}` | Update (revoke, mark appealed) |
+| GET | `/api/v1/factions/{id}/strikes` | List all active strikes across members (admin overview) |
+
+#### 12.2.5 Inactivity Detection
+
+Dashboard query enhancement: compute per-member "days since last entry".
+
+```sql
+SELECT 
+  u.id, u.username,
+  MAX(e.entry_date) as last_activity,
+  CURRENT_DATE - MAX(e.entry_date) as days_inactive
+FROM faction_members fm
+JOIN users u ON u.id = fm.user_id
+LEFT JOIN entries e ON e.user_id = fm.user_id AND e.is_deleted = false
+WHERE fm.faction_id = ?
+GROUP BY u.id, u.username
+ORDER BY days_inactive DESC NULLS LAST
+```
+
+Frontend: show an "Inactive Members" alert card on the admin dashboard when any member hasn't logged in X days (configurable, default 7). Members with strikes or recent joins excluded from inactivity alerts.
+
+#### 12.2.6 Member Join/Leave History
+
+Reuse the existing `audit_logs` table — no new table needed. Member joins, leaves, kicks, role changes, and reinstatements are already logged with `entity_type='faction_member'`. Build a dedicated UI that queries this:
+
+```
+GET /api/v1/factions/{id}/members/{userId}/history
+→ Returns audit_logs WHERE entity_type='faction_member' AND (details->>'user_id' = userId)
+```
+
+---
+
+### 12.3 Phase 6: Faction Communication
+
+#### Why This Matters
+
+Factions need to communicate outside of the in-game chat and Discord. Announcements like "quota deadline is Friday", "new member joining today", "faction meeting Saturday 8pm", or "rules update: all entries must include location" need a persistent, searchable home. Currently this information lives in Discord messages that get buried. A built-in announcement system gives every faction a lightweight bulletin board that's always accessible alongside their financial data.
+
+#### 12.3.1 Announcements
+
+```
+announcements
+  id              UUID PK
+  faction_id       FK -> factions
+  author_id       FK -> users
+  title           VARCHAR(200)
+  body            TEXT (markdown supported)
+  priority        VARCHAR(20) -- low / normal / high / urgent
+  is_pinned       BOOLEAN
+  expires_at      TIMESTAMPTZ (nullable)
+  created_at      TIMESTAMPTZ
+  updated_at      TIMESTAMPTZ
+  is_deleted      BOOLEAN
+```
+
+Priority visual treatment:
+- **low**: default style, no badge
+- **normal**: default style
+- **high**: yellow/amber left border or badge
+- **urgent**: red left border, pulsing dot, "URGENT" badge
+
+API:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/factions/{id}/announcements` | Create (admin only) |
+| GET | `/api/v1/factions/{id}/announcements` | List (all members), ordered by pinned first, then date |
+| PATCH | `/api/v1/factions/{id}/announcements/{aid}` | Edit (author only) |
+| DELETE | `/api/v1/factions/{id}/announcements/{aid}` | Soft-delete (admin or author) |
+
+#### 12.3.2 Read Tracking
+
+```
+announcement_reads
+  announcement_id  FK -> announcements
+  user_id           FK -> users
+  read_at          TIMESTAMPTZ
+  PRIMARY KEY (announcement_id, user_id)
+```
+
+- `GET /announcements` response includes `read_count` and `is_read_by_me`
+- Admins see per-member read status: `GET /announcements/{id}/reads` returns list of who has/hasn't read
+- Mark as read: `POST /announcements/{id}/read` (member clicks into announcement)
+
+#### 12.3.3 Activity Feed
+
+A unified timeline view combining all faction events:
+
+```
+GET /api/v1/factions/{id}/feed?page=1&page_size=30
+```
+
+Returns a chronological mix of:
+- Entries ("Username logged $5,000 Dirty Money")
+- Payouts ("Admin distributed $2,000 to Username")
+- Announcements ("Admin posted: Quota deadline Friday")
+- Member joins ("Username joined the faction")
+- Strikes ("Username received a minor strike")
+- Rank changes ("Username promoted to Capo")
+
+Each feed item has a `type` discriminator and a consistent shape:
+
+```json
+{
+  "id": "uuid",
+  "type": "entry" | "payout" | "announcement" | "member_join" | "strike" | "rank_change",
+  "actor_username": "string",
+  "actor_avatar_url": "string | null",
+  "summary": "Human-readable one-liner",
+  "details": { ... },
+  "created_at": "ISO timestamp"
+}
+```
+
+Implementation: `UNION ALL` query across entries, payouts, announcements, and relevant audit_logs, with consistent column aliasing, then `ORDER BY created_at DESC` with pagination.
+
+#### 12.3.4 Frontend
+
+- **Announcements nav item** in sidebar (visible to all members)
+- Announcement list with pinned section at top
+- Create/edit dialog for admins (title, body with markdown preview, priority, pin, expiry)
+- Individual announcement view with full markdown rendering
+- Activity feed as an optional dashboard widget or dedicated view
+
+---
+
+### 12.4 Phase 7: Advanced Analytics & Gamification
+
+#### Why This Matters
+
+Factions in FiveM are fundamentally competitive environments. Members want to know where they stand, leaders want to identify top performers and inactive members at a glance, and healthy competition drives engagement. Gamification features (streaks, leaderboards, scores) turn the mundane task of "log your daily contribution" into something members actually engage with. The analytics features give admins the data-driven insights they need to make leadership decisions.
+
+#### 12.4.1 Contribution Heatmap
+
+GitHub-style activity grid rendered on the frontend using recharts or a custom SVG grid.
+
+Backend endpoint:
+
+```
+GET /api/v1/factions/{id}/members/{userId}/heatmap?year=2026
+```
+
+Returns:
+
+```json
+{
+  "data": [
+    { "date": "2026-01-15", "count": 2, "total": 15000 },
+    { "date": "2026-01-16", "count": 1, "total": 5000 },
+    ...
+  ],
+  "max_count": 5
+}
+```
+
+SQL (gap-filled for all days in the year):
+
+```sql
+WITH all_days AS (
+  SELECT generate_series(
+    (date_trunc('year', CURRENT_DATE) || '-01-01')::date,
+    (date_trunc('year', CURRENT_DATE) || '-12-31')::date,
+    '1 day'::interval
+  )::date AS day
+),
+daily_counts AS (
+  SELECT e.entry_date AS day, COUNT(*) AS count, SUM(e.amount) AS total
+  FROM entries e
+  WHERE e.user_id = ? AND e.faction_id = ? AND e.is_deleted = false
+    AND e.entry_date >= (date_trunc('year', CURRENT_DATE) || '-01-01')::date
+  GROUP BY e.entry_date
+)
+SELECT d.day, COALESCE(dc.count, 0) AS count, COALESCE(dc.total, 0) AS total
+FROM all_days d
+LEFT JOIN daily_counts dc ON dc.day = d.day
+ORDER BY d.day
+```
+
+#### 12.4.2 Member Performance Score
+
+Composite score (0-100) calculated on the backend and cached:
+
+```
+score = (
+  quota_hit_rate   * 30    // % of quota periods where member contributed
+  + consistency      * 25    // days with entries / days in period
+  + total_volume     * 20    // rank-scaled based on total contribution
+  + streak_bonus     * 15    // current streak / best streak
+  + seniority_bonus  * 10    // months since joining, capped
+)
+```
+
+Each sub-score is normalized to 0-1 before weighting. Score is computed on-demand (not stored) and cached with short staleTime (5 min) in TanStack Query.
+
+#### 12.4.3 Streak Tracking
+
+A "streak" is consecutive days (or weeks) where a member logged at least one entry.
+
+Backend logic:
+
+```sql
+-- Get all entry dates for a member, ordered
+SELECT DISTINCT entry_date FROM entries
+WHERE user_id = ? AND faction_id = ? AND is_deleted = false
+ORDER BY entry_date DESC
+
+-- Count consecutive days from today backwards
+```
+
+Frontend displays:
+- Current streak with flame icon
+- Best streak (all-time)
+- "Keep it going!" encouragement when streak > 3
+
+#### 12.4.4 Leaderboards
+
+New endpoint:
+
+```
+GET /api/v1/factions/{id}/leaderboard?period=week|month|all&item_type_id=...
+```
+
+Returns ranked members with their totals:
+
+```json
+{
+  "period": { "from": "2026-01-01", "to": "2026-01-31", "label": "This Month" },
+  "rankings": [
+    { "rank": 1, "user_id": "...", "username": "...", "avatar_url": "...", "total": 50000, "entry_count": 12, "item_breakdown": { "Dirty Money": 30000, "Clean Money": 20000 } },
+    ...
+  ]
+}
+```
+
+Superadmin cross-faction leaderboard:
+
+```
+GET /api/v1/leaderboard?period=month&limit=50
+→ Top 50 members across ALL factions, with faction name shown
+```
+
+#### 12.4.5 Growth Metrics
+
+Enhancement to existing reports endpoint:
+
+```
+GET /api/v1/factions/{id}/reports/growth?periods=6
+```
+
+Returns period-over-period metrics:
+
+```json
+{
+  "periods": [
+    {
+      "label": "Jan 2026",
+      "total_entries": 150,
+      "total_amount": 500000,
+      "active_members": 12,
+      "avg_per_member": 41666
+    },
+    ...
+  ],
+  "growth": {
+    "entries_change_pct": 15.2,
+    "amount_change_pct": 8.7,
+    "member_change": 2,
+    "avg_change_pct": -3.1
+  }
+}
+```
+
+---
+
+### 12.5 Phase 8: Automation & Integrations
+
+#### Why This Matters
+
+The current system requires members to open a web browser, navigate to the site, and fill out a form for every single contribution. In FiveM, this is friction — they're in the middle of roleplay. A Discord bot lets members log contributions with a single slash command without leaving Discord. Server-side integrations (via API tokens) allow FiveM server scripts to automatically log transactions when players deposit money into faction safes in-game. Automated reports keep everyone informed without anyone having to check the dashboard.
+
+#### 12.5.1 Discord Bot Integration
+
+Architecture: a separate Node.js process (or threaded within the backend) that connects to Discord Gateway via discord.js.
+
+Environment variables:
+
+```
+DISCORD_BOT_TOKEN=...
+DISCORD_BOT_ENABLED=true
+```
+
+Bot commands (guild-scoped, only responds in configured channels):
+
+| Command | Access | Description | Example |
+|---------|--------|-------------|---------|
+| `/log <amount> <item_type> [description]` | Member | Log a contribution | `/log 5000 dirty money Heist from jewelry store` |
+| `/balance` | Member | Show faction treasury balances | `/balance` → "Dirty Money: $125,000 | Clean Money: $80,000" |
+| `/my` | Member | Show personal stats (total, this week, streak) | `/my` |
+| `/top [period]` | Member | Show top contributors | `/top week` |
+| `/quotas` | Member | Show quota progress | `/quotas` |
+| `/announce <title> | <body>` | Admin | Post announcement | `/announce Meeting Tonight | 8pm at HQ` |
+| `/payout <@user> <amount> <type> [reason]` | Admin | Create payout | `/payout @john 5000 dirty money Weekly cut` |
+| `/strike <@user> <severity> <reason>` | Admin | Issue strike | `/strike @john minor Missing 3 quota deadlines` |
+| `/note <@user> <category> <text>` | Admin | Add member note | `/note @john positive Led the heist flawlessly` |
+
+Bot permissions: reads member roles from the database (not Discord roles) to determine access. Only responds in channels that are configured per-faction in settings.
+
+#### 12.5.2 Automated Discord Reports
+
+Cron-like scheduler (node-cron) in the backend sends periodic embed messages to configured Discord channels:
+
+| Report | Schedule | Content |
+|--------|----------|--------|
+| Daily Summary | Daily at 11pm server time | Total entries today, top contributor, quota status |
+| Weekly Report | Sunday 11pm | Weekly totals, quota completion %, most improved member |
+| Quota Warning | Daily at 9am (if quota < 50% and period ends within 2 days) | Urgent: quota X is at Y%, deadline in Z days |
+| New Member | Real-time (on member add) | "Welcome @Username to the faction!" |
+| Strike Alert | Real-time (on strike issued) | "@Username received a [severity] strike: reason" |
+
+Configuration per faction (stored in `factions` JSONB or dedicated `faction_settings` table):
+
+```json
+{
+  "discord": {
+    "channel_id": "123456789",
+    "daily_summary": true,
+    "weekly_report": true,
+    "quota_warnings": true,
+    "member_events": true,
+    "strike_alerts": true
+  }
+}
+```
+
+#### 12.5.3 Webhook System
+
+Outgoing webhooks on configurable events:
+
+```json
+{
+  "url": "https://your-server.com/webhook",
+  "events": ["entry.created", "payout.completed", "quota.met", "strike.issued"],
+  "secret": "hmac_secret_string"
+}
+```
+
+Stored in a `webhooks` table:
+
+```
+webhooks
+  id              UUID PK
+  faction_id       FK -> factions
+  url             TEXT
+  secret          VARCHAR(255)
+  events          TEXT[] (array of event type strings)
+  is_active       BOOLEAN
+  created_at      TIMESTAMPTZ
+```
+
+On each event, the backend POSTs a signed payload to matching webhook URLs. Signature: HMAC-SHA256 of the payload body using the webhook's secret, sent as `X-Webhook-Signature` header.
+
+#### 12.5.4 API Tokens
+
+For FiveM server-side scripts to log transactions automatically (e.g., when a player uses an in-game menu to deposit money into the faction safe).
+
+```
+api_tokens
+  id              UUID PK
+  faction_id       FK -> factions
+  name             VARCHAR(100) -- e.g. "FiveM Server Script"
+  token_hash      VARCHAR(64) -- SHA-256 of the actual token
+  permissions      TEXT[] -- ["entries:create", "entries:read"]
+  last_used_at    TIMESTAMPTZ
+  is_active       BOOLEAN
+  created_at      TIMESTAMPTZ
+  expires_at      TIMESTAMPTZ (nullable)
+```
+
+Usage: `Authorization: Bearer <token>` header. The backend validates the token, resolves the faction, and applies the token's permission scope (which may be narrower than the creating user's role).
+
+#### 12.5.5 Data Backup/Restore
+
+**Export:**
+
+```
+GET /api/v1/factions/{id}/export/full (admin)
+→ Returns JSON with all faction data: settings, members, item types, entries, payouts,
+  quotas, announcements, notes, strikes, audit logs
+→ Also available as downloadable JSON file
+```
+
+**Import:**
+
+```
+POST /api/v1/factions/{id}/import/full (admin)
+→ Accepts JSON file, validates structure
+→ Upserts entries, payouts, notes, strikes (by original ID if exists, skip if conflict)
+→ Requires confirmation for destructive operations
+→ Full audit trail of import
+```
+
+**Superadmin full backup:**
+
+```
+POST /api/v1/admin/backup
+→ Dumps all factions, users, and related data as a JSON archive
+GET /api/v1/admin/backups
+→ Lists available backups (stored in a `backups` table or filesystem)
+POST /api/v1/admin/restore/{backup_id}
+→ Restores from a backup (with validation and confirmation)
+```
+
+#### 12.5.6 Faction Templates
+
+Predefined configuration presets that auto-configure item types, quotas, and ranks when creating a faction:
+
+```json
+{
+  "cartel": {
+    "item_types": [
+      { "name": "Dirty Money", "unit": "$" },
+      { "name": "Clean Money", "unit": "$" },
+      { "name": "Weapons", "unit": "pcs" },
+      { "name": "Drugs", "unit": "kg" },
+      { "name": "Lock Picks", "unit": "pcs" }
+    ],
+    "ranks": ["Boss", "Underboss", "Capo", "Soldier", "Associate"]
+  },
+  "police": {
+    "item_types": [
+      { "name": "Confiscated Cash", "unit": "$" },
+      { "name": "Evidence", "unit": "pcs" },
+      { "name": "Tickets Issued", "unit": "$" }
+    ],
+    "ranks": ["Chief", "Captain", "Lieutenant", "Sergeant", "Officer", "Cadet"]
+  },
+  "ems": {
+    "item_types": [
+      { "name": "Medical Supplies", "unit": "$" },
+      { "name": "Patient Fees", "unit": "$" },
+      { "name": "Revives", "unit": "pcs" }
+    ],
+    "ranks": ["Director", "Doctor", "Paramedic", "Intern"]
+  },
+  "mechanic": {
+    "item_types": [
+      { "name": "Repair Revenue", "unit": "$" },
+      { "name": "Parts Used", "unit": "$" },
+      { "name": "Scrap Sold", "unit": "$" }
+    ],
+    "ranks": ["Owner", "Senior Mechanic", "Mechanic", "Apprentice"]
+  }
+}
+```
+
+Template selection is shown during faction creation (superadmin view).
+
+---
+
+## 13. Master Prompt for AI-Assisted Development
 
 > **Copy everything between the `===` markers below and paste it into a new AI chat session to begin development.**
 
@@ -1017,15 +1783,19 @@ You are building a self-hosted web application called "Faction Accountant" for a
 - **faction_admin:** Scoped to their faction. Can add/remove members, configure item types, set quotas, edit/delete any entry in their faction.
 - **member:** Can view faction dashboard, log own entries, view entry history. Cannot edit/delete anything.
 
-### DATABASE SCHEMA (Drizzle ORM — 7 tables)
+### DATABASE SCHEMA (Drizzle ORM — 7 + 4 new tables)
 
 - **users:** id (UUID PK), discord_id (VARCHAR 20 UNIQUE), username, avatar_url, role (superadmin/faction_admin/member), created_at, last_login
-- **factions:** id (UUID PK), name (VARCHAR 100 UNIQUE), description, created_by (FK users), created_at, is_active
-- **faction_members:** id (UUID PK), faction_id (FK factions), user_id (FK users), role (admin/member), joined_at. UNIQUE(faction_id, user_id)
+- **factions:** id (UUID PK), name (VARCHAR 100 UNIQUE), description, brand_color (VARCHAR 7), custom_fields (JSONB), created_by (FK users), created_at, is_active
+- **faction_members:** id (UUID PK), faction_id (FK factions), user_id (FK users), role (admin/member), rank (VARCHAR, nullable), joined_at. UNIQUE(faction_id, user_id)
 - **item_types:** id (UUID PK), faction_id (FK factions), name, unit (default '$'), is_active, created_at
-- **entries:** id (UUID PK), faction_id (FK factions), user_id (FK users), item_type_id (FK item_types), amount (Decimal 15,2), description, entry_date (Date), created_at, updated_at
+- **entries:** id (UUID PK), faction_id (FK factions), user_id (FK users), item_type_id (FK item_types), amount (Decimal 15,2), description, custom_values (JSONB), entry_date (Date), created_at, updated_at, is_deleted
 - **quotas:** id (UUID PK), faction_id (FK factions), item_type_id (FK item_types), target_amount (Decimal 15,2), period_type (weekly/monthly), period_start (Date), is_active, created_at
 - **audit_logs:** id (BIGSERIAL PK), user_id (FK users), faction_id (FK nullable), action (VARCHAR 50), entity_type (VARCHAR 50), entity_id (UUID nullable), details (JSONB), ip_address (INET), created_at
+- **payouts:** id (UUID PK), faction_id (FK factions), recipient_user_id (FK users), created_by (FK users), item_type_id (FK item_types), amount (Decimal 15,2), description, payout_date, status (pending/approved/rejected/completed), approved_by (FK users nullable), approved_at, is_deleted, created_at, updated_at
+- **announcements:** id (UUID PK), faction_id (FK factions), author_id (FK users), title (VARCHAR 200), body (TEXT, markdown), priority (low/normal/high/urgent), is_pinned, expires_at, created_at, updated_at, is_deleted
+- **member_notes:** id (UUID PK), faction_id (FK factions), target_user_id (FK users), author_id (FK users), category (general/performance/discipline/positive/promotion), content (TEXT), is_flagged, created_at
+- **strikes:** id (UUID PK), faction_id (FK factions), target_user_id (FK users), issued_by (FK users), reason (TEXT), severity (warning/minor/major), status (active/appealed/expired/revoked), expires_at, created_at
 
 ### API STRUCTURE
 
@@ -1061,11 +1831,21 @@ All under `/api/v1`. All require auth except OAuth callback.
 
 ### DEVELOPMENT PHASES
 
-**Phase 1 (MVP, 3 weeks):** Docker Compose scaffolding, Discord OAuth, superadmin faction CRUD, member management, basic item types, entry logging, basic dashboard, audit logging
+**Phase 1 (MVP, 3 weeks):** COMPLETE — Docker Compose scaffolding, Discord OAuth, superadmin faction CRUD, member management, basic item types, entry logging, basic dashboard, audit logging
 
-**Phase 2 (3 weeks):** Quota system, advanced dashboard with charts, entry filtering/search, admin entry editing, CSV export, mobile responsive UI, notifications
+**Phase 2 (3 weeks):** COMPLETE — Quota system, advanced dashboard with charts, entry filtering/search, admin entry editing, CSV export, mobile responsive UI
 
-**Phase 3 (3 weeks):** Superadmin analytics, bulk operations, faction customization, advanced reporting, optional Discord bot integration, rate limiting, i18n
+**Phase 3 (3 weeks):** COMPLETE — Superadmin analytics, bulk operations, faction customization (brand color + custom fields), advanced reporting, rate limiting
+
+**Phase 4 (3 weeks):** Treasury & Payouts — payout CRUD, treasury balance tracking (computed, not stored), payout approval workflow, treasury dashboard with inflow/outflow charts, quick-payout even split
+
+**Phase 5 (3 weeks):** Member Tools & Discipline — custom faction ranks, member profile pages with full history, admin notes on members (categorized), strike/warning system with severity levels and auto-expiry, inactivity detection alerts, member join/leave history from audit logs
+
+**Phase 6 (3 weeks):** Faction Communication — announcements with priority levels and pinning, announcement read tracking, markdown rendering, unified activity feed (entries + payouts + announcements + strikes + member events)
+
+**Phase 7 (3 weeks):** Advanced Analytics & Gamification — GitHub-style contribution heatmap, composite member performance score (0-100), streak tracking (current + best), per-faction and cross-faction leaderboards, period-over-period growth metrics
+
+**Phase 8 (3 weeks):** Automation & Integrations — Discord bot with slash commands (/log, /balance, /my, /top, /quotas, /announce, /payout, /strike, /note), automated Discord reports (daily/weekly/quota warnings), outgoing webhook system with HMAC signatures, API tokens for FiveM in-game scripts, full data backup/restore, faction templates (cartel, police, EMS, mechanic presets), i18n framework
 
 ### START WITH
 
