@@ -168,7 +168,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Item Types</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-zinc-500">
             Manage the types of contributions members can log.
           </p>
         </div>
@@ -187,7 +187,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               ))}
             </div>
           ) : itemTypes.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
+            <div className="p-12 text-center text-zinc-500">
               <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>No item types configured.</p>
             </div>
@@ -254,7 +254,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
             <div className="space-y-2">
               <Label>Unit Symbol</Label>
               <Input placeholder="$" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-500">
                 Displayed before amounts, e.g. "$1,000” or “5 pcs”.
               </p>
             </div>
@@ -290,7 +290,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Active</p>
-                <p className="text-xs text-muted-foreground">Disabled types cannot be used for new entries.</p>
+                <p className="text-xs text-zinc-500">Disabled types cannot be used for new entries.</p>
               </div>
               <Switch checked={editActive} onCheckedChange={setEditActive} />
             </div>
@@ -322,7 +322,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-red-500 text-white hover:bg-red-600"
             >
               {deleteMutation.isPending ? 'Disabling...' : 'Disable'}
             </AlertDialogAction>
@@ -468,7 +468,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Quotas</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-zinc-500">
             Set weekly or monthly contribution targets per item type.
           </p>
         </div>
@@ -487,7 +487,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
               ))}
             </div>
           ) : quotasList.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
+            <div className="p-12 text-center text-zinc-500">
               <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>No quotas configured.</p>
               <p className="text-xs mt-1">Create a quota to track contribution targets.</p>
@@ -513,7 +513,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
                       <TableCell>
                         <div className="font-medium">{q.itemTypeName}</div>
                         {q.periodActive && q.periodStartComputed && q.periodEndComputed && (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-zinc-500">
                             {q.periodStartComputed} — {q.periodEndComputed}
                           </div>
                         )}
@@ -531,7 +531,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
                           <div className="space-y-1 min-w-[140px]">
                             <div className="flex items-center justify-between text-xs">
                               <span>{q.itemUnit}{(q.currentAmount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                              <span className={met ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                              <span className={met ? 'text-green-600 font-medium' : 'text-zinc-500'}>
                                 {pct.toFixed(1)}%
                               </span>
                             </div>
@@ -543,9 +543,9 @@ function QuotasSection({ factionId }: { factionId: string }) {
                             </div>
                           </div>
                         ) : q.isActive && !q.periodActive ? (
-                          <span className="text-xs text-muted-foreground">Starts {q.periodStart}</span>
+                          <span className="text-xs text-zinc-500">Starts {q.periodStart}</span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-zinc-500">—</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -626,7 +626,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
                 value={newPeriodStart}
                 onChange={(e) => setNewPeriodStart(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-500">
                 The quota will be inactive until this date. For weekly quotas, pick a Monday.
               </p>
             </div>
@@ -682,7 +682,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Active</p>
-                <p className="text-xs text-muted-foreground">Disabled quotas are hidden from the dashboard.</p>
+                <p className="text-xs text-zinc-500">Disabled quotas are hidden from the dashboard.</p>
               </div>
               <Switch checked={editActive} onCheckedChange={setEditActive} />
             </div>
@@ -713,7 +713,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-red-500 text-white hover:bg-red-600"
             >
               {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
@@ -801,10 +801,10 @@ function CustomizationSection({ factionId }: { factionId: string }) {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Brand Color</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">Brand Color</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-zinc-500">
             Set an accent color for this faction. Used for visual differentiation.
           </p>
           <div className="flex items-center gap-3">
@@ -829,10 +829,10 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Custom Entry Fields</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">Custom Entry Fields</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-zinc-500">
             Define extra fields members fill when logging entries.
           </p>
           <div className="flex gap-2">
@@ -870,7 +870,7 @@ function CustomizationSection({ factionId }: { factionId: string }) {
             </div>
           )}
           {customFields.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No custom fields defined.</p>
+            <p className="text-sm text-zinc-500 text-center py-4">No custom fields defined.</p>
           )}
         </CardContent>
       </Card>

@@ -18,10 +18,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserPlus, Shield, UserMinus, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/lib/store';
 
 interface Props {
   factionId: string;
@@ -30,6 +30,7 @@ interface Props {
 export function MembersView({ factionId }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const brandColor = useAppStore((s) => s.brandColor);
 
   const [addOpen, setAddOpen] = useState(false);
   const [discordId, setDiscordId] = useState('');
@@ -54,11 +55,7 @@ export function MembersView({ factionId }: Props) {
       toast({ title: 'Member added' });
     },
     onError: (err: any) => {
-      toast({
-        title: 'Failed to add member',
-        description: err.response?.data?.error?.message || 'Unknown error',
-        variant: 'destructive',
-      });
+      toast({ title: 'Failed to add member', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
     },
   });
 
@@ -71,11 +68,7 @@ export function MembersView({ factionId }: Props) {
       toast({ title: 'Role updated' });
     },
     onError: (err: any) => {
-      toast({
-        title: 'Failed to update role',
-        description: err.response?.data?.error?.message || 'Unknown error',
-        variant: 'destructive',
-      });
+      toast({ title: 'Failed to update role', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
     },
   });
 
@@ -88,11 +81,7 @@ export function MembersView({ factionId }: Props) {
       toast({ title: 'Member removed' });
     },
     onError: (err: any) => {
-      toast({
-        title: 'Failed to remove member',
-        description: err.response?.data?.error?.message || 'Unknown error',
-        variant: 'destructive',
-      });
+      toast({ title: 'Failed to remove member', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
     },
   });
 
@@ -101,28 +90,24 @@ export function MembersView({ factionId }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Faction Members</h3>
-          <p className="text-sm text-muted-foreground">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+          <h3 className="text-lg font-medium text-zinc-200">Faction Members</h3>
+          <p className="text-sm text-zinc-500">{members.length} member{members.length !== 1 ? 's' : ''}</p>
         </div>
         <Button onClick={() => setAddOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
+          <UserPlus className="mr-1.5 h-4 w-4" />
           Add Member
         </Button>
       </div>
 
-      {/* Members Table */}
-      <Card>
+      {/* Table */}
+      <Card className="py-0 gap-0">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-6 space-y-3">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
+            <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
           ) : members.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No members yet. Add someone by their Discord ID.</p>
+            <div className="p-12 text-center text-zinc-600">
+              <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No members yet. Add someone by their Discord ID.</p>
             </div>
           ) : (
             <Table>
@@ -131,54 +116,57 @@ export function MembersView({ factionId }: Props) {
                   <TableHead>Member</TableHead>
                   <TableHead>Discord ID</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Entries</TableHead>
+                  <TableHead className="text-right">Entries</TableHead>
                   <TableHead>Joined</TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {members.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar className="h-7 w-7">
                           <AvatarImage src={m.avatarUrl ?? undefined} />
-                          <AvatarFallback>{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[10px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <span className="font-medium">{m.username}</span>
+                        <span className="text-sm text-zinc-300 font-medium">{m.username}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground font-mono">{m.discordId}</TableCell>
+                    <TableCell className="text-xs text-zinc-600 font-mono tabular-nums">{m.discordId}</TableCell>
                     <TableCell>
-                      <Badge variant={m.role === 'admin' ? 'default' : 'secondary'}>
-                        {m.role === 'admin' ? 'Admin' : 'Member'}
-                      </Badge>
+                      {m.role === 'admin' ? (
+                        <span
+                          className="text-[11px] px-2 py-0.5 rounded-md font-medium border"
+                          style={{
+                            backgroundColor: `${brandColor}10`,
+                            borderColor: `${brandColor}25`,
+                            color: brandColor,
+                          }}
+                        >
+                          Admin
+                        </span>
+                      ) : (
+                        <span className="text-[11px] px-2 py-0.5 rounded-md font-medium border border-white/[0.06] bg-white/[0.03] text-zinc-500">
+                          Member
+                        </span>
+                      )}
                     </TableCell>
-                    <TableCell className="text-sm">{m.entryCount ?? 0}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-sm text-zinc-400 text-right tabular-nums">{m.entryCount ?? 0}</TableCell>
+                    <TableCell className="text-xs text-zinc-600 tabular-nums">
                       {new Date(m.joinedAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => {
-                            setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
-                            setNewRole(m.role === 'admin' ? 'member' : 'admin');
-                            setRoleDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
+                      <div className="flex items-center gap-0.5">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
+                          setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
+                          setNewRole(m.role === 'admin' ? 'member' : 'admin');
+                          setRoleDialogOpen(true);
+                        }}>
+                          <Pencil className="h-3 w-3" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
-                          onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })}
-                        >
-                          <UserMinus className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })}>
+                          <UserMinus className="h-3 w-3" />
                         </Button>
                       </div>
                     </TableCell>
@@ -195,29 +183,18 @@ export function MembersView({ factionId }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Member</DialogTitle>
-            <DialogDescription>
-              Enter the Discord ID of the user you want to add. They must have logged in to the system at least once.
-            </DialogDescription>
+            <DialogDescription>Enter the Discord ID of the user you want to add. They must have logged in to the system at least once.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Discord User ID</Label>
-              <Input
-                placeholder="e.g. 123456789012345678"
-                value={discordId}
-                onChange={(e) => setDiscordId(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Right-click a user in Discord and copy their User ID.
-              </p>
+              <Input placeholder="e.g. 123456789012345678" value={discordId} onChange={(e) => setDiscordId(e.target.value)} className="font-mono tabular-nums" />
+              <p className="text-xs text-zinc-600">Right-click a user in Discord and copy their User ID.</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => addMutation.mutate()}
-              disabled={!discordId.trim() || addMutation.isPending}
-            >
+            <Button onClick={() => addMutation.mutate()} disabled={!discordId.trim() || addMutation.isPending}>
               {addMutation.isPending ? 'Adding...' : 'Add Member'}
             </Button>
           </DialogFooter>
@@ -229,35 +206,22 @@ export function MembersView({ factionId }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change Role</DialogTitle>
-            <DialogDescription>
-              Update {roleTarget?.username}&apos;s role in this faction.
-            </DialogDescription>
+            <DialogDescription>Update {roleTarget?.username}&apos;s role in this faction.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex gap-4">
-              <Button
-                variant={newRole === 'member' ? 'outline' : 'default'}
-                className="flex-1"
-                onClick={() => setNewRole('member')}
-              >
+            <div className="flex gap-3">
+              <Button variant={newRole === 'member' ? 'outline' : 'default'} className="flex-1" onClick={() => setNewRole('member')}>
                 Member
               </Button>
-              <Button
-                variant={newRole === 'admin' ? 'default' : 'outline'}
-                className="flex-1"
-                onClick={() => setNewRole('admin')}
-              >
-                <Shield className="mr-2 h-4 w-4" />
+              <Button variant={newRole === 'admin' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('admin')}>
+                <Shield className="mr-1.5 h-4 w-4" />
                 Admin
               </Button>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => roleMutation.mutate()}
-              disabled={roleMutation.isPending}
-            >
+            <Button onClick={() => roleMutation.mutate()} disabled={roleMutation.isPending}>
               {roleMutation.isPending ? 'Saving...' : 'Update Role'}
             </Button>
           </DialogFooter>
@@ -269,17 +233,11 @@ export function MembersView({ factionId }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {removeTarget?.username}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove the member from the faction. Their entries will be preserved.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will remove the member from the faction. Their entries will be preserved.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => removeMutation.mutate()}
-              disabled={removeMutation.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={() => removeMutation.mutate()} disabled={removeMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">
               {removeMutation.isPending ? 'Removing...' : 'Remove'}
             </AlertDialogAction>
           </AlertDialogFooter>

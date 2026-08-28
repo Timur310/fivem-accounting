@@ -25,18 +25,6 @@ const RANGE_OPTIONS = [
   { label: '90d', value: '90d' },
 ];
 
-// Color palette for pie/stacked charts
-const COLORS = [
-  'hsl(221, 83%, 53%)',   // primary blue
-  'hsl(142, 71%, 45%)',   // green
-  'hsl(38, 92%, 50%)',    // amber
-  'hsl(0, 84%, 60%)',     // red
-  'hsl(262, 83%, 58%)',   // purple
-  'hsl(199, 89%, 48%)',   // cyan
-  'hsl(326, 100%, 74%)',  // pink
-  'hsl(47, 96%, 53%)',    // yellow
-];
-
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
@@ -45,19 +33,27 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+const tooltipStyle = {
+  backgroundColor: '#101114',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: '#e4e4e7',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+};
+
 export function DashboardCharts({ factionId, brandColor }: Props) {
   const [range, setRange] = useState('30d');
 
-  // Build a palette that starts with the brand color
   const palette = [
-    brandColor || 'hsl(221, 83%, 53%)',
-    'hsl(142, 71%, 45%)',
-    'hsl(38, 92%, 50%)',
-    'hsl(0, 84%, 60%)',
-    'hsl(262, 83%, 58%)',
-    'hsl(199, 89%, 48%)',
-    'hsl(326, 100%, 74%)',
-    'hsl(47, 96%, 53%)',
+    brandColor || '#6366f1',
+    '#22c55e',
+    '#f59e0b',
+    '#ef4444',
+    '#8b5cf6',
+    '#06b6d4',
+    '#ec4899',
+    '#eab308',
   ];
 
   const { data, isLoading } = useQuery({
@@ -70,10 +66,7 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
     return (
       <div className="grid gap-6 lg:grid-cols-2">
         {[...Array(4)].map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2"><Skeleton className="h-5 w-40" /></CardHeader>
-            <CardContent><Skeleton className="h-64 w-full" /></CardContent>
-          </Card>
+          <Card key={i}><CardHeader className="pb-2"><Skeleton className="h-5 w-40" /></CardHeader><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card>
         ))}
       </div>
     );
@@ -81,7 +74,6 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
 
   if (!data) return null;
 
-  // Aggregate member-item breakdown into pivot format for stacked bar
   const itemTypes = [...new Set(data.memberItemBreakdown.map((b) => b.itemTypeName))];
   const memberNames = [...new Set(data.memberItemBreakdown.map((b) => b.username))];
   const stackedData = memberNames.map((name) => {
@@ -97,10 +89,9 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Range selector */}
       <div className="flex items-center gap-2">
-        <CalendarDays className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Range:</span>
+        <CalendarDays className="h-4 w-4 text-zinc-500" />
+        <span className="text-xs text-zinc-500">Range:</span>
         <div className="flex gap-1">
           {RANGE_OPTIONS.map((opt) => (
             <Button
@@ -114,38 +105,25 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
             </Button>
           ))}
         </div>
-        <span className="text-xs text-muted-foreground ml-auto">
+        <span className="text-[11px] text-zinc-600 ml-auto tabular-nums">
           {data.range.from} → {data.range.to}
         </span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* 1. Per-member bar chart */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <BarChart3 className="h-4 w-4" />
-              Member Contributions
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200"><BarChart3 className="h-4 w-4 text-zinc-400" />Member Contributions</CardTitle>
           </CardHeader>
           <CardContent>
             {data.memberContributions.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-12">No data in this period.</p>
+              <p className="text-zinc-600 text-sm text-center py-12">No data in this period.</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={data.memberContributions} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <XAxis
-                    dataKey="username"
-                    tick={{ fontSize: 12 }}
-                    angle={-30}
-                    textAnchor="end"
-                    height={50}
-                  />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={formatCurrency} />
-                  <Tooltip
-                    formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']}
-                    contentStyle={{ borderRadius: '8px', fontSize: '13px' }}
-                  />
+                  <XAxis dataKey="username" tick={{ fontSize: 12, fill: '#71717a' }} angle={-30} textAnchor="end" height={50} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#71717a' }} tickFormatter={formatCurrency} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']} contentStyle={tooltipStyle} />
                   <Bar dataKey="total" fill={palette[0]} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -153,111 +131,60 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
           </CardContent>
         </Card>
 
-        {/* 2. Item type distribution pie */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <PieIcon className="h-4 w-4" />
-              Item Distribution
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200"><PieIcon className="h-4 w-4 text-zinc-400" />Item Distribution</CardTitle>
           </CardHeader>
           <CardContent>
             {data.itemDistribution.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-12">No data in this period.</p>
+              <p className="text-zinc-600 text-sm text-center py-12">No data in this period.</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
-                  <Pie
-                    data={data.itemDistribution}
-                    dataKey="total"
-                    nameKey="itemTypeName"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    label={({ itemTypeName, percent }) =>
-                      `${itemTypeName} ${(percent * 100).toFixed(0)}%`
-                    }
-                    labelLine={{ strokeWidth: 1 }}
-                  >
-                    {data.itemDistribution.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
-                    ))}
+                  <Pie data={data.itemDistribution} dataKey="total" nameKey="itemTypeName" cx="50%" cy="50%" outerRadius={90} label={({ itemTypeName, percent }) => `${itemTypeName} ${(percent * 100).toFixed(0)}%`} labelLine={{ strokeWidth: 1, stroke: '#3f3f46' }}>
+                    {data.itemDistribution.map((_, index) => (<Cell key={`cell-${index}`} fill={palette[index % palette.length]} />))}
                   </Pie>
-                  <Tooltip
-                    formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']}
-                    contentStyle={{ borderRadius: '8px', fontSize: '13px' }}
-                  />
+                  <Tooltip formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']} contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
 
-        {/* 3. Daily trend line */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4" />
-              Daily Trend
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200"><TrendingUp className="h-4 w-4 text-zinc-400" />Daily Trend</CardTitle>
           </CardHeader>
           <CardContent>
             {data.dailyTrend.every((d) => d.total === 0) ? (
-              <p className="text-muted-foreground text-sm text-center py-12">No data in this period.</p>
+              <p className="text-zinc-600 text-sm text-center py-12">No data in this period.</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={data.dailyTrend} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v: string) => {
-                      const d = new Date(v + 'T00:00:00');
-                      return `${d.getMonth() + 1}/${d.getDate()}`;
-                    }}
-                  />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={formatCurrency} />
-                  <Tooltip
-                    formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']}
-                    labelFormatter={(label: string) => `Date: ${label}`}
-                    contentStyle={{ borderRadius: '8px', fontSize: '13px' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    stroke={palette[0]}
-                    strokeWidth={2}
-                    dot={data.range.days <= 30}
-                    activeDot={{ r: 5 }}
-                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#71717a' }} tickFormatter={(v: string) => { const d = new Date(v + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()}`; }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#71717a' }} tickFormatter={formatCurrency} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 }), 'Total']} labelFormatter={(label: string) => `Date: ${label}`} contentStyle={tooltipStyle} />
+                  <Line type="monotone" dataKey="total" stroke={palette[0]} strokeWidth={2} dot={data.range.days <= 30} activeDot={{ r: 5, fill: palette[0] }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
 
-        {/* 4. Per-member per-item breakdown (stacked bar) */}
         {stackedData.length > 0 && itemTypes.length > 1 && (
           <Card className="lg:col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <BarChart3 className="h-4 w-4" />
-                Member Breakdown by Item Type
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2 text-sm text-zinc-200"><BarChart3 className="h-4 w-4 text-zinc-400" />Member Breakdown by Item Type</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={stackedData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={formatCurrency} />
-                  <Tooltip
-                    formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 })]}
-                    contentStyle={{ borderRadius: '8px', fontSize: '13px' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  {itemTypes.map((it, i) => (
-                    <Bar key={it} dataKey={it} stackId="a" fill={palette[i % palette.length]} />
-                  ))}
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#71717a' }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#71717a' }} tickFormatter={formatCurrency} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(value: number) => [value.toLocaleString('en-US', { minimumFractionDigits: 2 })]} contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: '#a1a1aa' }} />
+                  {itemTypes.map((it, i) => (<Bar key={it} dataKey={it} stackId="a" fill={palette[i % palette.length]} />))}
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>

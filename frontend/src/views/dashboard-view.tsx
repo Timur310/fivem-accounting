@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3 } from 'lucide-react';
+import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
 
@@ -26,7 +26,6 @@ export function DashboardView({ factionId }: Props) {
     refetchOnWindowFocus: true,
   });
 
-  // Fetch quotas for progress display (always called, never conditional)
   const { data: quotasList = [] } = useQuery({
     queryKey: ['quotas', factionId],
     queryFn: () => quotasApi.list(factionId),
@@ -36,21 +35,11 @@ export function DashboardView({ factionId }: Props) {
   if (isLoading) {
     return (
       <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-20" />
-              </CardContent>
-            </Card>
+            <Skeleton key={i} className="h-24 w-full" />
           ))}
-        </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
-          <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
         </div>
       </div>
     );
@@ -58,8 +47,8 @@ export function DashboardView({ factionId }: Props) {
 
   if (error || !data) {
     return (
-      <Card className="border-destructive">
-        <CardContent className="p-6 text-center text-destructive">
+      <Card className="border-red-500/20">
+        <CardContent className="p-6 text-center text-red-400">
           Failed to load dashboard. Make sure the backend is running.
         </CardContent>
       </Card>
@@ -69,68 +58,73 @@ export function DashboardView({ factionId }: Props) {
   const { faction, totalsByType, grandTotal, memberCount, adminCount, totalEntries, topContributors, recentEntries } = data;
   const activeQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(q => q.isActive && q.periodActive);
 
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
     <div className="space-y-6">
       {/* Faction Header */}
       <div>
-        <h2 className="text-2xl font-bold">{faction.name}</h2>
+        <h2 className="text-xl font-medium tracking-tight text-zinc-100">{faction.name}</h2>
         {faction.description && (
-          <p className="text-muted-foreground mt-1">{faction.description}</p>
+          <p className="text-zinc-500 mt-1 text-sm">{faction.description}</p>
         )}
       </div>
 
-      {/* Stat Cards */}
+      {/* ══ Bento Grid: Hero + 3 Stats ══ */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Grand Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+        {/* Hero Card — Grand Total with Glow */}
+        <Card className="faction-glow border-highlight lg:col-span-1 sm:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Treasury Balance</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <CardContent className="relative z-10">
+            <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: brandColor }}>
+              {fmt(grandTotal)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">across all item types</p>
+            <p className="text-xs text-zinc-500 mt-1.5">across all item types</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Entries</CardTitle>
-            <List className="h-4 w-4 text-muted-foreground" />
+
+        {/* Stat: Total Entries */}
+        <Card className="border-highlight">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Entries</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalEntries.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">logged contributions</p>
+          <CardContent className="relative z-10">
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalEntries.toLocaleString()}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">logged contributions</p>
           </CardContent>
         </Card>
+
+        {/* Stat: Members */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Members</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Members</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{memberCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">{adminCount} admin{adminCount !== 1 ? 's' : ''}</p>
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{memberCount}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">{adminCount} admin{adminCount !== 1 ? 's' : ''}</p>
           </CardContent>
         </Card>
+
+        {/* Stat: Item Types */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Item Types</CardTitle>
-            <Coins className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Categories</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalsByType.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">active categories</p>
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalsByType.length}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">active item types</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quota Progress */}
+      {/* ══ Quota Progress — Energy Bars ══ */}
       {activeQuotas.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Target className="h-4 w-4" />
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+              <Target className="h-4 w-4 text-zinc-400" />
               Quota Progress
             </CardTitle>
           </CardHeader>
@@ -140,23 +134,24 @@ export function DashboardView({ factionId }: Props) {
                 const pct = q.percentage ?? 0;
                 const met = pct >= 100;
                 return (
-                  <div key={q.id} className="rounded-lg border p-4 space-y-3">
+                  <div key={q.id} className="rounded-lg border border-white/[0.06] p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">{q.itemTypeName}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{q.periodType}</p>
+                        <p className="text-sm font-medium text-zinc-200">{q.itemTypeName}</p>
+                        <p className="text-[11px] text-zinc-500 capitalize">{q.periodType}</p>
                       </div>
-                      <Badge variant={met ? 'default' : 'outline'} className={met ? 'bg-green-600' : ''}>
+                      <Badge variant={met ? 'outline' : 'default'} className={met ? 'border-emerald-500/30 text-emerald-400' : ''}>
                         {met ? 'Met' : `${pct.toFixed(1)}%`}
                       </Badge>
                     </div>
-                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                    {/* Energy bar */}
+                    <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${met ? 'bg-green-500' : ''}`}
+                        className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : ''}`}
                         style={{ width: `${Math.min(pct, 100)}%`, ...(!met ? { backgroundColor: brandColor } : {}) }}
                       />
                     </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
+                    <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
                       <span>{q.itemUnit}{(q.currentAmount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                       <span>of {q.itemUnit}{Number(q.targetAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
@@ -168,99 +163,33 @@ export function DashboardView({ factionId }: Props) {
         </Card>
       )}
 
-      {/* Export & Charts Toggle */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Download className="h-4 w-4" />
-              Export Data
-            </CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const url = exportApi.entriesUrl(factionId);
-                window.open(url, '_blank');
-              }}
-            >
-              <Download className="mr-2 h-3.5 w-3.5" />
-              Export Entries CSV
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const url = exportApi.quotaReportUrl(factionId);
-                window.open(url, '_blank');
-              }}
-            >
-              <Target className="mr-2 h-3.5 w-3.5" />
-              Export Quota Report CSV
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Totals by Type */}
-      {totalsByType.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Totals by Item Type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {totalsByType.map((t) => (
-                <div
-                  key={t.itemTypeId}
-                  className="flex items-center justify-between rounded-lg border p-4"
-                >
-                  <div>
-                    <p className="font-medium">{t.itemTypeName}</p>
-                    <p className="text-sm text-muted-foreground">{t.unit}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold">
-                      {t.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ══ Two Column: Top Contributors + Recent Activity ══ */}
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Top Contributors */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4" />
+          <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+              <TrendingUp className="h-4 w-4 text-zinc-400" />
               Top Contributors
             </CardTitle>
           </CardHeader>
           <CardContent>
             {topContributors.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">No contributions yet.</p>
+              <p className="text-zinc-600 text-sm text-center py-8">No contributions yet.</p>
             ) : (
-              <div className="space-y-3">
-                {topContributors.map((c, i) => (
-                  <div key={c.userId} className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-muted-foreground w-5">#{i + 1}</span>
-                    <Avatar className="h-8 w-8">
+              <div className="space-y-1">
+                {topContributors.slice(0, 7).map((c, i) => (
+                  <div key={c.userId} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                    <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">{i + 1}</span>
+                    <Avatar className="h-7 w-7">
                       <AvatarImage src={c.avatarUrl ?? undefined} />
-                      <AvatarFallback>{c.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-[10px]">{c.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{c.username}</p>
-                      <p className="text-xs text-muted-foreground">{c.entryCount} entries</p>
+                      <p className="text-sm text-zinc-300 truncate">{c.username}</p>
+                      <p className="text-[11px] text-zinc-600">{c.entryCount} entries</p>
                     </div>
-                    <span className="text-sm font-bold">{c.totalContributed.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-medium tabular-nums text-zinc-200">{c.totalContributed.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                   </div>
                 ))}
               </div>
@@ -268,38 +197,41 @@ export function DashboardView({ factionId }: Props) {
           </CardContent>
         </Card>
 
-        {/* Recent Entries */}
+        {/* Recent Activity */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between text-base">
-              <span>Recent Activity</span>
-              <Badge
-                className="cursor-pointer"
-                style={{ backgroundColor: `${brandColor}15`, color: brandColor, borderColor: `${brandColor}30` }}
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-sm text-zinc-200">
+              <span className="flex items-center gap-2">
+                <List className="h-4 w-4 text-zinc-400" />
+                Recent Activity
+              </span>
+              <button
                 onClick={() => setCurrentView('entries')}
+                className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
+                style={{ color: brandColor }}
               >
-                View All
-              </Badge>
+                View All <ArrowUpRight className="h-3 w-3" />
+              </button>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">No entries yet.</p>
+              <p className="text-zinc-600 text-sm text-center py-8">No entries yet.</p>
             ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 rounded-lg border p-3">
-                    <Avatar className="h-8 w-8 shrink-0">
+                  <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                    <Avatar className="h-7 w-7 shrink-0">
                       <AvatarImage src={e.avatarUrl ?? undefined} />
-                      <AvatarFallback>{e.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-[10px]">{e.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
-                        <span className="font-medium">{e.username}</span>
-                        <span className="text-muted-foreground"> logged </span>
-                        <span className="font-bold">{e.itemUnit}{Number(e.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-zinc-300 font-medium">{e.username}</span>
+                        <span className="text-zinc-600"> logged </span>
+                        <span className="font-medium tabular-nums text-zinc-200">{e.itemUnit}{Number(e.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[11px] text-zinc-600">
                         {e.itemTypeName} &middot; {e.entryDate}
                         {e.description && ` — ${e.description}`}
                       </p>
@@ -312,11 +244,66 @@ export function DashboardView({ factionId }: Props) {
         </Card>
       </div>
 
-      {/* Charts Section */}
+      {/* ══ Totals by Type — compact grid ══ */}
+      {totalsByType.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-zinc-200">Totals by Item Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {totalsByType.map((t) => (
+                <div
+                  key={t.itemTypeId}
+                  className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
+                    <p className="text-xs text-zinc-600">{t.unit}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-medium tabular-nums text-zinc-100">
+                      {fmt(t.total)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ══ Export ══ */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center gap-3">
+            <Download className="h-4 w-4 text-zinc-500" />
+            <span className="text-sm text-zinc-400">Export</span>
+            <div className="flex gap-2 ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(exportApi.entriesUrl(factionId), '_blank')}
+              >
+                Entries CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(exportApi.quotaReportUrl(factionId), '_blank')}
+              >
+                Quota Report
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ══ Charts ══ */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <BarChart3 className="h-4 w-4" />
+          <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+            <BarChart3 className="h-4 w-4 text-zinc-400" />
             Analytics
           </CardTitle>
         </CardHeader>

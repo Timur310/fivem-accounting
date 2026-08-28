@@ -92,8 +92,6 @@ export function AppShell() {
   const isAdmin =
     user?.role === 'superadmin' || currentFactionMembership?.role === 'admin';
   const isSuperadmin = user?.role === 'superadmin';
-  // Can log entries if the user is an actual member of the selected faction
-  // (superadmins who are just browsing without membership cannot log entries)
   const canLogEntries = !!currentFactionMembership;
 
   const navItems = [
@@ -141,7 +139,6 @@ export function AppShell() {
 
   const handleNavClick = (view: string) => {
     if (!selectedFactionId && view !== 'admin-factions' && view !== 'admin-faction-detail') {
-      // No faction selected — superadmins go to admin panel, others see message
       if (isSuperadmin) {
         setCurrentView('admin-factions');
         return;
@@ -151,15 +148,13 @@ export function AppShell() {
   };
 
   const renderView = () => {
-    // Superadmin with no faction selected — auto-redirect to admin panel
     if (!selectedFactionId && currentView !== 'admin-factions' && currentView !== 'admin-faction-detail') {
       if (isSuperadmin) {
-        // Defer redirect to avoid setState during render
         requestAnimationFrame(() => setCurrentView('admin-factions'));
         return null;
       }
       return (
-        <div className="flex items-center justify-center h-full text-muted-foreground">
+        <div className="flex items-center justify-center h-full text-zinc-500">
           <p>You are not a member of any faction. Contact a superadmin.</p>
         </div>
       );
@@ -187,7 +182,6 @@ export function AppShell() {
     }
   };
 
-  // Inject brand color as CSS custom property on the root div
   const brandStyle = {
     '--brand-color': brandColor,
     '--brand-color-light': `${brandColor}20`,
@@ -195,27 +189,40 @@ export function AppShell() {
   } as React.CSSProperties;
 
   return (
-    <div className="min-h-screen flex bg-background" style={brandStyle}>
+    <div className="min-h-screen flex bg-background dot-grid" style={brandStyle}>
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300 lg:relative lg:z-auto ${sidebarOpen ? 'w-64' : 'w-0 lg:w-16'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/[0.06] bg-[#09090b] transition-all duration-300 lg:relative lg:z-auto ${sidebarOpen ? 'w-60' : 'w-0 lg:w-[52px]'}`}
       >
         {/* Sidebar Header */}
-        <div className="flex h-16 items-center gap-2 border-b px-4">
+        <div className="flex h-14 items-center gap-2.5 border-b border-white/[0.06] px-3">
           {sidebarOpen && (
-            <div className="flex items-center gap-2 overflow-hidden">
-              <Coins className="h-6 w-6 shrink-0" style={{ color: brandColor }} />
-              <span className="font-bold text-lg truncate">Faction Accountant</span>
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-lg"
+                style={{ backgroundColor: `${brandColor}18` }}
+              >
+                <Coins className="h-4 w-4" style={{ color: brandColor }} />
+              </div>
+              <span className="font-medium text-sm tracking-tight truncate text-zinc-200">
+                Faction Accountant
+              </span>
             </div>
           )}
           {!sidebarOpen && (
-            <Coins className="h-6 w-6 mx-auto" style={{ color: brandColor }} />
+            <button
+              onClick={toggleSidebar}
+              className="w-full flex justify-center py-1"
+              title="Expand sidebar"
+            >
+              <Coins className="h-4.5 w-4.5" style={{ color: brandColor }} />
+            </button>
           )}
         </div>
 
         {/* Faction Selector */}
         {activeFactions.length > 0 && (
-          <div className="px-3 py-3 border-b">
+          <div className="px-2.5 py-2.5 border-b border-white/[0.06]">
             {sidebarOpen ? (
               <Select
                 value={selectedFactionId ?? ''}
@@ -226,7 +233,7 @@ export function AppShell() {
                   }
                 }}
               >
-                <SelectTrigger className="w-full border-[var(--brand-color)]/30 focus:ring-[var(--brand-color)]/30">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select faction" />
                 </SelectTrigger>
                 <SelectContent>
@@ -235,7 +242,12 @@ export function AppShell() {
                       <span className="flex items-center gap-2">
                         <span>{f.factionName}</span>
                         {f.role === 'admin' && (
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}>Admin</span>
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                            style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
+                          >
+                            Admin
+                          </span>
                         )}
                       </span>
                     </SelectItem>
@@ -248,14 +260,14 @@ export function AppShell() {
                 className="w-full flex justify-center py-1"
                 title="Expand sidebar"
               >
-                <Coins className="h-5 w-5 text-muted-foreground" />
+                <Coins className="h-4 w-4 text-zinc-500" />
               </button>
             )}
           </div>
         )}
 
         {/* Nav Items */}
-        <nav className="flex-1 py-2 px-2 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
             if (item.superadminOnly && !isSuperadmin) return null;
@@ -264,14 +276,19 @@ export function AppShell() {
               <button
                 key={item.view}
                 onClick={() => handleNavClick(item.view)}
-                className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
                   active
-                    ? 'bg-[var(--brand-color)] text-white'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    ? 'text-white font-medium'
+                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
                 } ${!sidebarOpen ? 'justify-center' : ''}`}
+                style={active ? {
+                  backgroundColor: `${brandColor}12`,
+                  boxShadow: `inset 0 0 0 1px ${brandColor}25`,
+                  color: brandColor,
+                } : undefined}
                 title={!sidebarOpen ? item.label : undefined}
               >
-                <item.icon className="h-5 w-5 shrink-0" />
+                <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
                 {sidebarOpen && <span className="truncate">{item.label}</span>}
               </button>
             );
@@ -279,15 +296,15 @@ export function AppShell() {
         </nav>
 
         {/* Collapse button */}
-        <div className="border-t p-2 hidden lg:block">
+        <div className="border-t border-white/[0.06] p-1.5 hidden lg:block">
           <Button
             variant="ghost"
             size="sm"
-            className="w-full"
+            className="w-full text-zinc-500 hover:text-zinc-300"
             onClick={toggleSidebar}
           >
-            <ChevronLeft className={`h-4 w-4 transition-transform ${!sidebarOpen ? 'rotate-180' : ''}`} />
-            {sidebarOpen && <span className="ml-2">Collapse</span>}
+            <ChevronLeft className={`h-3.5 w-3.5 transition-transform duration-200 ${!sidebarOpen ? 'rotate-180' : ''}`} />
+            {sidebarOpen && <span className="ml-2 text-xs">Collapse</span>}
           </Button>
         </div>
       </aside>
@@ -295,7 +312,7 @@ export function AppShell() {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -303,39 +320,39 @@ export function AppShell() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 border-b bg-card flex items-center justify-between px-4 shrink-0">
+        <header className="h-14 border-b border-white/[0.06] bg-background/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden"
+              className="lg:hidden text-zinc-400"
               onClick={toggleSidebar}
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <h1 className="text-lg font-semibold">
+            <h1 className="text-sm font-medium text-zinc-300">
               {navItems.find((i) => i.view === currentView)?.label ?? 'Faction Accountant'}
             </h1>
           </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2">
-                <Avatar className="h-8 w-8">
+              <Button variant="ghost" className="flex items-center gap-2 hover:bg-white/[0.04]">
+                <Avatar className="h-7 w-7">
                   <AvatarImage src={user?.avatarUrl ?? undefined} />
-                  <AvatarFallback>
+                  <AvatarFallback className="text-[10px]">
                     {user?.username?.slice(0, 2).toUpperCase() ?? 'U'}
                   </AvatarFallback>
                 </Avatar>
-                <span className="hidden sm:inline text-sm font-medium">
+                <span className="hidden sm:inline text-sm text-zinc-300">
                   {user?.username}
                 </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
-                <div>{user?.username}</div>
-                <div className="text-xs text-muted-foreground font-normal">
+                <div className="text-zinc-200">{user?.username}</div>
+                <div className="text-xs text-zinc-500 font-normal">
                   {user?.role === 'superadmin'
                     ? 'Superadmin'
                     : user?.role === 'faction_admin'
@@ -353,7 +370,11 @@ export function AppShell() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 md:p-6 overflow-auto">{renderView()}</main>
+        <main className="flex-1 p-4 md:p-6 overflow-auto">
+          <div className="animate-fade-in">
+            {renderView()}
+          </div>
+        </main>
       </div>
     </div>
   );
