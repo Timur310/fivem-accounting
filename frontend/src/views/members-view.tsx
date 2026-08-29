@@ -23,7 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { FactionSettings } from '@/lib/api-types';
@@ -249,6 +249,20 @@ export function MembersView({ factionId }: Props) {
                             setRoleDialogOpen(true);
                           }} title="Change Role">
                             <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-zinc-500 hover:text-zinc-200 disabled:opacity-30"
+                            disabled={sortedRanks.length === 0}
+                            title={sortedRanks.length === 0 ? 'No ranks defined — add them in Settings' : 'Change Rank'}
+                            onClick={() => {
+                              setRankTarget({ userId: m.userId, username: m.username, currentRank: m.rank ?? null });
+                              setNewRank(m.rank ?? '');
+                              setRankDialogOpen(true);
+                            }}
+                          >
+                            <ChevronsUp className="h-3 w-3" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title="Remove">
                             <UserMinus className="h-3 w-3" />
