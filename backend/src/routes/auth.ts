@@ -67,7 +67,6 @@ router.get('/callback', async (req: Request, res: Response) => {
     let userId: string;
 
     if (existing) {
-      // Update username/avatar and last login
       await db
         .update(users)
         .set({
@@ -80,7 +79,6 @@ router.get('/callback', async (req: Request, res: Response) => {
         .where(eq(users.id, existing.id));
       userId = existing.id;
     } else {
-      // Create new user
       const [newUser] = await db
         .insert(users)
         .values({
@@ -119,13 +117,16 @@ router.get('/callback', async (req: Request, res: Response) => {
       req,
     });
 
-    // Redirect to frontend dashboard
+    // Redirect directly to the Next.js Frontend URL (Port 3000)
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.redirect(frontendUrl);
-    res.redirect(frontendUrl);
   } catch (err: any) {
-    console.error('[AUTH CALLBACK ERROR]', err?.response?.data || err?.message);
-    error(res, 'OAUTH_ERROR', 'Failed to complete authentication', 500);
+    console.error('[AUTH CALLBACK ERROR]', err?.response?.data || err?.message || err);
+
+    // Check if headers have already been sent before responding with an error
+    if (!res.headersSent) {
+      error(res, 'OAUTH_ERROR', 'Failed to complete authentication', 500);
+    }
   }
 });
 
