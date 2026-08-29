@@ -11,7 +11,9 @@ import { createAuditLog } from '../lib/audit.js';
 const router = Router({ mergeParams: true });
 
 // All routes require superadmin
-router.use(requireAuth, requireSuperadmin);
+// NOTE: auth is applied per-route, not via router.use(). This router is mounted
+// at /api/v1/factions, which prefix-matches the nested faction-scoped routers
+// (/factions/:id/entries etc.); router-level middleware would run for those too.
 
 // ── Validation schemas ────────────────────────────────
 
@@ -39,7 +41,7 @@ const listQuerySchema = z.object({
 });
 
 // ── POST / — create faction ─────────────────────────
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAuth, requireSuperadmin, async (req: Request, res: Response) => {
   const parsed = createFactionSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
@@ -126,7 +128,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // ── GET / — list all factions ────────────────────────
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', requireAuth, requireSuperadmin, async (req: Request, res: Response) => {
   const query = listQuerySchema.safeParse(req.query);
   if (!query.success) {
     error(res, 'VALIDATION_ERROR', query.error.issues[0]!.message);
@@ -165,7 +167,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── GET /:id — faction detail ─────────────────────────
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, requireSuperadmin, async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const [faction] = await db.select().from(factions).where(eq(factions.id, id)).limit(1);
   if (!faction) {
@@ -198,7 +200,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:id — update faction ───────────────────────
-router.patch('/:id', async (req: Request, res: Response) => {
+router.patch('/:id', requireAuth, requireSuperadmin, async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const parsed = updateFactionSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -249,7 +251,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 });
 
 // ── DELETE /:id — soft-delete faction ─────────────────
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireSuperadmin, async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const [existing] = await db.select().from(factions).where(eq(factions.id, id)).limit(1);
   if (!existing) {
