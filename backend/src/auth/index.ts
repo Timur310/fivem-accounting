@@ -127,8 +127,11 @@ export const COOKIE_NAME = 'faction_session';
 
 export const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: (env.NODE_ENV === 'production' ? 'strict' : 'lax') as 'strict' | 'lax',
+  // Force secure to false if you don't have HTTPS set up yet, 
+  // or use a custom env variable like env.USE_HTTPS === 'true'
+  secure: false, 
+  // Keep this as 'lax' for now to ensure smooth cross-port routing on your VPS
+  sameSite: 'lax' as const, 
   maxAge: env.JWT_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,
   path: '/',
 };
