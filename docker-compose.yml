@@ -33,12 +33,12 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/faction_accountant
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
-      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-http://YOUR_VPS_IP:3000/api/v1/auth/callback}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-http://localhost:3000/api/v1/auth/callback}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       JWT_EXPIRATION_DAYS: ${JWT_EXPIRATION_DAYS:-7}
       PORT: "8000"
       NODE_ENV: ${NODE_ENV:-production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://YOUR_VPS_IP:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8000:8000"
@@ -58,7 +58,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     environment:
-      NEXT_PUBLIC_API_URL: http://YOUR_VPS_IP:8000
+      NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
