@@ -221,6 +221,9 @@ router.patch('/:id', requireAuth, requireSuperadmin, async (req: Request, res: R
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
   if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
   if (parsed.data.payoutApprovalRequired !== undefined) updates.payoutApprovalRequired = parsed.data.payoutApprovalRequired;
+  // Ranks, inactivity threshold and strike expiry are faction-run settings and
+  // live on PATCH /factions/:id/settings, which faction admins can reach.
+
   if (parsed.data.customFields !== undefined) {
     const names = parsed.data.customFields.map((f) => f.name);
     if (new Set(names).size !== names.length) {

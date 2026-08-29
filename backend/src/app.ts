@@ -19,6 +19,10 @@ import bulkRoutes from './routes/bulk.js';
 import reportRoutes from './routes/reports.js';
 import payoutRoutes from './routes/payouts.js';
 import treasuryRoutes from './routes/treasury.js';
+import memberNoteRoutes from './routes/memberNotes.js';
+import memberStrikeRoutes from './routes/memberStrikes.js';
+import factionStrikeRoutes from './routes/factionStrikes.js';
+import factionSettingsRoutes from './routes/factionSettings.js';
 
 const app = express();
 
@@ -62,7 +66,13 @@ app.use('/api/v1/factions', factionRoutes);
 app.use('/api/v1/admin/analytics', adminAnalyticsRoutes);
 
 // Faction-scoped routes (nested under /factions/:id/...)
+// Member sub-resources are mounted before /members so the more specific paths
+// are matched by their own routers first.
+app.use('/api/v1/factions/:id/members/:userId/notes', memberNoteRoutes);
+app.use('/api/v1/factions/:id/members/:userId/strikes', memberStrikeRoutes);
 app.use('/api/v1/factions/:id/members', memberRoutes);
+app.use('/api/v1/factions/:id/strikes', factionStrikeRoutes);
+app.use('/api/v1/factions/:id/settings', factionSettingsRoutes);
 app.use('/api/v1/factions/:id/item-types', itemTypeRoutes);
 app.use('/api/v1/factions/:id/entries', entryRoutes);
 app.use('/api/v1/factions/:id/dashboard', dashboardRoutes);

@@ -31,3 +31,15 @@ export function formatDateValue(value: Date | string | null | undefined): string
   if (value == null) return '';
   return value instanceof Date ? toDateString(value) : String(value).slice(0, 10);
 }
+
+/**
+ * Whole days elapsed since a `YYYY-MM-DD` date, or null when there is no date.
+ * Used for inactivity reporting, where "never logged anything" and "logged
+ * today" must stay distinguishable.
+ */
+export function daysSince(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const then = new Date(`${dateStr}T00:00:00`).getTime();
+  if (Number.isNaN(then)) return null;
+  return Math.floor((Date.now() - then) / 86_400_000);
+}
