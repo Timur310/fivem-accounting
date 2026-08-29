@@ -1,0 +1,1 @@
+ALTER TABLE "item_types" ADD COLUMN "is_currency" boolean DEFAULT false NOT NULL;

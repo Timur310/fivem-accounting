@@ -17,11 +17,14 @@ router.use(requireAuth, requireFactionMember);
 const createItemTypeSchema = z.object({
   name: z.string().min(1).max(100),
   unit: z.string().min(1).max(20).default('$'),
+  // Presentation hint only: money vs. countable goods. Defaults to false.
+  isCurrency: z.boolean().default(false),
 });
 
 const updateItemTypeSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   unit: z.string().min(1).max(20).optional(),
+  isCurrency: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -34,11 +37,11 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  const { name, unit } = parsed.data;
+  const { name, unit, isCurrency } = parsed.data;
 
   const [created] = await db
     .insert(itemTypes)
-    .values({ factionId, name, unit })
+    .values({ factionId, name, unit, isCurrency })
     .returning();
 
   if (!created) {
@@ -52,7 +55,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     action: 'create',
     entityType: 'item_type',
     entityId: created.id,
-    details: { name, unit },
+    details: { name, unit, isCurrency },
     req,
   });
 
@@ -68,6 +71,7 @@ router.get('/', async (req: Request, res: Response) => {
       id: itemTypes.id,
       name: itemTypes.name,
       unit: itemTypes.unit,
+      isCurrency: itemTypes.isCurrency,
       isActive: itemTypes.isActive,
       createdAt: itemTypes.createdAt,
       entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE item_type_id = item_types.id AND is_deleted = false)::int`,
@@ -103,6 +107,7 @@ router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, r
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.unit !== undefined) updates.unit = parsed.data.unit;
+  if (parsed.data.isCurrency !== undefined) updates.isCurrency = parsed.data.isCurrency;
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
 
   const [updated] = await db
@@ -117,7 +122,7 @@ router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, r
     action: 'update',
     entityType: 'item_type',
     entityId: typeId,
-    details: { before: { name: existing.name, unit: existing.unit, isActive: existing.isActive }, after: updates },
+    details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive }, after: updates },
     req,
   });
 

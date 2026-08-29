@@ -113,6 +113,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       .select({
         itemTypeName: itemTypes.name,
         unit: itemTypes.unit,
+        isCurrency: itemTypes.isCurrency,
         total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
         count: sql<number>`COUNT(*)::int`,
         avg: sql<string>`COALESCE(AVG(CAST(amount AS NUMERIC)), 0)`,
@@ -121,7 +122,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       .from(entries)
       .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where)
-      .groupBy(itemTypes.name, itemTypes.unit)
+      .groupBy(itemTypes.name, itemTypes.unit, itemTypes.isCurrency)
       .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`),
 
     // Per member ranking
