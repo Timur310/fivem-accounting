@@ -136,7 +136,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                 const isMe = 'isMe' in r && r.isMe;
                 return (
                   <div
-                    key={`global-${showGlobal ? r.factionId : ''}-${r.userId}`}
+                    key={`${showGlobal && 'factionId' in r ? r.factionId : ''}-${r.userId}`}
                     className={`flex items-center gap-4 px-4 py-3 transition-colors duration-100 ${isMe ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'}`}
                     style={isMe ? { borderLeft: `3px solid ${brandColor}` } : { borderLeft: '3px solid transparent' }}
                   >

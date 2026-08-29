@@ -960,7 +960,7 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
 
   const [ranks, setRanks] = useState<{ name: string; level: number; permissions: string[] }[]>([]);
   const [inactivityThreshold, setInactivityThreshold] = useState(7);
-  const [strikeExpiry, setStrikeExpiry] = useState({ warning: 30, minor: 90, major: null as number | null });
+  const [strikeExpiry, setStrikeExpiry] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: 30, minor: 90, major: null });
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 

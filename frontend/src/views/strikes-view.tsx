@@ -160,20 +160,20 @@ export function StrikesView({ factionId }: Props) {
                     <TableCell>
                       {s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-blue-400" title="Appeal" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId, status: 'appealed' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <MessageSquare className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title="Revoke" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId, status: 'revoked' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title="Revoke" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>
                       )}
                       {s.effectiveStatus === 'appealed' && s.targetUserId && (
                         <div className="flex gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId, status: 'active' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <RotateCcw className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title="Revoke" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId, status: 'revoked' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title="Revoke" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>
