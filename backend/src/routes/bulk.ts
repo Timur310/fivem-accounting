@@ -5,13 +5,16 @@ import { factionMembers, users, entries, itemTypes, factions } from '../db/schem
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { todayDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
-router.use(requireAuth, requireFactionAdminOrSuperadmin);
+// requireFactionMember must run first: it resolves req.factionRole, which the
+// admin guard then checks. Without it factionRole is undefined and every
+// request is rejected — including a superadmin's.
+router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
 
 // ── POST /members — batch add members ─────────────────
 const bulkAddMembersSchema = z.object({
@@ -212,7 +215,7 @@ router.post('/entries/import', async (req: Request, res: Response) => {
     }
 
     // Validate date
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dateVal)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
       results.errors.push(`Row ${i + 1}: Invalid date format, use YYYY-MM-DD`);
       results.skipped++;
       continue;
