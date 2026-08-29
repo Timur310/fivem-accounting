@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
+import { useAppStore } from '@/lib/store';
 
 interface Props {
   factionId: string;

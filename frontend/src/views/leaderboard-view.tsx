@@ -13,6 +13,7 @@ import {
 import { Trophy, Medal, TrendingUp, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   factionId: string;
