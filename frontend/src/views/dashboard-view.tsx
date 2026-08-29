@@ -81,9 +81,13 @@ export function DashboardView({ factionId }: Props) {
           <CardContent className="relative z-10">
             {(() => {
               const bal = netBalance ?? grandTotal;
-              const hasTreasury = (treasuryBalances?.length ?? 0) > 0;
-              const totalIn = hasTreasury ? (treasuryBalances ?? []).reduce((s, b) => s + b.inflow, 0) : grandTotal;
-              const totalOut = hasTreasury ? (treasuryBalances ?? []).reduce((s, b) => s + b.outflow, 0) : 0;
+              // Money only: adding currency to kilograms and piece counts gives
+              // a figure with no unit. Goods are listed per type further down.
+              const currencyBalances = (treasuryBalances ?? []).filter((b) => b.isCurrency);
+              const goodsCount = (treasuryBalances ?? []).length - currencyBalances.length;
+              const hasTreasury = currencyBalances.length > 0;
+              const totalIn = hasTreasury ? currencyBalances.reduce((s, b) => s + b.inflow, 0) : grandTotal;
+              const totalOut = hasTreasury ? currencyBalances.reduce((s, b) => s + b.outflow, 0) : 0;
               return (
                 <>
                   <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : brandColor }}>
@@ -91,7 +95,10 @@ export function DashboardView({ factionId }: Props) {
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">
                     {hasTreasury
-                      ? <>inflow {fmt(totalIn)} &middot; outflow {fmt(totalOut)}</>
+                      ? <>
+                          inflow {fmt(totalIn)} &middot; outflow {fmt(totalOut)}
+                          {goodsCount > 0 && <> &middot; currency only</>}
+                        </>
                       : 'across all item types'
                     }
                   </p>

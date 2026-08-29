@@ -102,7 +102,10 @@ router.get('/', async (req: Request, res: Response) => {
 
   // Treasury balances (inflow minus completed payouts) per item type
   const treasuryBalances = await computeTreasuryBalances(factionId);
-  const netBalance = treasuryBalances.reduce((acc, b) => acc + b.balance, 0);
+  // Currency types only — see the note in routes/treasury.ts. Goods stay
+  // visible per item type in treasuryBalances.
+  const currencyBalances = treasuryBalances.filter((b) => b.isCurrency);
+  const netBalance = currencyBalances.reduce((acc, b) => acc + b.balance, 0);
 
   // Inactive members — admin-only, since it is a management signal.
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';

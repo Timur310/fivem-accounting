@@ -48,7 +48,14 @@ export function TreasuryView({ factionId }: Props) {
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const { balances, netBalance, totalInflow, totalOutflow, pending, outflowTrend, recentPayouts } = data;
+  const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
+
+  // The three headline totals cover currency types only — goods have no shared
+  // unit to add up. Say so whenever the faction actually tracks any.
+  const totalsNote =
+    totals.nonCurrencyTypeCount > 0
+      ? `across ${totals.currencyTypeCount} currency ${totals.currencyTypeCount === 1 ? 'type' : 'types'} · ${totals.nonCurrencyTypeCount} non-currency shown below`
+      : 'across all item types';
 
   return (
     <div className="space-y-6">
@@ -71,7 +78,7 @@ export function TreasuryView({ factionId }: Props) {
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">
               {netBalance < 0 && <span className="text-red-400">⚠ Negative balance</span>}
-              {netBalance >= 0 && 'across all item types'}
+              {netBalance >= 0 && totalsNote}
             </p>
           </CardContent>
         </Card>
@@ -90,7 +97,7 @@ export function TreasuryView({ factionId }: Props) {
                 {fmt(totalInflow)}
               </span>
             </div>
-            <p className="text-xs text-zinc-500 mt-1.5">from entries</p>
+            <p className="text-xs text-zinc-500 mt-1.5">from entries · currency only</p>
           </CardContent>
         </Card>
 
@@ -108,7 +115,7 @@ export function TreasuryView({ factionId }: Props) {
                 {fmt(totalOutflow)}
               </span>
             </div>
-            <p className="text-xs text-zinc-500 mt-1.5">completed payouts</p>
+            <p className="text-xs text-zinc-500 mt-1.5">completed payouts · currency only</p>
           </CardContent>
         </Card>
       </div>

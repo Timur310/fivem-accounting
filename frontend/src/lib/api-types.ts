@@ -426,6 +426,11 @@ export interface TreasuryData {
   netBalance: number;
   totalInflow: number;
   totalOutflow: number;
+  /** What the three totals above cover — currency item types only. */
+  totals: {
+    currencyTypeCount: number;
+    nonCurrencyTypeCount: number;
+  };
   pending: {
     count: number;
     total: number;
