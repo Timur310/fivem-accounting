@@ -54,7 +54,7 @@ export interface Faction {
 }
 
 export interface FactionDetail extends Faction {
- members: Member[];
+  members: Member[];
   itemTypes: ItemType[];
 }
 
@@ -79,11 +79,15 @@ export interface Member {
   id: string;
   userId: string;
   role: 'admin' | 'member';
+  rank: string | null;
   joinedAt: string;
   username: string;
   avatarUrl: string | null;
   discordId: string;
-  entryCount?: number;
+  entryCount: number;
+  lastEntryDate: string | null;
+  daysInactive: number | null;
+  activeStrikeCount?: number;
 }
 
 // ── Item Types ──
@@ -178,6 +182,14 @@ export interface DashboardData {
     itemTypeName: string;
     itemUnit: string;
   }[];
+  inactiveMembers?: {
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+    lastEntryDate: string | null;
+    daysInactive: number | null;
+  }[];
+  inactivityThresholdDays?: number;
 }
 
 // ── Quotas ──
@@ -451,4 +463,263 @@ export interface CsvImportResult {
   imported: number;
   skipped: number;
   errors: string[];
+}
+
+// ── Phase 5: Member Profile ─────────────────────────────
+
+export interface MemberProfile {
+  member: {
+    id: string;
+    role: 'admin' | 'member';
+    rank: string | null;
+    joinedAt: string;
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+    discordId: string;
+    lastLogin: string | null;
+    daysInactive: number | null;
+  };
+  contribution: {
+    totalContributed: number;
+    entryCount: number;
+    averagePerEntry: number;
+    lastEntryDate: string | null;
+    byItemType: {
+      itemTypeId: string;
+      itemTypeName: string;
+      unit: string;
+      total: number;
+      count: number;
+    }[];
+    mostActiveItemType: { itemTypeName: string; total: number } | null;
+  };
+  payouts: {
+    totalReceived: number;
+    payoutCount: number;
+  };
+  quotaProgress: {
+    quotaId: string;
+    itemTypeName: string;
+    unit: string;
+    periodType: string;
+    periodStart: string;
+    periodEnd: string;
+    targetAmount: number;
+    contributed: number;
+    percentage: number;
+  }[];
+  activeStrikeCount: number;
+  recentEntries: {
+    id: string;
+    amount: string;
+    description: string | null;
+    entryDate: string;
+    createdAt: string;
+    itemTypeName: string;
+    itemUnit: string;
+  }[];
+  recentPayouts: {
+    id: string;
+    amount: string;
+    description: string | null;
+    payoutDate: string;
+    status: string;
+    itemTypeName: string;
+    itemUnit: string;
+  }[];
+  streak: {
+    current: number;
+    best: number;
+    lastEntryDate: string | null;
+    activeToday: boolean;
+  };
+  performance: {
+    score: number;
+    breakdown: {
+      quotaHitRate: number;
+      consistency: number;
+      totalVolume: number;
+      streakBonus: number;
+      seniorityBonus: number;
+    };
+  };
+  canViewNotes: boolean;
+}
+
+export interface MemberHistoryEntry {
+  id: number;
+  action: string;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+  actorId: string;
+  actorUsername: string;
+  actorAvatarUrl: string | null;
+}
+
+// ── Phase 5: Notes ──────────────────────────────────────
+
+export type NoteCategory = 'general' | 'performance' | 'discipline' | 'positive' | 'promotion';
+
+export interface MemberNote {
+  id: string;
+  category: NoteCategory;
+  content: string;
+  isFlagged: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+  authorId: string;
+  authorUsername: string;
+  authorAvatarUrl: string | null;
+}
+
+export interface CreateNoteInput {
+  category?: NoteCategory;
+  content: string;
+  isFlagged?: boolean;
+}
+
+export interface UpdateNoteInput {
+  category?: NoteCategory;
+  content?: string;
+  isFlagged?: boolean;
+}
+
+// ── Phase 5: Strikes ────────────────────────────────────
+
+export type StrikeSeverity = 'warning' | 'minor' | 'major';
+export type StrikeStatus = 'active' | 'appealed' | 'revoked' | 'expired';
+export type StrikeEffectiveStatus = 'active' | 'appealed' | 'revoked' | 'expired';
+
+export interface Strike {
+  id: string;
+  reason: string;
+  severity: StrikeSeverity;
+  status: StrikeStatus;
+  effectiveStatus: StrikeEffectiveStatus;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  issuedBy: string;
+  issuerUsername: string;
+  issuerAvatarUrl: string | null;
+  targetUserId?: string;
+  targetUsername?: string;
+  targetAvatarUrl?: string | null;
+}
+
+export interface CreateStrikeInput {
+  reason: string;
+  severity: StrikeSeverity;
+}
+
+export interface FactionStrikesData {
+  strikes: Strike[];
+  activeSummary: {
+    warning: number;
+    minor: number;
+    major: number;
+  };
+}
+
+// ── Phase 5: Faction Settings ───────────────────────────
+
+export interface FactionRank {
+  name: string;
+  level: number;
+  permissions: string[];
+}
+
+export interface FactionSettings {
+  ranks: FactionRank[];
+  inactivityThresholdDays: number;
+  strikeExpiryDays: {
+    warning: number | null;
+    minor: number | null;
+    major: number | null;
+  };
+}
+
+export interface UpdateFactionSettingsInput {
+  ranks?: FactionRank[];
+  inactivityThresholdDays?: number;
+  strikeExpiryDays?: {
+    warning: number | null;
+    minor: number | null;
+    major: number | null;
+  };
+}
+
+// ── Phase 7: Heatmap ────────────────────────────────────
+
+export interface HeatmapDay {
+  date: string;
+  count: number;
+  total: number;
+}
+
+export interface HeatmapResult {
+  year: number;
+  data: HeatmapDay[];
+  maxCount: number;
+  maxTotal: number;
+}
+
+// ── Phase 7: Leaderboard ───────────────────────────────
+
+export interface LeaderboardRanking {
+  rank: number;
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  total: number;
+  entryCount: number;
+  itemBreakdown: Record<string, number>;
+  isMe: boolean;
+}
+
+export interface LeaderboardData {
+  period: { from: string | null; to: string | null; label: string };
+  rankings: LeaderboardRanking[];
+  myRank: number | null;
+}
+
+export interface GlobalLeaderboardRanking {
+  rank: number;
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+  factionId: string;
+  factionName: string;
+  total: number;
+  entryCount: number;
+}
+
+export interface GlobalLeaderboardData {
+  period: { from: string | null; to: string | null; label: string };
+  rankings: GlobalLeaderboardRanking[];
+}
+
+// ── Phase 7: Growth ────────────────────────────────────
+
+export interface GrowthPeriod {
+  label: string;
+  from: string;
+  to: string;
+  totalEntries: number;
+  totalAmount: number;
+  activeMembers: number;
+  avgPerMember: number;
+}
+
+export interface GrowthData {
+  granularity: string;
+  periods: GrowthPeriod[];
+  growth: {
+    entriesChangePct: number | null;
+    amountChangePct: number | null;
+    memberChange: number;
+    avgChangePct: number | null;
+  } | null;
+  partial: boolean;
 }

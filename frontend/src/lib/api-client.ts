@@ -3,7 +3,6 @@
 import axios from 'axios';
 import type {
   ApiSuccessResponse,
-  ApiErrorResponse,
   User,
   Faction,
   FactionDetail,
@@ -34,6 +33,20 @@ import type {
   EvenSplitInput,
   EvenSplitResult,
   TreasuryData,
+  MemberProfile,
+  MemberHistoryEntry,
+  MemberNote,
+  CreateNoteInput,
+  UpdateNoteInput,
+  Strike,
+  CreateStrikeInput,
+  FactionStrikesData,
+  FactionSettings,
+  UpdateFactionSettingsInput,
+  HeatmapResult,
+  LeaderboardData,
+  GlobalLeaderboardData,
+  GrowthData,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -101,8 +114,107 @@ export const membersApi = {
       })
       .then(unwrap),
 
+  updateRank: (factionId: string, userId: string, rank: string | null) =>
+    api
+      .patch<ApiSuccessResponse<Member>>(`/factions/${factionId}/members/${userId}`, {
+        rank,
+      })
+      .then(unwrap),
+
   remove: (factionId: string, userId: string) =>
     api.delete(`/factions/${factionId}/members/${userId}`),
+
+  // Phase 5: Member profile
+  getProfile: (factionId: string, userId: string) =>
+    api
+      .get<ApiSuccessResponse<MemberProfile>>(`/factions/${factionId}/members/${userId}`)
+      .then(unwrap),
+
+  // Phase 5: Member history
+  getHistory: (factionId: string, userId: string, page?: number, pageSize?: number) =>
+    api
+      .get<ApiSuccessResponse<MemberHistoryEntry[]>>(`/factions/${factionId}/members/${userId}/history`, {
+        params: { page, page_size: pageSize },
+      })
+      .then((r) => ({ data: r.data.data, meta: r.data.meta })),
+
+  // Phase 7: Heatmap
+  getHeatmap: (factionId: string, userId: string, year?: number) =>
+    api
+      .get<ApiSuccessResponse<HeatmapResult>>(`/factions/${factionId}/members/${userId}/heatmap`, {
+        params: year ? { year } : undefined,
+      })
+      .then(unwrap),
+};
+
+// ── Phase 5: Member Notes (admin only) ──
+
+export const notesApi = {
+  list: (factionId: string, userId: string, params?: { category?: string; flagged_only?: string }) =>
+    api
+      .get<ApiSuccessResponse<MemberNote[]>>(`/factions/${factionId}/members/${userId}/notes`, { params })
+      .then(unwrap),
+
+  create: (factionId: string, userId: string, input: CreateNoteInput) =>
+    api
+      .post<ApiSuccessResponse<MemberNote>>(`/factions/${factionId}/members/${userId}/notes`, input)
+      .then(unwrap),
+
+  update: (factionId: string, userId: string, noteId: string, input: UpdateNoteInput) =>
+    api
+      .patch<ApiSuccessResponse<MemberNote>>(`/factions/${factionId}/members/${userId}/notes/${noteId}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, userId: string, noteId: string) =>
+    api.delete(`/factions/${factionId}/members/${userId}/notes/${noteId}`),
+};
+
+// ── Phase 5: Member Strikes ──
+
+export const memberStrikesApi = {
+  list: (factionId: string, userId: string) =>
+    api
+      .get<ApiSuccessResponse<Strike[]>>(`/factions/${factionId}/members/${userId}/strikes`)
+      .then(unwrap),
+
+  issue: (factionId: string, userId: string, input: CreateStrikeInput) =>
+    api
+      .post<ApiSuccessResponse<Strike>>(`/factions/${factionId}/members/${userId}/strikes`, input)
+      .then(unwrap),
+
+  update: (factionId: string, userId: string, strikeId: string, status: 'appealed' | 'revoked' | 'active') =>
+    api
+      .patch<ApiSuccessResponse<Strike>>(`/factions/${factionId}/members/${userId}/strikes/${strikeId}`, { status })
+      .then(unwrap),
+};
+
+// ── Phase 5: Faction Strikes (admin overview) ──
+
+export const factionStrikesApi = {
+  list: (factionId: string, params?: {
+    status?: string;
+    severity?: string;
+    user_id?: string;
+    page?: number;
+    page_size?: number;
+  }) =>
+    api
+      .get<ApiSuccessResponse<FactionStrikesData>>(`/factions/${factionId}/strikes`, { params })
+      .then((r) => ({ data: r.data.data, meta: r.data.meta })),
+};
+
+// ── Phase 5: Faction Settings ──
+
+export const factionSettingsApi = {
+  get: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<FactionSettings>>(`/factions/${factionId}/settings`)
+      .then(unwrap),
+
+  update: (factionId: string, input: UpdateFactionSettingsInput) =>
+    api
+      .patch<ApiSuccessResponse<FactionSettings>>(`/factions/${factionId}/settings`, input)
+      .then(unwrap),
 };
 
 // ── Item Types ──
@@ -330,6 +442,35 @@ export const reportsApi = {
       .get<ApiSuccessResponse<ReportComparison>>(`/factions/${factionId}/reports/comparison`, {
         params: { period_a: periodA, period_b: periodB },
       })
+      .then(unwrap),
+
+  // Phase 7: Growth report
+  growth: (factionId: string, periods?: number, granularity?: 'week' | 'month') =>
+    api
+      .get<ApiSuccessResponse<GrowthData>>(`/factions/${factionId}/reports/growth`, {
+        params: {
+          ...(periods ? { periods } : {}),
+          ...(granularity ? { granularity } : {}),
+        },
+      })
+      .then(unwrap),
+};
+
+// ── Phase 7: Leaderboard ──
+
+export const leaderboardApi = {
+  get: (factionId: string, params?: { period?: string; item_type_id?: string; limit?: number }) =>
+    api
+      .get<ApiSuccessResponse<LeaderboardData>>(`/factions/${factionId}/leaderboard`, { params })
+      .then(unwrap),
+};
+
+// ── Phase 7: Global Leaderboard (superadmin) ──
+
+export const globalLeaderboardApi = {
+  get: (params?: { period?: string; limit?: number }) =>
+    api
+      .get<ApiSuccessResponse<GlobalLeaderboardData>>('/leaderboard', { params })
       .then(unwrap),
 };
 

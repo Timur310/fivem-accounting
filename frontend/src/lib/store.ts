@@ -10,6 +10,9 @@ export type AppView =
   | 'payouts'
   | 'treasury'
   | 'members'
+  | 'member-profile'
+  | 'strikes'
+  | 'leaderboard'
   | 'settings'
   | 'audit-logs'
   | 'admin-factions'
@@ -30,6 +33,10 @@ interface AppState {
   // Selected faction
   selectedFactionId: string | null;
   setSelectedFactionId: (id: string | null) => void;
+
+  // Selected member (for profile view)
+  selectedMemberUserId: string | null;
+  setSelectedMemberUserId: (id: string | null) => void;
 
   // Brand color
   brandColor: string;
@@ -54,6 +61,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   selectedFactionId: null,
   setSelectedFactionId: (id) => set({ selectedFactionId: id, brandColor: DEFAULT_BRAND_COLOR }),
+
+  selectedMemberUserId: null,
+  setSelectedMemberUserId: (id) => set({ selectedMemberUserId: id }),
 
   brandColor: DEFAULT_BRAND_COLOR,
   setBrandColor: (color) => set({ brandColor: color }),

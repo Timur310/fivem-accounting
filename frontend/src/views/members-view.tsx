@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { membersApi } from '@/lib/api-client';
+import { membersApi, factionSettingsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,14 +14,19 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
+import type { FactionSettings } from '@/lib/api-types';
 
 interface Props {
   factionId: string;
@@ -31,6 +36,8 @@ export function MembersView({ factionId }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const setSelectedMemberUserId = useAppStore((s) => s.setSelectedMemberUserId);
 
   const [addOpen, setAddOpen] = useState(false);
   const [discordId, setDiscordId] = useState('');
@@ -38,12 +45,25 @@ export function MembersView({ factionId }: Props) {
   const [roleTarget, setRoleTarget] = useState<{ userId: string; currentRole: string; username: string } | null>(null);
   const [newRole, setNewRole] = useState<'admin' | 'member'>('member');
   const [removeTarget, setRemoveTarget] = useState<{ userId: string; username: string } | null>(null);
+  // Rank dialog
+  const [rankDialogOpen, setRankDialogOpen] = useState(false);
+  const [rankTarget, setRankTarget] = useState<{ userId: string; username: string; currentRank: string | null } | null>(null);
+  const [newRank, setNewRank] = useState<string>('');
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['members', factionId],
     queryFn: () => membersApi.list(factionId),
     staleTime: 30 * 1000,
   });
+
+  // Fetch faction settings for rank list + inactivity threshold
+  const { data: settings } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const sortedRanks = (settings?.ranks ?? []).sort((a, b) => a.level - b.level);
 
   const addMutation = useMutation({
     mutationFn: () => membersApi.add(factionId, discordId),
@@ -72,6 +92,19 @@ export function MembersView({ factionId }: Props) {
     },
   });
 
+  const rankMutation = useMutation({
+    mutationFn: () => membersApi.updateRank(factionId, rankTarget!.userId, newRank || null),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members', factionId] });
+      setRankDialogOpen(false);
+      setRankTarget(null);
+      toast({ title: 'Rank updated' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to update rank', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    },
+  });
+
   const removeMutation = useMutation({
     mutationFn: () => membersApi.remove(factionId, removeTarget!.userId),
     onSuccess: () => {
@@ -84,6 +117,13 @@ export function MembersView({ factionId }: Props) {
       toast({ title: 'Failed to remove member', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
     },
   });
+
+  const handleOpenProfile = (userId: string) => {
+    setSelectedMemberUserId(userId);
+    setCurrentView('member-profile');
+  };
+
+  const inactivityThreshold = settings?.inactivityThresholdDays ?? 7;
 
   return (
     <div className="space-y-4">
@@ -114,64 +154,110 @@ export function MembersView({ factionId }: Props) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Member</TableHead>
-                  <TableHead>Discord ID</TableHead>
+                  <TableHead className="hidden sm:table-cell">Discord ID</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead className="text-right">Entries</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="w-[80px]"></TableHead>
+                  <TableHead className="hidden md:table-cell">Rank</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">Entries</TableHead>
+                  <TableHead className="hidden lg:table-cell">Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">Joined</TableHead>
+                  <TableHead className="w-[120px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2.5">
-                        <Avatar className="h-7 w-7">
-                          <AvatarImage src={m.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm text-zinc-300 font-medium">{m.username}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-zinc-600 font-mono tabular-nums">{m.discordId}</TableCell>
-                    <TableCell>
-                      {m.role === 'admin' ? (
-                        <span
-                          className="text-[11px] px-2 py-0.5 rounded-md font-medium border"
-                          style={{
-                            backgroundColor: `${brandColor}10`,
-                            borderColor: `${brandColor}25`,
-                            color: brandColor,
-                          }}
-                        >
-                          Admin
-                        </span>
-                      ) : (
-                        <span className="text-[11px] px-2 py-0.5 rounded-md font-medium border border-white/[0.06] bg-white/[0.03] text-zinc-500">
-                          Member
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-zinc-400 text-right tabular-nums">{m.entryCount ?? 0}</TableCell>
-                    <TableCell className="text-xs text-zinc-600 tabular-nums">
-                      {new Date(m.joinedAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-0.5">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
-                          setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
-                          setNewRole(m.role === 'admin' ? 'member' : 'admin');
-                          setRoleDialogOpen(true);
-                        }}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })}>
-                          <UserMinus className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {members.map((m) => {
+                  const isInactive = m.daysInactive !== null && m.daysInactive >= inactivityThreshold;
+                  return (
+                    <TableRow key={m.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={m.avatarUrl ?? undefined} />
+                            <AvatarFallback className="text-[10px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <button
+                              onClick={() => handleOpenProfile(m.userId)}
+                              className="text-sm text-zinc-300 font-medium hover:underline underline-offset-2 transition-colors"
+                              style={{ textDecorationColor: `${brandColor}60` }}
+                            >
+                              {m.username}
+                            </button>
+                            {/* Mobile: show strike badge inline */}
+                            {(m.activeStrikeCount ?? 0) > 0 && (
+                              <Badge className="lg:hidden text-[9px] bg-amber-500/15 text-amber-400 border-amber-500/20 ml-1" variant="outline">{(m.activeStrikeCount ?? 0)}</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-zinc-600 font-mono tabular-nums hidden sm:table-cell">{m.discordId}</TableCell>
+                      <TableCell>
+                        {m.role === 'admin' ? (
+                          <span
+                            className="text-[11px] px-2 py-0.5 rounded-md font-medium border"
+                            style={{
+                              backgroundColor: `${brandColor}10`,
+                              borderColor: `${brandColor}25`,
+                              color: brandColor,
+                            }}
+                          >
+                            Admin
+                          </span>
+                        ) : (
+                          <span className="text-[11px] px-2 py-0.5 rounded-md font-medium border border-white/[0.06] bg-white/[0.03] text-zinc-500">
+                            Member
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {m.rank ? (
+                          <Badge variant="outline" className="text-[11px]" style={{ borderColor: `${brandColor}30`, color: brandColor }}>{m.rank}</Badge>
+                        ) : (
+                          <span className="text-xs text-zinc-700">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-zinc-400 text-right tabular-nums hidden sm:table-cell">{m.entryCount}</TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <div className="flex items-center gap-1.5">
+                          {isInactive && (
+                            <Badge variant="outline" className="text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
+                              <Clock className="h-2.5 w-2.5 mr-0.5" />
+                              {m.daysInactive}d
+                            </Badge>
+                          )}
+                          {(m.activeStrikeCount ?? 0) > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-red-500/20 text-red-400 bg-red-500/5">
+                              <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                              {(m.activeStrikeCount ?? 0)}
+                            </Badge>
+                          )}
+                          {!isInactive && (m.activeStrikeCount ?? 0) === 0 && m.daysInactive !== null && m.daysInactive === 0 && (
+                            <span className="text-[10px] text-emerald-500">active today</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-zinc-600 tabular-nums hidden lg:table-cell">
+                        {new Date(m.joinedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-0.5">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title="View Profile">
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
+                            setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
+                            setNewRole(m.role === 'admin' ? 'member' : 'admin');
+                            setRoleDialogOpen(true);
+                          }} title="Change Role">
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title="Remove">
+                            <UserMinus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -210,20 +296,44 @@ export function MembersView({ factionId }: Props) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-3">
-              <Button variant={newRole === 'member' ? 'outline' : 'default'} className="flex-1" onClick={() => setNewRole('member')}>
-                Member
-              </Button>
+              <Button variant={newRole === 'member' ? 'outline' : 'default'} className="flex-1" onClick={() => setNewRole('member')}>Member</Button>
               <Button variant={newRole === 'admin' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('admin')}>
-                <Shield className="mr-1.5 h-4 w-4" />
-                Admin
+                <Shield className="mr-1.5 h-4 w-4" /> Admin
               </Button>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => roleMutation.mutate()} disabled={roleMutation.isPending}>
-              {roleMutation.isPending ? 'Saving...' : 'Update Role'}
-            </Button>
+            <Button onClick={() => roleMutation.mutate()} disabled={roleMutation.isPending}>{roleMutation.isPending ? 'Saving...' : 'Update Role'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rank Change Dialog */}
+      <Dialog open={rankDialogOpen} onOpenChange={setRankDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Rank</DialogTitle>
+            <DialogDescription>Update {rankTarget?.username}&apos;s display rank. This is separate from their admin role.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Rank</Label>
+              <Select value={newRank || '_none'} onValueChange={(v) => setNewRank(v === '_none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="No rank" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No rank (clear)</SelectItem>
+                  {sortedRanks.map((r) => (
+                    <SelectItem key={r.name} value={r.name}>{r.name} (Level {r.level})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-zinc-600">Ranks are display-only. Configure them in Settings &rarr; Faction Settings.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRankDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => rankMutation.mutate()} disabled={rankMutation.isPending}>{rankMutation.isPending ? 'Saving...' : 'Update Rank'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
