@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemTypesApi, quotasApi, factionsApi } from '@/lib/api-client';
+import { itemTypesApi, quotasApi, factionsApi, factionSettingsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target, Palette, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota } from '@/lib/api-types';
@@ -34,7 +34,7 @@ interface Props {
   factionId: string;
 }
 
-type SettingsTab = 'item-types' | 'quotas' | 'customization';
+type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings';
 
 export function SettingsView({ factionId }: Props) {
   const queryClient = useQueryClient();
@@ -66,11 +66,19 @@ export function SettingsView({ factionId }: Props) {
           <Palette className="mr-2 h-4 w-4" />
           Customization
         </Button>
+        <Button
+          variant={activeTab === 'faction-settings' ? 'default' : 'outline'}
+          onClick={() => setActiveTab('faction-settings')}
+        >
+          <Shield className="mr-2 h-4 w-4" />
+          Faction Settings
+        </Button>
       </div>
 
       {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} />}
       {activeTab === 'quotas' && <QuotasSection factionId={factionId} />}
       {activeTab === 'customization' && <CustomizationSection factionId={factionId} />}
+      {activeTab === 'faction-settings' && <FactionSettingsSection factionId={factionId} />}
     </div>
   );
 }
@@ -931,6 +939,179 @@ function CustomizationSection({ factionId }: { factionId: string }) {
       <Button onClick={handleSave} disabled={saving || saveMutation.isPending}>
         {saving ? 'Saving...' : 'Save Changes'}
       </Button>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// Faction Settings Section (Phase 5)
+// ══════════════════════════════════════════════════════
+
+function FactionSettingsSection({ factionId }: { factionId: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const brandColor = useAppStore((s) => s.brandColor);
+
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
+    staleTime: 0,
+  });
+
+  const [ranks, setRanks] = useState<{ name: string; level: number; permissions: string[] }[]>([]);
+  const [inactivityThreshold, setInactivityThreshold] = useState(7);
+  const [strikeExpiry, setStrikeExpiry] = useState({ warning: 30, minor: 90, major: null as number | null });
+  const [hasChanges, setHasChanges] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Sync from server
+  useEffect(() => {
+    if (settings) {
+      setRanks(settings.ranks);
+      setInactivityThreshold(settings.inactivityThresholdDays);
+      setStrikeExpiry(settings.strikeExpiryDays);
+    }
+  }, [settings]);
+
+  const markChanged = () => setHasChanges(true);
+
+  const addRank = () => {
+    const maxLevel = ranks.length > 0 ? Math.max(...ranks.map(r => r.level)) : 0;
+    setRanks([...ranks, { name: '', level: maxLevel + 1, permissions: [] }]);
+    markChanged();
+  };
+
+  const removeRank = (idx: number) => {
+    setRanks(ranks.filter((_, i) => i !== idx));
+    markChanged();
+  };
+
+  const updateRank = (idx: number, field: 'name' | 'level', value: string | number) => {
+    setRanks(ranks.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    markChanged();
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      factionSettingsApi.update(factionId, {
+        ranks: ranks.map(r => ({ ...r, level: Number(r.level) })),
+        inactivityThresholdDays: inactivityThreshold,
+        strikeExpiryDays: strikeExpiry,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
+      setHasChanges(false);
+      toast({ title: 'Faction settings saved' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    },
+    onSettled: () => setSaving(false),
+  });
+
+  if (isLoading) {
+    return <div className="space-y-4"><Skeleton className="h-64 w-full" /><Skeleton className="h-48 w-full" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* ── Ranks ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm text-zinc-200">Rank Hierarchy</CardTitle>
+            <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Rank</Button>
+          </div>
+          <p className="text-xs text-zinc-500 mt-1">Display-only ranks shown on the roster. Separate from admin access control.</p>
+        </CardHeader>
+        <CardContent>
+          {ranks.length === 0 ? (
+            <p className="text-zinc-600 text-sm text-center py-6">No ranks defined yet. Members will show no rank.</p>
+          ) : (
+            <div className="space-y-2">
+              {ranks.sort((a, b) => a.level - b.level).map((r, idx) => (
+                <div key={idx} className="flex items-center gap-2 rounded-lg border border-white/[0.06] p-3">
+                  <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">L{r.level}</span>
+                  <Input
+                    className="flex-1 h-8 text-sm"
+                    value={r.name}
+                    onChange={(e) => updateRank(idx, 'name', e.target.value)}
+                    placeholder="Rank name"
+                  />
+                  <Input
+                    className="w-16 h-8 text-sm tabular-nums"
+                    type="number"
+                    min={1}
+                    value={r.level}
+                    onChange={(e) => updateRank(idx, 'level', Number(e.target.value))}
+                  />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Inactivity ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm text-zinc-200">Inactivity Threshold</CardTitle>
+          <p className="text-xs text-zinc-500 mt-1">Days without a logged entry before a member is flagged as inactive on the dashboard.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3 max-w-xs">
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={inactivityThreshold}
+              onChange={(e) => { setInactivityThreshold(Number(e.target.value)); markChanged(); }}
+              className="tabular-nums"
+            />
+            <span className="text-sm text-zinc-500">days</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Strike Expiry ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm text-zinc-200">Strike Expiry (days)</CardTitle>
+          <p className="text-xs text-zinc-500 mt-1">How long each severity level remains active. Null = never expires.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 max-w-sm">
+            {(['warning', 'minor', 'major'] as const).map((sev) => (
+              <div key={sev} className="flex items-center gap-3">
+                <span className="text-sm text-zinc-300 capitalize w-14">{sev}</span>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Never"
+                  value={strikeExpiry[sev] ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStrikeExpiry(prev => ({ ...prev, [sev]: val === '' ? null : Number(val) }));
+                    markChanged();
+                  }}
+                  className="tabular-nums"
+                />
+                <span className="text-xs text-zinc-600">days</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Save */}
+      {hasChanges && (
+        <div className="flex justify-end">
+          <Button onClick={() => { setSaving(true); saveMutation.mutate(); }} disabled={saving || saveMutation.isPending}>
+            {saving || saveMutation.isPending ? 'Saving...' : 'Save Faction Settings'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

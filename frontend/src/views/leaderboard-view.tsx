@@ -1,0 +1,186 @@
+'use client';
+
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Trophy, Medal, TrendingUp, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAppStore } from '@/lib/store';
+import type { ItemType } from '@/lib/api-types';
+import { Button } from '@/components/ui/button';
+
+interface Props {
+  factionId: string;
+  isSuperadmin: boolean;
+}
+
+export function LeaderboardView({ factionId, isSuperadmin }: Props) {
+  const brandColor = useAppStore((s) => s.brandColor);
+  const [period, setPeriod] = useState<string>('month');
+  const [itemTypeId, setItemTypeId] = useState<string>('');
+  const [showGlobal, setShowGlobal] = useState(false);
+
+  // Fetch item types for filter
+  const { data: itemTypes = [] } = useQuery({
+    queryKey: ['item-types', factionId],
+    queryFn: () => itemTypesApi.list(factionId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Faction leaderboard
+  const { data: lbData, isLoading: lbLoading } = useQuery({
+    queryKey: ['leaderboard', factionId, period, itemTypeId],
+    queryFn: () => leaderboardApi.get(factionId, {
+      period: period as 'week' | 'month' | 'all',
+      item_type_id: itemTypeId || undefined,
+    }),
+    staleTime: 0,
+    enabled: !showGlobal,
+  });
+
+  // Global leaderboard (superadmin only)
+  const { data: globalData, isLoading: globalLoading } = useQuery({
+    queryKey: ['global-leaderboard', period],
+    queryFn: () => globalLeaderboardApi.get({ period: period as 'week' | 'month' | 'all' }),
+    staleTime: 0,
+    enabled: showGlobal && isSuperadmin,
+  });
+
+  const loading = showGlobal ? globalLoading : lbLoading;
+  const rankings = showGlobal ? (globalData?.rankings ?? []) : (lbData?.rankings ?? []);
+  const myRank = showGlobal ? null : (lbData?.myRank ?? null);
+  const periodLabel = showGlobal ? (globalData?.period?.label ?? '') : (lbData?.period?.label ?? '');
+
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const rankIcon = (rank: number) => {
+    if (rank === 1) return <Crown className="h-4 w-4 text-amber-400" />;
+    if (rank === 2) return <Medal className="h-4 w-4 text-zinc-300" />;
+    if (rank === 3) return <Medal className="h-4 w-4 text-amber-600" />;
+    return <span className="text-xs text-zinc-600 w-4 text-center tabular-nums">{rank}</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header + Filters */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h3 className="text-lg font-medium text-zinc-200">Leaderboard</h3>
+          <p className="text-sm text-zinc-500">{periodLabel}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isSuperadmin && (
+            <Button
+              variant={showGlobal ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowGlobal(!showGlobal)}
+              className="text-xs"
+            >
+              {showGlobal ? 'Global' : 'Faction'}
+            </Button>
+          )}
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="week">This Week</SelectItem>
+              <SelectItem value="month">This Month</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
+            </SelectContent>
+          </Select>
+          {!showGlobal && (
+            <Select value={itemTypeId || '_all'} onValueChange={(v) => setItemTypeId(v === '_all' ? '' : v)}>
+              <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="All Types" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Types</SelectItem>
+                {itemTypes.map((t: ItemType) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      {/* My Rank Banner */}
+      {myRank && (
+        <Card className="border-highlight" style={{ borderColor: `${brandColor}20` }}>
+          <CardContent className="py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4" style={{ color: brandColor }} />
+              <span className="text-sm text-zinc-300">Your Rank</span>
+            </div>
+            <span className="text-xl font-medium tabular-nums" style={{ color: brandColor }}>#{myRank}</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Rankings List */}
+      <Card className="py-0 gap-0">
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : rankings.length === 0 ? (
+            <div className="p-12 text-center text-zinc-600">
+              <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No entries yet for this period.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/[0.04]">
+              {rankings.map((r) => {
+                const isMe = 'isMe' in r && r.isMe;
+                return (
+                  <div
+                    key={`global-${showGlobal ? r.factionId : ''}-${r.userId}`}
+                    className={`flex items-center gap-4 px-4 py-3 transition-colors duration-100 ${isMe ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'}`}
+                    style={isMe ? { borderLeft: `3px solid ${brandColor}` } : { borderLeft: '3px solid transparent' }}
+                  >
+                    {/* Rank */}
+                    <div className="w-6 flex justify-center shrink-0">{rankIcon(r.rank)}</div>
+
+                    {/* Avatar + Name */}
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarImage src={r.avatarUrl ?? undefined} />
+                      <AvatarFallback className="text-[10px]">{r.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>
+                        {r.username}
+                        {isMe && <span className="text-[10px] text-zinc-500 ml-1">(you)</span>}
+                      </p>
+                      {'factionName' in r && (
+                        <p className="text-[11px] text-zinc-600">{r.factionName}</p>
+                      )}
+                    </div>
+
+                    {/* Item Breakdown (faction only) */}
+                    {!showGlobal && 'itemBreakdown' in r && Object.keys(r.itemBreakdown).length > 0 && (
+                      <div className="hidden lg:flex items-center gap-2">
+                        {Object.entries(r.itemBreakdown).slice(0, 3).map(([name, val]) => (
+                          <Badge key={name} variant="outline" className="text-[10px] text-zinc-500 border-white/[0.06]">
+                            {name}: {fmt(val)}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Stats */}
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-medium tabular-nums text-zinc-100">{fmt(r.total)}</p>
+                      <p className="text-[10px] text-zinc-600">{r.entryCount} entries</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

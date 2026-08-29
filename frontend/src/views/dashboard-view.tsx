@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight } from 'lucide-react';
+import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount } from '@/lib/format';
@@ -56,7 +56,7 @@ export function DashboardView({ factionId }: Props) {
     );
   }
 
-  const { faction, totalsByType, grandTotal, treasuryBalances, netBalance, memberCount, adminCount, totalEntries, topContributors, recentEntries } = data;
+  const { faction, totalsByType, grandTotal, treasuryBalances, netBalance, memberCount, adminCount, totalEntries, topContributors, recentEntries, inactiveMembers, inactivityThresholdDays } = data;
   const activeQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(q => q.isActive && q.periodActive);
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -228,13 +228,13 @@ export function DashboardView({ factionId }: Props) {
                 <List className="h-4 w-4 text-zinc-400" />
                 Recent Activity
               </span>
-              <button
+              <Button
                 onClick={() => setCurrentView('entries')}
                 className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
                 style={{ color: brandColor }}
               >
                 View All <ArrowUpRight className="h-3 w-3" />
-              </button>
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -273,13 +273,13 @@ export function DashboardView({ factionId }: Props) {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-sm text-zinc-200">Treasury by Item Type</CardTitle>
             {(treasuryBalances?.length ?? 0) > 0 && (
-              <button
+              <Button
                 onClick={() => setCurrentView('treasury')}
                 className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
                 style={{ color: brandColor }}
               >
                 Full View <ArrowUpRight className="h-3 w-3" />
-              </button>
+              </Button>
             )}
           </CardHeader>
           <CardContent>
@@ -318,6 +318,40 @@ export function DashboardView({ factionId }: Props) {
                   </div>
                 ))
               }
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ══ Inactive Members (admin only, data only sent by backend to admins) ══ */}
+      {inactiveMembers && inactiveMembers.length > 0 && (
+        <Card className="border-amber-500/15">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center justify-between text-sm text-zinc-200">
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-400" />
+                Inactive Members
+              </span>
+              <Badge variant="outline" className="text-[11px] border-amber-500/20 text-amber-400 bg-amber-500/5">
+                {inactiveMembers.length} &middot; {inactivityThresholdDays ?? 7}d threshold
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {inactiveMembers.slice(0, 5).map((m) => (
+                <div key={m.userId} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={m.avatarUrl ?? undefined} />
+                    <AvatarFallback className="text-[9px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm text-zinc-300 flex-1 truncate">{m.username}</span>
+                  <span className="text-xs text-amber-400 tabular-nums">{m.daysInactive === null ? 'Never' : `${m.daysInactive}d`}</span>
+                </div>
+              ))}
+              {inactiveMembers.length > 5 && (
+                <p className="text-[11px] text-zinc-600 text-center pt-1">+{inactiveMembers.length - 5} more</p>
+              )}
             </div>
           </CardContent>
         </Card>
