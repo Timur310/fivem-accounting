@@ -32,6 +32,7 @@ import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } fro
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -278,7 +279,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm text-zinc-200 tabular-nums">
-                          {entry.itemUnit}{Number(entry.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {formatAmount(entry.amount, entry.itemUnit, entry.itemIsCurrency)}
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate text-zinc-500 text-sm">
                           {entry.description || '—'}

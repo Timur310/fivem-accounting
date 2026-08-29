@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp } from 'lucide-react';
+import { formatAmount } from '@/lib/format';
 
 interface Props { factionId: string; }
 
@@ -122,7 +123,7 @@ export function ReportsView({ factionId }: Props) {
                               <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
                               <p className="text-[11px] text-zinc-600">{t.count} entries &middot; avg {fmt(t.avg)} &middot; max {fmt(t.max)}</p>
                             </div>
-                            <span className="text-sm font-medium tabular-nums text-zinc-200">{t.unit}{fmt(t.total)}</span>
+                            <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</span>
                           </div>
                         ))}
                       </div>

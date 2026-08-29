@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -170,11 +171,11 @@ export function TreasuryView({ factionId }: Props) {
                     </Badge>
                   </div>
                   <div className="text-2xl font-medium tabular-nums tracking-tight" style={{ color: b.balance < 0 ? '#ef4444' : brandColor }}>
-                    {b.balance < 0 ? '-' : ''}{fmt(Math.abs(b.balance))}
+                    {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
                   </div>
                   <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
-                    <span className="text-emerald-500/80">+{b.itemUnit}{fmt(b.inflow)} in</span>
-                    <span className="text-red-500/80">-{b.itemUnit}{fmt(b.outflow)} out</span>
+                    <span className="text-emerald-500/80">+{formatAmount(b.inflow, b.unit, b.isCurrency)} in</span>
+                    <span className="text-red-500/80">-{formatAmount(b.outflow, b.unit, b.isCurrency)} out</span>
                   </div>
                   {/* Mini outflow trend */}
                   {b.outflowTrend.length > 1 && (
@@ -253,7 +254,7 @@ export function TreasuryView({ factionId }: Props) {
                     <p className="text-sm">
                       <span className="text-zinc-300 font-medium">{p.recipientUsername}</span>
                       <span className="text-zinc-600"> received </span>
-                      <span className="font-medium tabular-nums text-zinc-200">{p.itemUnit}{fmt(Number(p.amount))}</span>
+                      <span className="font-medium tabular-nums text-zinc-200">{formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}</span>
                     </p>
                     <p className="text-[11px] text-zinc-600">
                       {p.itemTypeName} &middot; {p.payoutDate}

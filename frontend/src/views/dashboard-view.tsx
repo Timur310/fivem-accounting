@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -167,8 +168,8 @@ export function DashboardView({ factionId }: Props) {
                       />
                     </div>
                     <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
-                      <span>{q.itemUnit}{(q.currentAmount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                      <span>of {q.itemUnit}{Number(q.targetAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                      <span>{formatAmount(q.currentAmount ?? 0, q.itemUnit, q.itemIsCurrency)}</span>
+                      <span>of {formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency)}</span>
                     </div>
                   </div>
                 );
@@ -244,7 +245,7 @@ export function DashboardView({ factionId }: Props) {
                       <p className="text-sm">
                         <span className="text-zinc-300 font-medium">{e.username}</span>
                         <span className="text-zinc-600"> logged </span>
-                        <span className="font-medium tabular-nums text-zinc-200">{e.itemUnit}{Number(e.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                       </p>
                       <p className="text-[11px] text-zinc-600">
                         {e.itemTypeName} &middot; {e.entryDate}
@@ -284,11 +285,11 @@ export function DashboardView({ factionId }: Props) {
                   >
                     <div>
                       <p className="text-sm font-medium text-zinc-300">{b.itemTypeName}</p>
-                      <p className="text-xs text-zinc-600">in {b.itemUnit}{fmt(b.inflow)} &middot; out {b.itemUnit}{fmt(b.outflow)}</p>
+                      <p className="text-xs text-zinc-600">in {formatAmount(b.inflow, b.unit, b.isCurrency)} &middot; out {formatAmount(b.outflow, b.unit, b.isCurrency)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-medium tabular-nums" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
-                        {b.balance < 0 ? '-' : ''}{fmt(Math.abs(b.balance))}
+                        {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
                       </p>
                     </div>
                   </div>
@@ -304,7 +305,7 @@ export function DashboardView({ factionId }: Props) {
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-medium tabular-nums text-zinc-100">
-                        {fmt(t.total)}
+                        {formatAmount(t.total, t.unit, t.isCurrency)}
                       </p>
                     </div>
                   </div>

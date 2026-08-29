@@ -92,6 +92,7 @@ export interface ItemType {
   id: string;
   name: string;
   unit: string;
+  isCurrency: boolean;
   isActive: boolean;
   createdAt: string;
   entryCount?: number;
@@ -100,11 +101,13 @@ export interface ItemType {
 export interface CreateItemTypeInput {
   name: string;
   unit?: string;
+  isCurrency?: boolean;
 }
 
 export interface UpdateItemTypeInput {
   name?: string;
   unit?: string;
+  isCurrency?: boolean;
   isActive?: boolean;
 }
 
@@ -123,6 +126,7 @@ export interface Entry {
   avatarUrl: string | null;
   itemTypeName: string;
   itemUnit: string;
+  itemIsCurrency: boolean;
 }
 
 export interface CreateEntryInput {
@@ -152,6 +156,7 @@ export interface DashboardData {
     itemTypeId: string;
     itemTypeName: string;
     unit: string;
+    isCurrency: boolean;
     total: number;
   }[];
   grandTotal: number;
@@ -177,6 +182,7 @@ export interface DashboardData {
     avatarUrl: string | null;
     itemTypeName: string;
     itemUnit: string;
+    itemIsCurrency: boolean;
   }[];
 }
 
@@ -187,6 +193,7 @@ export interface Quota {
   itemTypeId: string;
   itemTypeName: string;
   itemUnit: string;
+  itemIsCurrency: boolean;
   targetAmount: string;
   periodType: 'weekly' | 'monthly';
   periodStart: string;
@@ -242,6 +249,7 @@ export interface ChartData {
     itemTypeId: string;
     itemTypeName: string;
     unit: string;
+    isCurrency: boolean;
     total: number;
     entryCount: number;
   }[];
@@ -256,6 +264,7 @@ export interface ChartData {
     itemTypeId: string;
     itemTypeName: string;
     unit: string;
+    isCurrency: boolean;
     total: number;
   }[];
 }
@@ -313,6 +322,7 @@ export interface ReportSummary {
   byType: {
     itemTypeName: string;
     unit: string;
+    isCurrency: boolean;
     total: number;
     count: number;
     avg: number;
@@ -362,6 +372,7 @@ export interface Payout {
   itemTypeId: string;
   itemTypeName: string;
   itemUnit: string;
+  itemIsCurrency: boolean;
   createdBy: string;
   approvedBy: string | null;
 }
@@ -402,7 +413,8 @@ export interface EvenSplitResult {
 export interface TreasuryBalanceItem {
   itemTypeId: string;
   itemTypeName: string;
-  itemUnit: string;
+  unit: string;
+  isCurrency: boolean;
   inflow: number;
   outflow: number;
   balance: number;
@@ -430,6 +442,7 @@ export interface TreasuryData {
     recipientAvatarUrl: string | null;
     itemTypeName: string;
     itemUnit: string;
+    itemIsCurrency: boolean;
   }[];
 }
 
