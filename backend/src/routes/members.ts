@@ -391,6 +391,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemTypeId: entries.itemTypeId,
           itemTypeName: itemTypes.name,
           unit: itemTypes.unit,
+          isCurrency: itemTypes.isCurrency,
           total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
           count: sql<number>`COUNT(*)::int`,
         })
@@ -403,7 +404,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
             eq(entries.isDeleted, false),
           ),
         )
-        .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit),
+        .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency),
       db
         .select({
           total: sql<string>`COALESCE(SUM(CAST(${payouts.amount} AS NUMERIC)), 0)`,
@@ -427,6 +428,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           createdAt: entries.createdAt,
           itemTypeName: itemTypes.name,
           itemUnit: itemTypes.unit,
+          itemIsCurrency: itemTypes.isCurrency,
         })
         .from(entries)
         .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
@@ -448,6 +450,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           status: payouts.status,
           itemTypeName: itemTypes.name,
           itemUnit: itemTypes.unit,
+          itemIsCurrency: itemTypes.isCurrency,
         })
         .from(payouts)
         .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
@@ -466,6 +469,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemTypeId: quotas.itemTypeId,
           itemTypeName: itemTypes.name,
           unit: itemTypes.unit,
+          isCurrency: itemTypes.isCurrency,
           targetAmount: quotas.targetAmount,
           periodType: quotas.periodType,
           periodStart: quotas.periodStart,

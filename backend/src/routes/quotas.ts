@@ -163,6 +163,7 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeId: quotas.itemTypeId,
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
+      itemIsCurrency: itemTypes.isCurrency,
       targetAmount: quotas.targetAmount,
       periodType: quotas.periodType,
       periodStart: quotas.periodStart,

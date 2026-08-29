@@ -33,6 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { Payout, PayoutStatus, Member, ItemType } from '@/lib/api-types';
+import { formatAmount } from '@/lib/format';
 
 // ── Status config ──
 const STATUS_CONFIG: Record<PayoutStatus, { label: string; color: string; bg: string }> = {
@@ -328,7 +329,7 @@ export function PayoutsView({ factionId }: Props) {
                     </TableCell>
                     <TableCell className="text-sm text-zinc-400">{p.itemTypeName}</TableCell>
                     <TableCell className="text-sm text-zinc-200 tabular-nums text-right font-medium">
-                      {p.itemUnit}{fmt(Number(p.amount))}
+                      {formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}
                     </TableCell>
                     <TableCell className="text-sm text-zinc-500">{p.payoutDate}</TableCell>
                     <TableCell>

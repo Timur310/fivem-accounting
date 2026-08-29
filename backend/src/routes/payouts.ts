@@ -238,6 +238,7 @@ router.get('/', async (req: Request, res: Response) => {
         itemTypeId: payouts.itemTypeId,
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
+        itemIsCurrency: itemTypes.isCurrency,
         createdBy: payouts.createdBy,
         approvedBy: payouts.approvedBy,
       })

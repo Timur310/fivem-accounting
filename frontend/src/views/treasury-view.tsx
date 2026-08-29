@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -47,7 +48,14 @@ export function TreasuryView({ factionId }: Props) {
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const { balances, netBalance, totalInflow, totalOutflow, pending, outflowTrend, recentPayouts } = data;
+  const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
+
+  // The three headline totals cover currency types only — goods have no shared
+  // unit to add up. Say so whenever the faction actually tracks any.
+  const totalsNote =
+    totals.nonCurrencyTypeCount > 0
+      ? `across ${totals.currencyTypeCount} currency ${totals.currencyTypeCount === 1 ? 'type' : 'types'} · ${totals.nonCurrencyTypeCount} non-currency shown below`
+      : 'across all item types';
 
   return (
     <div className="space-y-6">
@@ -70,7 +78,7 @@ export function TreasuryView({ factionId }: Props) {
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">
               {netBalance < 0 && <span className="text-red-400">⚠ Negative balance</span>}
-              {netBalance >= 0 && 'across all item types'}
+              {netBalance >= 0 && totalsNote}
             </p>
           </CardContent>
         </Card>
@@ -89,7 +97,7 @@ export function TreasuryView({ factionId }: Props) {
                 {fmt(totalInflow)}
               </span>
             </div>
-            <p className="text-xs text-zinc-500 mt-1.5">from entries</p>
+            <p className="text-xs text-zinc-500 mt-1.5">from entries · currency only</p>
           </CardContent>
         </Card>
 
@@ -107,7 +115,7 @@ export function TreasuryView({ factionId }: Props) {
                 {fmt(totalOutflow)}
               </span>
             </div>
-            <p className="text-xs text-zinc-500 mt-1.5">completed payouts</p>
+            <p className="text-xs text-zinc-500 mt-1.5">completed payouts · currency only</p>
           </CardContent>
         </Card>
       </div>
@@ -170,11 +178,11 @@ export function TreasuryView({ factionId }: Props) {
                     </Badge>
                   </div>
                   <div className="text-2xl font-medium tabular-nums tracking-tight" style={{ color: b.balance < 0 ? '#ef4444' : brandColor }}>
-                    {b.balance < 0 ? '-' : ''}{fmt(Math.abs(b.balance))}
+                    {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
                   </div>
                   <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
-                    <span className="text-emerald-500/80">+{b.itemUnit}{fmt(b.inflow)} in</span>
-                    <span className="text-red-500/80">-{b.itemUnit}{fmt(b.outflow)} out</span>
+                    <span className="text-emerald-500/80">+{formatAmount(b.inflow, b.unit, b.isCurrency)} in</span>
+                    <span className="text-red-500/80">-{formatAmount(b.outflow, b.unit, b.isCurrency)} out</span>
                   </div>
                   {/* Mini outflow trend */}
                   {b.outflowTrend.length > 1 && (
@@ -253,7 +261,7 @@ export function TreasuryView({ factionId }: Props) {
                     <p className="text-sm">
                       <span className="text-zinc-300 font-medium">{p.recipientUsername}</span>
                       <span className="text-zinc-600"> received </span>
-                      <span className="font-medium tabular-nums text-zinc-200">{p.itemUnit}{fmt(Number(p.amount))}</span>
+                      <span className="font-medium tabular-nums text-zinc-200">{formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}</span>
                     </p>
                     <p className="text-[11px] text-zinc-600">
                       {p.itemTypeName} &middot; {p.payoutDate}

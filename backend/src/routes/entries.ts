@@ -200,6 +200,7 @@ router.get('/', async (req: Request, res: Response) => {
         avatarUrl: users.avatarUrl,
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
+        itemIsCurrency: itemTypes.isCurrency,
       })
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))

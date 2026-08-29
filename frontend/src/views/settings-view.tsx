@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota } from '@/lib/api-types';
 import { useEffect, useRef } from 'react';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -96,9 +97,11 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
 
   const [newName, setNewName] = useState('');
   const [newUnit, setNewUnit] = useState('$');
+  const [newIsCurrency, setNewIsCurrency] = useState(false);
   const [editTarget, setEditTarget] = useState<ItemType | null>(null);
   const [editName, setEditName] = useState('');
   const [editUnit, setEditUnit] = useState('');
+  const [editIsCurrency, setEditIsCurrency] = useState(false);
   const [editActive, setEditActive] = useState(true);
 
   const { data: itemTypes = [], isLoading } = useQuery({
@@ -108,12 +111,13 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => itemTypesApi.create(factionId, { name: newName, unit: newUnit }),
+    mutationFn: () => itemTypesApi.create(factionId, { name: newName, unit: newUnit, isCurrency: newIsCurrency }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
       setCreateOpen(false);
       setNewName('');
       setNewUnit('$');
+      setNewIsCurrency(false);
       toast({ title: 'Item type created' });
     },
     onError: (err: any) => {
@@ -130,6 +134,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       itemTypesApi.update(factionId, editTarget!.id, {
         name: editName,
         unit: editUnit,
+        isCurrency: editIsCurrency,
         isActive: editActive,
       }),
     onSuccess: () => {
@@ -167,6 +172,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
     setEditTarget(t);
     setEditName(t.name);
     setEditUnit(t.unit);
+    setEditIsCurrency(t.isCurrency);
     setEditActive(t.isActive);
     setEditOpen(true);
   };
@@ -214,7 +220,16 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                 {itemTypes.map((t: ItemType) => (
                   <TableRow key={t.id} className={!t.isActive ? 'opacity-50' : ''}>
                     <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="font-mono text-sm">{t.unit}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      <span className="inline-flex items-center gap-1.5">
+                        {t.unit}
+                        {t.isCurrency && (
+                          <Badge variant="secondary" className="font-sans text-[10px] px-1.5 py-0">
+                            Currency
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-sm">{t.entryCount ?? 0}</TableCell>
                     <TableCell>
                       <Badge variant={t.isActive ? 'default' : 'secondary'}>
@@ -266,6 +281,15 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                 Displayed before amounts, e.g. "$1,000” or “5 pcs”.
               </p>
             </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Currency</p>
+                <p className="text-xs text-zinc-500">
+                  Money is shown as {'“'}$1,000.00{'”'}; anything else as {'“'}30 pcs{'”'}.
+                </p>
+              </div>
+              <Switch checked={newIsCurrency} onCheckedChange={setNewIsCurrency} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -294,6 +318,15 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
             <div className="space-y-2">
               <Label>Unit Symbol</Label>
               <Input value={editUnit} onChange={(e) => setEditUnit(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Currency</p>
+                <p className="text-xs text-zinc-500">
+                  Money is shown as {'“'}$1,000.00{'”'}; anything else as {'“'}30 pcs{'”'}.
+                </p>
+              </div>
+              <Switch checked={editIsCurrency} onCheckedChange={setEditIsCurrency} />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
@@ -532,13 +565,13 @@ function QuotasSection({ factionId }: { factionId: string }) {
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {q.itemUnit}{Number(q.targetAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        {formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency)}
                       </TableCell>
                       <TableCell>
                         {q.isActive && q.periodActive ? (
                           <div className="space-y-1 min-w-[140px]">
                             <div className="flex items-center justify-between text-xs">
-                              <span>{q.itemUnit}{(q.currentAmount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                              <span>{formatAmount(q.currentAmount ?? 0, q.itemUnit, q.itemIsCurrency)}</span>
                               <span className={met ? 'text-green-600 font-medium' : 'text-zinc-500'}>
                                 {pct.toFixed(1)}%
                               </span>

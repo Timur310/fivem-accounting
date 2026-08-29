@@ -108,6 +108,10 @@ export const itemTypes = pgTable('item_types', {
   factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
   name:      varchar('name', { length: 100 }).notNull(),
   unit:      varchar('unit', { length: 20 }).notNull().default('$'),
+  // Whether this type holds money rather than countable goods. Amounts are
+  // stored identically either way; this only tells clients how to present them
+  // (currency formatting and decimals vs. plain counts).
+  isCurrency: boolean('is_currency').notNull().default(false),
   isActive:  boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

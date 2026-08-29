@@ -80,6 +80,7 @@ router.get('/', async (req: Request, res: Response) => {
         recipientAvatarUrl: users.avatarUrl,
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
+        itemIsCurrency: itemTypes.isCurrency,
       })
       .from(payouts)
       .innerJoin(users, eq(payouts.recipientUserId, users.id))
@@ -95,9 +96,13 @@ router.get('/', async (req: Request, res: Response) => {
       .limit(10),
   ]);
 
-  const netBalance = balances.reduce((acc, b) => acc + b.balance, 0);
-  const totalInflow = balances.reduce((acc, b) => acc + b.inflow, 0);
-  const totalOutflow = balances.reduce((acc, b) => acc + b.outflow, 0);
+  // Cross-type totals only sum currency item types. Adding money to kilograms
+  // and piece counts produces a number with no meaningful unit, so goods are
+  // reported per item type in `balances` and left out of the roll-up.
+  const currencyBalances = balances.filter((b) => b.isCurrency);
+  const netBalance = currencyBalances.reduce((acc, b) => acc + b.balance, 0);
+  const totalInflow = currencyBalances.reduce((acc, b) => acc + b.inflow, 0);
+  const totalOutflow = currencyBalances.reduce((acc, b) => acc + b.outflow, 0);
 
   // Roll the per-item-type rows up into one overall series...
   const overallByDate = new Map<string, number>();
@@ -120,6 +125,11 @@ router.get('/', async (req: Request, res: Response) => {
     netBalance,
     totalInflow,
     totalOutflow,
+    // What the totals above cover, so the UI never implies they include goods.
+    totals: {
+      currencyTypeCount: currencyBalances.length,
+      nonCurrencyTypeCount: balances.length - currencyBalances.length,
+    },
     pending: {
       count: pendingStats[0]?.count ?? 0,
       total: Number(pendingStats[0]?.total ?? 0),

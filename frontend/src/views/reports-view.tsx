@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp } from 'lucide-react';
+import { formatAmount } from '@/lib/format';
 
 interface Props { factionId: string; }
 
@@ -22,6 +23,13 @@ const PERIOD_OPTIONS = [
   { label: 'Last 90d', value: 'last_90d' },
   { label: 'All Time', value: 'all' },
 ];
+
+// A null percentage means the earlier period was zero — no baseline to compare
+// against, which is not the same as no change.
+function pctLabel(pct: number | null): string {
+  if (pct === null) return 'no baseline';
+  return `${pct >= 0 ? '+' : ''}${pct}%`;
+}
 
 export function ReportsView({ factionId }: Props) {
   const [tab, setTab] = useState<Tab>('summary');
@@ -83,27 +91,33 @@ export function ReportsView({ factionId }: Props) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card className="border-highlight">
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Total Amount</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.totalAmount)}</p>
-                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">{summary.from} → {summary.to}</p>
+                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Currency Total</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.currencyTotal)}</p>
+                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">
+                      {summary.overview.currencyEntryCount} entries &middot; avg {fmt(summary.overview.avgPerCurrencyEntry)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Item Total</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.itemTotal)}</p>
+                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">
+                      {summary.overview.itemEntryCount} entries &middot; avg {fmt(summary.overview.avgPerItemEntry)}
+                    </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Entries</p>
                     <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.entryCount}</p>
+                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">{summary.from} → {summary.to}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Unique Members</p>
                     <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.uniqueMembers}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Avg per Entry</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.avgPerEntry)}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -122,7 +136,7 @@ export function ReportsView({ factionId }: Props) {
                               <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
                               <p className="text-[11px] text-zinc-600">{t.count} entries &middot; avg {fmt(t.avg)} &middot; max {fmt(t.max)}</p>
                             </div>
-                            <span className="text-sm font-medium tabular-nums text-zinc-200">{t.unit}{fmt(t.total)}</span>
+                            <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</span>
                           </div>
                         ))}
                       </div>
@@ -146,9 +160,14 @@ export function ReportsView({ factionId }: Props) {
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-zinc-300 truncate">{m.username}</p>
-                              <p className="text-[11px] text-zinc-600">{m.count} entries &middot; avg {fmt(m.avg)}</p>
+                              <p className="text-[11px] text-zinc-600">{m.count} entries</p>
                             </div>
-                            <span className="text-sm font-medium tabular-nums text-zinc-200">{fmt(m.total)}</span>
+                            <span className="text-sm font-medium tabular-nums text-zinc-200">
+                              {fmt(m.currencyTotal)}
+                              {m.itemTotal > 0 && (
+                                <span className="text-zinc-500 font-normal"> &middot; {fmt(m.itemTotal)} items</span>
+                              )}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -185,15 +204,25 @@ export function ReportsView({ factionId }: Props) {
             <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
           ) : comparison ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Amount Change</p>
+                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Currency Change</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.totalAmount))}</p>
-                      {comparison.deltas.totalAmount > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.totalAmount < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
+                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.currencyTotal))}</p>
+                      {comparison.deltas.currencyTotal > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.currencyTotal < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
                     </div>
-                    <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{comparison.deltas.totalAmountPercent >= 0 ? '+' : ''}{comparison.deltas.totalAmountPercent}%</p>
+                    <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.currencyTotalPercent)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Item Change</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.itemTotal))}</p>
+                      {comparison.deltas.itemTotal > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.itemTotal < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.itemTotalPercent)}</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -226,13 +255,14 @@ export function ReportsView({ factionId }: Props) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Total</span><span className="font-medium tabular-nums text-zinc-200">{fmt(p.total)}</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Currency</span><span className="font-medium tabular-nums text-zinc-200">{fmt(p.currencyTotal)}</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Items</span><span className="font-medium tabular-nums text-zinc-200">{fmt(p.itemTotal)}</span></div>
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">Entries</span><span className="font-medium tabular-nums text-zinc-200">{p.count}</span></div>
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">Active Members</span><span className="font-medium tabular-nums text-zinc-200">{p.members}</span></div>
                       {p.byType.map((t) => (
                         <div key={t.itemTypeName} className="flex justify-between text-sm border-t border-white/[0.06] pt-2">
                           <span className="text-zinc-500">{t.itemTypeName}</span>
-                          <span className="tabular-nums text-zinc-300">{fmt(t.total)} ({t.count})</span>
+                          <span className="tabular-nums text-zinc-300">{formatAmount(t.total, t.unit, t.isCurrency)} ({t.count})</span>
                         </div>
                       ))}
                     </CardContent>
