@@ -46,6 +46,7 @@ export interface Faction {
   description: string | null;
   brandColor: string | null;
   customFields: { name: string; required: boolean }[] | null;
+  payoutApprovalRequired: boolean;
   isActive: boolean;
   createdAt: string;
   memberCount: number;
@@ -68,6 +69,7 @@ export interface UpdateFactionInput {
   description?: string | null;
   isActive?: boolean;
   brandColor?: string;
+  payoutApprovalRequired?: boolean;
   customFields?: { name: string; required: boolean }[];
 }
 
@@ -153,6 +155,8 @@ export interface DashboardData {
     total: number;
   }[];
   grandTotal: number;
+  treasuryBalances: TreasuryBalanceItem[];
+  netBalance: number;
   memberCount: number;
   adminCount: number;
   totalEntries: number;
@@ -337,6 +341,96 @@ export interface ReportComparison {
     entryCount: number;
     memberActivity: number;
   };
+}
+
+// ── Payouts ────────────────────────────────────────
+
+export type PayoutStatus = 'pending' | 'approved' | 'rejected' | 'completed';
+
+export interface Payout {
+  id: string;
+  amount: string;
+  description: string | null;
+  payoutDate: string;
+  status: PayoutStatus;
+  createdAt: string;
+  updatedAt: string | null;
+  approvedAt: string | null;
+  recipientUserId: string;
+  recipientUsername: string;
+  recipientAvatarUrl: string | null;
+  itemTypeId: string;
+  itemTypeName: string;
+  itemUnit: string;
+  createdBy: string;
+  approvedBy: string | null;
+}
+
+export interface CreatePayoutInput {
+  recipientUserId: string;
+  itemTypeId: string;
+  amount: string;
+  description?: string;
+  payoutDate?: string;
+}
+
+export interface UpdatePayoutInput {
+  amount?: string;
+  description?: string | null;
+  payoutDate?: string;
+  status?: PayoutStatus;
+}
+
+export interface EvenSplitInput {
+  itemTypeId: string;
+  totalAmount: string;
+  description?: string;
+  payoutDate?: string;
+}
+
+export interface EvenSplitResult {
+  created: number;
+  perMember: number;
+  distributedTotal: number;
+  remainder: number;
+  status: PayoutStatus;
+  payoutIds: string[];
+}
+
+// ── Treasury ─────────────────────────────────────────
+
+export interface TreasuryBalanceItem {
+  itemTypeId: string;
+  itemTypeName: string;
+  itemUnit: string;
+  inflow: number;
+  outflow: number;
+  balance: number;
+  outflowTrend: { date: string; total: number }[];
+}
+
+export interface TreasuryData {
+  balances: TreasuryBalanceItem[];
+  netBalance: number;
+  totalInflow: number;
+  totalOutflow: number;
+  pending: {
+    count: number;
+    total: number;
+  };
+  outflowTrend: { date: string; total: number }[];
+  trendDays: number;
+  recentPayouts: {
+    id: string;
+    amount: string;
+    description: string | null;
+    payoutDate: string;
+    status: PayoutStatus;
+    recipientUsername: string;
+    recipientAvatarUrl: string | null;
+    itemTypeName: string;
+    itemUnit: string;
+  }[];
 }
 
 // ── Bulk Operations ───────────────────────────────────
