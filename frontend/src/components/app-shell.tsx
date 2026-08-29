@@ -34,6 +34,8 @@ import {
   FileBarChart,
   Wallet,
   ArrowDownToLine,
+  Trophy,
+  AlertTriangle,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
@@ -45,6 +47,9 @@ import { AuditLogsView } from '@/views/audit-logs-view';
 import { ReportsView } from '@/views/reports-view';
 import { AdminFactionsView } from '@/views/admin-factions-view';
 import { AdminFactionDetailView } from '@/views/admin-faction-detail-view';
+import { MemberProfileView } from '@/views/member-profile-view';
+import { StrikesView } from '@/views/strikes-view';
+import { LeaderboardView } from '@/views/leaderboard-view';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AppView } from '@/lib/store';
@@ -62,6 +67,7 @@ export function AppShell() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setUser = useAppStore((s) => s.setUser);
   const [loggingOut, setLoggingOut] = useState(false);
+  const selectedMemberUserId = useAppStore((s) => s.selectedMemberUserId);
 
   // Fetch faction detail for brand color on faction switch
   const { data: factionDetail } = useQuery({
@@ -127,6 +133,17 @@ export function AppShell() {
       adminOnly: true,
     },
     {
+      view: 'leaderboard' as const,
+      label: 'Leaderboard',
+      icon: Trophy,
+    },
+    {
+      view: 'strikes' as const,
+      label: 'Strikes',
+      icon: AlertTriangle,
+      adminOnly: true,
+    },
+    {
       view: 'settings' as const,
       label: 'Settings',
       icon: Settings,
@@ -153,6 +170,7 @@ export function AppShell() {
   ];
 
   const handleNavClick = (view: string) => {
+    if (view === 'member-profile') return;
     if (!selectedFactionId && view !== 'admin-factions' && view !== 'admin-faction-detail') {
       if (isSuperadmin) {
         setCurrentView('admin-factions');
@@ -186,6 +204,12 @@ export function AppShell() {
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':
         return selectedFactionId ? <MembersView factionId={selectedFactionId} /> : null;
+      case 'member-profile':
+        return (selectedFactionId && selectedMemberUserId) ? <MemberProfileView factionId={selectedFactionId} userId={selectedMemberUserId} /> : null;
+      case 'strikes':
+        return selectedFactionId ? <StrikesView factionId={selectedFactionId} /> : null;
+      case 'leaderboard':
+        return selectedFactionId ? <LeaderboardView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'settings':
         return selectedFactionId ? <SettingsView factionId={selectedFactionId} /> : null;
       case 'audit-logs':
@@ -350,7 +374,7 @@ export function AppShell() {
               <Menu className="h-5 w-5" />
             </Button>
             <h1 className="text-sm font-medium text-zinc-300">
-              {navItems.find((i) => i.view === currentView)?.label ?? 'Faction Accountant'}
+              {currentView === 'member-profile' ? 'Member Profile' : (navItems.find((i) => i.view === currentView)?.label ?? 'Faction Accountant')}
             </h1>
           </div>
 
