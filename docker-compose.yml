@@ -17,6 +17,8 @@ services:
     image: edoburu/pgbouncer
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/faction_accountant
+      AUTH_TYPE: scram-sha-256
+      LISTEN_PORT: 5432
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 100
       DEFAULT_POOL_SIZE: 20
