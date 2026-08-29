@@ -100,12 +100,18 @@ router.get('/summary', async (req: Request, res: Response) => {
     // Overall stats
     db
       .select({
-        totalAmount: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
+        // Split by kind: adding money to kilograms gives a figure with no unit.
+        currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+        itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
+        currencyEntryCount: sql<number>`COUNT(*) FILTER (WHERE ${itemTypes.isCurrency})::int`,
+        itemEntryCount: sql<number>`COUNT(*) FILTER (WHERE NOT ${itemTypes.isCurrency})::int`,
         entryCount: sql<number>`COUNT(*)::int`,
-        uniqueMembers: sql<number>`COUNT(DISTINCT user_id)::int`,
-        avgPerEntry: sql<string>`COALESCE(AVG(CAST(amount AS NUMERIC)), 0)`,
+        uniqueMembers: sql<number>`COUNT(DISTINCT ${entries.userId})::int`,
+        avgPerCurrencyEntry: sql<string>`COALESCE(AVG(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+        avgPerItemEntry: sql<string>`COALESCE(AVG(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
       })
       .from(entries)
+      .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where),
 
     // Per item type
@@ -130,24 +136,28 @@ router.get('/summary', async (req: Request, res: Response) => {
       .select({
         username: users.username,
         avatarUrl: users.avatarUrl,
-        total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
+        currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+        itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
         count: sql<number>`COUNT(*)::int`,
-        avg: sql<string>`COALESCE(AVG(CAST(amount AS NUMERIC)), 0)`,
       })
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))
+      .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where)
       .groupBy(users.id, users.username, users.avatarUrl)
-      .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`),
+      // Ranked on money, with goods reported alongside rather than mixed in.
+      .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}) DESC NULLS LAST`),
 
     // Daily breakdown
     db
       .select({
         date: entries.entryDate,
-        total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
+        currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+        itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
         count: sql<number>`COUNT(*)::int`,
       })
       .from(entries)
+      .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where)
       .groupBy(entries.entryDate)
       .orderBy(entries.entryDate),
@@ -159,10 +169,16 @@ router.get('/summary', async (req: Request, res: Response) => {
     from,
     to,
     overview: {
-      totalAmount: Number(s?.totalAmount ?? 0),
+      // Money and goods are reported separately: they have no shared unit, so
+      // one combined figure would be meaningless.
+      currencyTotal: Number(s?.currencyTotal ?? 0),
+      itemTotal: Number(s?.itemTotal ?? 0),
+      currencyEntryCount: s?.currencyEntryCount ?? 0,
+      itemEntryCount: s?.itemEntryCount ?? 0,
       entryCount: s?.entryCount ?? 0,
       uniqueMembers: s?.uniqueMembers ?? 0,
-      avgPerEntry: Number(s?.avgPerEntry ?? 0),
+      avgPerCurrencyEntry: Number(s?.avgPerCurrencyEntry ?? 0),
+      avgPerItemEntry: Number(s?.avgPerItemEntry ?? 0),
     },
     byType: byType.map((t) => ({
       ...t,
@@ -172,12 +188,13 @@ router.get('/summary', async (req: Request, res: Response) => {
     })),
     memberRanking: byMember.map((m) => ({
       ...m,
-      total: Number(m.total),
-      avg: Number(m.avg),
+      currencyTotal: Number(m.currencyTotal),
+      itemTotal: Number(m.itemTotal),
     })),
     dailyBreakdown: dailyBreakdown.map((d) => ({
       ...d,
-      total: Number(d.total),
+      currencyTotal: Number(d.currencyTotal),
+      itemTotal: Number(d.itemTotal),
     })),
   });
 });
@@ -204,25 +221,30 @@ router.get('/comparison', async (req: Request, res: Response) => {
     );
     const [stats] = await db
       .select({
-        total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
+        currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+        itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
         count: sql<number>`COUNT(*)::int`,
-        members: sql<number>`COUNT(DISTINCT user_id)::int`,
+        members: sql<number>`COUNT(DISTINCT ${entries.userId})::int`,
       })
       .from(entries)
+      .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where);
     const byType = await db
       .select({
         itemTypeName: itemTypes.name,
-        total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
+        unit: itemTypes.unit,
+        isCurrency: itemTypes.isCurrency,
+        total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
         count: sql<number>`COUNT(*)::int`,
       })
       .from(entries)
       .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where)
-      .groupBy(itemTypes.name)
-      .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
+      .groupBy(itemTypes.name, itemTypes.unit, itemTypes.isCurrency)
+      .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) DESC`);
     return {
-      total: Number(stats?.total ?? 0),
+      currencyTotal: Number(stats?.currencyTotal ?? 0),
+      itemTotal: Number(stats?.itemTotal ?? 0),
       count: stats?.count ?? 0,
       members: stats?.members ?? 0,
       byType: byType.map((t) => ({ ...t, total: Number(t.total) })),
@@ -234,17 +256,22 @@ router.get('/comparison', async (req: Request, res: Response) => {
     getPeriodStats(boundsB),
   ]);
 
-  // Compute deltas
-  const pctChange = periodA.total > 0
-    ? ((periodB.total - periodA.total) / periodA.total) * 100
-    : periodB.total > 0 ? 100 : 0;
+  // Deltas are computed per kind for the same reason the totals are split.
+  // null means the earlier period was zero, so there is no baseline — that is
+  // not the same as 0% and should not be rendered as one.
+  const pct = (before: number, after: number): number | null => {
+    if (before === 0) return after === 0 ? 0 : null;
+    return Math.round(((after - before) / before) * 10000) / 100;
+  };
 
   success(res, {
     periodA: { label: period_a, ...boundsA, ...periodA },
     periodB: { label: period_b, ...boundsB, ...periodB },
     deltas: {
-      totalAmount: periodB.total - periodA.total,
-      totalAmountPercent: Math.round(pctChange * 100) / 100,
+      currencyTotal: periodB.currencyTotal - periodA.currencyTotal,
+      currencyTotalPercent: pct(periodA.currencyTotal, periodB.currencyTotal),
+      itemTotal: periodB.itemTotal - periodA.itemTotal,
+      itemTotalPercent: pct(periodA.itemTotal, periodB.itemTotal),
       entryCount: periodB.count - periodA.count,
       memberActivity: periodB.members - periodA.members,
     },

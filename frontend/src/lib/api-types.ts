@@ -314,10 +314,15 @@ export interface ReportSummary {
   from: string;
   to: string;
   overview: {
-    totalAmount: number;
+    /** Money and goods are kept apart — they share no unit. */
+    currencyTotal: number;
+    itemTotal: number;
+    currencyEntryCount: number;
+    itemEntryCount: number;
     entryCount: number;
     uniqueMembers: number;
-    avgPerEntry: number;
+    avgPerCurrencyEntry: number;
+    avgPerItemEntry: number;
   };
   byType: {
     itemTypeName: string;
@@ -331,23 +336,39 @@ export interface ReportSummary {
   memberRanking: {
     username: string;
     avatarUrl: string | null;
-    total: number;
+    /** Ranked on currencyTotal; itemTotal is reported alongside. */
+    currencyTotal: number;
+    itemTotal: number;
     count: number;
-    avg: number;
   }[];
   dailyBreakdown: {
     date: string;
-    total: number;
+    currencyTotal: number;
+    itemTotal: number;
     count: number;
   }[];
 }
 
+interface ComparisonPeriod {
+  label: string;
+  from: string;
+  to: string;
+  currencyTotal: number;
+  itemTotal: number;
+  count: number;
+  members: number;
+  byType: { itemTypeName: string; unit: string; isCurrency: boolean; total: number; count: number }[];
+}
+
 export interface ReportComparison {
-  periodA: { label: string; from: string; to: string; total: number; count: number; members: number; byType: { itemTypeName: string; total: number; count: number }[] };
-  periodB: { label: string; from: string; to: string; total: number; count: number; members: number; byType: { itemTypeName: string; total: number; count: number }[] };
+  periodA: ComparisonPeriod;
+  periodB: ComparisonPeriod;
   deltas: {
-    totalAmount: number;
-    totalAmountPercent: number;
+    currencyTotal: number;
+    /** null when the earlier period was zero — no baseline, not 0%. */
+    currencyTotalPercent: number | null;
+    itemTotal: number;
+    itemTotalPercent: number | null;
     entryCount: number;
     memberActivity: number;
   };
