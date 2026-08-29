@@ -6,14 +6,22 @@
  */
 
 /**
- * Format a Date as a `YYYY-MM-DD` string (UTC).
+ * Format a Date as a `YYYY-MM-DD` string using its **local** calendar date.
  *
- * Prefer this over `d.toISOString().split('T')[0]`: `slice` always returns a
- * string, so the result is not `string | undefined` under
- * `noUncheckedIndexedAccess`.
+ * Deliberately not `toISOString().slice(0, 10)`: that converts to UTC first, so
+ * east of Greenwich a local midnight lands on the previous day. `new Date(2026,
+ * 7, 1)` — 1 August — would come back as "2026-07-31" at UTC+2, shifting month
+ * and week boundaries by a day for every quota, report and leaderboard.
+ *
+ * The dates this compares against (`entry_date`, `payout_date`) are plain
+ * calendar dates with no timezone, so the local calendar day is the right
+ * reading: a contribution logged at 00:30 belongs to that day, not yesterday.
  */
 export function toDateString(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**

@@ -1093,7 +1093,7 @@ crontab -e
 | 4 | Markdown rendering | Announcements support full markdown with preview | Low |
 | 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline | Medium |
 
-### Phase 7: Advanced Analytics & Gamification (Weeks 19-21)
+### Phase 7: Advanced Analytics & Gamification (Weeks 19-21) — BACKEND COMPLETE, FRONTEND PENDING
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1820,6 +1820,114 @@ Returns period-over-period metrics:
   }
 }
 ```
+
+
+#### 12.4.6 Backend Implementation Status — DELIVERED
+
+The Phase 7 backend is implemented, type-checked and verified against a live
+database. **No frontend exists yet.** This section is the API contract; where it
+differs from the specification above, this section is authoritative.
+
+Note that **Phase 6 was skipped** — the announcement and activity-feed work in
+12.3 has not been built.
+
+##### What is available
+
+| Method | Endpoint | Access | Purpose |
+|--------|----------|--------|---------|
+| GET | `/factions/{id}/members/{userId}/heatmap?year=` | Any faction member | Gap-filled daily activity for one calendar year |
+| GET | `/factions/{id}/leaderboard` | Any faction member | Ranked members for a period |
+| GET | `/leaderboard` | **Superadmin** | Top contributors across all factions |
+| GET | `/factions/{id}/reports/growth` | Faction admin | Period-over-period metrics |
+
+The member profile (`GET /factions/{id}/members/{userId}`) no longer returns
+`heatmap: null` and `streak: null`. It now carries a populated `streak` object
+and a `performance` score. The heatmap stays on its own endpoint because a full
+year of days dwarfs the rest of that response.
+
+##### Response shapes
+
+```jsonc
+// GET /members/{userId}/heatmap?year=2026
+{
+  "year": 2026,
+  "data": [ { "date": "2026-01-01", "count": 0, "total": 0 }, ... ],  // every day
+  "maxCount": 3, "maxTotal": 15000    // for scaling the colour ramp
+}
+
+// inside GET /members/{userId}
+"streak": { "current": 5, "best": 12, "lastEntryDate": "2026-08-29", "activeToday": true },
+"performance": {
+  "score": 77.22,
+  "breakdown": { "quotaHitRate": 1, "consistency": 0.27,
+                 "totalVolume": 1, "streakBonus": 1, "seniorityBonus": 0.56 }
+}
+
+// GET /factions/{id}/leaderboard?period=week|month|all&item_type_id=&limit=
+{
+  "period": { "from": "2026-08-01", "to": "2026-08-29", "label": "This Month" },
+  "rankings": [ { "rank": 1, "userId": "...", "username": "...", "avatarUrl": null,
+                  "total": 5502, "entryCount": 8,
+                  "itemBreakdown": { "Cash": 5500, "Drugs": 2 }, "isMe": true } ],
+  "myRank": 1
+}
+
+// GET /factions/{id}/reports/growth?periods=6&granularity=month|week
+{
+  "granularity": "month",
+  "periods": [ { "label": "Aug 2026", "from": "2026-08-01", "to": "2026-08-31",
+                 "totalEntries": 10, "totalAmount": 6102,
+                 "activeMembers": 2, "avgPerMember": 3051 } ],
+  "growth": { "entriesChangePct": 15.2, "amountChangePct": null,
+              "memberChange": 2, "avgChangePct": -3.1 },
+  "partial": true
+}
+```
+
+##### Rules the UI must respect
+
+1. **A streak survives until a day is missed.** Logging yesterday but not yet
+   today keeps `current` alive; `activeToday` distinguishes the two. Do not
+   render a streak as broken just because the member has not logged today.
+2. **`performance.score` is computed on demand and never stored.** Cache it
+   client-side with a short stale time; do not treat it as a stable value.
+3. **The score is relative to the faction.** `totalVolume` is rank-scaled
+   against the faction's top contributor, so 100 does not mean "contributed a
+   lot" in absolute terms — it means "leads this faction".
+4. **`quotaHitRate` is neutral (1), not zero, when the faction has no active
+   quotas.** A faction that does not use quotas should not have every member
+   scored down for it.
+5. **Growth percentages can be `null`.** That means the previous period was
+   zero, so there is no baseline to compare against — render it as "n/a", not
+   as 0% or ∞.
+6. **`partial: true` means the last period is still running.** Label it as
+   in-progress; otherwise a mid-month reading looks like a collapse.
+7. **Equal totals share a rank.** Two members on the same amount both get e.g.
+   rank 2, and the next is rank 4. Do not renumber sequentially.
+8. **The leaderboard returns `isMe` and `myRank`** so the caller's own row can
+   be highlighted without a second lookup. `myRank` is null when the caller
+   falls outside the returned slice.
+9. **`GET /leaderboard` (no faction) is superadmin-only.** It deliberately
+   crosses the faction isolation boundary every other endpoint enforces, and
+   lists each member once per faction they are active in.
+10. **The heatmap always returns every day of the year**, including zeroes, so
+    the grid can be rendered without filling gaps client-side.
+
+##### Related fix outside Phase 7
+
+`toDateString` formatted dates by converting to UTC first, so at UTC+2 a local
+midnight landed on the previous day: `new Date(2026, 7, 1)` came back as
+`2026-07-31`. That shifted every month and week boundary by a day — quota
+periods, reports, charts, exports and the new leaderboards all read from it. It
+now formats from the local calendar date, which is the correct reading given
+`entry_date` and `payout_date` are plain dates with no timezone.
+
+##### Not included
+
+Phase 7 frontend work — the heatmap grid, score display, streak indicator,
+leaderboard views and growth charts — is still open. Phase 6 (announcements,
+read tracking, activity feed) was skipped entirely and remains unbuilt on both
+sides.
 
 ---
 

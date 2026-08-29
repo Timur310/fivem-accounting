@@ -23,6 +23,8 @@ import memberNoteRoutes from './routes/memberNotes.js';
 import memberStrikeRoutes from './routes/memberStrikes.js';
 import factionStrikeRoutes from './routes/factionStrikes.js';
 import factionSettingsRoutes from './routes/factionSettings.js';
+import leaderboardRoutes from './routes/leaderboard.js';
+import globalLeaderboardRoutes from './routes/globalLeaderboard.js';
 
 const app = express();
 
@@ -64,6 +66,8 @@ app.get('/api/v1/health', (_req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/factions', factionRoutes);
 app.use('/api/v1/admin/analytics', adminAnalyticsRoutes);
+// Cross-faction ranking (superadmin) — not scoped to a faction.
+app.use('/api/v1/leaderboard', globalLeaderboardRoutes);
 
 // Faction-scoped routes (nested under /factions/:id/...)
 // Member sub-resources are mounted before /members so the more specific paths
@@ -73,6 +77,7 @@ app.use('/api/v1/factions/:id/members/:userId/strikes', memberStrikeRoutes);
 app.use('/api/v1/factions/:id/members', memberRoutes);
 app.use('/api/v1/factions/:id/strikes', factionStrikeRoutes);
 app.use('/api/v1/factions/:id/settings', factionSettingsRoutes);
+app.use('/api/v1/factions/:id/leaderboard', leaderboardRoutes);
 app.use('/api/v1/factions/:id/item-types', itemTypeRoutes);
 app.use('/api/v1/factions/:id/entries', entryRoutes);
 app.use('/api/v1/factions/:id/dashboard', dashboardRoutes);

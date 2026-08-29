@@ -11,6 +11,7 @@ import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
 import { daysSince } from '../lib/date.js';
 import { countActiveStrikes } from '../lib/strikes.js';
+import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/analytics.js';
 
 const router = Router({ mergeParams: true });
 
@@ -312,6 +313,30 @@ router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Requ
   });
 });
 
+// ── GET /:userId/heatmap — daily activity grid ───────
+router.get('/:userId/heatmap', async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+  const targetUserId = req.params.userId as string;
+
+  const year = Number(req.query.year) || new Date().getFullYear();
+  if (year < 2000 || year > 2100) {
+    error(res, 'VALIDATION_ERROR', 'year must be between 2000 and 2100');
+    return;
+  }
+
+  const [membership] = await db
+    .select({ id: factionMembers.id })
+    .from(factionMembers)
+    .where(and(eq(factionMembers.factionId, factionId), eq(factionMembers.userId, targetUserId)))
+    .limit(1);
+  if (!membership) {
+    error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
+    return;
+  }
+
+  success(res, await computeHeatmap(factionId, targetUserId, year));
+});
+
 // ── GET /:userId — member profile ─────────────────────
 // Aggregate view for one member. Notes and strikes stay on their own
 // endpoints, which enforce their own visibility rules.
@@ -497,6 +522,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
       : null;
 
   const strikeCounts = await countActiveStrikes(factionId);
+  const streak = await computeStreak(factionId, targetUserId);
+  const performance = await computePerformanceScore(factionId, targetUserId, streak);
 
   success(res, {
     member: {
@@ -522,10 +549,10 @@ router.get('/:userId', async (req: Request, res: Response) => {
     activeStrikeCount: strikeCounts.get(targetUserId) ?? 0,
     recentEntries,
     recentPayouts,
-    // Phase 7 features — declared so the UI can render an empty state today
-    // without guessing at the eventual shape.
-    heatmap: null,
-    streak: null,
+    // Heatmap has its own endpoint (/heatmap?year=) because a full year of
+    // days is far larger than the rest of this response.
+    streak,
+    performance,
     // Notes are admin-only and paginated separately; this flag tells the UI
     // whether to show the tab at all.
     canViewNotes: isAdmin,
