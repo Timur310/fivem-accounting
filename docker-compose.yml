@@ -30,7 +30,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@pgbouncer:6432/faction_accountant
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/faction_accountant
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
       DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-http://YOUR_VPS_IP:3000/api/v1/auth/callback}
