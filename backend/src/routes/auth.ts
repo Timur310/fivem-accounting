@@ -120,9 +120,8 @@ router.get('/callback', async (req: Request, res: Response) => {
     });
 
     // Redirect to frontend dashboard
-    const frontendUrl = process.env.NODE_ENV === 'production'
-      ? '/'
-      : 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(frontendUrl);
     res.redirect(frontendUrl);
   } catch (err: any) {
     console.error('[AUTH CALLBACK ERROR]', err?.response?.data || err?.message);
