@@ -55,7 +55,7 @@ export function DashboardView({ factionId }: Props) {
     );
   }
 
-  const { faction, totalsByType, grandTotal, memberCount, adminCount, totalEntries, topContributors, recentEntries } = data;
+  const { faction, totalsByType, grandTotal, treasuryBalances, netBalance, memberCount, adminCount, totalEntries, topContributors, recentEntries } = data;
   const activeQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(q => q.isActive && q.periodActive);
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -75,13 +75,28 @@ export function DashboardView({ factionId }: Props) {
         {/* Hero Card — Grand Total with Glow */}
         <Card className="faction-glow border-highlight lg:col-span-1 sm:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Treasury Balance</CardTitle>
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Net Treasury Balance</CardTitle>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: brandColor }}>
-              {fmt(grandTotal)}
-            </div>
-            <p className="text-xs text-zinc-500 mt-1.5">across all item types</p>
+            {(() => {
+              const bal = netBalance ?? grandTotal;
+              const hasTreasury = (treasuryBalances?.length ?? 0) > 0;
+              const totalIn = hasTreasury ? (treasuryBalances ?? []).reduce((s, b) => s + b.inflow, 0) : grandTotal;
+              const totalOut = hasTreasury ? (treasuryBalances ?? []).reduce((s, b) => s + b.outflow, 0) : 0;
+              return (
+                <>
+                  <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : brandColor }}>
+                    {fmt(bal)}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1.5">
+                    {hasTreasury
+                      ? <>inflow {fmt(totalIn)} &middot; outflow {fmt(totalOut)}</>
+                      : 'across all item types'
+                    }
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
 
@@ -244,30 +259,57 @@ export function DashboardView({ factionId }: Props) {
         </Card>
       </div>
 
-      {/* ══ Totals by Type — compact grid ══ */}
+      {/* ══ Totals by Type — compact grid (with treasury balance if available) ══ */}
       {totalsByType.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm text-zinc-200">Totals by Item Type</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-sm text-zinc-200">Treasury by Item Type</CardTitle>
+            {(treasuryBalances?.length ?? 0) > 0 && (
+              <button
+                onClick={() => setCurrentView('treasury')}
+                className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
+                style={{ color: brandColor }}
+              >
+                Full View <ArrowUpRight className="h-3 w-3" />
+              </button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {totalsByType.map((t) => (
-                <div
-                  key={t.itemTypeId}
-                  className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
-                    <p className="text-xs text-zinc-600">{t.unit}</p>
+              {(treasuryBalances?.length ?? 0) > 0
+                ? treasuryBalances.map((b) => (
+                  <div
+                    key={b.itemTypeId}
+                    className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-zinc-300">{b.itemTypeName}</p>
+                      <p className="text-xs text-zinc-600">in {b.itemUnit}{fmt(b.inflow)} &middot; out {b.itemUnit}{fmt(b.outflow)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-medium tabular-nums" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
+                        {b.balance < 0 ? '-' : ''}{fmt(Math.abs(b.balance))}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-medium tabular-nums text-zinc-100">
-                      {fmt(t.total)}
-                    </p>
+                ))
+                : totalsByType.map((t) => (
+                  <div
+                    key={t.itemTypeId}
+                    className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
+                      <p className="text-xs text-zinc-600">{t.unit}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-medium tabular-nums text-zinc-100">
+                        {fmt(t.total)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              }
             </div>
           </CardContent>
         </Card>

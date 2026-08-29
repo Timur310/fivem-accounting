@@ -32,9 +32,13 @@ import {
   ChevronLeft,
   Coins,
   FileBarChart,
+  Wallet,
+  ArrowDownToLine,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
+import { PayoutsView } from '@/views/payouts-view';
+import { TreasuryView } from '@/views/treasury-view';
 import { MembersView } from '@/views/members-view';
 import { SettingsView } from '@/views/settings-view';
 import { AuditLogsView } from '@/views/audit-logs-view';
@@ -106,6 +110,17 @@ export function AppShell() {
       icon: List,
     },
     {
+      view: 'payouts' as const,
+      label: 'Payouts',
+      icon: ArrowDownToLine,
+      adminOnly: true,
+    },
+    {
+      view: 'treasury' as const,
+      label: 'Treasury',
+      icon: Wallet,
+    },
+    {
       view: 'members' as const,
       label: 'Members',
       icon: Users,
@@ -165,6 +180,10 @@ export function AppShell() {
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} /> : null;
       case 'entries':
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} /> : null;
+      case 'payouts':
+        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} /> : null;
+      case 'treasury':
+        return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':
         return selectedFactionId ? <MembersView factionId={selectedFactionId} /> : null;
       case 'settings':

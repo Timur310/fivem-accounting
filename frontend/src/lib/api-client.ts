@@ -28,6 +28,12 @@ import type {
   BulkAddResult,
   BulkDeleteResult,
   CsvImportResult,
+  Payout,
+  CreatePayoutInput,
+  UpdatePayoutInput,
+  EvenSplitInput,
+  EvenSplitResult,
+  TreasuryData,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -214,6 +220,63 @@ export const quotasApi = {
 
   remove: (factionId: string, quotaId: string) =>
     api.delete(`/factions/${factionId}/quotas/${quotaId}`),
+};
+
+// ── Payouts ──
+
+export const payoutsApi = {
+  list: (
+    factionId: string,
+    params?: {
+      item_type_id?: string;
+      recipient_user_id?: string;
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      page?: number;
+      page_size?: number;
+    },
+  ) =>
+    api
+      .get<ApiSuccessResponse<Payout[]>>(`/factions/${factionId}/payouts`, {
+        params,
+      })
+      .then((r) => ({ data: r.data.data, meta: r.data.meta })),
+
+  create: (factionId: string, input: CreatePayoutInput) =>
+    api
+      .post<ApiSuccessResponse<Payout>>(`/factions/${factionId}/payouts`, input)
+      .then(unwrap),
+
+  update: (factionId: string, payoutId: string, input: UpdatePayoutInput) =>
+    api
+      .patch<ApiSuccessResponse<Payout>>(
+        `/factions/${factionId}/payouts/${payoutId}`,
+        input,
+      )
+      .then(unwrap),
+
+  remove: (factionId: string, payoutId: string) =>
+    api.delete(`/factions/${factionId}/payouts/${payoutId}`),
+
+  evenSplit: (factionId: string, input: EvenSplitInput) =>
+    api
+      .post<ApiSuccessResponse<EvenSplitResult>>(
+        `/factions/${factionId}/payouts/even-split`,
+        input,
+      )
+      .then(unwrap),
+};
+
+// ── Treasury ──
+
+export const treasuryApi = {
+  get: (factionId: string, trendDays?: number) =>
+    api
+      .get<ApiSuccessResponse<TreasuryData>>(`/factions/${factionId}/treasury`, {
+        params: trendDays ? { trend_days: trendDays } : undefined,
+      })
+      .then(unwrap),
 };
 
 // ── Charts ──

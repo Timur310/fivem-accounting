@@ -741,6 +741,7 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
   const [brandColor, setBrandColor] = useState('#3b82f6');
   const [customFields, setCustomFields] = useState<{ name: string; required: boolean }[]>([]);
+  const [payoutApprovalRequired, setPayoutApprovalRequired] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -749,13 +750,14 @@ function CustomizationSection({ factionId }: { factionId: string }) {
     if (faction && !initialized.current) {
       setBrandColor(faction.brandColor ?? '#3b82f6');
       setCustomFields(faction.customFields ?? []);
+      setPayoutApprovalRequired(faction.payoutApprovalRequired ?? false);
       initialized.current = true;
     }
   }, [faction]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      factionsApi.update(factionId, { brandColor, customFields }),
+      factionsApi.update(factionId, { brandColor, customFields, payoutApprovalRequired }),
     onSuccess: () => {
       // Immediately update the global brand color in the store
       updateGlobalBrandColor(brandColor);
@@ -872,6 +874,24 @@ function CustomizationSection({ factionId }: { factionId: string }) {
           {customFields.length === 0 && (
             <p className="text-sm text-zinc-500 text-center py-4">No custom fields defined.</p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-zinc-200">Payout Approval</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-zinc-500">
+            When enabled, payouts created by one admin must be approved by a different admin before completion. Single-admin factions auto-complete regardless.
+          </p>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <Switch
+              checked={payoutApprovalRequired}
+              onCheckedChange={setPayoutApprovalRequired}
+            />
+            <span className="text-sm text-zinc-300">Require approval for payouts</span>
+          </label>
         </CardContent>
       </Card>
 

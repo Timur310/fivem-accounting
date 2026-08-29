@@ -7,6 +7,8 @@ export type AppView =
   | 'login'
   | 'dashboard'
   | 'entries'
+  | 'payouts'
+  | 'treasury'
   | 'members'
   | 'settings'
   | 'audit-logs'
