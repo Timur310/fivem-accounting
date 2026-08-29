@@ -28,6 +28,7 @@ const updateFactionSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  payoutApprovalRequired: z.boolean().optional(),
   customFields: z.array(z.object({
     name: z.string().min(1).max(100),
     required: z.boolean(),
@@ -219,6 +220,7 @@ router.patch('/:id', requireAuth, requireSuperadmin, async (req: Request, res: R
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
   if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
+  if (parsed.data.payoutApprovalRequired !== undefined) updates.payoutApprovalRequired = parsed.data.payoutApprovalRequired;
   if (parsed.data.customFields !== undefined) {
     const names = parsed.data.customFields.map((f) => f.name);
     if (new Set(names).size !== names.length) {

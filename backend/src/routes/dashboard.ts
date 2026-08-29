@@ -5,6 +5,7 @@ import { eq, and, sql, desc, sum } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
+import { computeTreasuryBalances } from '../lib/treasury.js';
 
 const router = Router({ mergeParams: true });
 
@@ -95,6 +96,10 @@ router.get('/', async (req: Request, res: Response) => {
     .from(entries)
     .where(and(eq(entries.factionId, factionId), eq(entries.isDeleted, false)));
 
+  // Treasury balances (inflow minus completed payouts) per item type
+  const treasuryBalances = await computeTreasuryBalances(factionId);
+  const netBalance = treasuryBalances.reduce((acc, b) => acc + b.balance, 0);
+
   success(res, {
     faction: {
       id: faction.id,
@@ -103,6 +108,8 @@ router.get('/', async (req: Request, res: Response) => {
     },
     totalsByType,
     grandTotal: grandTotal?.total ?? 0,
+    treasuryBalances,
+    netBalance,
     memberCount: memberStats?.totalMembers ?? 0,
     adminCount: memberStats?.adminCount ?? 0,
     totalEntries: entryStats?.count ?? 0,

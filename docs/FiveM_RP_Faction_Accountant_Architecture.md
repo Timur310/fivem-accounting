@@ -1061,7 +1061,7 @@ crontab -e
 | 4 | Advanced reporting | Periodic summaries, comparison reports, performance rankings | Low |
 | 5 | Rate limiting | Per-user and per-IP sliding window | Low |
 
-### Phase 4: Treasury & Payouts (Weeks 10-12)
+### Phase 4: Treasury & Payouts (Weeks 10-12) — BACKEND COMPLETE, FRONTEND PENDING
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1201,6 +1201,139 @@ Dashboard endpoint returns balances alongside existing totals. The treasury card
 New faction setting (in `factions` table or `customFields` JSONB):
 - `payoutApprovalRequired` (BOOLEAN, default false)
 - When enabled, payouts created by one admin must be approved by another
+
+
+#### 12.1.8 Backend Implementation Status — DELIVERED
+
+The Phase 4 backend is implemented, type-checked and verified against a live
+database. **No frontend exists yet** — everything below is ready for the UI to
+be built on top of. This section is the API contract; where it differs from the
+specification above, this section is authoritative.
+
+##### What is available
+
+| Method | Endpoint | Access | Purpose |
+|--------|----------|--------|---------|
+| POST | `/api/v1/factions/{id}/payouts` | Faction admin | Create a payout |
+| GET | `/api/v1/factions/{id}/payouts` | Faction admin | List payouts (filtered, paginated) |
+| POST | `/api/v1/factions/{id}/payouts/even-split` | Faction admin | Distribute an amount evenly to all members |
+| PATCH | `/api/v1/factions/{id}/payouts/{payoutId}` | Faction admin | Edit fields or advance status |
+| DELETE | `/api/v1/factions/{id}/payouts/{payoutId}` | Faction admin | Soft-delete |
+| GET | `/api/v1/factions/{id}/treasury` | Any faction member | Balances, net position, pending total, outflow trend |
+
+`GET /dashboard` additionally returns `treasuryBalances` and `netBalance`, so a
+balance summary can be rendered without a second request.
+
+##### Request bodies
+
+```jsonc
+// POST /payouts
+{
+  "recipientUserId": "uuid",     // must be a member of this faction
+  "itemTypeId": "uuid",          // must belong to this faction
+  "amount": "2000.00",           // string, positive; decimal(15,2)
+  "description": "Weekly cut",   // optional, max 500
+  "payoutDate": "2026-08-28"     // optional, defaults to today, cannot be future
+}
+
+// POST /payouts/even-split
+{
+  "itemTypeId": "uuid",
+  "totalAmount": "1000.00",
+  "description": "Heist bonus", // optional; defaults to "Even split distribution"
+  "payoutDate": "2026-08-28"    // optional
+}
+
+// PATCH /payouts/{payoutId} — any subset
+{
+  "amount": "500.00",
+  "description": "Corrected note",
+  "payoutDate": "2026-08-27",
+  "status": "approved"
+}
+```
+
+`GET /payouts` query parameters: `item_type_id`, `recipient_user_id`, `status`,
+`date_from`, `date_to`, `page`, `page_size`. List rows are already joined with
+the recipient and item type, so no extra lookups are needed:
+`recipientUsername`, `recipientAvatarUrl`, `itemTypeName`, `itemUnit`.
+
+##### Response shapes
+
+```jsonc
+// GET /treasury
+{
+  "balances": [
+    { "itemTypeId": "uuid", "itemTypeName": "Dirty Money", "unit": "$",
+      "inflow": 10000, "outflow": 4500, "balance": 5500,
+      // per-card sparkline data, same window as trendDays
+      "outflowTrend": [{ "date": "2026-08-28", "total": 2000 }] }
+  ],
+  "netBalance": 5500,
+  "totalInflow": 10000,
+  "totalOutflow": 4500,
+  "pending": { "count": 1, "total": 500 },   // awaiting approval, not yet deducted
+  "outflowTrend": [{ "date": "2026-08-28", "total": 2000 }],  // all item types combined
+  "trendDays": 30,                            // ?trend_days=1..90, default 30
+  "recentPayouts": [ /* last 10 completed, with recipient and item type */ ]
+}
+
+// POST /payouts/even-split
+{
+  "created": 2, "perMember": 500, "distributedTotal": 1000,
+  "remainder": 0.01, "status": "completed", "payoutIds": ["uuid", "uuid"]
+}
+```
+
+Every item type of the faction appears in `balances`, including ones with no
+activity (zeroes), so the UI can render a stable set of cards.
+
+##### Rules the UI must respect
+
+1. **Status lifecycle.** `pending → approved | rejected | completed`,
+   `approved → completed | rejected`. `completed` and `rejected` are terminal —
+   the API rejects any transition out of them, so do not offer a "reopen"
+   action.
+2. **Only `completed` payouts affect the balance.** `pending` and `approved`
+   amounts are surfaced separately in `treasury.pending` so they can be shown as
+   "committed but not yet paid".
+3. **Four-eyes approval.** When `payoutApprovalRequired` is on, the admin who
+   created a payout cannot approve it (HTTP 403). Hide or disable the approve
+   button on rows where `createdBy` equals the current user.
+4. **Locked records.** `amount`, `description` and `payoutDate` cannot be edited
+   once a payout is `completed` or `rejected` (HTTP 400).
+5. **Creation status depends on the faction setting *and* the admin count.**
+   With `payoutApprovalRequired` off, a new payout is created directly as
+   `completed`. With it on, it is created as `pending` only when the faction has
+   at least two admins; with a single admin there would be nobody allowed to
+   approve it (see rule 3), so it auto-completes instead. Always read the
+   resulting status from the response — do not assume `pending`.
+6. **Even split rounds down to whole cents.** The undistributed `remainder`
+   stays in the treasury and is returned in the response; show it so the user
+   understands why the numbers do not add up exactly.
+7. **Balances may be negative.** Paying out more than was contributed is a valid
+   state, not an error. Render negatives rather than clamping at zero.
+8. **`amount` is a string** on the wire (`decimal(15,2)`), while computed
+   treasury figures are numbers. Do not parse amounts as floats before display.
+
+`payoutApprovalRequired` is a real column on `factions` (not inside
+`customFields`) and is settable via `PATCH /api/v1/factions/{id}` alongside
+`brandColor` and `customFields`.
+
+##### Related fix outside Phase 4
+
+The faction router applied `requireSuperadmin` at router level while being
+mounted at `/api/v1/factions`. Because `app.use` matches by prefix, that guard
+also ran for every nested faction-scoped route, so `entries`, `dashboard`,
+`item-types`, `quotas`, `charts`, `export`, `reports` and `bulk` returned
+`403 FORBIDDEN` for anyone who was not a superadmin. The guard is now applied
+per route. Frontend code written around the old behaviour (for example paths
+that only ever worked while logged in as superadmin) should be re-tested.
+
+##### Not included
+
+Phase 4 frontend work — treasury tab, balance cards, payout management page,
+create dialog and the pending-approval queue — is still open.
 
 ---
 

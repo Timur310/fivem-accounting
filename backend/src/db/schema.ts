@@ -28,6 +28,7 @@ export const users = pgTable('users', {
 export const usersRelations = relations(users, ({ many }) => ({
   factionMembers: many(factionMembers),
   entries:        many(entries),
+  payouts:        many(payouts),
   auditLogs:      many(auditLogs),
 }));
 
@@ -41,6 +42,9 @@ export const factions = pgTable('factions', {
   description:  text('description'),
   brandColor:   varchar('brand_color', { length: 7 }),
   customFields: jsonb('custom_fields').$type<{ name: string; required: boolean }[]>(),
+  // When true, a payout created by one admin must be approved by a different
+  // admin before it can be completed.
+  payoutApprovalRequired: boolean('payout_approval_required').notNull().default(false),
   createdBy:    uuid('created_by').notNull().references(() => users.id),
   createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   isActive:     boolean('is_active').notNull().default(true),
@@ -51,6 +55,7 @@ export const factionsRelations = relations(factions, ({ one, many }) => ({
   factionMembers: many(factionMembers),
   itemTypes:      many(itemTypes),
   entries:        many(entries),
+  payouts:        many(payouts),
   quotas:         many(quotas),
   auditLogs:      many(auditLogs),
 }));
@@ -90,6 +95,7 @@ export const itemTypes = pgTable('item_types', {
 export const itemTypesRelations = relations(itemTypes, ({ one, many }) => ({
   faction: one(factions, { fields: [itemTypes.factionId], references: [factions.id] }),
   entries: many(entries),
+  payouts: many(payouts),
   quotas:  many(quotas),
 }));
 
@@ -119,6 +125,41 @@ export const entriesRelations = relations(entries, ({ one }) => ({
 
 export type Entry = typeof entries.$inferSelect;
 export type NewEntry = typeof entries.$inferInsert;
+
+// ── payouts ────────────────────────────────────────────
+// Resources distributed OUT of the faction treasury to members.
+// Only 'completed' payouts count against the treasury balance.
+export const payouts = pgTable('payouts', {
+  id:              uuid('id').defaultRandom().primaryKey(),
+  factionId:       uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  recipientUserId: uuid('recipient_user_id').notNull().references(() => users.id),
+  createdBy:       uuid('created_by').notNull().references(() => users.id),
+  itemTypeId:      uuid('item_type_id').notNull().references(() => itemTypes.id),
+  amount:          decimal('amount', { precision: 15, scale: 2 }).notNull(),
+  description:     text('description'),
+  payoutDate:      date('payout_date').notNull().defaultNow(),
+  status:          varchar('status', { length: 20 }).notNull().default('pending'),
+  approvedBy:      uuid('approved_by').references(() => users.id),
+  approvedAt:      timestamp('approved_at', { withTimezone: true }),
+  createdAt:       timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp('updated_at', { withTimezone: true }),
+  isDeleted:       boolean('is_deleted').notNull().default(false),
+});
+
+export const payoutsRelations = relations(payouts, ({ one }) => ({
+  faction:   one(factions,  { fields: [payouts.factionId],       references: [factions.id] }),
+  recipient: one(users,     { fields: [payouts.recipientUserId], references: [users.id] }),
+  creator:   one(users,     { fields: [payouts.createdBy],       references: [users.id] }),
+  approver:  one(users,     { fields: [payouts.approvedBy],      references: [users.id] }),
+  itemType:  one(itemTypes, { fields: [payouts.itemTypeId],      references: [itemTypes.id] }),
+}));
+
+export type Payout = typeof payouts.$inferSelect;
+export type NewPayout = typeof payouts.$inferInsert;
+
+/** Payout lifecycle states. Only 'completed' affects the treasury balance. */
+export const PAYOUT_STATUSES = ['pending', 'approved', 'rejected', 'completed'] as const;
+export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 
 // ── quotas ─────────────────────────────────────────────
 export const quotas = pgTable('quotas', {
