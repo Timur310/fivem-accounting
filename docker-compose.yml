@@ -31,28 +31,20 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    # Point directly to the backend env file
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-1313}@pgbouncer:5432/faction_accountant
-      # These variables will now automatically pull from ./backend/.env
-      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
-      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
-      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_DAYS: ${JWT_EXPIRATION_DAYS:-7}
       PORT: "8000"
-      NODE_ENV: ${NODE_ENV:-production}
-      CORS_ORIGINS: ${CORS_ORIGINS}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8000:8000"
     depends_on:
       pgbouncer:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://152.53.185:8000/api/v1/health"]
+      # Fixed: Use localhost inside the container for internal health checks
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/api/v1/health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -63,11 +55,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    # Point directly to the frontend env file
+      args:
+        # Passes the public API URL at image build time
+        NEXT_PUBLIC_API_URL: http://152.53.185.62:8000
     env_file:
-      - ./frontend/.env
-    environment:
-      NEXT_PUBLIC_API_URL: http://152.53.185.62:8000
+      - path: ./frontend/.env
+        required: false
     ports:
       - "3000:3000"
     depends_on:
