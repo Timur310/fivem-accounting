@@ -374,11 +374,17 @@ router.get('/:userId', async (req: Request, res: Response) => {
     await Promise.all([
       db
         .select({
-          total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
+          // Split by kind: money and goods share no unit, so one combined
+          // figure would be meaningless (see routes/reports.ts).
+          currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+          itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
+          currencyCount: sql<number>`COUNT(*) FILTER (WHERE ${itemTypes.isCurrency})::int`,
+          itemCount: sql<number>`COUNT(*) FILTER (WHERE NOT ${itemTypes.isCurrency})::int`,
           count: sql<number>`COUNT(*)::int`,
           lastEntryDate: sql<string | null>`MAX(${entries.entryDate})`,
         })
         .from(entries)
+        .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
         .where(
           and(
             eq(entries.factionId, factionId),
@@ -407,10 +413,12 @@ router.get('/:userId', async (req: Request, res: Response) => {
         .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency),
       db
         .select({
-          total: sql<string>`COALESCE(SUM(CAST(${payouts.amount} AS NUMERIC)), 0)`,
+          currencyTotal: sql<string>`COALESCE(SUM(CAST(${payouts.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+          itemTotal: sql<string>`COALESCE(SUM(CAST(${payouts.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
           count: sql<number>`COUNT(*)::int`,
         })
         .from(payouts)
+        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
         .where(
           and(
             eq(payouts.factionId, factionId),
@@ -505,6 +513,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           quotaId: q.id,
           itemTypeName: q.itemTypeName,
           unit: q.unit,
+          isCurrency: q.isCurrency,
           periodType: q.periodType,
           periodStart: range.start,
           periodEnd: range.end,
@@ -516,7 +525,10 @@ router.get('/:userId', async (req: Request, res: Response) => {
       }),
   );
 
-  const totalContributed = Number(contribution[0]?.total ?? 0);
+  const currencyContributed = Number(contribution[0]?.currencyTotal ?? 0);
+  const itemContributed = Number(contribution[0]?.itemTotal ?? 0);
+  const currencyEntryCount = contribution[0]?.currencyCount ?? 0;
+  const itemEntryCount = contribution[0]?.itemCount ?? 0;
   const entryCount = contribution[0]?.count ?? 0;
   const lastEntryDate = contribution[0]?.lastEntryDate ?? null;
 
@@ -535,9 +547,17 @@ router.get('/:userId', async (req: Request, res: Response) => {
       daysInactive: daysSince(lastEntryDate),
     },
     contribution: {
-      totalContributed,
+      currencyContributed,
+      itemContributed,
+      currencyEntryCount,
+      itemEntryCount,
       entryCount,
-      averagePerEntry: entryCount > 0 ? Math.round((totalContributed / entryCount) * 100) / 100 : 0,
+      // Averaged within each kind — an average across money and kilograms
+      // would be as meaningless as their sum.
+      avgPerCurrencyEntry:
+        currencyEntryCount > 0 ? Math.round((currencyContributed / currencyEntryCount) * 100) / 100 : 0,
+      avgPerItemEntry:
+        itemEntryCount > 0 ? Math.round((itemContributed / itemEntryCount) * 100) / 100 : 0,
       lastEntryDate,
       byItemType: byItemType.map((t) => ({ ...t, total: Number(t.total) })),
       mostActiveItemType: mostActiveItemType
@@ -545,7 +565,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
         : null,
     },
     payouts: {
-      totalReceived: Number(payoutStats[0]?.total ?? 0),
+      currencyReceived: Number(payoutStats[0]?.currencyTotal ?? 0),
+      itemReceived: Number(payoutStats[0]?.itemTotal ?? 0),
       payoutCount: payoutStats[0]?.count ?? 0,
     },
     quotaProgress,

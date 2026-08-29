@@ -33,6 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -292,8 +293,15 @@ export function MemberProfileView({ factionId, userId }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.totalContributed)}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">{contribution.entryCount} entries &middot; avg {fmt(contribution.averagePerEntry)}</p>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.currencyContributed)}</div>
+                <p className="text-[11px] text-zinc-600 mt-1">
+                  {contribution.currencyEntryCount} entries &middot; avg {fmt(contribution.avgPerCurrencyEntry)}
+                </p>
+                {contribution.itemEntryCount > 0 && (
+                  <p className="text-[11px] text-zinc-600 mt-0.5">
+                    + {fmt(contribution.itemContributed)} in items ({contribution.itemEntryCount} entries)
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -305,8 +313,11 @@ export function MemberProfileView({ factionId, userId }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.totalReceived)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
                 <p className="text-[11px] text-zinc-600 mt-1">{payoutStats.payoutCount} payout{payoutStats.payoutCount !== 1 ? 's' : ''}</p>
+                {payoutStats.itemReceived > 0 && (
+                  <p className="text-[11px] text-zinc-600 mt-0.5">+ {fmt(payoutStats.itemReceived)} in items</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -357,8 +368,8 @@ export function MemberProfileView({ factionId, userId }: Props) {
                             <div className={`h-full rounded-full transition-all duration-500 ${met ? 'bg-emerald-500' : ''}`} style={{ width: `${Math.min(q.percentage, 100)}%`, ...(!met ? { backgroundColor: brandColor } : {}) }} />
                           </div>
                           <div className="flex justify-between text-[10px] text-zinc-600 mt-0.5">
-                            <span>{q.unit}{fmt(q.contributed)}</span>
-                            <span>of {q.unit}{fmt(q.targetAmount)}</span>
+                            <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>
+                            <span>of {formatAmount(q.targetAmount, q.unit, q.isCurrency)}</span>
                           </div>
                         </div>
                       );
@@ -425,7 +436,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
                           <p className="text-[11px] text-zinc-600">{t.count} entries</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium tabular-nums text-zinc-200">{t.unit}{fmt(t.total)}</p>
+                          <p className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</p>
                           {isTop && <p className="text-[10px]" style={{ color: brandColor }}>most active</p>}
                         </div>
                       </div>
@@ -461,7 +472,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
                         key={d.date}
                         className="w-[11px] h-[11px] rounded-[2px] transition-colors duration-100"
                         style={{ backgroundColor: `${brandColor}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` }}
-                        title={`${d.date}: ${d.count} entries (${fmt(d.total)})`}
+                        title={`${d.date}: ${d.count} ${d.count === 1 ? 'entry' : 'entries'}${d.currencyTotal > 0 ? ` · ${fmt(d.currencyTotal)}` : ''}${d.itemTotal > 0 ? ` · ${fmt(d.itemTotal)} items` : ''}`}
                       />
                     );
                   })}
@@ -490,7 +501,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
                   {recentEntries.map((e) => (
                     <div key={e.id} className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
                       <div>
-                        <span className="text-sm font-medium tabular-nums text-zinc-200">{e.itemUnit}{Number(e.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                         <span className="text-xs text-zinc-600 ml-2">{e.itemTypeName}</span>
                       </div>
                       <div className="text-right">

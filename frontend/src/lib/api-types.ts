@@ -520,27 +520,35 @@ export interface MemberProfile {
     daysInactive: number | null;
   };
   contribution: {
-    totalContributed: number;
+    /** Money and goods kept apart — they share no unit. */
+    currencyContributed: number;
+    itemContributed: number;
+    currencyEntryCount: number;
+    itemEntryCount: number;
     entryCount: number;
-    averagePerEntry: number;
+    avgPerCurrencyEntry: number;
+    avgPerItemEntry: number;
     lastEntryDate: string | null;
     byItemType: {
       itemTypeId: string;
       itemTypeName: string;
       unit: string;
+      isCurrency: boolean;
       total: number;
       count: number;
     }[];
     mostActiveItemType: { itemTypeName: string; total: number } | null;
   };
   payouts: {
-    totalReceived: number;
+    currencyReceived: number;
+    itemReceived: number;
     payoutCount: number;
   };
   quotaProgress: {
     quotaId: string;
     itemTypeName: string;
     unit: string;
+    isCurrency: boolean;
     periodType: string;
     periodStart: string;
     periodEnd: string;
@@ -557,6 +565,7 @@ export interface MemberProfile {
     createdAt: string;
     itemTypeName: string;
     itemUnit: string;
+    itemIsCurrency: boolean;
   }[];
   recentPayouts: {
     id: string;
@@ -566,6 +575,7 @@ export interface MemberProfile {
     status: string;
     itemTypeName: string;
     itemUnit: string;
+    itemIsCurrency: boolean;
   }[];
   streak: {
     current: number;
@@ -694,14 +704,15 @@ export interface UpdateFactionSettingsInput {
 export interface HeatmapDay {
   date: string;
   count: number;
-  total: number;
+  currencyTotal: number;
+  itemTotal: number;
 }
 
 export interface HeatmapResult {
   year: number;
   data: HeatmapDay[];
   maxCount: number;
-  maxTotal: number;
+  maxCurrencyTotal: number;
 }
 
 // ── Phase 7: Leaderboard ───────────────────────────────

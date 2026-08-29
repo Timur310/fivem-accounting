@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { entries, quotas, factionMembers } from '../db/schema.js';
+import { entries, quotas, factionMembers, itemTypes } from '../db/schema.js';
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
 import { toDateString } from './date.js';
 import { getPeriodRange } from './period.js';
@@ -77,14 +77,16 @@ export async function computeStreak(factionId: string, userId: string): Promise<
 export interface HeatmapDay {
   date: string;
   count: number;
-  total: number;
+  /** Split by kind: money and goods share no unit, so no combined total. */
+  currencyTotal: number;
+  itemTotal: number;
 }
 
 export interface HeatmapResult {
   year: number;
   data: HeatmapDay[];
   maxCount: number;
-  maxTotal: number;
+  maxCurrencyTotal: number;
 }
 
 /**
@@ -106,9 +108,11 @@ export async function computeHeatmap(
     .select({
       date: entries.entryDate,
       count: sql<number>`COUNT(*)::int`,
-      total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
+      currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
+      itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
     })
     .from(entries)
+    .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
     .where(
       and(
         eq(entries.factionId, factionId),
@@ -120,7 +124,12 @@ export async function computeHeatmap(
     )
     .groupBy(entries.entryDate);
 
-  const byDate = new Map(rows.map((r) => [r.date, { count: r.count, total: Number(r.total) }]));
+  const byDate = new Map(
+    rows.map((r) => [
+      r.date,
+      { count: r.count, currencyTotal: Number(r.currencyTotal), itemTotal: Number(r.itemTotal) },
+    ]),
+  );
 
   const data: HeatmapDay[] = [];
   const cursor = new Date(Date.UTC(year, 0, 1));
@@ -128,7 +137,12 @@ export async function computeHeatmap(
   while (cursor <= end) {
     const date = cursor.toISOString().slice(0, 10);
     const hit = byDate.get(date);
-    data.push({ date, count: hit?.count ?? 0, total: hit?.total ?? 0 });
+    data.push({
+      date,
+      count: hit?.count ?? 0,
+      currencyTotal: hit?.currencyTotal ?? 0,
+      itemTotal: hit?.itemTotal ?? 0,
+    });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
@@ -136,7 +150,7 @@ export async function computeHeatmap(
     year,
     data,
     maxCount: data.reduce((m, d) => Math.max(m, d.count), 0),
-    maxTotal: data.reduce((m, d) => Math.max(m, d.total), 0),
+    maxCurrencyTotal: data.reduce((m, d) => Math.max(m, d.currencyTotal), 0),
   };
 }
 
