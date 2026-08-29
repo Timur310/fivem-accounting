@@ -6,7 +6,8 @@ import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
-import { toDateString } from '../lib/date.js';
+import { toDateString, todayDateString } from '../lib/date.js';
+import { getPeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });
 
@@ -14,6 +15,11 @@ router.use(requireAuth, requireFactionMember);
 
 const summaryQuerySchema = z.object({
   period: z.enum(['this_week', 'last_week', 'this_month', 'last_month', 'last_30d', 'last_90d', 'all']).default('this_month'),
+});
+
+const growthQuerySchema = z.object({
+  periods: z.string().optional(),
+  granularity: z.enum(['week', 'month']).optional(),
 });
 
 const comparisonQuerySchema = z.object({
@@ -247,6 +253,104 @@ router.get('/comparison', async (req: Request, res: Response) => {
       entryCount: periodB.count - periodA.count,
       memberActivity: periodB.members - periodA.members,
     },
+  });
+});
+
+// ── GET /growth — period-over-period metrics ─────────
+router.get('/growth', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+
+  const parsed = growthQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  const periodCount = Math.min(24, Math.max(2, Number(parsed.data.periods) || 6));
+  const granularity = parsed.data.granularity ?? 'month';
+
+  // Build the window list newest-last, so the response reads left to right on
+  // a chart without the frontend having to reverse it.
+  const windows: { label: string; from: string; to: string }[] = [];
+  const now = new Date();
+  for (let i = periodCount - 1; i >= 0; i--) {
+    if (granularity === 'month') {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      windows.push({
+        label: start.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
+        from: toDateString(start),
+        to: toDateString(end),
+      });
+    } else {
+      const ref = new Date(now);
+      ref.setDate(ref.getDate() - i * 7);
+      const range = getPeriodRange('weekly', ref);
+      windows.push({ label: `Week of ${range.start}`, from: range.start, to: range.end });
+    }
+  }
+
+  const periods = await Promise.all(
+    windows.map(async (w) => {
+      const [row] = await db
+        .select({
+          totalEntries: sql<number>`COUNT(*)::int`,
+          totalAmount: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
+          activeMembers: sql<number>`COUNT(DISTINCT ${entries.userId})::int`,
+        })
+        .from(entries)
+        .where(
+          and(
+            eq(entries.factionId, factionId),
+            eq(entries.isDeleted, false),
+            gte(entries.entryDate, w.from),
+            lte(entries.entryDate, w.to),
+          ),
+        );
+
+      const totalAmount = Number(row?.totalAmount ?? 0);
+      const activeMembers = row?.activeMembers ?? 0;
+      return {
+        label: w.label,
+        from: w.from,
+        to: w.to,
+        totalEntries: row?.totalEntries ?? 0,
+        totalAmount,
+        activeMembers,
+        // Averaged over members who were actually active, not the whole roster:
+        // otherwise adding a dormant member looks like a performance drop.
+        avgPerMember: activeMembers > 0 ? Math.round((totalAmount / activeMembers) * 100) / 100 : 0,
+      };
+    }),
+  );
+
+  // Growth compares the two most recent windows. The latest one is usually
+  // still in progress, which the `partial` flag makes explicit rather than
+  // letting it read as a sudden decline.
+  const latest = periods[periods.length - 1];
+  const previous = periods[periods.length - 2];
+
+  const pct = (now: number, before: number): number | null => {
+    if (before === 0) return now === 0 ? 0 : null; // null = no baseline to compare against
+    return Math.round(((now - before) / before) * 10000) / 100;
+  };
+
+  const growth =
+    latest && previous
+      ? {
+          entriesChangePct: pct(latest.totalEntries, previous.totalEntries),
+          amountChangePct: pct(latest.totalAmount, previous.totalAmount),
+          memberChange: latest.activeMembers - previous.activeMembers,
+          avgChangePct: pct(latest.avgPerMember, previous.avgPerMember),
+        }
+      : null;
+
+  success(res, {
+    granularity,
+    periods,
+    growth,
+    // The final window has not finished yet unless its end date is in the past.
+    partial: latest ? latest.to >= todayDateString() : false,
   });
 });
 
