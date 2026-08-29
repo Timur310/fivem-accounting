@@ -17,6 +17,8 @@ import exportRoutes from './routes/export.js';
 import adminAnalyticsRoutes from './routes/adminAnalytics.js';
 import bulkRoutes from './routes/bulk.js';
 import reportRoutes from './routes/reports.js';
+import payoutRoutes from './routes/payouts.js';
+import treasuryRoutes from './routes/treasury.js';
 
 const app = express();
 
@@ -70,6 +72,8 @@ app.use('/api/v1/factions/:id/charts', chartRoutes);
 app.use('/api/v1/factions/:id/export', exportRoutes);
 app.use('/api/v1/factions/:id/reports', reportRoutes);
 app.use('/api/v1/factions/:id/bulk', bulkRoutes);
+app.use('/api/v1/factions/:id/payouts', payoutRoutes);
+app.use('/api/v1/factions/:id/treasury', treasuryRoutes);
 
 // ── 404 handler ───────────────────────────────────────
 
