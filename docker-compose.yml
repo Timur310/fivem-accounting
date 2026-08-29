@@ -5,7 +5,7 @@ services:
       - pgdata:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: faction_accountant
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1313}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -16,7 +16,7 @@ services:
   pgbouncer:
     image: edoburu/pgbouncer
     environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-password}@db:5432/faction_accountant
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-1313}@db:5432/faction_accountant
       AUTH_TYPE: scram-sha-256
       LISTEN_PORT: 5432
       POOL_MODE: transaction
@@ -31,16 +31,20 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Point directly to the backend env file
+    env_file:
+      - ./backend/.env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@pgbouncer:5432/faction_accountant
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-1313}@pgbouncer:5432/faction_accountant
+      # These variables will now automatically pull from ./backend/.env
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
-      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-http://localhost:3000/api/v1/auth/callback}
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
+      JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_DAYS: ${JWT_EXPIRATION_DAYS:-7}
       PORT: "8000"
       NODE_ENV: ${NODE_ENV:-production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8000:8000"
@@ -59,8 +63,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    # Point directly to the frontend env file
+    env_file:
+      - ./frontend/.env
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://152.53.185.62:8000
     ports:
       - "3000:3000"
     depends_on:
