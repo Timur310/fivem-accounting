@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
 import { toDateString, todayDateString, formatDateValue } from '../lib/date.js';
+import { getPeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });
 
@@ -190,31 +191,5 @@ router.get('/quota-report', async (req: Request, res: Response) => {
 });
 
 // ── Period helpers ────────────────────────────────────
-
-function getPeriodRange(periodType: string, referenceDate: Date): { start: string; end: string } {
-  const d = new Date(referenceDate);
-
-  if (periodType === 'weekly') {
-    const day = d.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - diff);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return {
-      start: toDateString(monday),
-      end: toDateString(sunday),
-    };
-  }
-
-  const year = d.getFullYear();
-  const month = d.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  return {
-    start: toDateString(firstDay),
-    end: toDateString(lastDay),
-  };
-}
 
 export default router;

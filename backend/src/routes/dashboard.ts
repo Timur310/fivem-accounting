@@ -6,6 +6,8 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { computeTreasuryBalances } from '../lib/treasury.js';
+import { countActiveStrikes } from '../lib/strikes.js';
+import { daysSince, toDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
 
@@ -100,6 +102,57 @@ router.get('/', async (req: Request, res: Response) => {
   const treasuryBalances = await computeTreasuryBalances(factionId);
   const netBalance = treasuryBalances.reduce((acc, b) => acc + b.balance, 0);
 
+  // Inactive members — admin-only, since it is a management signal.
+  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+  let inactiveMembers: {
+    userId: string;
+    username: string;
+    avatarUrl: string | null;
+    lastEntryDate: string | null;
+    daysInactive: number | null;
+  }[] = [];
+  let inactivityThresholdDays = faction.inactivityThresholdDays;
+
+  if (isAdmin) {
+    const roster = await db
+      .select({
+        userId: factionMembers.userId,
+        joinedAt: factionMembers.joinedAt,
+        username: users.username,
+        avatarUrl: users.avatarUrl,
+        lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = ${factionMembers.userId} AND faction_id = ${factionId} AND is_deleted = false)`,
+      })
+      .from(factionMembers)
+      .innerJoin(users, eq(factionMembers.userId, users.id))
+      .where(eq(factionMembers.factionId, factionId));
+
+    const strikeCounts = await countActiveStrikes(factionId);
+    const threshold = inactivityThresholdDays;
+
+    inactiveMembers = roster
+      .filter((m) => {
+        // Someone who joined more recently than the threshold has not had the
+        // chance to go quiet for that long yet.
+        const memberDays = daysSince(toDateString(m.joinedAt));
+        if (memberDays !== null && memberDays < threshold) return false;
+        // Members already under a strike are handled through discipline, so
+        // they would only duplicate the signal here.
+        if ((strikeCounts.get(m.userId) ?? 0) > 0) return false;
+
+        const idle = daysSince(m.lastEntryDate);
+        return idle === null || idle >= threshold;
+      })
+      .map((m) => ({
+        userId: m.userId,
+        username: m.username,
+        avatarUrl: m.avatarUrl,
+        lastEntryDate: m.lastEntryDate,
+        daysInactive: daysSince(m.lastEntryDate),
+      }))
+      // Never-active first, then longest idle.
+      .sort((a, b) => (b.daysInactive ?? Infinity) - (a.daysInactive ?? Infinity));
+  }
+
   success(res, {
     faction: {
       id: faction.id,
@@ -115,6 +168,7 @@ router.get('/', async (req: Request, res: Response) => {
     totalEntries: entryStats?.count ?? 0,
     topContributors,
     recentEntries,
+    ...(isAdmin ? { inactiveMembers, inactivityThresholdDays } : {}),
   });
 });
 

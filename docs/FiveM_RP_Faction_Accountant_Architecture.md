@@ -1072,7 +1072,7 @@ crontab -e
 | 5 | Payout history & filtering | Full CRUD, filterable list with audit trail | Medium |
 | 6 | Quick-payout from dashboard | One-click "distribute even split" to all active members | Medium |
 
-### Phase 5: Member Tools & Discipline (Weeks 13-15)
+### Phase 5: Member Tools & Discipline (Weeks 13-15) — BACKEND COMPLETE, FRONTEND PENDING
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1463,6 +1463,121 @@ Reuse the existing `audit_logs` table — no new table needed. Member joins, lea
 GET /api/v1/factions/{id}/members/{userId}/history
 → Returns audit_logs WHERE entity_type='faction_member' AND (details->>'user_id' = userId)
 ```
+
+
+#### 12.2.7 Backend Implementation Status — DELIVERED
+
+The Phase 5 backend is implemented, type-checked and verified against a live
+database. **No frontend exists yet.** This section is the API contract; where it
+differs from the specification above, this section is authoritative.
+
+##### What is available
+
+| Method | Endpoint | Access | Purpose |
+|--------|----------|--------|---------|
+| GET | `/factions/{id}/members/{userId}` | Any faction member | Member profile aggregate |
+| GET | `/factions/{id}/members/{userId}/history` | Faction admin | Join / role / rank changes from the audit log |
+| PATCH | `/factions/{id}/members/{userId}` | Faction admin | Now also accepts `rank` |
+| POST/GET | `/factions/{id}/members/{userId}/notes` | Faction admin | Private admin notes |
+| PATCH/DELETE | `/factions/{id}/members/{userId}/notes/{noteId}` | Faction admin | Edit / remove a note |
+| POST/GET | `/factions/{id}/members/{userId}/strikes` | Admin issues; member reads own | Strikes for one member |
+| PATCH | `/factions/{id}/members/{userId}/strikes/{strikeId}` | Faction admin | Appeal, revoke, reinstate |
+| GET | `/factions/{id}/strikes` | Faction admin | Faction-wide discipline overview |
+| GET | `/factions/{id}/settings` | Any faction member | Ranks, inactivity threshold, strike expiry |
+| PATCH | `/factions/{id}/settings` | Faction admin | Update those settings |
+
+`GET /members` (roster) gained `rank`, `lastEntryDate`, `daysInactive`, and —
+for admins only — `activeStrikeCount`.
+`GET /dashboard` gained `inactiveMembers` and `inactivityThresholdDays`, both
+admin-only.
+
+##### New faction settings
+
+All three live on **`PATCH /api/v1/factions/{id}/settings`**, which **faction
+admins can reach** for their own faction. They are deliberately not on
+`PATCH /factions/{id}` (superadmin-only): that endpoint governs whether a
+faction exists — name, active flag — while these govern how a faction runs
+itself. `GET /factions/{id}/settings` is readable by any member, since ranks
+appear on the roster and the threshold explains why someone is flagged.
+
+```jsonc
+{
+  "ranks": [                                   // max 20, names and levels unique
+    { "name": "Boss", "level": 1, "permissions": ["all"] },
+    { "name": "Capo", "level": 3, "permissions": [] }
+  ],
+  "inactivityThresholdDays": 7,                // 1..365
+  "strikeExpiryDays": { "warning": 30, "minor": 90, "major": null }  // null = never
+}
+```
+
+Removing a rank from the list clears it from every member holding it, in the
+same transaction — a roster can never display a rank the faction no longer
+defines.
+
+##### Request bodies
+
+```jsonc
+// PATCH /members/{userId} — at least one field required
+{ "role": "admin", "rank": "Capo" }   // rank: null clears it
+
+// POST /members/{userId}/notes
+{ "category": "performance",          // general|performance|discipline|positive|promotion
+  "content": "Consistently hits quota",
+  "isFlagged": true }
+
+// POST /members/{userId}/strikes
+{ "severity": "minor",                // warning|minor|major
+  "reason": "Missed 3 quota deadlines" }
+
+// PATCH /members/{userId}/strikes/{strikeId}
+{ "status": "appealed" }              // appealed|revoked|active only
+```
+
+##### Rules the UI must respect
+
+1. **Notes are invisible to their subject.** Every note endpoint requires admin
+   rights, including read. Never surface a note to the member it is about. The
+   profile response carries `canViewNotes` so the tab can be hidden outright.
+2. **Note bodies are deliberately kept out of the audit log** — audit logs are
+   readable by every faction admin, so only the category and flag are recorded.
+3. **Strikes are visible to their subject.** A member may read their own
+   strikes; reading anyone else's returns 403.
+4. **Expiry is evaluated at read time.** There is no scheduler, so a strike past
+   `expiresAt` still has `status: "active"` stored. Use **`effectiveStatus`**,
+   which every strike response includes, and ignore the raw `status` for
+   display.
+5. **`revoked` and `expired` are terminal.** Allowed transitions are
+   `active → appealed|revoked` and `appealed → active|revoked`. Do not offer
+   reinstatement for a revoked or expired strike.
+6. **Reason and severity cannot be edited after issuing** — only the outcome
+   changes, so the record cannot be quietly rewritten.
+7. **Nobody can strike themselves** (HTTP 400).
+8. **Ranks are display-only.** Access control still runs entirely off `role`
+   (`admin`/`member`). `permissions` inside a rank is stored but not enforced
+   anywhere — do not build UI that implies it grants anything.
+9. **An unknown rank is rejected** with the list of valid names in the message.
+10. **Inactivity excludes two groups**: members who joined more recently than
+    the threshold, and members with an active strike (already handled through
+    discipline). `daysInactive: null` means the member has never logged an
+    entry — that is *more* severe than a large number, and the list is sorted
+    with those first.
+
+##### Not included
+
+Phase 5 frontend work — member profile page, notes tab, strike management,
+rank editor and the inactivity alert card — is still open. `heatmap` and
+`streak` are returned as `null` in the profile response: they are Phase 7
+features, declared now so the UI can render an empty state without guessing at
+the eventual shape.
+
+##### Note on `brandColor` and `customFields`
+
+Those two Phase 3 settings still sit on the superadmin-only
+`PATCH /factions/{id}`, so a faction admin cannot change their own faction's
+brand colour or custom entry fields. That predates Phase 5 and was left as is;
+if the same reasoning should apply to them, they belong on this settings
+endpoint too.
 
 ---
 

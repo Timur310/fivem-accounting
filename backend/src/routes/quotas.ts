@@ -8,45 +8,13 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { toDateString } from '../lib/date.js';
+import { getPeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 
 // ── Helpers ──────────────────────────────────────────
-
-/**
- * Compute the date range for the current period of a quota.
- * - Weekly: Monday-based 7-day window containing `referenceDate`
- * - Monthly: calendar month containing `referenceDate`
- */
-function getPeriodRange(periodType: string, referenceDate: Date): { start: string; end: string } {
-  const d = new Date(referenceDate);
-
-  if (periodType === 'weekly') {
-    // Find Monday of the current week (Sunday = 0, Monday = 1)
-    const day = d.getDay();
-    const diff = day === 0 ? 6 : day - 1; // shift so Monday = 0
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - diff);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return {
-      start: toDateString(monday),
-      end: toDateString(sunday),
-    };
-  }
-
-  // Monthly: first and last day of the calendar month
-  const year = d.getFullYear();
-  const month = d.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  return {
-    start: toDateString(firstDay),
-    end: toDateString(lastDay),
-  };
-}
 
 /**
  * Check if a quota's current period has started (period_start <= today)
