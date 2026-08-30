@@ -216,7 +216,17 @@ export function MemberProfileView({ factionId, userId }: Props) {
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-medium text-zinc-100">{displayName(member)}</h3>
             {member.rank && (
-              <Badge variant="outline" className="text-[11px]" style={{ borderColor: `${brandColor}30`, color: brandColor }}>{member.rank}</Badge>
+              <span className="flex items-center gap-1.5">
+                <Badge variant="outline" className="text-[11px]" style={{ borderColor: `${brandColor}30`, color: brandColor }}>{member.rank}</Badge>
+                {member.daysInRank !== null && (
+                  <span
+                    className="text-[10px] text-zinc-500"
+                    title={member.rankSince ? `Since ${new Date(member.rankSince).toLocaleDateString()}` : undefined}
+                  >
+                    {member.daysInRank === 0 ? 'since today' : `${member.daysInRank}d in rank`}
+                  </span>
+                )}
+              </span>
             )}
             {member.role === 'admin' && (
               <Badge className="text-[11px]" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}>Admin</Badge>

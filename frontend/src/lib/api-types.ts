@@ -555,6 +555,10 @@ export interface MemberProfile {
     discordId: string;
     lastLogin: string | null;
     daysInactive: number | null;
+    /** When they moved into their current rank; null if it was never recorded. */
+    rankSince: string | null;
+    /** Whole days in the current rank, from rankSince. Null alongside it. */
+    daysInRank: number | null;
   };
   contribution: {
     /** Money and goods kept apart — they share no unit. */

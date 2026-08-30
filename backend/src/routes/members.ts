@@ -9,7 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
-import { daysSince } from '../lib/date.js';
+import { daysSince, toDateString } from '../lib/date.js';
 import { countActiveStrikes } from '../lib/strikes.js';
 import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/analytics.js';
 
@@ -533,6 +533,31 @@ router.get('/:userId', async (req: Request, res: Response) => {
     return;
   }
 
+  // How long they have held their current rank. Rank changes go through
+  // PATCH /:userId, which audits before/after, so the move *into* the current
+  // rank is the newest audit row whose `after.rank` is it and whose
+  // `before.rank` is something else. Null when nothing recorded that move — a
+  // rank assigned before the audit trail existed, or cleared wholesale by a
+  // settings change — and the client then shows nothing rather than guessing.
+  let rankSince: Date | null = null;
+  if (membership.rank) {
+    const [rankChange] = await db
+      .select({ createdAt: auditLogs.createdAt })
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.factionId, factionId),
+          eq(auditLogs.entityType, 'member'),
+          sql`${auditLogs.details}->>'userId' = ${targetUserId}`,
+          sql`${auditLogs.details}->'after'->>'rank' = ${membership.rank}`,
+          sql`${auditLogs.details}->'before'->>'rank' IS DISTINCT FROM ${membership.rank}`,
+        ),
+      )
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(1);
+    rankSince = rankChange?.createdAt ?? null;
+  }
+
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
 
   // Payouts are admin-only material — members cannot see what others earned.
@@ -721,6 +746,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
     member: {
       ...membership,
       daysInactive: daysSince(lastEntryDate),
+      rankSince,
+      daysInRank: rankSince ? daysSince(toDateString(rankSince)) : null,
     },
     contribution: {
       currencyContributed,
