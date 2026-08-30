@@ -87,6 +87,33 @@ export async function exchangeCode(code: string, codeVerifier: string): Promise<
   return res.data;
 }
 
+/**
+ * The avatar to show for a Discord user — their own if they uploaded one, the
+ * default Discord serves them otherwise. Never null: storing nothing left every
+ * member without a custom picture faceless in the app, which is most of them.
+ *
+ * Two schemes exist. Legacy accounts still carry a discriminator like "1234" and
+ * pick one of five images from it; accounts migrated to unique usernames report
+ * discriminator "0" and pick one of six from the user id.
+ */
+export function resolveAvatarUrl(user: {
+  id: string;
+  avatar: string | null;
+  discriminator?: string;
+}): string {
+  if (user.avatar) {
+    return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
+  }
+
+  const discriminator = user.discriminator ?? '0';
+  const index =
+    discriminator !== '0'
+      ? Number(discriminator) % 5
+      : Number((BigInt(user.id) >> 22n) % 6n);
+
+  return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+}
+
 export async function getDiscordUser(accessToken: string): Promise<DiscordUser> {
   const res = await axios.get<DiscordUser>('https://discord.com/api/users/@me', {
     headers: { Authorization: `Bearer ${accessToken}` },
