@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemTypesApi, quotasApi, factionsApi, factionSettingsApi } from '@/lib/api-client';
+import { itemTypesApi, quotasApi, factionSettingsApi, membersApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { ItemType, Quota } from '@/lib/api-types';
+import type { ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
+import {
+  FACTION_PERMISSIONS,
+  PERMISSION_LABELS,
+  type FactionPermission,
+} from '@/lib/api-types';
 import { useEffect, useRef } from 'react';
 import { formatAmount } from '@/lib/format';
 
@@ -37,14 +42,12 @@ interface Props {
 type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings';
 
 export function SettingsView({ factionId }: Props) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<SettingsTab>('item-types');
 
   return (
     <div className="space-y-4">
       {/* Tab Switcher */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto">
         <Button
           variant={activeTab === 'item-types' ? 'default' : 'outline'}
           onClick={() => setActiveTab('item-types')}
@@ -95,12 +98,13 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ItemType | null>(null);
 
+  // Unit is auto-derived: `$` for currency, `pcs` for goods. We don't ask
+  // the user — the previous free-text field was a frequent source of typos
+  // like "$" vs "$ " that broke formatting downstream.
   const [newName, setNewName] = useState('');
-  const [newUnit, setNewUnit] = useState('$');
   const [newIsCurrency, setNewIsCurrency] = useState(false);
   const [editTarget, setEditTarget] = useState<ItemType | null>(null);
   const [editName, setEditName] = useState('');
-  const [editUnit, setEditUnit] = useState('');
   const [editIsCurrency, setEditIsCurrency] = useState(false);
   const [editActive, setEditActive] = useState(true);
 
@@ -111,19 +115,23 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => itemTypesApi.create(factionId, { name: newName, unit: newUnit, isCurrency: newIsCurrency }),
+    mutationFn: () =>
+      itemTypesApi.create(factionId, {
+        name: newName,
+        unit: newIsCurrency ? '$' : 'pcs',
+        isCurrency: newIsCurrency,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
       setCreateOpen(false);
       setNewName('');
-      setNewUnit('$');
       setNewIsCurrency(false);
       toast({ title: 'Item type created' });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast({
         title: 'Failed to create item type',
-        description: err.response?.data?.error?.message || 'Unknown error',
+        description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
@@ -133,7 +141,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
     mutationFn: () =>
       itemTypesApi.update(factionId, editTarget!.id, {
         name: editName,
-        unit: editUnit,
+        unit: editIsCurrency ? '$' : 'pcs',
         isCurrency: editIsCurrency,
         isActive: editActive,
       }),
@@ -143,10 +151,10 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       setEditTarget(null);
       toast({ title: 'Item type updated' });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast({
         title: 'Update failed',
-        description: err.response?.data?.error?.message || 'Unknown error',
+        description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
@@ -159,10 +167,10 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       setDeleteTarget(null);
       toast({ title: 'Item type disabled' });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast({
         title: 'Failed to disable',
-        description: err.response?.data?.error?.message || 'Unknown error',
+        description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
@@ -171,7 +179,6 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   const openEdit = (t: ItemType) => {
     setEditTarget(t);
     setEditName(t.name);
-    setEditUnit(t.unit);
     setEditIsCurrency(t.isCurrency);
     setEditActive(t.isActive);
     setEditOpen(true);
@@ -210,7 +217,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Unit</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Entries</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
@@ -220,15 +227,16 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                 {itemTypes.map((t: ItemType) => (
                   <TableRow key={t.id} className={!t.isActive ? 'opacity-50' : ''}>
                     <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="font-mono text-sm">
-                      <span className="inline-flex items-center gap-1.5">
-                        {t.unit}
-                        {t.isCurrency && (
-                          <Badge variant="secondary" className="font-sans text-[10px] px-1.5 py-0">
-                            Currency
-                          </Badge>
-                        )}
-                      </span>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={t.isCurrency
+                          ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
+                          : 'border-blue-500/30 text-blue-400 bg-blue-500/10'
+                        }
+                      >
+                        {t.isCurrency ? 'Currency ($)' : 'Goods (pcs)'}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{t.entryCount ?? 0}</TableCell>
                     <TableCell>
@@ -274,18 +282,14 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               <Label>Name</Label>
               <Input placeholder="e.g. Weapons" value={newName} onChange={(e) => setNewName(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Unit Symbol</Label>
-              <Input placeholder="$" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} />
-              <p className="text-xs text-zinc-500">
-                Displayed before amounts, e.g. "$1,000” or “5 pcs”.
-              </p>
-            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Currency</p>
                 <p className="text-xs text-zinc-500">
-                  Money is shown as {'“'}$1,000.00{'”'}; anything else as {'“'}30 pcs{'”'}.
+                  Currency types are shown as {'“'}$1,000.00{'”'} and use the
+                  {' '}<code className="text-zinc-400">$</code> unit. Goods use
+                  {' '}<code className="text-zinc-400">pcs</code> and are
+                  formatted as {'“'}30 pcs{'”'}.
                 </p>
               </div>
               <Switch checked={newIsCurrency} onCheckedChange={setNewIsCurrency} />
@@ -315,15 +319,13 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               <Label>Name</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Unit Symbol</Label>
-              <Input value={editUnit} onChange={(e) => setEditUnit(e.target.value)} />
-            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Currency</p>
                 <p className="text-xs text-zinc-500">
-                  Money is shown as {'“'}$1,000.00{'”'}; anything else as {'“'}30 pcs{'”'}.
+                  Currency types use <code className="text-zinc-400">$</code>;
+                  goods use <code className="text-zinc-400">pcs</code>. The
+                  unit changes automatically.
                 </p>
               </div>
               <Switch checked={editIsCurrency} onCheckedChange={setEditIsCurrency} />
@@ -386,12 +388,14 @@ function QuotasSection({ factionId }: { factionId: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Quota | null>(null);
 
-  // Create form
+  // Create form — Scope lets you target the whole faction (the default) or a
+  // single member. Per-member quotas only count that member's contributions.
   const [newItemTypeId, setNewItemTypeId] = useState('');
   const [newTargetAmount, setNewTargetAmount] = useState('');
   const [newPeriodType, setNewPeriodType] = useState<'weekly' | 'monthly'>('weekly');
+  const [newScope, setNewScope] = useState<'faction' | 'member'>('faction');
+  const [newTargetUserId, setNewTargetUserId] = useState<string>('');
   const [newPeriodStart, setNewPeriodStart] = useState(() => {
-    // Default to upcoming Monday
     const d = new Date();
     const day = d.getDay();
     const diff = day === 0 ? 1 : 8 - day;
@@ -419,6 +423,14 @@ function QuotasSection({ factionId }: { factionId: string }) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Members power the per-member dropdown in the create dialog and the scope
+  // column lookup in the table.
+  const { data: members = [] } = useQuery({
+    queryKey: ['members', factionId],
+    queryFn: () => membersApi.list(factionId),
+    staleTime: 60 * 1000,
+  });
+
   const activeItemTypes = itemTypes.filter((t: ItemType) => t.isActive);
 
   const createMutation = useMutation({
@@ -428,6 +440,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
         targetAmount: newTargetAmount,
         periodType: newPeriodType,
         periodStart: newPeriodStart,
+        targetUserId: newScope === 'member' ? newTargetUserId : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
@@ -435,10 +448,10 @@ function QuotasSection({ factionId }: { factionId: string }) {
       resetCreateForm();
       toast({ title: 'Quota created' });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast({
         title: 'Failed to create quota',
-        description: err.response?.data?.error?.message || 'Unknown error',
+        description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
@@ -458,10 +471,10 @@ function QuotasSection({ factionId }: { factionId: string }) {
       setEditTarget(null);
       toast({ title: 'Quota updated' });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast({
         title: 'Update failed',
-        description: err.response?.data?.error?.message || 'Unknown error',
+        description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
@@ -474,10 +487,10 @@ function QuotasSection({ factionId }: { factionId: string }) {
       setDeleteTarget(null);
       toast({ title: 'Quota deleted' });
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast({
         title: 'Delete failed',
-        description: err.response?.data?.error?.message || 'Unknown error',
+        description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
@@ -487,6 +500,8 @@ function QuotasSection({ factionId }: { factionId: string }) {
     setNewItemTypeId('');
     setNewTargetAmount('');
     setNewPeriodType('weekly');
+    setNewScope('faction');
+    setNewTargetUserId('');
     const d = new Date();
     const day = d.getDay();
     const diff = day === 0 ? 1 : 8 - day;
@@ -502,6 +517,13 @@ function QuotasSection({ factionId }: { factionId: string }) {
     setEditPeriodStart(q.periodStart);
     setEditActive(q.isActive);
     setEditOpen(true);
+  };
+
+  const scopeLabel = (q: Quota): string => {
+    if (!q.targetUserId) return 'Faction-wide';
+    if (q.targetUsername) return q.targetUsername;
+    const m = members.find((mm) => mm.userId === q.targetUserId);
+    return m?.username ?? 'Per-member';
   };
 
   return (
@@ -538,6 +560,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Item Type</TableHead>
+                  <TableHead>Scope</TableHead>
                   <TableHead>Period</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Progress</TableHead>
@@ -557,6 +580,15 @@ function QuotasSection({ factionId }: { factionId: string }) {
                           <div className="text-xs text-zinc-500">
                             {q.periodStartComputed} — {q.periodEndComputed}
                           </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {q.targetUserId ? (
+                          <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
+                            {scopeLabel(q)}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-zinc-500">Faction-wide</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -640,6 +672,40 @@ function QuotasSection({ factionId }: { factionId: string }) {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select
+                value={newScope}
+                onValueChange={(v: 'faction' | 'member') => {
+                  setNewScope(v);
+                  if (v === 'faction') setNewTargetUserId('');
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="faction">Faction-wide</SelectItem>
+                  <SelectItem value="member">Per-member</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-zinc-500">
+                {newScope === 'faction'
+                  ? 'Counts every member\u2019s contributions toward the target.'
+                  : 'Only the selected member\u2019s contributions count toward this quota.'}
+              </p>
+            </div>
+            {newScope === 'member' && (
+              <div className="space-y-2">
+                <Label>Member</Label>
+                <Select value={newTargetUserId} onValueChange={setNewTargetUserId}>
+                  <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                  <SelectContent>
+                    {members.map((m: Member) => (
+                      <SelectItem key={m.userId} value={m.userId}>{m.username}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
               <Label>Target Amount</Label>
               <Input
                 type="number"
@@ -652,7 +718,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
             </div>
             <div className="space-y-2">
               <Label>Period Type</Label>
-              <Select value={newPeriodType} onValueChange={(v: any) => setNewPeriodType(v)}>
+              <Select value={newPeriodType} onValueChange={(v: 'weekly' | 'monthly') => setNewPeriodType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="weekly">Weekly (Monday–Sunday)</SelectItem>
@@ -676,7 +742,13 @@ function QuotasSection({ factionId }: { factionId: string }) {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               onClick={() => createMutation.mutate()}
-              disabled={!newItemTypeId || !newTargetAmount || Number(newTargetAmount) <= 0 || createMutation.isPending}
+              disabled={
+                !newItemTypeId
+                || !newTargetAmount
+                || Number(newTargetAmount) <= 0
+                || (newScope === 'member' && !newTargetUserId)
+                || createMutation.isPending
+              }
             >
               {createMutation.isPending ? 'Creating...' : 'Create Quota'}
             </Button>
@@ -704,7 +776,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
             </div>
             <div className="space-y-2">
               <Label>Period Type</Label>
-              <Select value={editPeriodType} onValueChange={(v: any) => setEditPeriodType(v)}>
+              <Select value={editPeriodType} onValueChange={(v: 'weekly' | 'monthly') => setEditPeriodType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="weekly">Weekly (Monday–Sunday)</SelectItem>
@@ -774,9 +846,12 @@ function CustomizationSection({ factionId }: { factionId: string }) {
   const { toast } = useToast();
   const updateGlobalBrandColor = useAppStore((s) => s.setBrandColor);
 
-  const { data: faction, isLoading } = useQuery({
-    queryKey: ['faction-detail', factionId],
-    queryFn: () => factionsApi.get(factionId),
+  // Customization is read/written through factionSettingsApi so faction
+  // admins (manage_settings OR manage_customization) can edit it — the
+  // factionsApi.update endpoint is superadmin-only and would 403 most users.
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
     staleTime: 30 * 1000,
   });
 
@@ -788,27 +863,27 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
   const initialized = useRef(false);
   useEffect(() => {
-    if (faction && !initialized.current) {
-      setBrandColor(faction.brandColor ?? '#3b82f6');
-      setCustomFields(faction.customFields ?? []);
-      setPayoutApprovalRequired(faction.payoutApprovalRequired ?? false);
+    if (settings && !initialized.current) {
+      setBrandColor(settings.brandColor ?? '#3b82f6');
+      setCustomFields(settings.customFields ?? []);
+      setPayoutApprovalRequired(settings.payoutApprovalRequired ?? false);
       initialized.current = true;
     }
-  }, [faction]);
+  }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      factionsApi.update(factionId, { brandColor, customFields, payoutApprovalRequired }),
+      factionSettingsApi.update(factionId, { brandColor, customFields, payoutApprovalRequired }),
     onSuccess: () => {
-      // Immediately update the global brand color in the store
       updateGlobalBrandColor(brandColor);
-      queryClient.invalidateQueries({ queryKey: ['faction-detail', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
       queryClient.invalidateQueries({ queryKey: ['faction-brand', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['faction-detail', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       toast({ title: 'Customization saved' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Save failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      toast({ title: 'Save failed', description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -958,7 +1033,7 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
     staleTime: 0,
   });
 
-  const [ranks, setRanks] = useState<{ name: string; level: number; permissions: string[] }[]>([]);
+  const [ranks, setRanks] = useState<FactionRank[]>([]);
   const [inactivityThreshold, setInactivityThreshold] = useState(7);
   const [strikeExpiry, setStrikeExpiry] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: 30, minor: 90, major: null });
   const [hasChanges, setHasChanges] = useState(false);
@@ -991,6 +1066,20 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
     markChanged();
   };
 
+  const togglePermission = (idx: number, perm: FactionPermission) => {
+    setRanks((prev) => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const has = r.permissions.includes(perm);
+      return {
+        ...r,
+        permissions: has
+          ? r.permissions.filter((p) => p !== perm)
+          : [...r.permissions, perm],
+      };
+    }));
+    markChanged();
+  };
+
   const saveMutation = useMutation({
     mutationFn: () =>
       factionSettingsApi.update(factionId, {
@@ -1003,8 +1092,8 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
       setHasChanges(false);
       toast({ title: 'Faction settings saved' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      toast({ title: 'Failed', description: apiErrorMessage(err), variant: 'destructive' });
     },
     onSettled: () => setSaving(false),
   });
@@ -1022,32 +1111,61 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
             <CardTitle className="text-sm text-zinc-200">Rank Hierarchy</CardTitle>
             <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Rank</Button>
           </div>
-          <p className="text-xs text-zinc-500 mt-1">Display-only ranks shown on the roster. Separate from admin access control.</p>
+          <p className="text-xs text-zinc-500 mt-1">Display-only ranks shown on the roster. Permissions gate what each rank can do.</p>
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
             <p className="text-zinc-600 text-sm text-center py-6">No ranks defined yet. Members will show no rank.</p>
           ) : (
-            <div className="space-y-2">
-              {ranks.sort((a, b) => a.level - b.level).map((r, idx) => (
-                <div key={idx} className="flex items-center gap-2 rounded-lg border border-white/[0.06] p-3">
-                  <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">L{r.level}</span>
-                  <Input
-                    className="flex-1 h-8 text-sm"
-                    value={r.name}
-                    onChange={(e) => updateRank(idx, 'name', e.target.value)}
-                    placeholder="Rank name"
-                  />
-                  <Input
-                    className="w-16 h-8 text-sm tabular-nums"
-                    type="number"
-                    min={1}
-                    value={r.level}
-                    onChange={(e) => updateRank(idx, 'level', Number(e.target.value))}
-                  />
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                </div>
-              ))}
+            <div className="space-y-3">
+              {[...ranks].sort((a, b) => a.level - b.level).map((r, sortedIdx) => {
+                // The original index in the unsorted array, so toggles map back
+                // to the right rank even after we re-sort for display.
+                const idx = ranks.findIndex((rr) => rr === r);
+                return (
+                  <div key={idx} className="rounded-lg border border-white/[0.06] p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">L{r.level}</span>
+                      <Input
+                        className="flex-1 h-8 text-sm"
+                        value={r.name}
+                        onChange={(e) => updateRank(idx, 'name', e.target.value)}
+                        placeholder="Rank name"
+                      />
+                      <Input
+                        className="w-16 h-8 text-sm tabular-nums"
+                        type="number"
+                        min={1}
+                        value={r.level}
+                        onChange={(e) => updateRank(idx, 'level', Number(e.target.value))}
+                      />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                    {/* Permissions */}
+                    <div className="flex flex-wrap gap-1.5 pl-8">
+                      {FACTION_PERMISSIONS.map((perm) => {
+                        const active = r.permissions.includes(perm);
+                        return (
+                          <button
+                            key={perm}
+                            type="button"
+                            onClick={() => togglePermission(idx, perm)}
+                            className={`text-[10px] px-2 py-1 rounded-md border transition-colors ${
+                              active
+                                ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                                : 'bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300'
+                            }`}
+                            style={active ? { borderColor: `${brandColor}40`, backgroundColor: `${brandColor}15`, color: brandColor } : undefined}
+                            title={PERMISSION_LABELS[perm]}
+                          >
+                            {PERMISSION_LABELS[perm]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useCallback } from 'react';
 import { useAppStore } from '@/lib/store';
 import { authApi } from '@/lib/api-client';
@@ -10,38 +11,40 @@ export default function Home() {
   const user = useAppStore((s) => s.user);
   const setUser = useAppStore((s) => s.setUser);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
-  const setSelectedFactionId = useAppStore((s) => s.setSelectedFactionId);
 
   const checkAuth = useCallback(async () => {
     try {
       const me = await authApi.getMe();
       setUser(me);
+      // Auto-select first active faction
       const activeFaction = me.factions.find((f) => f.factionActive);
       if (activeFaction) {
-        setSelectedFactionId(activeFaction.factionId);
+        useAppStore.getState().setSelectedFactionId(activeFaction.factionId);
         setCurrentView('dashboard');
       } else if (me.role === 'superadmin') {
-        // No active membership — but a superadmin might still have browseable
-        // factions. Drop them into the first one if available, otherwise the
-        // admin factions list view.
-        if (me.browseableFactions && me.browseableFactions.length > 0) {
-          setSelectedFactionId(me.browseableFactions[0]!.id);
+        // Superadmin with no memberships: drop them on the admin-factions
+        // view, but auto-select the first faction they're allowed to browse
+        // (if any) so the rest of the app has a context to render into.
+        const firstBrowseable = me.browseableFactions?.[0];
+        if (firstBrowseable) {
+          useAppStore.getState().setSelectedFactionId(firstBrowseable.id);
           setCurrentView('dashboard');
         } else {
-          setSelectedFactionId(null);
+          useAppStore.getState().setSelectedFactionId(null);
           setCurrentView('admin-factions');
         }
       } else {
-        setSelectedFactionId(null);
-        setCurrentView('login');
+        setCurrentView('dashboard');
       }
     } catch {
       setUser(null);
       setCurrentView('login');
     }
-  }, [setUser, setCurrentView, setSelectedFactionId]);
+  }, [setUser, setCurrentView]);
 
-  useEffect(() => { checkAuth(); }, [checkAuth]);
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   if (!user) return <LoginPage onLogin={checkAuth} />;
 

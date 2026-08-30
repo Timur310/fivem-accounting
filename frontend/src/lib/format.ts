@@ -46,22 +46,13 @@ export function formatSignedAmount(
   return `${sign}${formatAmount(Math.abs(value), unit, isCurrency)}`;
 }
 
-/**
- * Format a plain number with two decimals and thousands separators.
- * Used for headline totals that are always currency-style even when no
- * unit symbol is appropriate (e.g. dashboard net balance across currency
- * item types, treasury net/inflow/outflow).
- */
+/** Plain two-decimal number format with thousands separators. */
 export function formatNumber(n: number): string {
   if (!Number.isFinite(n)) return '—';
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/**
- * Today's date as `YYYY-MM-DD` in the user's local timezone.
- * Used to seed `<input type="date">` defaults so entries can't be backdated
- * to "tomorrow" via UTC drift.
- */
+/** Local YYYY-MM-DD string (avoids UTC drift from toISOString). */
 export function todayLocalDateString(d: Date = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -69,11 +60,7 @@ export function todayLocalDateString(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-/**
- * Return the name to display for a user across the UI.
- * In-game name is preferred when set; falls back to Discord username.
- * Accepts the User shape, Member shape, or any object with username + inGameName.
- */
+/** In-game name when set, Discord username as fallback. */
 export function displayName(user: { username: string; inGameName?: string | null }): string {
   return user.inGameName?.trim() || user.username;
 }

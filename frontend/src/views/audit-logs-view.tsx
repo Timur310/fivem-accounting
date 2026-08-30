@@ -14,7 +14,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ScrollText } from 'lucide-react';
 import type { AuditLog } from '@/lib/api-types';
-import { displayName } from '@/lib/format';
 
 interface Props { factionId: string; }
 
@@ -115,7 +114,7 @@ export function AuditLogsView({ factionId }: Props) {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <div className="text-sm text-zinc-300">{displayName({ username: log.actorUsername, inGameName: log.actorInGameName })}</div>
+                          <div className="text-sm text-zinc-300">{log.actorUsername}</div>
                           <div className="text-[11px] text-zinc-600 font-mono tabular-nums">{log.actorDiscordId}</div>
                         </TableCell>
                         <TableCell className="max-w-[200px]">

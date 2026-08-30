@@ -23,12 +23,12 @@ export interface User {
   discordId: string;
   username: string;
   inGameName: string | null;
+  browseableFactions?: { id: string; name: string }[];
   avatarUrl: string | null;
   role: 'superadmin' | 'faction_admin' | 'member';
   createdAt: string;
   lastLogin: string | null;
   factions: FactionMembership[];
-  browseableFactions?: { id: string; name: string }[];
 }
 
 export interface FactionMembership {
@@ -218,6 +218,9 @@ export interface Quota {
   periodStart: string;
   isActive: boolean;
   createdAt: string;
+  targetUserId: string | null;
+  targetUsername: string | null;
+  targetAvatarUrl: string | null;
   currentAmount?: number;
   percentage?: number;
   periodActive?: boolean;
@@ -230,6 +233,7 @@ export interface CreateQuotaInput {
   targetAmount: string;
   periodType: 'weekly' | 'monthly';
   periodStart: string;
+  targetUserId?: string | null;
 }
 
 export interface UpdateQuotaInput {
@@ -237,6 +241,7 @@ export interface UpdateQuotaInput {
   periodType?: 'weekly' | 'monthly';
   periodStart?: string;
   isActive?: boolean;
+  targetUserId?: string | null;
 }
 
 // ── Audit Logs ──
@@ -695,8 +700,22 @@ export interface FactionStrikesData {
 export interface FactionRank {
   name: string;
   level: number;
-  permissions: string[];
+  permissions: FactionPermission[];
 }
+
+export const FACTION_PERMISSIONS = [
+  'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
+  'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
+  'view_audit_logs', 'view_reports',
+] as const;
+export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
+export const PERMISSION_LABELS: Record<FactionPermission, string> = {
+  manage_members: 'Manage Members', manage_payouts: 'Manage Payouts',
+  manage_entries: 'Edit/Delete Entries', manage_strikes: 'Manage Strikes',
+  manage_quotas: 'Manage Quotas', manage_item_types: 'Manage Item Types',
+  manage_settings: 'Manage Settings', manage_customization: 'Manage Customization',
+  view_audit_logs: 'View Audit Logs', view_reports: 'View Reports',
+};
 
 export interface FactionSettings {
   ranks: FactionRank[];
@@ -706,6 +725,9 @@ export interface FactionSettings {
     minor: number | null;
     major: number | null;
   };
+  brandColor: string | null;
+  payoutApprovalRequired: boolean;
+  customFields: { name: string; required: boolean }[];
 }
 
 export interface UpdateFactionSettingsInput {
@@ -716,6 +738,9 @@ export interface UpdateFactionSettingsInput {
     minor: number | null;
     major: number | null;
   };
+  brandColor?: string;
+  payoutApprovalRequired?: boolean;
+  customFields?: { name: string; required: boolean }[];
 }
 
 // ── Phase 7: Heatmap ────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { factionsApi, adminAnalyticsApi } from '@/lib/api-client';
+import { factionsApi, adminAnalyticsApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -66,19 +66,19 @@ export function AdminFactionsView() {
   const createMutation = useMutation({
     mutationFn: () => factionsApi.create({ name: newName, description: newDesc || undefined, initialAdminDiscordId: newAdminDiscordId }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-factions'] }); setCreateOpen(false); setNewName(''); setNewDesc(''); setNewAdminDiscordId(''); toast({ title: 'Faction created' }); },
-    onError: (err: any) => { toast({ title: 'Failed to create faction', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' }); },
+    onError: (err: unknown) => { toast({ title: 'Failed to create faction', description: apiErrorMessage(err), variant: 'destructive' }); },
   });
 
   const updateMutation = useMutation({
     mutationFn: () => factionsApi.update(editFaction!.id, { name: editName, description: editDesc || null, isActive: editActive }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-factions'] }); setEditOpen(false); setEditFaction(null); toast({ title: 'Faction updated' }); },
-    onError: (err: any) => { toast({ title: 'Update failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' }); },
+    onError: (err: unknown) => { toast({ title: 'Update failed', description: apiErrorMessage(err), variant: 'destructive' }); },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => factionsApi.remove(deleteTarget!.id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-factions'] }); setDeleteTarget(null); toast({ title: 'Faction deactivated' }); },
-    onError: (err: any) => { toast({ title: 'Failed to deactivate', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' }); },
+    onError: (err: unknown) => { toast({ title: 'Failed to deactivate', description: apiErrorMessage(err), variant: 'destructive' }); },
   });
 
   const openEdit = (f: Faction) => { setEditFaction(f); setEditName(f.name); setEditDesc(f.description || ''); setEditActive(f.isActive); setEditOpen(true); };
@@ -101,7 +101,7 @@ export function AdminFactionsView() {
           <Card className="border-highlight"><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><Shield className="h-3.5 w-3.5" />Factions</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalFactions}</p><p className="text-[11px] text-zinc-500">{analytics.overview.activeFactions} active</p></CardContent></Card>
           <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><Users className="h-3.5 w-3.5" />Users</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalUsers}</p><p className="text-[11px] text-zinc-500">{analytics.overview.totalMemberships} memberships</p></CardContent></Card>
           <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><List className="h-3.5 w-3.5" />Total Entries</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalEntries.toLocaleString()}</p><p className="text-[11px] text-zinc-500">{analytics.overview.entriesLast7d} last 7d &middot; {analytics.overview.entriesLast30d} last 30d</p></CardContent></Card>
-          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><BarChart3 className="h-3.5 w-3.5" />Top Faction</div>{analytics.topFactionsByAmount.length > 0 ? (<><p className="text-sm font-medium mt-1 truncate text-zinc-200">{analytics.topFactionsByAmount[0].name}</p><p className="text-[11px] text-zinc-500">{analytics.topFactionsByAmount[0].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} total</p></>) : (<p className="text-sm text-zinc-600 mt-1">No data yet</p>)}</CardContent></Card>
+          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><BarChart3 className="h-3.5 w-3.5" />Top Faction</div>{analytics.topFactionsByAmount.length > 0 ? (<><p className="text-sm font-medium mt-1 truncate text-zinc-200">{analytics.topFactionsByAmount[0].name}</p><p className="text-[11px] text-zinc-500">${analytics.topFactionsByAmount[0].totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })} total</p></>) : (<p className="text-sm text-zinc-600 mt-1">No data yet</p>)}</CardContent></Card>
         </div>
       )}
 

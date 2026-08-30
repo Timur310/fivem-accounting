@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { membersApi, factionSettingsApi } from '@/lib/api-client';
+import { membersApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { FactionSettings } from '@/lib/api-types';
@@ -42,6 +42,9 @@ export function MembersView({ factionId }: Props) {
 
   const [addOpen, setAddOpen] = useState(false);
   const [discordId, setDiscordId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatarUrl: string | null; discordId: string }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<{ id: string; username: string; avatarUrl: string | null; discordId: string } | null>(null);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<{ userId: string; currentRole: string; username: string } | null>(null);
   const [newRole, setNewRole] = useState<'admin' | 'member'>('member');
@@ -67,18 +70,37 @@ export function MembersView({ factionId }: Props) {
   const sortedRanks = (settings?.ranks ?? []).sort((a, b) => a.level - b.level);
 
   const addMutation = useMutation({
-    mutationFn: () => membersApi.add(factionId, discordId),
+    mutationFn: () => membersApi.add(factionId, selectedUser ? selectedUser.id : discordId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['members', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       setAddOpen(false);
       setDiscordId('');
+      setSelectedUser(null);
+      setSearchQuery('');
+      setSearchResults([]);
       toast({ title: 'Member added' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed to add member', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      toast({ title: 'Failed to add member', description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
+
+  // Debounced search of any user the backend knows about (whether or not
+  // they're already a faction member — the backend validates on add).
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (q.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const results = await membersApi.search(factionId, q);
+      setSearchResults(results);
+    } catch {
+      setSearchResults([]);
+    }
+  };
 
   const roleMutation = useMutation({
     mutationFn: () => membersApi.updateRole(factionId, roleTarget!.userId, newRole),
@@ -88,8 +110,8 @@ export function MembersView({ factionId }: Props) {
       setRoleTarget(null);
       toast({ title: 'Role updated' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed to update role', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      toast({ title: 'Failed to update role', description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -101,8 +123,8 @@ export function MembersView({ factionId }: Props) {
       setRankTarget(null);
       toast({ title: 'Rank updated' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed to update rank', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      toast({ title: 'Failed to update rank', description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -114,8 +136,8 @@ export function MembersView({ factionId }: Props) {
       setRemoveTarget(null);
       toast({ title: 'Member removed' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed to remove member', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      toast({ title: 'Failed to remove member', description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -279,23 +301,94 @@ export function MembersView({ factionId }: Props) {
         </CardContent>
       </Card>
 
-      {/* Add Member Dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+                      {/* Add Member Dialog */}
+      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) { setSearchQuery(''); setSearchResults([]); setSelectedUser(null); setDiscordId(''); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Member</DialogTitle>
-            <DialogDescription>Enter the Discord ID of the user you want to add. They must have logged in to the system at least once.</DialogDescription>
+            <DialogDescription>Search for a user by Discord username or ID, or paste a Discord ID manually below.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Search input + dropdown */}
             <div className="space-y-2">
-              <Label>Discord User ID</Label>
-              <Input placeholder="e.g. 123456789012345678" value={discordId} onChange={(e) => setDiscordId(e.target.value)} className="font-mono tabular-nums" />
-              <p className="text-xs text-zinc-600">Right-click a user in Discord and copy their User ID.</p>
+              <Label>Search users</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
+                <Input
+                  placeholder="Type at least 2 characters..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="pl-9"
+                  disabled={!!selectedUser}
+                />
+                {searchQuery && !selectedUser && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {/* Selected user chip */}
+              {selectedUser ? (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-white/[0.08] p-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar className="h-7 w-7">
+                      <AvatarImage src={selectedUser.avatarUrl ?? undefined} />
+                      <AvatarFallback className="text-[10px]">{selectedUser.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-sm text-zinc-200 truncate">{selectedUser.username}</p>
+                      <p className="text-[11px] text-zinc-600 font-mono tabular-nums truncate">{selectedUser.discordId}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedUser(null); setSearchQuery(''); setSearchResults([]); }}
+                    className="text-zinc-500 hover:text-zinc-300 shrink-0"
+                    aria-label="Clear selection"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                searchResults.length > 0 && (
+                  <div className="max-h-56 overflow-y-auto rounded-md border border-white/[0.08]">
+                    {searchResults.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { setSelectedUser(u); setSearchQuery(''); setSearchResults([]); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.04] transition-colors"
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={u.avatarUrl ?? undefined} />
+                          <AvatarFallback className="text-[10px]">{u.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm text-zinc-200 truncate">{u.username}</p>
+                          <p className="text-[11px] text-zinc-600 font-mono tabular-nums truncate">{u.discordId}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Manual fallback */}
+            <div className="space-y-2">
+              <Label>Or enter Discord User ID manually</Label>
+              <Input placeholder="e.g. 123456789012345678" value={discordId} onChange={(e) => setDiscordId(e.target.value)} className="font-mono tabular-nums" disabled={!!selectedUser} />
+              <p className="text-xs text-zinc-600">Used when the user has logged in but search doesn’t find them.</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={() => addMutation.mutate()} disabled={!discordId.trim() || addMutation.isPending}>
+            <Button onClick={() => addMutation.mutate()} disabled={(!selectedUser && !discordId.trim()) || addMutation.isPending}>
               {addMutation.isPending ? 'Adding...' : 'Add Member'}
             </Button>
           </DialogFooter>

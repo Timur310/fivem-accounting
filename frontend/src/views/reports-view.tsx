@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp } from 'lucide-react';
-import { formatAmount, formatNumber, displayName } from '@/lib/format';
+import { formatAmount, displayName } from '@/lib/format';
 
 interface Props { factionId: string; }
 
@@ -50,6 +50,9 @@ export function ReportsView({ factionId }: Props) {
     enabled: tab === 'comparison',
   });
 
+  const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtItems = (n: number) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} pcs`;
+
   return (
     <div className="space-y-4">
       {/* Tab switcher */}
@@ -90,18 +93,18 @@ export function ReportsView({ factionId }: Props) {
                 <Card className="border-highlight">
                   <CardContent className="p-4">
                     <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Currency Total</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{formatNumber(summary.overview.currencyTotal)}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.currencyTotal)}</p>
                     <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">
-                      {summary.overview.currencyEntryCount} entries &middot; avg {formatNumber(summary.overview.avgPerCurrencyEntry)}
+                      {summary.overview.currencyEntryCount} entries &middot; avg {fmt(summary.overview.avgPerCurrencyEntry)}
                     </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Item Total</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{formatNumber(summary.overview.itemTotal)}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmtItems(summary.overview.itemTotal)}</p>
                     <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">
-                      {summary.overview.itemEntryCount} entries &middot; avg {formatNumber(summary.overview.avgPerItemEntry)}
+                      {summary.overview.itemEntryCount} entries &middot; avg {fmtItems(summary.overview.avgPerItemEntry)}
                     </p>
                   </CardContent>
                 </Card>
@@ -132,7 +135,7 @@ export function ReportsView({ factionId }: Props) {
                           <div key={t.itemTypeName} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3 transition-all duration-150 hover:border-white/[0.1]">
                             <div>
                               <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
-                              <p className="text-[11px] text-zinc-600">{t.count} entries &middot; avg {formatNumber(t.avg)} &middot; max {formatNumber(t.max)}</p>
+                              <p className="text-[11px] text-zinc-600">{t.count} entries &middot; avg {fmt(t.avg)} &middot; max {fmt(t.max)}</p>
                             </div>
                             <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</span>
                           </div>
@@ -154,16 +157,16 @@ export function ReportsView({ factionId }: Props) {
                             <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">#{i + 1}</span>
                             <Avatar className="h-6 w-6">
                               <AvatarImage src={m.avatarUrl ?? undefined} />
-                              <AvatarFallback className="text-[9px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
+                              <AvatarFallback className="text-[9px]">{displayName({ username: m.username, inGameName: m.inGameName }).slice(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-zinc-300 truncate">{displayName(m)}</p>
+                              <p className="text-sm text-zinc-300 truncate">{displayName({ username: m.username, inGameName: m.inGameName })}</p>
                               <p className="text-[11px] text-zinc-600">{m.count} entries</p>
                             </div>
                             <span className="text-sm font-medium tabular-nums text-zinc-200">
-                              {formatNumber(m.currencyTotal)}
+                              {fmt(m.currencyTotal)}
                               {m.itemTotal > 0 && (
-                                <span className="text-zinc-500 font-normal"> &middot; {formatNumber(m.itemTotal)} items</span>
+                                <span className="text-zinc-500 font-normal"> &middot; {fmtItems(m.itemTotal)}</span>
                               )}
                             </span>
                           </div>
@@ -207,7 +210,7 @@ export function ReportsView({ factionId }: Props) {
                   <CardContent className="p-4">
                     <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Currency Change</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{formatNumber(Math.abs(comparison.deltas.currencyTotal))}</p>
+                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.currencyTotal))}</p>
                       {comparison.deltas.currencyTotal > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.currencyTotal < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
                     </div>
                     <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.currencyTotalPercent)}</p>
@@ -217,7 +220,7 @@ export function ReportsView({ factionId }: Props) {
                   <CardContent className="p-4">
                     <p className="text-[11px] text-zinc-500 uppercase tracking-wider">Item Change</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{formatNumber(Math.abs(comparison.deltas.itemTotal))}</p>
+                      <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.itemTotal))}</p>
                       {comparison.deltas.itemTotal > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.itemTotal < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
                     </div>
                     <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.itemTotalPercent)}</p>
@@ -253,8 +256,8 @@ export function ReportsView({ factionId }: Props) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Currency</span><span className="font-medium tabular-nums text-zinc-200">{formatNumber(p.currencyTotal)}</span></div>
-                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Items</span><span className="font-medium tabular-nums text-zinc-200">{formatNumber(p.itemTotal)}</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Currency</span><span className="font-medium tabular-nums text-zinc-200">{fmt(p.currencyTotal)}</span></div>
+                      <div className="flex justify-between text-sm"><span className="text-zinc-500">Items</span><span className="font-medium tabular-nums text-zinc-200">{fmtItems(p.itemTotal)}</span></div>
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">Entries</span><span className="font-medium tabular-nums text-zinc-200">{p.count}</span></div>
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">Active Members</span><span className="font-medium tabular-nums text-zinc-200">{p.members}</span></div>
                       {p.byType.map((t) => (

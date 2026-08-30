@@ -9,7 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Users, Package, Settings } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import type { Member, ItemType } from '@/lib/api-types';
-import { displayName } from '@/lib/format';
 
 export function AdminFactionDetailView() {
   const adminDetailFactionId = useAppStore((s) => s.adminDetailFactionId);
@@ -77,8 +76,8 @@ export function AdminFactionDetailView() {
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.members.map((m: Member) => (
                   <div key={m.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
-                    <Avatar className="h-7 w-7"><AvatarImage src={m.avatarUrl ?? undefined} /><AvatarFallback className="text-[10px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
-                    <div className="flex-1 min-w-0"><p className="text-sm text-zinc-300 truncate">{displayName(m)}</p><p className="text-[11px] text-zinc-600 font-mono tabular-nums">{m.discordId}</p></div>
+                    <Avatar className="h-7 w-7"><AvatarImage src={m.avatarUrl ?? undefined} /><AvatarFallback className="text-[10px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                    <div className="flex-1 min-w-0"><p className="text-sm text-zinc-300 truncate">{m.username}</p><p className="text-[11px] text-zinc-600 font-mono tabular-nums">{m.discordId}</p></div>
                     <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${m.role === 'admin' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-white/[0.04] text-zinc-500 border-white/[0.06]'}`}>{m.role}</span>
                   </div>
                 ))}

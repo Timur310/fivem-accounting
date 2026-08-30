@@ -18,7 +18,6 @@ import { AlertTriangle, Shield, Ban, RotateCcw, MessageSquare } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { StrikeEffectiveStatus } from '@/lib/api-types';
-import { displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -41,6 +40,14 @@ export function StrikesView({ factionId }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
+  const user = useAppStore((s) => s.user);
+
+  // Backend already filters the list to a member's own strikes when they
+  // aren't an admin. The buttons that mutate strike status (Revoke,
+  // Reinstate, Appeal) are only meaningful for admins — hide them for
+  // plain members so the UI doesn't invite a 403.
+  const activeFaction = user?.factions.find((f) => f.factionId === factionId);
+  const isAdmin = user?.role === 'superadmin' || activeFaction?.role === 'admin';
 
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -64,8 +71,12 @@ export function StrikesView({ factionId }: Props) {
       queryClient.invalidateQueries({ queryKey: ['faction-strikes', factionId] });
       toast({ title: 'Strike updated' });
     },
-    onError: (err: any) => {
-      toast({ title: 'Failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+    onError: (err: unknown) => {
+      // Lazy import keeps the bundle from pulling axios types at module
+      // load time.
+      import('@/lib/api-client').then(({ apiErrorMessage }) => {
+        toast({ title: 'Failed', description: apiErrorMessage(err), variant: 'destructive' });
+      });
     },
   });
 
@@ -140,9 +151,9 @@ export function StrikesView({ factionId }: Props) {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={s.targetAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[8px]">{displayName({ username: s.targetUsername || '?', inGameName: s.targetInGameName ?? null }).slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[8px]">{(s.targetInGameName || s.targetUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <span className="text-sm text-zinc-300">{displayName({ username: s.targetUsername || '?', inGameName: s.targetInGameName ?? null })}</span>
+                        <span className="text-sm text-zinc-300">{s.targetInGameName?.trim() || s.targetUsername || 'Unknown'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -159,7 +170,7 @@ export function StrikesView({ factionId }: Props) {
                     </TableCell>
                     <TableCell className="text-xs text-zinc-600 tabular-nums">{new Date(s.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {s.effectiveStatus === 'active' && s.targetUserId && (
+                      {isAdmin && s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <MessageSquare className="h-3 w-3" />
@@ -169,7 +180,7 @@ export function StrikesView({ factionId }: Props) {
                           </Button>
                         </div>
                       )}
-                      {s.effectiveStatus === 'appealed' && s.targetUserId && (
+                      {isAdmin && s.effectiveStatus === 'appealed' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <RotateCcw className="h-3 w-3" />

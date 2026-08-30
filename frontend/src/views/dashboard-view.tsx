@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
-import { formatAmount, formatNumber, displayName } from '@/lib/format';
+import { formatAmount, displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -59,6 +59,10 @@ export function DashboardView({ factionId }: Props) {
   const { faction, totalsByType, grandTotal, treasuryBalances, netBalance, memberCount, adminCount, totalEntries, topContributors, recentEntries, inactiveMembers, inactivityThresholdDays } = data;
   const activeQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(q => q.isActive && q.periodActive);
 
+  // Currency summaries are prefixed with $; the goods breakdown uses
+  // formatAmount() with the type-specific unit instead.
+  const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   return (
     <div className="space-y-6">
       {/* Faction Header */}
@@ -89,12 +93,12 @@ export function DashboardView({ factionId }: Props) {
               return (
                 <>
                   <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : brandColor }}>
-                    {formatNumber(bal)}
+                    {fmt(bal)}
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">
                     {hasTreasury
                       ? <>
-                          inflow {formatNumber(totalIn)} &middot; outflow {formatNumber(totalOut)}
+                          inflow {fmt(totalIn)} &middot; outflow {fmt(totalOut)}
                           {goodsCount > 0 && <> &middot; currency only</>}
                         </>
                       : 'across all item types'
@@ -210,7 +214,7 @@ export function DashboardView({ factionId }: Props) {
                       <p className="text-sm text-zinc-300 truncate">{displayName(c)}</p>
                       <p className="text-[11px] text-zinc-600">{c.entryCount} entries</p>
                     </div>
-                    <span className="text-sm font-medium tabular-nums text-zinc-200">{formatNumber(c.totalContributed)}</span>
+                    <span className="text-sm font-medium tabular-nums text-zinc-200">{`$${c.totalContributed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
                   </div>
                 ))}
               </div>
@@ -227,10 +231,8 @@ export function DashboardView({ factionId }: Props) {
                 Recent Activity
               </span>
               <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => setCurrentView('entries')}
-                className="text-[11px] font-medium flex items-center gap-1 h-auto p-0 transition-opacity duration-100 hover:opacity-80"
+                className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
                 style={{ color: brandColor }}
               >
                 View All <ArrowUpRight className="h-3 w-3" />
@@ -274,10 +276,8 @@ export function DashboardView({ factionId }: Props) {
             <CardTitle className="text-sm text-zinc-200">Treasury by Item Type</CardTitle>
             {(treasuryBalances?.length ?? 0) > 0 && (
               <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => setCurrentView('treasury')}
-                className="text-[11px] font-medium flex items-center gap-1 h-auto p-0 transition-opacity duration-100 hover:opacity-80"
+                className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
                 style={{ color: brandColor }}
               >
                 Full View <ArrowUpRight className="h-3 w-3" />
@@ -362,12 +362,10 @@ export function DashboardView({ factionId }: Props) {
       {/* ══ Export ══ */}
       <Card>
         <CardContent className="py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Download className="h-4 w-4 text-zinc-500" />
-              <span className="text-sm text-zinc-400">Export</span>
-            </div>
-            <div className="flex gap-2 sm:ml-auto">
+          <div className="flex items-center gap-3">
+            <Download className="h-4 w-4 text-zinc-500" />
+            <span className="text-sm text-zinc-400">Export</span>
+            <div className="flex gap-2 ml-auto">
               <Button
                 variant="outline"
                 size="sm"
