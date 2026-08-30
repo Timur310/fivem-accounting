@@ -27,6 +27,7 @@ import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, Chevron
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { FactionSettings } from '@/lib/api-types';
+import { displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -172,7 +173,7 @@ export function MembersView({ factionId }: Props) {
                         <div className="flex items-center gap-2.5">
                           <Avatar className="h-7 w-7">
                             <AvatarImage src={m.avatarUrl ?? undefined} />
-                            <AvatarFallback className="text-[10px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            <AvatarFallback className="text-[10px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div>
                             <button
@@ -180,7 +181,7 @@ export function MembersView({ factionId }: Props) {
                               className="text-sm text-zinc-300 font-medium hover:underline underline-offset-2 transition-colors"
                               style={{ textDecorationColor: `${brandColor}60` }}
                             >
-                              {m.username}
+                              {displayName(m)}
                             </button>
                             {/* Mobile: show strike badge inline */}
                             {(m.activeStrikeCount ?? 0) > 0 && (
@@ -306,7 +307,7 @@ export function MembersView({ factionId }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change Role</DialogTitle>
-            <DialogDescription>Update {roleTarget?.username}&apos;s role in this faction.</DialogDescription>
+            <DialogDescription>Update {roleTarget ? displayName(roleTarget) : ''}&apos;s role in this faction.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-3">
@@ -328,7 +329,7 @@ export function MembersView({ factionId }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Set Rank</DialogTitle>
-            <DialogDescription>Update {rankTarget?.username}&apos;s display rank. This is separate from their admin role.</DialogDescription>
+            <DialogDescription>Update {rankTarget ? displayName(rankTarget) : ''}&apos;s display rank. This is separate from their admin role.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -356,7 +357,7 @@ export function MembersView({ factionId }: Props) {
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {removeTarget?.username}?</AlertDialogTitle>
+            <AlertDialogTitle>Remove {removeTarget ? displayName(removeTarget) : ''}?</AlertDialogTitle>
             <AlertDialogDescription>This will remove the member from the faction. Their entries will be preserved.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

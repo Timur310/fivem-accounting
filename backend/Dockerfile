@@ -17,15 +17,24 @@ ENV NODE_ENV=production
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodejs
-RUN apk add --no-cache wget
+# tini reaps zombie processes that node leaves behind on signal handling,
+# which would otherwise accumulate across deploys. wget powers HEALTHCHECK.
+RUN apk add --no-cache tini wget
 
-# Copy files with proper ownership assigned to non-root user
+# Copy files with proper ownership assigned to non-root user.
+# Build artefacts come from `builder`; production deps come from `deps` (which
+# skipped devDependencies for a smaller image).
 COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/drizzle ./drizzle
 COPY --from=builder --chown=nodejs:nodejs /app/package.json ./package.json
+COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 USER nodejs
 EXPOSE 8000
 
-CMD ["node", "dist/index.js"]
+# Liveness probe — if /api/v1/health stops answering, the orchestrator
+# restarts the container rather than leaving a hung process in service.
+HEALTHCHECK CMD wget -qO- http://localhost:8000/api/v1/health || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "--enable-source-maps", "dist/index.js"]

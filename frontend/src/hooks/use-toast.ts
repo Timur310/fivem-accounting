@@ -8,8 +8,13 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+// Three toasts visible at once — a single-toast limit silently dropped
+// error messages that arrived while a success toast was still on screen.
+const TOAST_LIMIT = 3
+// Auto-dismiss after 1 second in the removal queue. The previous 1_000_000ms
+// (~16 minutes) effectively never fired, leaking each dismissed toast's
+// listener and React state until a full page reload.
+const TOAST_REMOVE_DELAY = 1000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -182,7 +187,13 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+    // The listener pushes `setState` into a module-level array and dispatch()
+    // calls every listener with the latest memoryState. The listener itself
+    // is stable — it doesn't read `state`, it just forwards whatever
+    // dispatch passes. Re-subscribing on every state change is wasteful and
+    // causes a brief period where two copies of the same setState are
+    // registered. Subscribe once for the lifetime of the component instead.
+  }, [])
 
   return {
     ...state,

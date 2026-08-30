@@ -3,7 +3,8 @@ import { error } from '../lib/response.js';
 
 // ── In-memory sliding window rate limiter ──────────────
 // No Redis required — suitable for single-instance deployments.
-// Entries are cleaned up periodically to prevent memory leaks.
+// Entries are cleaned up by a background timer (setInterval), so request
+// handlers don't pay the cleanup cost on the hot path.
 
 interface RateLimitEntry {
   timestamps: number[];
@@ -11,23 +12,19 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// Cleanup old entries every 60 seconds
-let lastCleanup = Date.now();
-const CLEANUP_INTERVAL = 60_000;
+const MAX_WINDOW_MS = 60_000;
 
-function cleanup() {
+// Background cleanup — runs every 60s, unref'd so it can't keep the event
+// loop alive on its own (important for graceful shutdown).
+setInterval(() => {
   const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-  lastCleanup = now;
-
   for (const [key, entry] of store) {
-    // Remove timestamps older than the max window (60s)
-    entry.timestamps = entry.timestamps.filter((ts) => now - ts < 60_000);
+    entry.timestamps = entry.timestamps.filter((ts) => now - ts < MAX_WINDOW_MS);
     if (entry.timestamps.length === 0) {
       store.delete(key);
     }
   }
-}
+}, 60_000).unref();
 
 export interface RateLimitOptions {
   /** Time window in milliseconds (default 60000 = 1 min) */
@@ -48,10 +45,15 @@ export function rateLimit(opts: RateLimitOptions = {}) {
   const message = opts.message ?? 'Too many requests. Please slow down.';
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    cleanup();
+    // Use userId if authenticated, otherwise fall back to IP. If neither is
+    // available (no trust proxy + no auth) reject — the 'unknown' fallback
+    // would let a single bad client collapse everyone into one bucket.
+    const key = req.user?.id ?? req.ip;
+    if (!key) {
+      error(res, 'BAD_REQUEST', 'Could not determine client identity for rate limiting', 400);
+      return;
+    }
 
-    // Use userId if authenticated, otherwise fall back to IP
-    const key = req.user?.id || req.ip || 'unknown';
     const now = Date.now();
 
     let entry = store.get(key);
@@ -63,11 +65,24 @@ export function rateLimit(opts: RateLimitOptions = {}) {
     // Filter out timestamps outside the window
     entry.timestamps = entry.timestamps.filter((ts) => now - ts < windowMs);
 
+    const limit = maxRequests;
+    const remaining = Math.max(0, limit - entry.timestamps.length);
+    const firstTimestamp = entry.timestamps[0];
+    const resetTimestamp = firstTimestamp !== undefined
+      ? firstTimestamp + windowMs
+      : now + windowMs;
+
+    res.setHeader('X-RateLimit-Limit', String(limit));
+    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, remaining - 1)));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil(resetTimestamp / 1000)));
+
     if (entry.timestamps.length >= maxRequests) {
       const retryAfter = Math.ceil(
         ((entry.timestamps[0] ?? now) + windowMs - now) / 1000,
       );
       res.setHeader('Retry-After', String(retryAfter));
+      // On 429, remaining is 0 (this request itself is rejected).
+      res.setHeader('X-RateLimit-Remaining', '0');
       error(res, 'RATE_LIMITED', message, 429);
       return;
     }
@@ -79,11 +94,11 @@ export function rateLimit(opts: RateLimitOptions = {}) {
 
 /**
  * Stricter rate limit for mutation endpoints (POST/PATCH/DELETE).
- * 20 requests per minute per user/IP.
+ * 30 requests per minute per user/IP.
  */
 export const mutationRateLimit = rateLimit({
   windowMs: 60_000,
-  maxRequests: 20,
+  maxRequests: 30,
   message: 'Too many actions. Please wait a moment.',
 });
 
@@ -95,4 +110,15 @@ export const readRateLimit = rateLimit({
   windowMs: 60_000,
   maxRequests: 120,
   message: 'Too many requests. Please slow down.',
+});
+
+/**
+ * Strictest rate limit — applied to the OAuth callback to prevent
+ * brute-force / replay style abuse of the code-exchange endpoint.
+ * 10 requests per minute per IP.
+ */
+export const authRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 10,
+  message: 'Too many authentication attempts. Please wait a moment.',
 });

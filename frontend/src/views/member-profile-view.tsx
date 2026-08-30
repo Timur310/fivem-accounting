@@ -33,7 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
-import { formatAmount } from '@/lib/format';
+import { formatAmount, formatNumber, displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -68,6 +68,10 @@ export function MemberProfileView({ factionId, userId }: Props) {
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  // Reactive read so the page updates if the logged-in user's role/membership
+  // changes (e.g. they're promoted to admin in another tab). Previously this
+  // was a one-shot `useAppStore.getState()` read that wouldn't react.
+  const currentUser = useAppStore((s) => s.user);
 
   const [tab, setTab] = useState<ProfileTab>('overview');
 
@@ -183,8 +187,6 @@ export function MemberProfileView({ factionId, userId }: Props) {
     setEditingNoteId(null);
   }
 
-  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
   if (isLoading || !profile) {
     return (
       <div className="space-y-4">
@@ -197,7 +199,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
   }
 
   const { member, contribution, payouts: payoutStats, quotaProgress, streak, performance, recentEntries, recentPayouts } = profile;
-  const isAdmin = useAppStore.getState().user?.role === 'superadmin' || useAppStore.getState().user?.factions.find(f => f.factionId === factionId)?.role === 'admin';
+  const isAdmin = currentUser?.role === 'superadmin' || currentUser?.factions.find(f => f.factionId === factionId)?.role === 'admin';
 
   return (
     <div className="space-y-6">
@@ -208,11 +210,11 @@ export function MemberProfileView({ factionId, userId }: Props) {
         </Button>
         <Avatar className="h-10 w-10">
           <AvatarImage src={member.avatarUrl ?? undefined} />
-          <AvatarFallback>{member.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+          <AvatarFallback>{displayName(member).slice(0, 2).toUpperCase()}</AvatarFallback>
         </Avatar>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-medium text-zinc-100">{member.username}</h3>
+            <h3 className="text-lg font-medium text-zinc-100">{displayName(member)}</h3>
             {member.rank && (
               <Badge variant="outline" className="text-[11px]" style={{ borderColor: `${brandColor}30`, color: brandColor }}>{member.rank}</Badge>
             )}
@@ -293,13 +295,13 @@ export function MemberProfileView({ factionId, userId }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.currencyContributed)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100">{formatNumber(contribution.currencyContributed)}</div>
                 <p className="text-[11px] text-zinc-600 mt-1">
-                  {contribution.currencyEntryCount} entries &middot; avg {fmt(contribution.avgPerCurrencyEntry)}
+                  {contribution.currencyEntryCount} entries &middot; avg {formatNumber(contribution.avgPerCurrencyEntry)}
                 </p>
                 {contribution.itemEntryCount > 0 && (
                   <p className="text-[11px] text-zinc-600 mt-0.5">
-                    + {fmt(contribution.itemContributed)} in items ({contribution.itemEntryCount} entries)
+                    + {formatNumber(contribution.itemContributed)} in items ({contribution.itemEntryCount} entries)
                   </p>
                 )}
               </CardContent>
@@ -313,10 +315,10 @@ export function MemberProfileView({ factionId, userId }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100">{formatNumber(payoutStats.currencyReceived)}</div>
                 <p className="text-[11px] text-zinc-600 mt-1">{payoutStats.payoutCount} payout{payoutStats.payoutCount !== 1 ? 's' : ''}</p>
                 {payoutStats.itemReceived > 0 && (
-                  <p className="text-[11px] text-zinc-600 mt-0.5">+ {fmt(payoutStats.itemReceived)} in items</p>
+                  <p className="text-[11px] text-zinc-600 mt-0.5">+ {formatNumber(payoutStats.itemReceived)} in items</p>
                 )}
               </CardContent>
             </Card>
@@ -472,7 +474,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
                         key={d.date}
                         className="w-[11px] h-[11px] rounded-[2px] transition-colors duration-100"
                         style={{ backgroundColor: `${brandColor}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` }}
-                        title={`${d.date}: ${d.count} ${d.count === 1 ? 'entry' : 'entries'}${d.currencyTotal > 0 ? ` · ${fmt(d.currencyTotal)}` : ''}${d.itemTotal > 0 ? ` · ${fmt(d.itemTotal)} items` : ''}`}
+                        title={`${d.date}: ${d.count} ${d.count === 1 ? 'entry' : 'entries'}${d.currencyTotal > 0 ? ` · ${formatNumber(d.currencyTotal)}` : ''}${d.itemTotal > 0 ? ` · ${formatNumber(d.itemTotal)} items` : ''}`}
                       />
                     );
                   })}
@@ -536,7 +538,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="outline" className="text-[10px] capitalize">{n.category}</Badge>
                           {n.isFlagged && <Flag className="h-3 w-3 text-amber-400" />}
-                          <span className="text-[10px] text-zinc-600">by {n.authorUsername} &middot; {new Date(n.createdAt).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-zinc-600">by {n.authorInGameName?.trim() || n.authorUsername} &middot; {new Date(n.createdAt).toLocaleDateString()}</span>
                         </div>
                         <p className="text-sm text-zinc-300 whitespace-pre-wrap">{n.content}</p>
                       </div>
@@ -564,16 +566,19 @@ export function MemberProfileView({ factionId, userId }: Props) {
               <p className="text-zinc-600 text-sm text-center py-6">No history recorded.</p>
             ) : (
               <div className="space-y-2">
-                {historyData.data.map((h) => (
-                  <div key={h.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
-                    <Avatar className="h-6 w-6"><AvatarImage src={h.actorAvatarUrl ?? undefined} /><AvatarFallback className="text-[8px]">{h.actorUsername.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-zinc-300"><span className="font-medium">{h.actorUsername}</span> <span className="text-zinc-500 capitalize">{h.action}</span> <span className="text-zinc-500">member</span></p>
-                      {h.details && <p className="text-[11px] text-zinc-600 truncate">{JSON.stringify(h.details)}</p>}
+                {historyData.data.map((h) => {
+                  const actorDisplay = h.actorInGameName?.trim() || h.actorUsername;
+                  return (
+                    <div key={h.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                      <Avatar className="h-6 w-6"><AvatarImage src={h.actorAvatarUrl ?? undefined} /><AvatarFallback className="text-[8px]">{actorDisplay.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-zinc-300"><span className="font-medium">{actorDisplay}</span> <span className="text-zinc-500 capitalize">{h.action}</span> <span className="text-zinc-500">member</span></p>
+                        {h.details && <p className="text-[11px] text-zinc-600 truncate">{JSON.stringify(h.details)}</p>}
+                      </div>
+                      <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{new Date(h.createdAt).toLocaleDateString()}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{new Date(h.createdAt).toLocaleDateString()}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -585,7 +590,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingNoteId ? 'Edit Note' : 'Add Note'}</DialogTitle>
-            <DialogDescription>Admin-only note about {member.username}.</DialogDescription>
+            <DialogDescription>Admin-only note about {displayName(member)}.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -632,7 +637,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Issue Strike</DialogTitle>
-            <DialogDescription>Issue a formal strike against {member.username}. They will be able to see it.</DialogDescription>
+            <DialogDescription>Issue a formal strike against {displayName(member)}. They will be able to see it.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">

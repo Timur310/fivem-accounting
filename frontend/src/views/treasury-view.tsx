@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import { formatAmount } from '@/lib/format';
+import { formatAmount, formatNumber, displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -46,8 +46,6 @@ export function TreasuryView({ factionId }: Props) {
     );
   }
 
-  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
   const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
 
   // The three headline totals cover currency types only — goods have no shared
@@ -74,7 +72,7 @@ export function TreasuryView({ factionId }: Props) {
           </CardHeader>
           <CardContent className="relative z-10">
             <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: netBalance < 0 ? '#ef4444' : brandColor }}>
-              {netBalance < 0 ? '-' : ''}{fmt(Math.abs(netBalance))}
+              {netBalance < 0 ? '-' : ''}{formatNumber(Math.abs(netBalance))}
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">
               {netBalance < 0 && <span className="text-red-400">⚠ Negative balance</span>}
@@ -94,7 +92,7 @@ export function TreasuryView({ factionId }: Props) {
                 <TrendingDown className="h-3.5 w-3.5 text-emerald-400 rotate-180" />
               </div>
               <span className="text-2xl font-medium tabular-nums tracking-tight text-emerald-400">
-                {fmt(totalInflow)}
+                {formatNumber(totalInflow)}
               </span>
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">from entries · currency only</p>
@@ -112,7 +110,7 @@ export function TreasuryView({ factionId }: Props) {
                 <ArrowDownToLine className="h-3.5 w-3.5 text-red-400" />
               </div>
               <span className="text-2xl font-medium tabular-nums tracking-tight text-red-400">
-                {fmt(totalOutflow)}
+                {formatNumber(totalOutflow)}
               </span>
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">completed payouts · currency only</p>
@@ -133,11 +131,11 @@ export function TreasuryView({ factionId }: Props) {
                   {pending.count} Pending Payout{pending.count !== 1 ? 's' : ''}
                 </p>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  {fmt(pending.total)} waiting for approval or completion
+                  {formatNumber(pending.total)} waiting for approval or completion
                 </p>
               </div>
               <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                {fmt(pending.total)}
+                {formatNumber(pending.total)}
               </Badge>
             </div>
           </CardContent>
@@ -255,11 +253,11 @@ export function TreasuryView({ factionId }: Props) {
                 <div key={p.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
                   <Avatar className="h-7 w-7 shrink-0">
                     <AvatarImage src={p.recipientAvatarUrl ?? undefined} />
-                    <AvatarFallback className="text-[10px]">{p.recipientUsername.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    <AvatarFallback className="text-[10px]">{displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm">
-                      <span className="text-zinc-300 font-medium">{p.recipientUsername}</span>
+                      <span className="text-zinc-300 font-medium">{displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName })}</span>
                       <span className="text-zinc-600"> received </span>
                       <span className="font-medium tabular-nums text-zinc-200">{formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}</span>
                     </p>

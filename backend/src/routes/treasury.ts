@@ -34,6 +34,52 @@ router.get('/', async (req: Request, res: Response) => {
   since.setDate(since.getDate() - trendDays);
   const sinceStr = toDateString(since);
 
+  // recentPayouts leak individual payout records, which are admin-only
+  // (GET /payouts returns 403 to plain members). Compute before the
+  // Promise.all so we can substitute an empty array for non-admins.
+  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+  type RecentPayoutRow = {
+    id: string;
+    amount: string;
+    description: string | null;
+    payoutDate: string;
+    status: string;
+    recipientUsername: string | null;
+    recipientInGameName: string | null;
+    recipientAvatarUrl: string | null;
+    itemTypeName: string;
+    itemUnit: string;
+    itemIsCurrency: boolean;
+  };
+  const recentPayoutsPromise: Promise<RecentPayoutRow[]> = isAdmin
+    ? (db
+        .select({
+          id: payouts.id,
+          amount: payouts.amount,
+          description: payouts.description,
+          payoutDate: payouts.payoutDate,
+          status: payouts.status,
+          recipientUsername: users.username,
+          recipientInGameName: users.inGameName,
+          recipientAvatarUrl: users.avatarUrl,
+          itemTypeName: itemTypes.name,
+          itemUnit: itemTypes.unit,
+          itemIsCurrency: itemTypes.isCurrency,
+        })
+        .from(payouts)
+        .innerJoin(users, eq(payouts.recipientUserId, users.id))
+        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
+        .where(
+          and(
+            eq(payouts.factionId, factionId),
+            eq(payouts.isDeleted, false),
+            eq(payouts.status, 'completed'),
+          ),
+        )
+        .orderBy(desc(payouts.createdAt))
+        .limit(10) as Promise<RecentPayoutRow[]>)
+    : Promise.resolve([] as RecentPayoutRow[]);
+
   const [balances, recentOutflow, pendingStats, recentPayouts] = await Promise.all([
     computeTreasuryBalances(factionId),
     // Completed outflow per day AND per item type over the trend window.
@@ -69,32 +115,7 @@ router.get('/', async (req: Request, res: Response) => {
           sql`${payouts.status} IN ('pending', 'approved')`,
         ),
       ),
-    db
-      .select({
-        id: payouts.id,
-        amount: payouts.amount,
-        description: payouts.description,
-        payoutDate: payouts.payoutDate,
-        status: payouts.status,
-        recipientUsername: users.username,
-        recipientInGameName: users.inGameName,
-        recipientAvatarUrl: users.avatarUrl,
-        itemTypeName: itemTypes.name,
-        itemUnit: itemTypes.unit,
-        itemIsCurrency: itemTypes.isCurrency,
-      })
-      .from(payouts)
-      .innerJoin(users, eq(payouts.recipientUserId, users.id))
-      .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
-      .where(
-        and(
-          eq(payouts.factionId, factionId),
-          eq(payouts.isDeleted, false),
-          eq(payouts.status, 'completed'),
-        ),
-      )
-      .orderBy(desc(payouts.createdAt))
-      .limit(10),
+    recentPayoutsPromise,
   ]);
 
   // Cross-type totals only sum currency item types. Adding money to kilograms

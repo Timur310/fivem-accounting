@@ -1,5 +1,5 @@
 node_modules
-dist
+.next
 .git
 .gitignore
 .env
@@ -7,14 +7,10 @@ dist
 .env.local
 .env.production
 *.md
-test
-coverage
-*.log
-npm-debug.log*
-.DS_Store
-.vscode
-.idea
 *.tsbuildinfo
-docker-compose*.yml
 Dockerfile
 .dockerignore
+.vscode
+.idea
+.DS_Store
+coverage

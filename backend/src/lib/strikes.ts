@@ -41,13 +41,16 @@ export function isActiveStrike(): SQL {
 
 /**
  * The status to show for a strike, folding in expiry that has passed.
- * Stored status wins for the terminal states ('revoked', 'appealed').
+ * Stored status wins for the terminal state ('revoked'). 'appealed' strikes
+ * that have aged past their expiry are also flipped to 'expired' — otherwise
+ * an appealed-but-unanswered strike would block the member indefinitely.
  */
 export function effectiveStatus(strike: {
   status: string;
   expiresAt: Date | null;
 }): string {
-  if (strike.status === 'active' && strike.expiresAt && strike.expiresAt <= new Date()) {
+  const hasExpired = strike.expiresAt !== null && strike.expiresAt <= new Date();
+  if (hasExpired && (strike.status === 'active' || strike.status === 'appealed')) {
     return 'expired';
   }
   return strike.status;

@@ -110,14 +110,16 @@ export function consumeState(state: string): string | null {
 // ── JWT ─────────────────────────────────────────────────
 
 export function signJwt(payload: JwtPayload): string {
-  return jwt.sign(payload, env.JWT_SECRET, {
+  const secret: jwt.Secret = env.JWT_SECRET;
+  return jwt.sign(payload, secret, {
     expiresIn: `${env.JWT_EXPIRATION_DAYS}d`,
   });
 }
 
 export function verifyJwt(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    const secret: jwt.Secret = env.JWT_SECRET;
+    return jwt.verify(token, secret) as JwtPayload;
   } catch {
     return null;
   }
