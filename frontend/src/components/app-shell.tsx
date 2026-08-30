@@ -304,6 +304,28 @@ export function AppShell() {
     '--brand-color-medium': `${brandColor}40`,
   } as React.CSSProperties;
 
+  // Radix renders dialogs, selects and dropdowns into a portal on <body>,
+  // which is outside this subtree. Scoped to the shell alone, the brand
+  // variables never reached them: `var(--brand-color, #6366f1)` fell through
+  // to the hardcoded default, so a selected button inside a dialog came out
+  // indigo while the rest of the app wore the faction's colour. The document
+  // element is the one ancestor every portal shares.
+  //
+  // The inline style above stays: it covers the shell's own first paint,
+  // before this effect has run.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--brand-color', brandColor);
+    root.style.setProperty('--brand-color-light', `${brandColor}20`);
+    root.style.setProperty('--brand-color-medium', `${brandColor}40`);
+    return () => {
+      // Do not leave a faction's colour behind on the login screen.
+      root.style.removeProperty('--brand-color');
+      root.style.removeProperty('--brand-color-light');
+      root.style.removeProperty('--brand-color-medium');
+    };
+  }, [brandColor]);
+
   // The selector combines memberships (admin/member) and browseable factions
   // (superadmin-only, marked with a Browse badge so the role is clear).
   const showFactionSelector = activeFactions.length > 0 || browseableOnly.length > 0;
