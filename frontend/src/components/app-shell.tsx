@@ -2,6 +2,7 @@
 
 import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
 import { authApi, factionSettingsApi } from '@/lib/api-client';
+import type { FactionPermission } from '@/lib/api-types';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -60,7 +61,10 @@ interface NavItem {
   view: AppView;
   label: string;
   icon: typeof LayoutDashboard;
-  adminOnly?: boolean;
+  /** Any one of these is enough to see the item. */
+  anyPermission?: FactionPermission[];
+  /** Hide unless the user actually belongs to the selected faction. */
+  membersOnly?: boolean;
   superadminOnly?: boolean;
 }
 
@@ -120,6 +124,16 @@ export function AppShell() {
   );
   const isAdmin =
     user?.role === 'superadmin' || currentFactionMembership?.role === 'admin';
+
+  /**
+   * What the caller may do in the selected faction. Members carry the list
+   * their rank grants; a superadmin browsing a faction they do not belong to
+   * has no membership, and the API treats them as holding everything there.
+   */
+  const hasPermission = (permission: FactionPermission) =>
+    currentFactionMembership
+      ? currentFactionMembership.permissions.includes(permission)
+      : user?.role === 'superadmin';
   const isSuperadmin = user?.role === 'superadmin';
   const canLogEntries = !!currentFactionMembership;
 
@@ -138,11 +152,45 @@ export function AppShell() {
     { view: 'members', label: 'Members', icon: Users },
     { view: 'leaderboard', label: 'Leaderboard', icon: Trophy },
     { view: 'strikes', label: 'Strikes', icon: AlertTriangle },
-    { view: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
-    { view: 'audit-logs', label: 'Audit Logs', icon: ScrollText, adminOnly: true },
-    { view: 'reports', label: 'Reports', icon: FileBarChart, adminOnly: true },
+    {
+      view: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      // Mirrors the PATCH guard: either permission opens the settings screen.
+      anyPermission: ['manage_settings', 'manage_customization'],
+    },
+    {
+      view: 'audit-logs',
+      label: 'Audit Logs',
+      icon: ScrollText,
+      anyPermission: ['view_audit_logs'],
+      // Only ever your own faction's history — a superadmin passing through a
+      // faction they do not belong to has no business reading it.
+      membersOnly: true,
+    },
+    { view: 'reports', label: 'Reports', icon: FileBarChart, anyPermission: ['view_reports'] },
     { view: 'admin-factions', label: 'Faction Admin', icon: Shield, superadminOnly: true },
   ];
+
+  const isNavItemVisible = (item: NavItem) => {
+    if (item.superadminOnly) return isSuperadmin;
+    if (item.membersOnly && !currentFactionMembership) return false;
+    if (item.anyPermission) return item.anyPermission.some(hasPermission);
+    return true;
+  };
+
+  // Switching factions can take away the permission that opened the current
+  // screen. Drop back to the dashboard rather than leaving a page up that the
+  // API will refuse to fill.
+  useEffect(() => {
+    const item = navItems.find((i) => i.view === currentView);
+    if (item && !isNavItemVisible(item)) {
+      setCurrentView('dashboard');
+    }
+    // navItems and isNavItemVisible are rebuilt every render; what actually
+    // changes the answer is the view, the faction, and who is asking.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, selectedFactionId, user]);
 
   const handleNavClick = (view: AppView) => {
     if (view === 'member-profile') return;
@@ -323,8 +371,7 @@ export function AppShell() {
         {/* Nav Items */}
         <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
-            if (item.adminOnly && !isAdmin) return null;
-            if (item.superadminOnly && !isSuperadmin) return null;
+            if (!isNavItemVisible(item)) return null;
             const active = currentView === item.view;
             return (
               <button

@@ -40,6 +40,13 @@ export interface FactionMembership {
   factionActive: boolean;
   /** This faction's own accent colour; null until an admin picks one. */
   factionBrandColor: string | null;
+  rank: string | null;
+  /**
+   * What this user may do in this faction — resolved server-side exactly as
+   * the API's own guard resolves it, so hiding a menu by this can never hide
+   * something the API would have allowed, or offer something it refuses.
+   */
+  permissions: FactionPermission[];
 }
 
 // ── Factions ──
