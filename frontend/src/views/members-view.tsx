@@ -268,7 +268,9 @@ export function MembersView({ factionId }: Props) {
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
                             setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
-                            setNewRole(m.role === 'admin' ? 'member' : 'admin');
+                            // Start on the role they hold, so the highlighted
+                            // button always says what is true right now.
+                            setNewRole(m.role === 'admin' ? 'admin' : 'member');
                             setRoleDialogOpen(true);
                           }} title="Change Role">
                             <Pencil className="h-3 w-3" />
@@ -404,7 +406,7 @@ export function MembersView({ factionId }: Props) {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-3">
-              <Button variant={newRole === 'member' ? 'outline' : 'default'} className="flex-1" onClick={() => setNewRole('member')}>Member</Button>
+              <Button variant={newRole === 'member' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('member')}>Member</Button>
               <Button variant={newRole === 'admin' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('admin')}>
                 <Shield className="mr-1.5 h-4 w-4" /> Admin
               </Button>

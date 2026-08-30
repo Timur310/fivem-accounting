@@ -1,7 +1,7 @@
 'use client';
 
 import { useAppStore } from '@/lib/store';
-import { authApi, factionsApi } from '@/lib/api-client';
+import { authApi, factionSettingsApi } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -80,19 +80,23 @@ export function AppShell() {
   const selectedMemberUserId = useAppStore((s) => s.selectedMemberUserId);
   const queryClient = useQueryClient();
 
-  // Fetch faction detail for brand color on faction switch
-  const { data: factionDetail } = useQuery({
+  // Brand colour comes from the faction settings endpoint, which any member
+  // can read. It used to come from GET /factions/:id — that route is
+  // superadmin-only, so for everyone else the request 403'd, factionDetail
+  // stayed undefined and the colour silently fell back to the default no
+  // matter what had been saved.
+  const { data: factionSettings } = useQuery({
     queryKey: ['faction-brand', selectedFactionId],
-    queryFn: () => factionsApi.get(selectedFactionId!),
+    queryFn: () => factionSettingsApi.get(selectedFactionId!),
     enabled: !!selectedFactionId,
     staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
-    if (factionDetail?.brandColor) {
-      setBrandColor(factionDetail.brandColor);
+    if (factionSettings?.brandColor) {
+      setBrandColor(factionSettings.brandColor);
     }
-  }, [factionDetail?.brandColor, setBrandColor]);
+  }, [factionSettings?.brandColor, setBrandColor]);
 
   const router = useRouter();
 
