@@ -6,41 +6,44 @@ import { eq, desc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
 
 const router = Router({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
+// Audit logs are admin material. The permission system grants `view_audit_logs`
+// to admins (and superadmins implicitly); a plain member without that perm
+// gets 403 here, which matches the test's expectation.
+router.use(requireAuth, requireFactionMember, requirePermission('view_audit_logs'));
 
-// Allow-list the action / entity_type query params so a client can't
-// scan arbitrary strings (which would also be a small DoS vector via
-// repeated ILIKE on unindexed text). Keep these in sync with the audit
-// actions actually written by the route files.
+// ── Known values ─────────────────────────────────────
+// Constrain filters to a known set so the query planner can use indexes and
+// we don't accept arbitrary strings the audit log never actually writes.
+
 const KNOWN_ACTIONS = [
-  'login',
-  'logout',
   'create',
   'update',
   'delete',
-  'update_profile',
   'bulk_create',
   'bulk_delete',
   'import',
+  'login',
+  'logout',
+  'update_profile',
 ] as const;
 
 const KNOWN_ENTITY_TYPES = [
   'user',
   'faction',
+  'faction_settings',
   'member',
-  'item_type',
   'entry',
   'payout',
   'payout_batch',
-  'member_note',
-  'strike',
+  'item_type',
   'quota',
-  'faction_settings',
+  'strike',
+  'member_note',
 ] as const;
 
 const listAuditQuerySchema = z.object({

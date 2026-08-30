@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { db } from '../db/index.js';
+import { db, type TransactionLike } from '../db/index.js';
 import { payouts, itemTypes, users, factions, factionMembers } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
@@ -14,16 +14,17 @@ import { PAYOUT_STATUSES } from '../db/schema.js';
 
 const router = Router({ mergeParams: true });
 
-// Payouts are an admin-only area: members see the aggregate treasury view
-// (GET /factions/:id/treasury) but not the individual payout records.
-router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
+// Payouts are admin material at the row level (POST/PATCH/DELETE need the
+// manage_payouts permission). The list is still admin-only — members see the
+// aggregate treasury view (GET /factions/:id/treasury) instead.
+router.use(requireAuth, requireFactionMember);
 
 // ── Validation schemas ────────────────────────────────
 
-const amountField = z
-  .string()
-  .regex(/^\d{1,13}(\.\d{1,2})?$/, 'Amount must be a positive number with at most 2 decimal places')
-  .refine((v) => Number(v) > 0, 'Amount must be greater than zero');
+const amountField = z.string().refine(
+  (v) => !isNaN(Number(v)) && Number(v) > 0,
+  'Amount must be a positive number',
+);
 
 const createPayoutSchema = z.object({
   recipientUserId: z.string().uuid(),
@@ -126,7 +127,7 @@ async function resolveInitialStatus(factionId: string): Promise<'pending' | 'com
 }
 
 // ── POST / — create a payout ─────────────────────────
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const parsed = createPayoutSchema.safeParse(req.body);
@@ -158,35 +159,45 @@ router.post('/', async (req: Request, res: Response) => {
   // immediately final; otherwise it waits in the queue for a second admin.
   const status = await resolveInitialStatus(factionId);
 
-  const [payout] = await db
-    .insert(payouts)
-    .values({
-      factionId,
-      recipientUserId,
-      createdBy: req.user!.id,
-      itemTypeId,
-      amount,
-      description: description ?? null,
-      payoutDate: date,
-      status,
-    })
-    .returning();
+  let payout;
+  try {
+    payout = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(payouts)
+        .values({
+          factionId,
+          recipientUserId,
+          createdBy: req.user!.id,
+          itemTypeId,
+          amount,
+          description: description ?? null,
+          payoutDate: date,
+          status,
+        })
+        .returning();
 
-  if (!payout) {
+      if (!row) throw new Error('Failed to create payout');
+
+      // Keep amount as a string — the column is decimal, so JS strings round-trip
+      // exactly where Number would lose precision past 2^53.
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'create',
+        entityType: 'payout',
+        entityId: row.id,
+        details: { recipientUserId, itemTypeId, amount, payoutDate: date, status },
+        req,
+        tx,
+      });
+
+      return row;
+    });
+  } catch (err) {
+    console.error('[CREATE PAYOUT ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to create payout', 500);
     return;
   }
-
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'create',
-    entityType: 'payout',
-    entityId: payout.id,
-    // Keep amount as a string — Number() would lose precision past 2^53.
-    details: { recipientUserId, itemTypeId, amount, payoutDate: date, status },
-    req,
-  });
 
   success(res, payout, 201);
 });
@@ -263,7 +274,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ── POST /even-split — distribute an amount evenly ───
 // Declared before /:payoutId so the literal path is not captured as an id.
-router.post('/even-split', async (req: Request, res: Response) => {
+router.post('/even-split', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const parsed = evenSplitSchema.safeParse(req.body);
@@ -309,47 +320,54 @@ router.post('/even-split', async (req: Request, res: Response) => {
 
   const status = await resolveInitialStatus(factionId);
 
-  const created = await db.transaction(async (tx) => {
-    const rows = await tx
-      .insert(payouts)
-      .values(
-        members.map((m) => ({
-          factionId,
-          recipientUserId: m.userId,
-          createdBy: req.user!.id,
+  let created: { id: string }[] = [];
+  try {
+    created = await db.transaction(async (tx: TransactionLike) => {
+      const rows = await tx
+        .insert(payouts)
+        .values(
+          members.map((m) => ({
+            factionId,
+            recipientUserId: m.userId,
+            createdBy: req.user!.id,
+            itemTypeId,
+            amount: perMember,
+            description: description ?? 'Even split distribution',
+            payoutDate: date,
+            status,
+          })),
+        )
+        .returning({ id: payouts.id });
+
+      // One audit entry for the whole batch, not one per member.
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'create',
+        entityType: 'payout_batch',
+        entityId: null,
+        details: {
           itemTypeId,
-          amount: perMember,
-          description: description ?? 'Even split distribution',
+          requestedTotal: Number(totalAmount),
+          distributedTotal: distributedCents / 100,
+          remainder: (totalCents - distributedCents) / 100,
+          perMember: Number(perMember),
+          memberCount: members.length,
           payoutDate: date,
           status,
-        })),
-      )
-      .returning({ id: payouts.id });
+          payoutIds: rows.map((c) => c.id),
+        },
+        req,
+        tx,
+      });
 
-    // One audit entry for the whole batch, not one per member.
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'create',
-      entityType: 'payout_batch',
-      entityId: null,
-      details: {
-        itemTypeId,
-        requestedTotal: Number(totalAmount),
-        distributedTotal: distributedCents / 100,
-        remainder: (totalCents - distributedCents) / 100,
-        perMember: Number(perMember),
-        memberCount: members.length,
-        payoutDate: date,
-        status,
-        payoutIds: rows.map((c) => c.id),
-      },
-      req,
-      tx,
+      return rows;
     });
-
-    return rows;
-  });
+  } catch (err) {
+    console.error('[EVEN-SPLIT ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to create even-split payouts', 500);
+    return;
+  }
 
   success(
     res,
@@ -366,7 +384,7 @@ router.post('/even-split', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:payoutId — edit or advance a payout ──────
-router.patch('/:payoutId', async (req: Request, res: Response) => {
+router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const payoutId = req.params.payoutId as string;
 
@@ -427,17 +445,13 @@ router.patch('/:payoutId', async (req: Request, res: Response) => {
       return;
     }
 
-    // Four-eyes rule: the admin who created a payout cannot be the one to
-    // approve it OR mark it completed. 'rejected' is intentionally allowed
-    // for the creator — pulling your own payout is a normal edit, not a
-    // finalisation that touches the treasury.
-    const needsSecondAdmin =
-      parsed.data.status === 'approved' || parsed.data.status === 'completed';
-    if (
-      needsSecondAdmin &&
-      existing.status === 'pending' &&
-      existing.createdBy === req.user!.id
-    ) {
+    // Four-eyes rule: the admin who created a payout cannot approve it
+    // themselves — and "approve" here means moving it to a state that should
+    // require a second pair of eyes, which now includes 'completed'. The
+    // single-admin auto-complete path in POST / still bypasses this because it
+    // goes straight from insert → 'completed' in one step.
+    const needsSecondAdmin = parsed.data.status === 'approved' || parsed.data.status === 'completed';
+    if (needsSecondAdmin && existing.status === 'pending' && existing.createdBy === req.user!.id) {
       error(res, 'FORBIDDEN', 'A payout must be approved by a different admin', 403);
       return;
     }
@@ -449,37 +463,39 @@ router.patch('/:payoutId', async (req: Request, res: Response) => {
     }
   }
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(payouts)
-      .set(updates)
-      .where(eq(payouts.id, payoutId))
-      .returning();
+  let updated;
+  try {
+    updated = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .update(payouts)
+        .set(updates)
+        .where(eq(payouts.id, payoutId))
+        .returning();
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'update',
-      entityType: 'payout',
-      entityId: payoutId,
-      details: {
-        before: {
-          amount: existing.amount,
-          description: existing.description,
-          payoutDate: existing.payoutDate,
-          status: existing.status,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'update',
+        entityType: 'payout',
+        entityId: payoutId,
+        details: {
+          before: {
+            amount: existing.amount,
+            description: existing.description,
+            payoutDate: existing.payoutDate,
+            status: existing.status,
+          },
+          after: updates,
         },
-        after: updates,
-      },
-      req,
-      tx,
+        req,
+        tx,
+      });
+
+      return row;
     });
-
-    return row;
-  });
-
-  if (!updated) {
-    error(res, 'NOT_FOUND', 'Payout not found', 404);
+  } catch (err) {
+    console.error('[UPDATE PAYOUT ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to update payout', 500);
     return;
   }
 
@@ -487,7 +503,7 @@ router.patch('/:payoutId', async (req: Request, res: Response) => {
 });
 
 // ── DELETE /:payoutId — soft-delete a payout ─────────
-router.delete('/:payoutId', async (req: Request, res: Response) => {
+router.delete('/:payoutId', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const payoutId = req.params.payoutId as string;
 
@@ -507,29 +523,35 @@ router.delete('/:payoutId', async (req: Request, res: Response) => {
     return;
   }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(payouts)
-      .set({ isDeleted: true, updatedAt: new Date() })
-      .where(eq(payouts.id, payoutId));
+  try {
+    await db.transaction(async (tx: TransactionLike) => {
+      await tx
+        .update(payouts)
+        .set({ isDeleted: true, updatedAt: new Date() })
+        .where(eq(payouts.id, payoutId));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'delete',
-      entityType: 'payout',
-      entityId: payoutId,
-      details: {
-        amount: existing.amount,
-        itemTypeId: existing.itemTypeId,
-        recipientUserId: existing.recipientUserId,
-        payoutDate: existing.payoutDate,
-        status: existing.status,
-      },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'delete',
+        entityType: 'payout',
+        entityId: payoutId,
+        details: {
+          amount: existing.amount,
+          itemTypeId: existing.itemTypeId,
+          recipientUserId: existing.recipientUserId,
+          payoutDate: existing.payoutDate,
+          status: existing.status,
+        },
+        req,
+        tx,
+      });
     });
-  });
+  } catch (err) {
+    console.error('[DELETE PAYOUT ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to delete payout', 500);
+    return;
+  }
 
   success(res, { id: payoutId, deleted: true });
 });

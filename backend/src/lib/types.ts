@@ -6,6 +6,9 @@ declare global {
     interface Request {
       user?: User;
       factionRole?: 'superadmin' | 'admin' | 'member';
+      /** Permissions granted by the user's rank within this faction.
+       *  Always the full list for admins/superadmins. */
+      factionPermissions?: string[];
     }
   }
 }

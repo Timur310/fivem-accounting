@@ -1,0 +1,2 @@
+ALTER TABLE "quotas" ADD COLUMN "target_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "quotas" ADD CONSTRAINT "quotas_target_user_id_users_id_fk" FOREIGN KEY ("target_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;

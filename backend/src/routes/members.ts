@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { db } from '../db/index.js';
+import { db, type TransactionLike } from '../db/index.js';
 import { factionMembers, users, entries, factions, itemTypes, payouts, quotas, auditLogs } from '../db/schema.js';
-import { eq, and, sql, desc, gte, lte, count as countFn } from 'drizzle-orm';
+import { eq, and, sql, desc, gte, lte, ilike, notInArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
 import { daysSince } from '../lib/date.js';
@@ -18,11 +18,23 @@ const router = Router({ mergeParams: true });
 // All routes require faction membership
 router.use(requireAuth, requireFactionMember);
 
+/** Escape a user-supplied search string for safe use inside an ilike('%...%')
+ *  pattern. Backslash, %, and _ are escaped so they match literally. */
+function escapeLike(input: string): string {
+  return input.replace(/[%_\\]/g, (m) => '\\' + m);
+}
+
 // ── Validation schemas ────────────────────────────────
 
 const addMemberSchema = z.object({
-  discordId: z.string().min(1, 'Discord ID is required'),
-});
+  // Accept either the Discord ID (existing flow) or a known user id (e.g.
+  // from the /search endpoint). Exactly one must be provided.
+  discordId: z.string().min(1, 'Discord ID is required').optional(),
+  userId: z.string().uuid().optional(),
+}).refine(
+  (d) => (d.discordId ? !d.userId : !!d.userId),
+  'Provide exactly one of: discordId, userId',
+);
 
 const updateMemberSchema = z.object({
   role: z.enum(['admin', 'member']).optional(),
@@ -34,7 +46,7 @@ const updateMemberSchema = z.object({
 );
 
 // ── POST / — add member to faction ───────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const parsed = addMemberSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -42,16 +54,23 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  const { discordId } = parsed.data;
+  // Look up the target either by Discord ID or by primary key.
+  const where = parsed.data.userId
+    ? eq(users.id, parsed.data.userId)
+    : eq(users.discordId, parsed.data.discordId!);
 
-  // Find user by Discord ID
   const [targetUser] = await db
     .select()
     .from(users)
-    .where(eq(users.discordId, discordId))
+    .where(where)
     .limit(1);
+
   if (!targetUser) {
-    error(res, 'NOT_FOUND', `No user found with Discord ID: ${discordId}. They must log in first.`);
+    if (parsed.data.discordId) {
+      error(res, 'NOT_FOUND', `No user found with Discord ID: ${parsed.data.discordId}. They must log in first.`);
+    } else {
+      error(res, 'NOT_FOUND', 'User not found');
+    }
     return;
   }
 
@@ -71,50 +90,98 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  const [member] = await db
-    .insert(factionMembers)
-    .values({ factionId, userId: targetUser.id, role: 'member' })
-    .returning();
+  let member;
+  try {
+    member = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .insert(factionMembers)
+        .values({ factionId, userId: targetUser.id, role: 'member' })
+        .returning();
+      if (!row) throw new Error('Failed to add member');
 
-  if (!member) {
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'create',
+        entityType: 'member',
+        entityId: row.id,
+        details: {
+          userId: targetUser.id,
+          addedUserId: targetUser.id,
+          discordId: targetUser.discordId,
+          username: targetUser.username,
+        },
+        req,
+        tx,
+      });
+
+      return row;
+    });
+  } catch (err) {
+    console.error('[ADD MEMBER ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to add member', 500);
     return;
   }
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'create',
-    entityType: 'member',
-    entityId: member.id,
-    // Include `userId` alongside `addedUserId` so the /history endpoint can
-    // match this join event by either key.
-    details: {
-      userId: targetUser.id,
-      addedUserId: targetUser.id,
-      discordId: targetUser.discordId,
-      username: targetUser.username,
-    },
-    req,
-  });
+  success(res, {
+    ...member,
+    username: targetUser.username,
+    inGameName: targetUser.inGameName,
+    avatarUrl: targetUser.avatarUrl,
+    discordId: targetUser.discordId,
+  }, 201);
+});
 
-  success(
-    res,
-    {
-      ...member,
-      username: targetUser.username,
-      inGameName: targetUser.inGameName,
-      avatarUrl: targetUser.avatarUrl,
-      discordId: targetUser.discordId,
-    },
-    201,
-  );
+// ── GET /search — find users not yet in this faction ──
+// Powers the "add member" picker. Limited to faction admins so the roster is
+// not exposed to arbitrary searches by plain members.
+router.get('/search', requirePermission('manage_members'), async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+  const q = (req.query.q as string | undefined)?.trim() ?? '';
+  if (q.length < 2) {
+    success(res, []);
+    return;
+  }
+
+  // Existing member ids — we exclude these so the picker never offers someone
+  // who is already in the faction.
+  const existing = await db
+    .select({ userId: factionMembers.userId })
+    .from(factionMembers)
+    .where(eq(factionMembers.factionId, factionId));
+  const existingIds = existing.map((m) => m.userId);
+
+  const escaped = escapeLike(q);
+  const query = db
+    .select({
+      id: users.id,
+      username: users.username,
+      inGameName: users.inGameName,
+      avatarUrl: users.avatarUrl,
+      discordId: users.discordId,
+      lastLogin: users.lastLogin,
+    })
+    .from(users)
+    .where(
+      and(
+        ilike(users.username, `%${escaped}%`),
+        existingIds.length > 0 ? notInArray(users.id, existingIds) : undefined,
+      ),
+    )
+    .orderBy(desc(users.lastLogin))
+    .limit(20);
+
+  const matches = await query;
+  success(res, matches);
 });
 
 // ── GET / — list faction members ─────────────────────
 router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
+  // Parameterised bindings, not sql.raw — the faction id is a UUID pulled from
+  // the path, but treating it as text in the SQL is the safer default and
+  // keeps the query plan stable.
   const memberList = await db
     .select({
       id: factionMembers.id,
@@ -126,10 +193,6 @@ router.get('/', async (req: Request, res: Response) => {
       inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
-      // Parameterised sub-selects so a malformed factionId can't escape
-      // into raw SQL — the previous `sql.raw` interpolation was safe here
-      // only because Express's uuid route param happens to be validated by
-      // the FK lookup, but it's a pattern we shouldn't ship.
       entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)::int`,
       lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)`,
     })
@@ -153,7 +216,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:userId — update member role ──────────────
-router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:userId', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -177,6 +240,11 @@ router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, r
     error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
     return;
   }
+
+  // Capture before-state outside the transaction so the audit details are
+  // correct even if the write itself fails.
+  const oldRole = membership.role;
+  const oldRank = membership.rank;
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.role !== undefined) updates.role = parsed.data.role;
@@ -205,52 +273,51 @@ router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, r
     updates.rank = parsed.data.rank;
   }
 
-  // Capture before-state BEFORE the transaction so the audit log shows
-  // the values that were actually there at the start of the request.
-  const oldRole = membership.role;
-  const oldRank = membership.rank;
+  let updated;
+  try {
+    updated = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .update(factionMembers)
+        .set(updates)
+        .where(eq(factionMembers.id, membership.id))
+        .returning();
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(factionMembers)
-      .set(updates)
-      .where(eq(factionMembers.id, membership.id))
-      .returning();
-
-    // If promoting to admin, bump the user's global role from 'member' to
-    // 'faction_admin' so the SPA can show admin chrome elsewhere. Done in
-    // the same transaction so a failure rolls both writes back.
-    if (parsed.data.role === 'admin') {
-      const [targetUser] = await tx
-        .select({ role: users.role })
-        .from(users)
-        .where(eq(users.id, targetUserId))
-        .limit(1);
-      if (targetUser && targetUser.role === 'member') {
-        await tx.update(users).set({ role: 'faction_admin' }).where(eq(users.id, targetUserId));
+      // If promoting to admin, update user's global role inside the same
+      // transaction so the user table never lags the membership table.
+      if (parsed.data.role === 'admin') {
+        const [targetUser] = await tx
+          .select({ role: users.role })
+          .from(users)
+          .where(eq(users.id, targetUserId))
+          .limit(1);
+        if (targetUser && targetUser.role === 'member') {
+          await tx
+            .update(users)
+            .set({ role: 'faction_admin' })
+            .where(eq(users.id, targetUserId));
+        }
       }
-    }
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'update',
-      entityType: 'member',
-      entityId: membership.id,
-      details: {
-        userId: targetUserId,
-        before: { role: oldRole, rank: oldRank },
-        after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
-      },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'update',
+        entityType: 'member',
+        entityId: membership.id,
+        details: {
+          userId: targetUserId,
+          before: { role: oldRole, rank: oldRank },
+          after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
+        },
+        req,
+        tx,
+      });
+
+      return row;
     });
-
-    return row;
-  });
-
-  if (!updated) {
-    error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
+  } catch (err) {
+    console.error('[UPDATE MEMBER ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to update member', 500);
     return;
   }
 
@@ -258,7 +325,7 @@ router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, r
 });
 
 // ── DELETE /:userId — remove member ───────────────────
-router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:userId', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -294,24 +361,30 @@ router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, 
     }
   }
 
-  await db.transaction(async (tx) => {
-    await tx.delete(factionMembers).where(eq(factionMembers.id, membership.id));
+  try {
+    await db.transaction(async (tx: TransactionLike) => {
+      await tx.delete(factionMembers).where(eq(factionMembers.id, membership.id));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'delete',
-      entityType: 'member',
-      entityId: membership.id,
-      details: {
-        userId: targetUserId,
-        removedUserId: targetUserId,
-        role: membership.role,
-      },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'delete',
+        entityType: 'member',
+        entityId: membership.id,
+        details: {
+          userId: targetUserId,
+          removedUserId: targetUserId,
+          role: membership.role,
+        },
+        req,
+        tx,
+      });
     });
-  });
+  } catch (err) {
+    console.error('[REMOVE MEMBER ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to remove member', 500);
+    return;
+  }
 
   success(res, { removed: true });
 });
@@ -319,7 +392,7 @@ router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, 
 // ── GET /:userId/history — join / leave / role changes ──
 // Reads the existing audit log rather than keeping a second table: member
 // lifecycle events are already recorded there with entity_type='member'.
-router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.get('/:userId/history', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -328,17 +401,15 @@ router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Requ
     page_size: req.query.page_size as string | undefined,
   });
 
+  // Member lifecycle events record the target as either `userId`, `addedUserId`
+  // (POST /) or `removedUserId` (DELETE /) inside the JSONB details — match any
+  // of them so the history stays complete across all three event kinds.
   const where = and(
     eq(auditLogs.factionId, factionId),
     eq(auditLogs.entityType, 'member'),
-    // Match any of the member-lifecycle keys we write — different actions
-    // populate different ones (addedUserId on join, removedUserId on leave,
-    // userId on role change) and we want them all to surface here.
-    sql`(
-      ${auditLogs.details}->>'userId' = ${targetUserId}
-      OR ${auditLogs.details}->>'addedUserId' = ${targetUserId}
-      OR ${auditLogs.details}->>'removedUserId' = ${targetUserId}
-    )`,
+    sql`(${auditLogs.details}->>'userId' = ${targetUserId}
+         OR ${auditLogs.details}->>'addedUserId' = ${targetUserId}
+         OR ${auditLogs.details}->>'removedUserId' = ${targetUserId})`,
   );
 
   const [items, countResult] = await Promise.all([
@@ -427,43 +498,32 @@ router.get('/:userId', async (req: Request, res: Response) => {
 
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
 
-  // recentPayouts are admin-only material (the /payouts index returns 403 to
-  // plain members). Don't leak them through this aggregate endpoint — gate
-  // the entire query behind isAdmin so members get an empty array instead.
-  type RecentPayoutRow = {
-    id: string;
-    amount: string;
-    description: string | null;
-    payoutDate: string;
-    status: string;
-    itemTypeName: string;
-    itemUnit: string;
-    itemIsCurrency: boolean;
-  };
-  const recentPayoutsPromise: Promise<RecentPayoutRow[]> = isAdmin
-    ? (db
-        .select({
-          id: payouts.id,
-          amount: payouts.amount,
-          description: payouts.description,
-          payoutDate: payouts.payoutDate,
-          status: payouts.status,
-          itemTypeName: itemTypes.name,
-          itemUnit: itemTypes.unit,
-          itemIsCurrency: itemTypes.isCurrency,
-        })
-        .from(payouts)
-        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
-        .where(
-          and(
-            eq(payouts.factionId, factionId),
-            eq(payouts.recipientUserId, targetUserId),
-            eq(payouts.isDeleted, false),
-          ),
-        )
-        .orderBy(desc(payouts.createdAt))
-        .limit(20) as Promise<RecentPayoutRow[]>)
-    : Promise.resolve([] as RecentPayoutRow[]);
+  // Payouts are admin-only material — members cannot see what others earned.
+  // Use Promise.resolve([]) to keep the Promise.all shape uniform.
+  const recentPayoutsPromise: Promise<RecentPayoutsRow[]> = isAdmin
+    ? db
+      .select({
+        id: payouts.id,
+        amount: payouts.amount,
+        description: payouts.description,
+        payoutDate: payouts.payoutDate,
+        status: payouts.status,
+        itemTypeName: itemTypes.name,
+        itemUnit: itemTypes.unit,
+        itemIsCurrency: itemTypes.isCurrency,
+      })
+      .from(payouts)
+      .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
+      .where(
+        and(
+          eq(payouts.factionId, factionId),
+          eq(payouts.recipientUserId, targetUserId),
+          eq(payouts.isDeleted, false),
+        ),
+      )
+      .orderBy(desc(payouts.createdAt))
+      .limit(20)
+    : Promise.resolve([]);
 
   const [contribution, byItemType, payoutStats, recentEntries, recentPayouts, activeQuotas] =
     await Promise.all([
@@ -657,5 +717,19 @@ router.get('/:userId', async (req: Request, res: Response) => {
     canViewNotes: isAdmin,
   });
 });
+
+// Hoisted type for the recent payouts promise so the Promise.all binding can
+// be typed uniformly for both admin and member callers (members get an
+// empty array of the same shape).
+type RecentPayoutsRow = {
+  id: string;
+  amount: string;
+  description: string | null;
+  payoutDate: string;
+  status: string;
+  itemTypeName: string;
+  itemUnit: string;
+  itemIsCurrency: boolean;
+};
 
 export default router;

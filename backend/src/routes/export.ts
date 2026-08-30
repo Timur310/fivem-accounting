@@ -74,8 +74,8 @@ router.get('/entries', async (req: Request, res: Response) => {
 
   setCsvHeaders(res, `entries-${factionId.slice(0, 8)}-${todayDateString()}.csv`);
 
-  // Write header — In-Game Name is appended at the END so existing CSV column
-  // positions stay stable for any consumer that parses by index.
+  // Header — the In-Game Name column is appended at the END so the column
+  // indices of every existing column stay stable for any downstream parser.
   res.write('Member,Item Type,Amount,Description,Entry Date,Created At,In-Game Name\n');
 
   // Write rows

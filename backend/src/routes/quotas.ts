@@ -1,13 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { quotas, entries, itemTypes } from '../db/schema.js';
-import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
+import { quotas, entries, itemTypes, users, factionMembers } from '../db/schema.js';
+import { eq, and, sql, desc, gte, lte, isNull } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
-import { toDateString } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });
@@ -19,9 +18,19 @@ router.use(requireAuth, requireFactionMember);
 /**
  * Check if a quota's current period has started (period_start <= today)
  * and compute the actual sum of entries for that period.
+ *
+ * If `targetUserId` is set, only entries by that member count towards the
+ * quota — otherwise the whole faction's contributions apply.
  */
 async function computeQuotaProgress(
-  quota: { itemTypeId: string; targetAmount: string; periodType: string; periodStart: string; isActive: boolean },
+  quota: {
+    itemTypeId: string;
+    targetUserId: string | null;
+    targetAmount: string;
+    periodType: string;
+    periodStart: string;
+    isActive: boolean;
+  },
   factionId: string,
 ) {
   const today = new Date();
@@ -48,6 +57,7 @@ async function computeQuotaProgress(
       and(
         eq(entries.factionId, factionId),
         eq(entries.itemTypeId, quota.itemTypeId),
+        quota.targetUserId ? eq(entries.userId, quota.targetUserId) : undefined,
         gte(entries.entryDate, range.start),
         lte(entries.entryDate, range.end),
         eq(entries.isDeleted, false),
@@ -78,6 +88,9 @@ const createQuotaSchema = z.object({
   ),
   periodType: z.enum(['weekly', 'monthly']),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD format'),
+  // When set, the quota tracks only this member's contributions rather than
+  // the faction's. Must reference a current faction member.
+  targetUserId: z.string().uuid().nullable().optional(),
 });
 
 const updateQuotaSchema = z.object({
@@ -88,10 +101,11 @@ const updateQuotaSchema = z.object({
   periodType: z.enum(['weekly', 'monthly']).optional(),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD format').optional(),
   isActive: z.boolean().optional(),
+  targetUserId: z.string().uuid().nullable().optional(),
 });
 
 // ── POST / — create quota ───────────────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_quotas'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const parsed = createQuotaSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -99,7 +113,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  const { itemTypeId, targetAmount, periodType, periodStart } = parsed.data;
+  const { itemTypeId, targetAmount, periodType, periodStart, targetUserId } = parsed.data;
 
   // Validate item type belongs to this faction
   const [itemType] = await db
@@ -112,7 +126,22 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  // Check for duplicate active quota on same item type + period type
+  // If a per-member target was supplied, the target must actually be in the
+  // faction — otherwise the quota would silently apply faction-wide.
+  if (targetUserId) {
+    const [membership] = await db
+      .select({ id: factionMembers.id })
+      .from(factionMembers)
+      .where(and(eq(factionMembers.factionId, factionId), eq(factionMembers.userId, targetUserId)))
+      .limit(1);
+    if (!membership) {
+      error(res, 'VALIDATION_ERROR', 'Target user is not a member of this faction');
+      return;
+    }
+  }
+
+  // Duplicate check: only one active quota per (itemType + periodType + scope).
+  // Both null (faction-wide) and the same userId count as the same scope.
   const [duplicate] = await db
     .select()
     .from(quotas)
@@ -122,6 +151,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
         eq(quotas.itemTypeId, itemTypeId),
         eq(quotas.periodType, periodType),
         eq(quotas.isActive, true),
+        targetUserId ? eq(quotas.targetUserId, targetUserId) : isNull(quotas.targetUserId),
       ),
     )
     .limit(1);
@@ -132,7 +162,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
 
   const [created] = await db
     .insert(quotas)
-    .values({ factionId, itemTypeId, targetAmount, periodType, periodStart })
+    .values({ factionId, itemTypeId, targetAmount, periodType, periodStart, targetUserId: targetUserId ?? null })
     .returning();
 
   if (!created) {
@@ -146,7 +176,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     action: 'create',
     entityType: 'quota',
     entityId: created.id,
-    details: { itemTypeId, targetAmount: Number(targetAmount), periodType, periodStart },
+    details: { itemTypeId, targetAmount: Number(targetAmount), periodType, periodStart, targetUserId: targetUserId ?? null },
     req,
   });
 
@@ -157,6 +187,9 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
 router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
+  // leftJoin on users so a per-member quota can resolve its target user even
+  // if the user has since left the faction (the row is kept by the cascade
+  // rule, but the user record still exists).
   const allQuotas = await db
     .select({
       id: quotas.id,
@@ -169,9 +202,13 @@ router.get('/', async (req: Request, res: Response) => {
       periodStart: quotas.periodStart,
       isActive: quotas.isActive,
       createdAt: quotas.createdAt,
+      targetUserId: quotas.targetUserId,
+      targetUsername: users.username,
+      targetAvatarUrl: users.avatarUrl,
     })
     .from(quotas)
     .innerJoin(itemTypes, eq(quotas.itemTypeId, itemTypes.id))
+    .leftJoin(users, eq(quotas.targetUserId, users.id))
     .where(eq(quotas.factionId, factionId))
     .orderBy(desc(quotas.createdAt));
 
@@ -190,6 +227,7 @@ router.get('/', async (req: Request, res: Response) => {
       const progress = await computeQuotaProgress(
         {
           itemTypeId: q.itemTypeId,
+          targetUserId: q.targetUserId,
           targetAmount: q.targetAmount,
           periodType: q.periodType,
           periodStart: q.periodStart,
@@ -208,7 +246,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:quotaId — update quota ──────────────────
-router.patch('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:quotaId', requirePermission('manage_quotas'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const quotaId = req.params.quotaId as string;
 
@@ -233,6 +271,7 @@ router.patch('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, 
   if (parsed.data.periodType !== undefined) updates.periodType = parsed.data.periodType;
   if (parsed.data.periodStart !== undefined) updates.periodStart = parsed.data.periodStart;
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
+  if (parsed.data.targetUserId !== undefined) updates.targetUserId = parsed.data.targetUserId;
 
   const [updated] = await db
     .update(quotas)
@@ -252,6 +291,7 @@ router.patch('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, 
         periodType: existing.periodType,
         periodStart: existing.periodStart,
         isActive: existing.isActive,
+        targetUserId: existing.targetUserId,
       },
       after: updates,
     },
@@ -262,7 +302,7 @@ router.patch('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, 
 });
 
 // ── DELETE /:quotaId — delete quota ──────────────────
-router.delete('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:quotaId', requirePermission('manage_quotas'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const quotaId = req.params.quotaId as string;
 
@@ -288,6 +328,7 @@ router.delete('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request,
       targetAmount: existing.targetAmount,
       periodType: existing.periodType,
       periodStart: existing.periodStart,
+      targetUserId: existing.targetUserId,
     },
     req,
   });
