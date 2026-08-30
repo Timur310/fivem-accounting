@@ -23,6 +23,7 @@ const KNOWN_ACTIONS = [
   'create',
   'update',
   'delete',
+  'update_profile',
   'bulk_create',
   'bulk_delete',
   'import',

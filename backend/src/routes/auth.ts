@@ -187,10 +187,10 @@ router.patch('/me', requireAuth, async (req: Request, res: Response) => {
 
   await createAuditLog({
     userId: req.user!.id,
-    action: 'update',
+    action: 'update_profile',
     entityType: 'user',
     entityId: req.user!.id,
-    details: { field: 'inGameName', before, after },
+    details: { inGameName: after, previousInGameName: before },
     req,
   });
 
