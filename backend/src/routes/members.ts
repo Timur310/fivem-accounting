@@ -511,6 +511,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
+        itemImageUrl: itemTypes.imageUrl,
       })
       .from(payouts)
       .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
@@ -553,6 +554,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemTypeName: itemTypes.name,
           unit: itemTypes.unit,
           isCurrency: itemTypes.isCurrency,
+          imageUrl: itemTypes.imageUrl,
           total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
           count: sql<number>`COUNT(*)::int`,
         })
@@ -565,7 +567,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
             eq(entries.isDeleted, false),
           ),
         )
-        .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency),
+        .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency, itemTypes.imageUrl),
       db
         .select({
           currencyTotal: sql<string>`COALESCE(SUM(CAST(${payouts.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
@@ -592,6 +594,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemTypeName: itemTypes.name,
           itemUnit: itemTypes.unit,
           itemIsCurrency: itemTypes.isCurrency,
+          itemImageUrl: itemTypes.imageUrl,
         })
         .from(entries)
         .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
@@ -612,6 +615,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemTypeName: itemTypes.name,
           unit: itemTypes.unit,
           isCurrency: itemTypes.isCurrency,
+          imageUrl: itemTypes.imageUrl,
           targetAmount: quotas.targetAmount,
           periodType: quotas.periodType,
           periodStart: quotas.periodStart,
@@ -648,6 +652,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemTypeName: q.itemTypeName,
           unit: q.unit,
           isCurrency: q.isCurrency,
+          imageUrl: q.imageUrl,
           periodType: q.periodType,
           periodStart: range.start,
           periodEnd: range.end,
@@ -730,6 +735,7 @@ type RecentPayoutsRow = {
   itemTypeName: string;
   itemUnit: string;
   itemIsCurrency: boolean;
+  itemImageUrl: string | null;
 };
 
 export default router;

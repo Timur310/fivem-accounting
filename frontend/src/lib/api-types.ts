@@ -100,6 +100,8 @@ export interface ItemType {
   name: string;
   unit: string;
   isCurrency: boolean;
+  /** Link to an icon for this item; null until an admin sets one. */
+  imageUrl: string | null;
   isActive: boolean;
   createdAt: string;
   entryCount?: number;
@@ -109,6 +111,7 @@ export interface CreateItemTypeInput {
   name: string;
   unit?: string;
   isCurrency?: boolean;
+  imageUrl?: string;
 }
 
 export interface UpdateItemTypeInput {
@@ -116,6 +119,8 @@ export interface UpdateItemTypeInput {
   unit?: string;
   isCurrency?: boolean;
   isActive?: boolean;
+  /** null clears the image; omit the key to leave it untouched. */
+  imageUrl?: string | null;
 }
 
 // ── Entries ──
@@ -135,6 +140,7 @@ export interface Entry {
   itemTypeName: string;
   itemUnit: string;
   itemIsCurrency: boolean;
+  itemImageUrl: string | null;
 }
 
 export interface CreateEntryInput {
@@ -165,6 +171,7 @@ export interface DashboardData {
     itemTypeName: string;
     unit: string;
     isCurrency: boolean;
+    imageUrl: string | null;
     total: number;
   }[];
   grandTotal: number;
@@ -193,6 +200,7 @@ export interface DashboardData {
     itemTypeName: string;
     itemUnit: string;
     itemIsCurrency: boolean;
+    itemImageUrl: string | null;
   }[];
   inactiveMembers?: {
     userId: string;
@@ -213,6 +221,7 @@ export interface Quota {
   itemTypeName: string;
   itemUnit: string;
   itemIsCurrency: boolean;
+  itemImageUrl: string | null;
   targetAmount: string;
   periodType: 'weekly' | 'monthly';
   periodStart: string;
@@ -276,6 +285,7 @@ export interface ChartData {
     itemTypeName: string;
     unit: string;
     isCurrency: boolean;
+    imageUrl: string | null;
     total: number;
     entryCount: number;
   }[];
@@ -292,6 +302,7 @@ export interface ChartData {
     itemTypeName: string;
     unit: string;
     isCurrency: boolean;
+    imageUrl: string | null;
     total: number;
   }[];
 }
@@ -356,6 +367,7 @@ export interface ReportSummary {
     itemTypeName: string;
     unit: string;
     isCurrency: boolean;
+    imageUrl: string | null;
     total: number;
     count: number;
     avg: number;
@@ -386,7 +398,7 @@ interface ComparisonPeriod {
   itemTotal: number;
   count: number;
   members: number;
-  byType: { itemTypeName: string; unit: string; isCurrency: boolean; total: number; count: number }[];
+  byType: { itemTypeName: string; unit: string; isCurrency: boolean; imageUrl: string | null; total: number; count: number }[];
 }
 
 export interface ReportComparison {
@@ -424,6 +436,7 @@ export interface Payout {
   itemTypeName: string;
   itemUnit: string;
   itemIsCurrency: boolean;
+  itemImageUrl: string | null;
   createdBy: string;
   approvedBy: string | null;
 }
@@ -466,6 +479,7 @@ export interface TreasuryBalanceItem {
   itemTypeName: string;
   unit: string;
   isCurrency: boolean;
+  imageUrl: string | null;
   inflow: number;
   outflow: number;
   balance: number;
@@ -500,6 +514,7 @@ export interface TreasuryData {
     itemTypeName: string;
     itemUnit: string;
     itemIsCurrency: boolean;
+    itemImageUrl: string | null;
   }[];
 }
 
@@ -554,6 +569,7 @@ export interface MemberProfile {
       itemTypeName: string;
       unit: string;
       isCurrency: boolean;
+      imageUrl: string | null;
       total: number;
       count: number;
     }[];
@@ -569,6 +585,7 @@ export interface MemberProfile {
     itemTypeName: string;
     unit: string;
     isCurrency: boolean;
+    imageUrl: string | null;
     periodType: string;
     periodStart: string;
     periodEnd: string;
@@ -586,6 +603,7 @@ export interface MemberProfile {
     itemTypeName: string;
     itemUnit: string;
     itemIsCurrency: boolean;
+    itemImageUrl: string | null;
   }[];
   recentPayouts: {
     id: string;
@@ -596,6 +614,7 @@ export interface MemberProfile {
     itemTypeName: string;
     itemUnit: string;
     itemIsCurrency: boolean;
+    itemImageUrl: string | null;
   }[];
   streak: {
     current: number;

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp } from 'lucide-react';
 import { formatAmount, displayName } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 interface Props { factionId: string; }
 
@@ -133,9 +134,12 @@ export function ReportsView({ factionId }: Props) {
                       <div className="space-y-2">
                         {summary.byType.map((t) => (
                           <div key={t.itemTypeName} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3 transition-all duration-150 hover:border-white/[0.1]">
-                            <div>
-                              <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
-                              <p className="text-[11px] text-zinc-600">{t.count} entries &middot; avg {fmt(t.avg)} &middot; max {fmt(t.max)}</p>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <ItemIcon src={t.imageUrl} className="size-8" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-zinc-300 truncate">{t.itemTypeName}</p>
+                                <p className="text-[11px] text-zinc-600">{t.count} entries &middot; avg {fmt(t.avg)} &middot; max {fmt(t.max)}</p>
+                              </div>
                             </div>
                             <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</span>
                           </div>
@@ -262,7 +266,10 @@ export function ReportsView({ factionId }: Props) {
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">Active Members</span><span className="font-medium tabular-nums text-zinc-200">{p.members}</span></div>
                       {p.byType.map((t) => (
                         <div key={t.itemTypeName} className="flex justify-between text-sm border-t border-white/[0.06] pt-2">
-                          <span className="text-zinc-500">{t.itemTypeName}</span>
+                          <span className="text-zinc-500 flex items-center gap-1.5">
+                            <ItemIcon src={t.imageUrl} className="size-4" />
+                            {t.itemTypeName}
+                          </span>
                           <span className="tabular-nums text-zinc-300">{formatAmount(t.total, t.unit, t.isCurrency)} ({t.count})</span>
                         </div>
                       ))}

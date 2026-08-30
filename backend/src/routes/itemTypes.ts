@@ -17,11 +17,23 @@ router.use(requireAuth, requireFactionMember);
 // `unit` stays in the schema (the existing tests still send it explicitly and
 // assert on the returned value). The derived-unit helper kicks in only when
 // the caller changes `isCurrency` without overriding `unit` at the same time.
+
+// The image is a link to something hosted elsewhere. Restricted to http(s)
+// because the value is handed straight to an <img src>: `data:` and other
+// schemes that zod's .url() accepts have no business being there.
+const imageUrlSchema = z
+  .string()
+  .trim()
+  .max(2048, 'Image URL must be at most 2048 characters')
+  .url('Image URL must be a valid URL')
+  .refine((v) => /^https?:\/\//i.test(v), 'Image URL must start with http:// or https://');
+
 const createItemTypeSchema = z.object({
   name: z.string().min(1).max(100),
   unit: z.string().min(1).max(20).default('$'),
   // Presentation hint only: money vs. countable goods. Defaults to false.
   isCurrency: z.boolean().default(false),
+  imageUrl: imageUrlSchema.optional(),
 });
 
 const updateItemTypeSchema = z.object({
@@ -29,6 +41,8 @@ const updateItemTypeSchema = z.object({
   unit: z.string().min(1).max(20).optional(),
   isCurrency: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  // Explicit null removes the image; omitting the key leaves it untouched.
+  imageUrl: imageUrlSchema.nullable().optional(),
 });
 
 /** Derive the display unit from the currency flag. */
@@ -45,14 +59,14 @@ router.post('/', requirePermission('manage_item_types'), async (req: Request, re
     return;
   }
 
-  const { name, unit, isCurrency } = parsed.data;
+  const { name, unit, isCurrency, imageUrl } = parsed.data;
 
   let created;
   try {
     created = await db.transaction(async (tx: TransactionLike) => {
       const [row] = await tx
         .insert(itemTypes)
-        .values({ factionId, name, unit, isCurrency })
+        .values({ factionId, name, unit, isCurrency, imageUrl: imageUrl ?? null })
         .returning();
 
       if (!row) throw new Error('Failed to create item type');
@@ -63,7 +77,7 @@ router.post('/', requirePermission('manage_item_types'), async (req: Request, re
         action: 'create',
         entityType: 'item_type',
         entityId: row.id,
-        details: { name, unit, isCurrency },
+        details: { name, unit, isCurrency, imageUrl: imageUrl ?? null },
         req,
         tx,
       });
@@ -89,6 +103,7 @@ router.get('/', async (req: Request, res: Response) => {
       name: itemTypes.name,
       unit: itemTypes.unit,
       isCurrency: itemTypes.isCurrency,
+      imageUrl: itemTypes.imageUrl,
       isActive: itemTypes.isActive,
       createdAt: itemTypes.createdAt,
       entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE item_type_id = item_types.id AND is_deleted = false)::int`,
@@ -136,6 +151,7 @@ router.patch('/:typeId', requirePermission('manage_item_types'), async (req: Req
     }
   }
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
+  if (parsed.data.imageUrl !== undefined) updates.imageUrl = parsed.data.imageUrl;
 
   let updated;
   try {
@@ -152,7 +168,7 @@ router.patch('/:typeId', requirePermission('manage_item_types'), async (req: Req
         action: 'update',
         entityType: 'item_type',
         entityId: typeId,
-        details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive }, after: updates },
+        details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive, imageUrl: existing.imageUrl }, after: updates },
         req,
         tx,
       });

@@ -35,12 +35,13 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeName: itemTypes.name,
       unit: itemTypes.unit,
       isCurrency: itemTypes.isCurrency,
+      imageUrl: itemTypes.imageUrl,
       total: sum(entries.amount).mapWith(Number),
     })
     .from(entries)
     .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
     .where(and(eq(entries.factionId, factionId), eq(entries.isDeleted, false)))
-    .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency);
+    .groupBy(entries.itemTypeId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency, itemTypes.imageUrl);
 
   // Member count
   const [memberStats] = await db
@@ -88,6 +89,7 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
       itemIsCurrency: itemTypes.isCurrency,
+      itemImageUrl: itemTypes.imageUrl,
     })
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))

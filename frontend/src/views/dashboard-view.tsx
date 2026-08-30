@@ -11,6 +11,7 @@ import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount, displayName } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   factionId: string;
@@ -161,9 +162,12 @@ export function DashboardView({ factionId }: Props) {
                 return (
                   <div key={q.id} className="rounded-lg border border-white/[0.06] p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1]">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-200">{q.itemTypeName}</p>
-                        <p className="text-[11px] text-zinc-500 capitalize">{q.periodType}</p>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <ItemIcon src={q.itemImageUrl} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-zinc-200 truncate">{q.itemTypeName}</p>
+                          <p className="text-[11px] text-zinc-500 capitalize">{q.periodType}</p>
+                        </div>
                       </div>
                       <Badge variant={met ? 'outline' : 'default'} className={met ? 'border-emerald-500/30 text-emerald-400' : ''}>
                         {met ? 'Met' : `${pct.toFixed(1)}%`}
@@ -256,9 +260,12 @@ export function DashboardView({ factionId }: Props) {
                         <span className="text-zinc-600"> logged </span>
                         <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                       </p>
-                      <p className="text-[11px] text-zinc-600">
-                        {e.itemTypeName} &middot; {e.entryDate}
-                        {e.description && ` — ${e.description}`}
+                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <ItemIcon src={e.itemImageUrl} className="size-4" />
+                        <span className="truncate">
+                          {e.itemTypeName} &middot; {e.entryDate}
+                          {e.description && ` — ${e.description}`}
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -292,9 +299,12 @@ export function DashboardView({ factionId }: Props) {
                     key={b.itemTypeId}
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-zinc-300">{b.itemTypeName}</p>
-                      <p className="text-xs text-zinc-600">in {formatAmount(b.inflow, b.unit, b.isCurrency)} &middot; out {formatAmount(b.outflow, b.unit, b.isCurrency)}</p>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ItemIcon src={b.imageUrl} className="size-8" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-300 truncate">{b.itemTypeName}</p>
+                        <p className="text-xs text-zinc-600">in {formatAmount(b.inflow, b.unit, b.isCurrency)} &middot; out {formatAmount(b.outflow, b.unit, b.isCurrency)}</p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-medium tabular-nums" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
@@ -308,9 +318,12 @@ export function DashboardView({ factionId }: Props) {
                     key={t.itemTypeId}
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
-                    <div>
-                      <p className="text-sm font-medium text-zinc-300">{t.itemTypeName}</p>
-                      <p className="text-xs text-zinc-600">{t.unit}</p>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ItemIcon src={t.imageUrl} className="size-8" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-zinc-300 truncate">{t.itemTypeName}</p>
+                        <p className="text-xs text-zinc-600">{t.unit}</p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-medium tabular-nums text-zinc-100">

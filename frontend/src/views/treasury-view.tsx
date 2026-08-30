@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   factionId: string;
@@ -164,8 +165,11 @@ export function TreasuryView({ factionId }: Props) {
                     b.balance < 0 ? 'border-red-500/20 bg-red-500/[0.02]' : 'border-white/[0.06]'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-zinc-200">{b.itemTypeName}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <ItemIcon src={b.imageUrl} className="size-8" />
+                      <p className="text-sm font-medium text-zinc-200 truncate">{b.itemTypeName}</p>
+                    </span>
                     <Badge
                       variant="outline"
                       className={`text-[11px] ${
@@ -263,9 +267,12 @@ export function TreasuryView({ factionId }: Props) {
                       <span className="text-zinc-600"> received </span>
                       <span className="font-medium tabular-nums text-zinc-200">{formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}</span>
                     </p>
-                    <p className="text-[11px] text-zinc-600">
-                      {p.itemTypeName} &middot; {p.payoutDate}
-                      {p.description && ` — ${p.description}`}
+                    <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                      <ItemIcon src={p.itemImageUrl} className="size-4" />
+                      <span className="truncate">
+                        {p.itemTypeName} &middot; {p.payoutDate}
+                        {p.description && ` — ${p.description}`}
+                      </span>
                     </p>
                   </div>
                 </div>

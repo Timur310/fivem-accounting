@@ -57,7 +57,7 @@ export async function computeTreasuryBalances(factionId: string): Promise<Treasu
       )
       .groupBy(payouts.itemTypeId),
     db
-      .select({ id: itemTypes.id, name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency })
+      .select({ id: itemTypes.id, name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency, imageUrl: itemTypes.imageUrl })
       .from(itemTypes)
       .where(eq(itemTypes.factionId, factionId)),
   ]);
@@ -73,6 +73,7 @@ export async function computeTreasuryBalances(factionId: string): Promise<Treasu
       itemTypeName: t.name,
       unit: t.unit,
       isCurrency: t.isCurrency,
+      imageUrl: t.imageUrl,
       inflow,
       outflow,
       balance: inflow - outflow,

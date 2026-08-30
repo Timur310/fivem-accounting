@@ -235,6 +235,7 @@ FactionMember 1---* MemberNote
 | faction_id | UUID | FK -> factions.id, NOT NULL | Owning faction |
 | name | VARCHAR(100) | NOT NULL | Display name (Dirty Money, Lock Pick, etc.) |
 | unit | VARCHAR(20) | NOT NULL, DEFAULT '$' | Unit: $, kg, pcs, etc. |
+| image_url | TEXT | NULLABLE | Link to an icon for the item, hosted elsewhere |
 | is_active | BOOLEAN | NOT NULL, DEFAULT TRUE | Whether members can log this type |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
 
@@ -420,6 +421,7 @@ export const itemTypes = pgTable('item_types', {
   factionId: uuid('faction_id').notNull().references(() => factions.id),
   name:      varchar('name', { length: 100 }).notNull(),
   unit:      varchar('unit', { length: 20 }).notNull().default('$'),
+  imageUrl:  text('image_url'),
   isActive:  boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -650,9 +652,9 @@ All endpoints under `/api/v1`. All require auth except OAuth callback.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/factions/{id}/item-types` | Create trackable item type (name, unit) |
+| POST | `/api/v1/factions/{id}/item-types` | Create trackable item type (name, unit, optional image URL) |
 | GET | `/api/v1/factions/{id}/item-types` | List item types with active/inactive status |
-| PATCH | `/api/v1/factions/{id}/item-types/{type_id}` | Update name, unit, or active status |
+| PATCH | `/api/v1/factions/{id}/item-types/{type_id}` | Update name, unit, image URL, or active status |
 | DELETE | `/api/v1/factions/{id}/item-types/{type_id}` | Soft-delete (existing entries preserved) |
 
 ### 6.6 Quotas (Faction Admin)
