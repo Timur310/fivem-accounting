@@ -11,6 +11,7 @@ import {
   exchangeCode,
   getDiscordUser,
   consumeState,
+  resolveAvatarUrl,
   signJwt,
   COOKIE_NAME,
   COOKIE_OPTIONS,
@@ -19,12 +20,6 @@ import { requireAuth } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router();
-
-/** Build the canonical CDN avatar URL for a Discord user, or null. */
-function avatarUrl(discordId: string, avatar: string | null): string | null {
-  if (!avatar) return null;
-  return `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png`;
-}
 
 /**
  * Build the standard /me response shape from a user record.
@@ -119,7 +114,7 @@ router.get('/callback', async (req: Request, res: Response) => {
       .values({
         discordId: discordUser.id,
         username: discordUser.username,
-        avatarUrl: avatarUrl(discordUser.id, discordUser.avatar),
+        avatarUrl: resolveAvatarUrl(discordUser),
         role: 'member',
         lastLogin: new Date(),
       })
@@ -127,7 +122,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         target: users.discordId,
         set: {
           username: discordUser.username,
-          avatarUrl: avatarUrl(discordUser.id, discordUser.avatar),
+          avatarUrl: resolveAvatarUrl(discordUser),
           lastLogin: new Date(),
         },
       })
