@@ -39,6 +39,7 @@ const KNOWN_ENTITY_TYPES = [
   'member_note',
   'strike',
   'quota',
+  'faction_settings',
 ] as const;
 
 const listAuditQuerySchema = z.object({
