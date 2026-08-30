@@ -39,16 +39,19 @@ async function buildUserResponse(user: typeof users.$inferSelect) {
       joinedAt: factionMembers.joinedAt,
       factionName: factions.name,
       factionActive: factions.isActive,
+      // The faction switcher paints every row, so it needs each faction's own
+      // colour — not just the selected one's.
+      factionBrandColor: factions.brandColor,
     })
     .from(factionMembers)
     .innerJoin(factions, eq(factionMembers.factionId, factions.id))
     .where(eq(factionMembers.userId, user.id));
 
   // Superadmins can browse every active faction even without a membership.
-  let browseableFactions: { id: string; name: string }[] = [];
+  let browseableFactions: { id: string; name: string; brandColor: string | null }[] = [];
   if (user.role === 'superadmin') {
     browseableFactions = await db
-      .select({ id: factions.id, name: factions.name })
+      .select({ id: factions.id, name: factions.name, brandColor: factions.brandColor })
       .from(factions)
       .where(eq(factions.isActive, true));
   }

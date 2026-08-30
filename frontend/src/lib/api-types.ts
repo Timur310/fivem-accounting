@@ -23,7 +23,7 @@ export interface User {
   discordId: string;
   username: string;
   inGameName: string | null;
-  browseableFactions?: { id: string; name: string }[];
+  browseableFactions?: { id: string; name: string; brandColor: string | null }[];
   avatarUrl: string | null;
   role: 'superadmin' | 'faction_admin' | 'member';
   createdAt: string;
@@ -38,6 +38,8 @@ export interface FactionMembership {
   joinedAt: string;
   factionName: string;
   factionActive: boolean;
+  /** This faction's own accent colour; null until an admin picks one. */
+  factionBrandColor: string | null;
 }
 
 // ── Factions ──

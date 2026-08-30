@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppStore } from '@/lib/store';
+import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
 import { authApi, factionSettingsApi } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -264,24 +264,40 @@ export function AppShell() {
                   <SelectValue placeholder="Select faction" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeFactions.map((f) => (
-                    <SelectItem key={f.factionId} value={f.factionId}>
-                      <span className="flex items-center gap-2">
-                        <span>{f.factionName}</span>
-                        {f.role === 'admin' && (
+                  {activeFactions.map((f) => {
+                    // Every row wears its own faction's colour. Using the store
+                    // value here painted the whole list in the selected
+                    // faction's colour, which told you nothing.
+                    const rowColor = f.factionBrandColor ?? DEFAULT_BRAND_COLOR;
+                    return (
+                      <SelectItem key={f.factionId} value={f.factionId}>
+                        <span className="flex items-center gap-2">
                           <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
-                          >
-                            Admin
-                          </span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: rowColor }}
+                            aria-hidden="true"
+                          />
+                          <span>{f.factionName}</span>
+                          {f.role === 'admin' && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                              style={{ backgroundColor: `${rowColor}15`, color: rowColor }}
+                            >
+                              Admin
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                   {browseableOnly.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       <span className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: b.brandColor ?? DEFAULT_BRAND_COLOR }}
+                          aria-hidden="true"
+                        />
                         <span>{b.name}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-white/[0.06] text-zinc-400">
                           Browse

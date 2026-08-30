@@ -73,3 +73,59 @@ describe('brand colour', () => {
     }
   });
 });
+
+/**
+ * The faction switcher paints one row per faction, so /auth/me has to carry
+ * each faction's own colour. Reading it from the store instead painted every
+ * row in the selected faction's colour.
+ */
+describe('brand colour per faction on /auth/me', () => {
+  it('carries each membership its own faction colour', async () => {
+    const second = await api()
+      .post('/api/v1/factions')
+      .set('Cookie', w.superadmin.cookie)
+      .send({ name: 'Second Faction', initialAdminDiscordId: w.admin.discordId });
+    expect(second.status).toBe(201);
+    const secondId = second.body.data.id;
+
+    await api()
+      .patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ brandColor: '#aa0000' });
+    await api()
+      .patch(`/api/v1/factions/${secondId}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ brandColor: '#00bb00' });
+
+    const me = await api().get('/api/v1/auth/me').set('Cookie', w.admin.cookie);
+    expect(me.status).toBe(200);
+
+    const first = me.body.data.factions.find(
+      (f: { factionId: string }) => f.factionId === w.faction.id,
+    );
+    const other = me.body.data.factions.find(
+      (f: { factionId: string }) => f.factionId === secondId,
+    );
+    expect(first.factionBrandColor).toBe('#aa0000');
+    expect(other.factionBrandColor).toBe('#00bb00');
+  });
+
+  it('reports null for a faction nobody has coloured yet', async () => {
+    const me = await api().get('/api/v1/auth/me').set('Cookie', w.member.cookie);
+    const only = me.body.data.factions[0];
+    expect(only.factionBrandColor).toBeNull();
+  });
+
+  it('carries it on the superadmin browse list too', async () => {
+    await api()
+      .patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ brandColor: '#123456' });
+
+    const me = await api().get('/api/v1/auth/me').set('Cookie', w.superadmin.cookie);
+    const browseable = me.body.data.browseableFactions.find(
+      (b: { id: string }) => b.id === w.faction.id,
+    );
+    expect(browseable.brandColor).toBe('#123456');
+  });
+});
