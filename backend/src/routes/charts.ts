@@ -47,7 +47,8 @@ router.get('/', async (req: Request, res: Response) => {
     })
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))
-    .where(baseWhere)
+    // Anonymous entries belong to the faction, not to a person.
+    .where(and(baseWhere, eq(users.isSystem, false)))
     .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
     .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
 
@@ -115,7 +116,7 @@ router.get('/', async (req: Request, res: Response) => {
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))
     .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
-    .where(baseWhere)
+    .where(and(baseWhere, eq(users.isSystem, false)))
     .groupBy(users.id, users.username, users.inGameName, itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency, itemTypes.imageUrl)
     .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
 

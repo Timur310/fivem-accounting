@@ -158,6 +158,8 @@ export interface CreateEntryInput {
   description?: string;
   entryDate?: string;
   customValues?: Record<string, string>;
+  /** Credit the faction rather than the person logging it. */
+  anonymous?: boolean;
 }
 
 export interface UpdateEntryInput {

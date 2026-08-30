@@ -72,7 +72,9 @@ router.get('/', async (req: Request, res: Response) => {
       })
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))
-      .where(where)
+      // Anonymous entries belong to the faction, not to a person, so they are
+      // left out of anything that ranks people.
+      .where(and(where, eq(users.isSystem, false)))
       .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
       .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) DESC`)
       .limit(limit),

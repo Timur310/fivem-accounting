@@ -25,9 +25,17 @@ export const users = pgTable('users', {
   inGameName: varchar('in_game_name', { length: 50 }),
   avatarUrl: text('avatar_url'),
   role:      varchar('role', { length: 20 }).notNull().default('member'),
+  // Not a person. Marks the placeholder that anonymous entries are logged
+  // against, so per-member rankings can leave it out without matching on a
+  // magic username.
+  isSystem:  boolean('is_system').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastLogin: timestamp('last_login', { withTimezone: true }),
 });
+
+/** Discord id of the placeholder that owns anonymous entries. */
+export const ANONYMOUS_DISCORD_ID = 'system:anonymous';
+export const ANONYMOUS_USERNAME = 'Anonymous';
 
 export const usersRelations = relations(users, ({ many }) => ({
   factionMembers: many(factionMembers),
