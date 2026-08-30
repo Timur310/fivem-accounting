@@ -15,6 +15,13 @@ import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/a
 
 const router = Router({ mergeParams: true });
 
+/**
+ * Thrown by the role update when the change would leave a faction with no
+ * admin. It travels out through the transaction, so the catch below has to
+ * tell it apart from a genuine failure and answer 400 rather than 500.
+ */
+class LastAdminError extends Error {}
+
 // All routes require faction membership
 router.use(requireAuth, requireFactionMember);
 
@@ -276,6 +283,28 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
   let updated;
   try {
     updated = await db.transaction(async (tx: TransactionLike) => {
+      // A faction with no admin cannot be repaired from its own screens: the
+      // member management endpoints all need manage_members, which only an
+      // admin or a rank they grant has. DELETE already refuses to remove the
+      // last admin; demoting them is the same hole.
+      //
+      // The admin rows are locked rather than counted, so two admins demoting
+      // each other at the same moment cannot both read "there are 2 of us"
+      // and both succeed.
+      if (parsed.data.role === 'member' && membership.role === 'admin') {
+        const admins = await tx
+          .select({ id: factionMembers.id })
+          .from(factionMembers)
+          .where(
+            and(
+              eq(factionMembers.factionId, factionId),
+              eq(factionMembers.role, 'admin'),
+            ),
+          )
+          .for('update');
+        if (admins.length <= 1) throw new LastAdminError();
+      }
+
       const [row] = await tx
         .update(factionMembers)
         .set(updates)
@@ -316,6 +345,14 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
       return row;
     });
   } catch (err) {
+    if (err instanceof LastAdminError) {
+      error(
+        res,
+        'BAD_REQUEST',
+        'Cannot demote the last admin of a faction. Promote another member first.',
+      );
+      return;
+    }
     console.error('[UPDATE MEMBER ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to update member', 500);
     return;

@@ -123,6 +123,76 @@ describe('PATCH /members/:userId — role and rank', () => {
   });
 });
 
+describe('PATCH /members/:userId — the last admin', () => {
+  // A faction with no admin cannot be repaired from its own screens: every
+  // member management endpoint needs manage_members, which only an admin or a
+  // rank they granted has. Removal has always refused this; demotion has to
+  // refuse it too.
+  it('refuses to demote the only admin', async () => {
+    const res = await api()
+      .patch(`${base()}/${w.admin.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ role: 'member' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('BAD_REQUEST');
+
+    // The refusal has to leave the roster untouched, not half-applied.
+    const list = await api().get(base()).set('Cookie', w.admin.cookie);
+    const admin = list.body.data.find((m: { userId: string }) => m.userId === w.admin.id);
+    expect(admin.role).toBe('admin');
+  });
+
+  it('refuses even when a superadmin asks', async () => {
+    const res = await api()
+      .patch(`${base()}/${w.admin.id}`)
+      .set('Cookie', w.superadmin.cookie)
+      .send({ role: 'member' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('allows the demotion once a second admin exists', async () => {
+    const promoted = await api()
+      .patch(`${base()}/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ role: 'admin' });
+    expect(promoted.status).toBe(200);
+
+    const res = await api()
+      .patch(`${base()}/${w.admin.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ role: 'member' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.role).toBe('member');
+  });
+
+  it('leaves a rank-only change on the last admin alone', async () => {
+    await api()
+      .patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ ranks: [{ name: 'Boss', level: 1, permissions: [] }] });
+
+    const res = await api()
+      .patch(`${base()}/${w.admin.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: 'Boss' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.rank).toBe('Boss');
+  });
+
+  it('still lets a plain member be demoted to what they already are', async () => {
+    const res = await api()
+      .patch(`${base()}/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ role: 'member' });
+
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('DELETE /members/:userId', () => {
   it('removes a member', async () => {
     const res = await api().delete(`${base()}/${w.member.id}`).set('Cookie', w.admin.cookie);
