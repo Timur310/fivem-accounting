@@ -5,7 +5,7 @@ import { quotas, entries, itemTypes, users, factionMembers } from '../db/schema.
 import { eq, and, sql, desc, gte, lte, isNull } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { toDateString } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
@@ -105,7 +105,7 @@ const updateQuotaSchema = z.object({
 });
 
 // ── POST / — create quota ───────────────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_quotas'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const parsed = createQuotaSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -243,7 +243,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:quotaId — update quota ──────────────────
-router.patch('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:quotaId', requirePermission('manage_quotas'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const quotaId = req.params.quotaId as string;
 
@@ -297,7 +297,7 @@ router.patch('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, 
 });
 
 // ── DELETE /:quotaId — delete quota ──────────────────
-router.delete('/:quotaId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:quotaId', requirePermission('manage_quotas'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const quotaId = req.params.quotaId as string;
 

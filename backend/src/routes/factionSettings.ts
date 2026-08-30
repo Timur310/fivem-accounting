@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { factions, factionMembers, DEFAULT_STRIKE_EXPIRY_DAYS } from '../db/schema.js';
+import { factions, factionMembers, DEFAULT_STRIKE_EXPIRY_DAYS, FACTION_PERMISSIONS } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router({ mergeParams: true });
@@ -19,7 +19,9 @@ const updateSettingsSchema = z.object({
   ranks: z.array(z.object({
     name: z.string().min(1).max(100),
     level: z.number().int().min(1).max(100),
-    permissions: z.array(z.string().max(50)).default([]),
+    // Permissions must be from the known list — prevents typos and stale
+    // entries from being stored.
+    permissions: z.array(z.enum(FACTION_PERMISSIONS)).default([]),
   })).max(20).optional(),
   inactivityThresholdDays: z.number().int().min(1).max(365).optional(),
   strikeExpiryDays: z.object({
@@ -76,8 +78,22 @@ router.get('/', async (req: Request, res: Response) => {
   });
 });
 
-// ── PATCH / — update settings (faction admin) ────────
-router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+// ── PATCH / — update settings (faction admin or rank with permission) ──
+// Accepts either `manage_settings` (full settings: ranks, inactivity, strike
+// expiry) or `manage_customization` (brand color, custom fields, payout
+// approval). A rank with only `manage_customization` can change the look but
+// not the operational settings, and vice versa.
+router.patch('/', (req, res, next) => {
+  const perms = req.factionPermissions ?? [];
+  const hasSettings = perms.includes('manage_settings');
+  const hasCustomization = perms.includes('manage_customization');
+  if (hasSettings || hasCustomization) {
+    next();
+  } else {
+    // Fall through to requirePermission which returns the 403.
+    requirePermission('manage_settings')(req, res, next);
+  }
+}, async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const parsed = updateSettingsSchema.safeParse(req.body);

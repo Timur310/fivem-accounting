@@ -680,10 +680,39 @@ export interface FactionStrikesData {
 
 // ── Phase 5: Faction Settings ───────────────────────────
 
+// ── Faction permissions ──
+// Must match the backend FACTION_PERMISSIONS constant in schema.ts.
+export const FACTION_PERMISSIONS = [
+  'manage_members',
+  'manage_payouts',
+  'manage_entries',
+  'manage_strikes',
+  'manage_quotas',
+  'manage_item_types',
+  'manage_settings',
+  'manage_customization',
+  'view_audit_logs',
+  'view_reports',
+] as const;
+export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
+
+export const PERMISSION_LABELS: Record<FactionPermission, string> = {
+  manage_members: 'Manage Members',
+  manage_payouts: 'Manage Payouts',
+  manage_entries: 'Edit/Delete Entries',
+  manage_strikes: 'Manage Strikes',
+  manage_quotas: 'Manage Quotas',
+  manage_item_types: 'Manage Item Types',
+  manage_settings: 'Manage Settings',
+  manage_customization: 'Manage Customization',
+  view_audit_logs: 'View Audit Logs',
+  view_reports: 'View Reports',
+};
+
 export interface FactionRank {
   name: string;
   level: number;
-  permissions: string[];
+  permissions: FactionPermission[];
 }
 
 export interface FactionSettings {

@@ -5,7 +5,7 @@ import { strikes, users, factionMembers, STRIKE_SEVERITIES } from '../db/schema.
 import { eq, and, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { resolveStrikeExpiry, effectiveStatus } from '../lib/strikes.js';
 
@@ -34,7 +34,7 @@ const ALLOWED_STATUS_CHANGES: Record<string, readonly string[]> = {
 };
 
 // ── POST / — issue a strike (admin) ──────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_strikes'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -119,7 +119,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:strikeId — appeal, revoke or reinstate ───
-router.patch('/:strikeId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:strikeId', requirePermission('manage_strikes'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
   const strikeId = req.params.strikeId as string;

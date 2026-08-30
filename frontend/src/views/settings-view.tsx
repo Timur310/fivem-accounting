@@ -26,7 +26,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { ItemType, Quota } from '@/lib/api-types';
+import type { ItemType, Quota, FactionPermission } from '@/lib/api-types';
+import { FACTION_PERMISSIONS, PERMISSION_LABELS } from '@/lib/api-types';
 import { useEffect, useRef } from 'react';
 import { formatAmount } from '@/lib/format';
 
@@ -988,7 +989,7 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
     staleTime: 0,
   });
 
-  const [ranks, setRanks] = useState<{ name: string; level: number; permissions: string[] }[]>([]);
+  const [ranks, setRanks] = useState<{ name: string; level: number; permissions: FactionPermission[] }[]>([]);
   const [inactivityThreshold, setInactivityThreshold] = useState(7);
   const [strikeExpiry, setStrikeExpiry] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: 30, minor: 90, major: null });
   const [hasChanges, setHasChanges] = useState(false);
@@ -1018,6 +1019,20 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
 
   const updateRank = (idx: number, field: 'name' | 'level', value: string | number) => {
     setRanks(ranks.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    markChanged();
+  };
+
+  const togglePermission = (idx: number, perm: FactionPermission) => {
+    setRanks(ranks.map((r, i) => {
+      if (i !== idx) return r;
+      const has = r.permissions.includes(perm);
+      return {
+        ...r,
+        permissions: has
+          ? r.permissions.filter((p) => p !== perm)
+          : [...r.permissions, perm],
+      };
+    }));
     markChanged();
   };
 
@@ -1052,7 +1067,7 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
             <CardTitle className="text-sm text-zinc-200">Rank Hierarchy</CardTitle>
             <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Rank</Button>
           </div>
-          <p className="text-xs text-zinc-500 mt-1">Display-only ranks shown on the roster. Separate from admin access control.</p>
+          <p className="text-xs text-zinc-500 mt-1">Ranks shown on the roster. Assign permissions to let non-admin members perform specific actions. Admins automatically have all permissions.</p>
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
@@ -1060,22 +1075,40 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
           ) : (
             <div className="space-y-2">
               {ranks.sort((a, b) => a.level - b.level).map((r, idx) => (
-                <div key={idx} className="flex items-center gap-2 rounded-lg border border-white/[0.06] p-3">
-                  <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">L{r.level}</span>
-                  <Input
-                    className="flex-1 h-8 text-sm"
-                    value={r.name}
-                    onChange={(e) => updateRank(idx, 'name', e.target.value)}
-                    placeholder="Rank name"
-                  />
-                  <Input
-                    className="w-16 h-8 text-sm tabular-nums"
-                    type="number"
-                    min={1}
-                    value={r.level}
-                    onChange={(e) => updateRank(idx, 'level', Number(e.target.value))}
-                  />
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                <div key={idx} className="rounded-lg border border-white/[0.06] p-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">L{r.level}</span>
+                    <Input
+                      className="flex-1 h-8 text-sm"
+                      value={r.name}
+                      onChange={(e) => updateRank(idx, 'name', e.target.value)}
+                      placeholder="Rank name"
+                    />
+                    <Input
+                      className="w-16 h-8 text-sm tabular-nums"
+                      type="number"
+                      min={1}
+                      value={r.level}
+                      onChange={(e) => updateRank(idx, 'level', Number(e.target.value))}
+                    />
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                  {/* Permission checkboxes */}
+                  <div className="flex flex-wrap gap-1.5 pl-8">
+                    {FACTION_PERMISSIONS.map((perm) => (
+                      <button
+                        key={perm}
+                        onClick={() => togglePermission(idx, perm)}
+                        className={`text-[10px] px-2 py-1 rounded-md border transition-colors ${
+                          r.permissions.includes(perm)
+                            ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                            : 'bg-white/[0.02] border-white/[0.06] text-zinc-600 hover:text-zinc-400'
+                        }`}
+                      >
+                        {PERMISSION_LABELS[perm]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

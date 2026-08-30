@@ -6,7 +6,7 @@ import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
@@ -16,7 +16,7 @@ const router = Router({ mergeParams: true });
 
 // All routes require faction membership. The list endpoint (GET /) is
 // readable by any member so they can see who got paid; mutations (POST/PATCH/
-// DELETE) are admin-only and apply `requireFactionAdminOrSuperadmin` per-route.
+// DELETE) are admin-only and apply `requirePermission('manage_payouts')` per-route.
 router.use(requireAuth, requireFactionMember);
 
 // ── Validation schemas ────────────────────────────────
@@ -127,7 +127,7 @@ async function resolveInitialStatus(factionId: string): Promise<'pending' | 'com
 }
 
 // ── POST / — create a payout ─────────────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const parsed = createPayoutSchema.safeParse(req.body);
@@ -262,7 +262,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ── POST /even-split — distribute an amount evenly ───
 // Declared before /:payoutId so the literal path is not captured as an id.
-router.post('/even-split', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/even-split', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const parsed = evenSplitSchema.safeParse(req.body);
@@ -360,7 +360,7 @@ router.post('/even-split', requireFactionAdminOrSuperadmin, async (req: Request,
 });
 
 // ── PATCH /:payoutId — edit or advance a payout ──────
-router.patch('/:payoutId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const payoutId = req.params.payoutId as string;
 
@@ -462,7 +462,7 @@ router.patch('/:payoutId', requireFactionAdminOrSuperadmin, async (req: Request,
 });
 
 // ── DELETE /:payoutId — soft-delete a payout ─────────
-router.delete('/:payoutId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:payoutId', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const payoutId = req.params.payoutId as string;
 

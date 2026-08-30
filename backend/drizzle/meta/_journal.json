@@ -22,6 +22,13 @@
       "when": 1788076526076,
       "tag": "0002_closed_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788101492898,
+      "tag": "0003_lively_nicolaos",
+      "breakpoints": true
     }
   ]
 }

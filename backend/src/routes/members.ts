@@ -6,7 +6,7 @@ import { eq, and, sql, desc, gte, lte, ilike, notInArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
 import { daysSince } from '../lib/date.js';
@@ -53,7 +53,7 @@ const updateMemberSchema = z.object({
 // Used by the Add Member dialog's searchable dropdown. Returns users who
 // have logged in at least once (so they have a row in `users`) but are not
 // yet members of this faction.
-router.get('/search', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.get('/search', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const query = (req.query.q as string | undefined)?.trim() ?? '';
 
@@ -102,7 +102,7 @@ router.get('/search', requireFactionAdminOrSuperadmin, async (req: Request, res:
 });
 
 // ── POST / — add member to faction ───────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const parsed = addMemberSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -209,7 +209,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:userId — update member role ──────────────
-router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:userId', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -295,7 +295,7 @@ router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, r
 });
 
 // ── DELETE /:userId — remove member ───────────────────
-router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:userId', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -349,7 +349,7 @@ router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, 
 // ── GET /:userId/history — join / leave / role changes ──
 // Reads the existing audit log rather than keeping a second table: member
 // lifecycle events are already recorded there with entity_type='member'.
-router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.get('/:userId/history', requirePermission('manage_members'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 

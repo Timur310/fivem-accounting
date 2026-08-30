@@ -6,7 +6,7 @@ import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
@@ -220,7 +220,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:entryId — edit entry (admin only) ───────
-router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:entryId', requirePermission('manage_entries'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const entryId = req.params.entryId as string;
 
@@ -291,7 +291,7 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
 });
 
 // ── DELETE /:entryId — soft-delete entry (admin) ────
-router.delete('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:entryId', requirePermission('manage_entries'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const entryId = req.params.entryId as string;
 

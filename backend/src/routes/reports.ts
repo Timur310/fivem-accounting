@@ -5,7 +5,7 @@ import { entries, itemTypes, users, factionMembers, factions } from '../db/schem
 import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { toDateString, todayDateString } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
 
@@ -285,7 +285,7 @@ router.get('/comparison', async (req: Request, res: Response) => {
 });
 
 // ── GET /growth — period-over-period metrics ─────────
-router.get('/growth', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.get('/growth', requirePermission('view_reports'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const parsed = growthQuerySchema.safeParse(req.query);

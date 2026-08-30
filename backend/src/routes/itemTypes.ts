@@ -5,7 +5,7 @@ import { itemTypes } from '../db/schema.js';
 import { eq, and, desc, sql, asc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router({ mergeParams: true });
@@ -36,7 +36,7 @@ function derivedUnit(isCurrency: boolean): string {
 }
 
 // ── POST / — create item type ───────────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_item_types'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const parsed = createItemTypeSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -92,7 +92,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:typeId — update item type ───────────────
-router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:typeId', requirePermission('manage_item_types'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const typeId = req.params.typeId as string;
 
@@ -142,7 +142,7 @@ router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, r
 });
 
 // ── DELETE /:typeId — soft-delete item type ──────────
-router.delete('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:typeId', requirePermission('manage_item_types'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const typeId = req.params.typeId as string;
 

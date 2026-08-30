@@ -6,12 +6,12 @@ import { eq, desc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
 
 const router = Router({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
+router.use(requireAuth, requireFactionMember, requirePermission('view_audit_logs'));
 
 const listAuditQuerySchema = z.object({
   action: z.string().optional(),

@@ -49,8 +49,9 @@ export const factions = pgTable('factions', {
   // admin before it can be completed.
   payoutApprovalRequired: boolean('payout_approval_required').notNull().default(false),
   // Display-only rank hierarchy (Boss, Underboss, Capo, ...). Access control
-  // still runs off faction_members.role; `permissions` is reserved for future
-  // use and is not enforced anywhere yet.
+  // still runs off faction_members.role for the admin/member split, but custom
+  // ranks can now carry granular permissions (see FACTION_PERMISSIONS below)
+  // that let non-admin members perform specific admin actions.
   ranks: jsonb('ranks').$type<{ name: string; level: number; permissions: string[] }[]>(),
   // Days without a logged entry before a member is flagged as inactive.
   inactivityThresholdDays: integer('inactivity_threshold_days').notNull().default(7),
@@ -79,6 +80,42 @@ export const factionsRelations = relations(factions, ({ one, many }) => ({
 
 export type Faction = typeof factions.$inferSelect;
 export type NewFaction = typeof factions.$inferInsert;
+
+// ── Faction permissions ───────────────────────────────
+// Granular permissions that can be assigned to custom ranks. Admins and
+// superadmins implicitly have ALL permissions — these only extend access to
+// non-admin members whose rank carries the permission.
+//
+// Example: a faction could create a rank "Quartermaster" with only
+// `manage_payouts` + `manage_item_types`, letting them handle the treasury
+// without being able to add/remove members or issue strikes.
+export const FACTION_PERMISSIONS = [
+  'manage_members',       // add/remove members, change roles
+  'manage_payouts',       // create/approve/complete/delete payouts
+  'manage_entries',       // edit/delete other members' entries
+  'manage_strikes',       // issue/revoke/appeal strikes
+  'manage_quotas',        // create/edit/delete quotas
+  'manage_item_types',    // create/edit/disable item types
+  'manage_settings',      // change ranks, inactivity threshold, strike expiry
+  'manage_customization', // change brand color, custom fields, payout approval
+  'view_audit_logs',      // see the audit log
+  'view_reports',         // see reports
+] as const;
+export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
+
+/** Human-readable labels for the UI. */
+export const PERMISSION_LABELS: Record<FactionPermission, string> = {
+  manage_members: 'Manage Members',
+  manage_payouts: 'Manage Payouts',
+  manage_entries: 'Edit/Delete Entries',
+  manage_strikes: 'Manage Strikes',
+  manage_quotas: 'Manage Quotas',
+  manage_item_types: 'Manage Item Types',
+  manage_settings: 'Manage Settings',
+  manage_customization: 'Manage Customization',
+  view_audit_logs: 'View Audit Logs',
+  view_reports: 'View Reports',
+};
 
 // ── faction_members ────────────────────────────────────
 export const factionMembers = pgTable('faction_members', {
