@@ -203,7 +203,9 @@ router.post('/', requirePermission('manage_payouts'), async (req: Request, res: 
 });
 
 // ── GET / — list payouts with filters ────────────────
-router.get('/', async (req: Request, res: Response) => {
+// Guarded like the mutations: a payout list names every recipient and amount
+// in the faction, so reading it is as much a management action as creating one.
+router.get('/', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
   const query = listPayoutsQuerySchema.safeParse(req.query);

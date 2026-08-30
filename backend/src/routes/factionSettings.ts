@@ -127,6 +127,31 @@ router.patch(
         error(res, 'VALIDATION_ERROR', 'Rank levels must be unique');
         return;
       }
+
+      // Who holds which permission is an admin decision. Without this, anyone
+      // granted manage_settings — or manage_customization, which sounds purely
+      // cosmetic — could rewrite their own rank's permission list and hand
+      // themselves every permission there is. Renaming and re-levelling ranks
+      // stays delegable; only the permission arrays are locked down.
+      const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+      if (!isAdmin) {
+        const before = new Map(
+          (existing.ranks ?? []).map((r) => [r.name, [...(r.permissions ?? [])].sort()]),
+        );
+        const changed = parsed.data.ranks.some((r) => {
+          const previous = before.get(r.name);
+          const next = [...r.permissions].sort();
+          // A rank that did not exist before may only be created without
+          // permissions; an existing one must keep exactly what it had.
+          if (previous === undefined) return next.length > 0;
+          return previous.length !== next.length || previous.some((p, i) => p !== next[i]);
+        });
+        if (changed) {
+          error(res, 'FORBIDDEN', 'Only a faction admin can change rank permissions', 403);
+          return;
+        }
+      }
+
       removedRanks = (existing.ranks ?? []).map((r) => r.name).filter((n) => !names.includes(n));
       updates.ranks = parsed.data.ranks;
     }
