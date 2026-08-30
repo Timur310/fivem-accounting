@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { formatAmount, displayName } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   factionId: string;
@@ -278,7 +279,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="text-xs bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-md text-zinc-400">
+                          <span className="inline-flex items-center gap-1.5 text-xs bg-white/[0.04] border border-white/[0.06] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
+                            <ItemIcon src={entry.itemImageUrl} className="size-4" />
                             {entry.itemTypeName}
                           </span>
                         </TableCell>

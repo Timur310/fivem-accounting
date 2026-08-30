@@ -58,13 +58,14 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeName: itemTypes.name,
       unit: itemTypes.unit,
       isCurrency: itemTypes.isCurrency,
+      imageUrl: itemTypes.imageUrl,
       total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
       entryCount: sql<number>`COUNT(*)::int`,
     })
     .from(entries)
     .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
     .where(baseWhere)
-    .groupBy(itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency)
+    .groupBy(itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency, itemTypes.imageUrl)
     .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
 
   // ── 3. Daily trend (line chart) ────────────────────
@@ -108,13 +109,14 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeName: itemTypes.name,
       unit: itemTypes.unit,
       isCurrency: itemTypes.isCurrency,
+      imageUrl: itemTypes.imageUrl,
       total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
     })
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))
     .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
     .where(baseWhere)
-    .groupBy(users.id, users.username, users.inGameName, itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency)
+    .groupBy(users.id, users.username, users.inGameName, itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency, itemTypes.imageUrl)
     .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
 
   success(res, {

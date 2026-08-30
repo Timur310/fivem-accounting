@@ -254,6 +254,7 @@ router.get('/', requirePermission('manage_payouts'), async (req: Request, res: R
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
+        itemImageUrl: itemTypes.imageUrl,
         createdBy: payouts.createdBy,
         approvedBy: payouts.approvedBy,
       })

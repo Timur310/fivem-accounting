@@ -221,6 +221,7 @@ router.get('/', async (req: Request, res: Response) => {
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
+        itemImageUrl: itemTypes.imageUrl,
       })
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))

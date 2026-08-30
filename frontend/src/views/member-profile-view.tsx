@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   factionId: string;
@@ -362,7 +363,10 @@ export function MemberProfileView({ factionId, userId }: Props) {
                       return (
                         <div key={q.quotaId}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm text-zinc-300">{q.itemTypeName}</span>
+                            <span className="text-sm text-zinc-300 flex items-center gap-2 min-w-0">
+                              <ItemIcon src={q.imageUrl} className="size-5" />
+                              <span className="truncate">{q.itemTypeName}</span>
+                            </span>
                             <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-zinc-400'}`}>{q.percentage.toFixed(1)}%</span>
                           </div>
                           <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
@@ -432,9 +436,12 @@ export function MemberProfileView({ factionId, userId }: Props) {
                     const isTop = contribution.mostActiveItemType?.itemTypeName === t.itemTypeName;
                     return (
                       <div key={t.itemTypeId} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3" style={isTop ? { borderColor: `${brandColor}25`, backgroundColor: `${brandColor}08` } : undefined}>
-                        <div>
-                          <p className="text-sm text-zinc-300">{t.itemTypeName}</p>
-                          <p className="text-[11px] text-zinc-600">{t.count} entries</p>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <ItemIcon src={t.imageUrl} className="size-8" />
+                          <div className="min-w-0">
+                            <p className="text-sm text-zinc-300 truncate">{t.itemTypeName}</p>
+                            <p className="text-[11px] text-zinc-600">{t.count} entries</p>
+                          </div>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</p>
@@ -501,9 +508,10 @@ export function MemberProfileView({ factionId, userId }: Props) {
                 <div className="space-y-1 max-h-[240px] overflow-y-auto">
                   {recentEntries.map((e) => (
                     <div key={e.id} className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
-                      <div>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ItemIcon src={e.itemImageUrl} className="size-5" />
                         <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
-                        <span className="text-xs text-zinc-600 ml-2">{e.itemTypeName}</span>
+                        <span className="text-xs text-zinc-600 truncate">{e.itemTypeName}</span>
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-zinc-500 tabular-nums">{e.entryDate}</div>

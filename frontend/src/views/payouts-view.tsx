@@ -34,6 +34,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { Payout, PayoutStatus, Member, ItemType } from '@/lib/api-types';
 import { formatAmount } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 // ── Status config ──
 const STATUS_CONFIG: Record<PayoutStatus, { label: string; color: string; bg: string }> = {
@@ -327,7 +328,12 @@ export function PayoutsView({ factionId }: Props) {
                         <span className="text-sm text-zinc-300">{p.recipientUsername}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-zinc-400">{p.itemTypeName}</TableCell>
+                    <TableCell className="text-sm text-zinc-400">
+                      <span className="inline-flex items-center gap-2">
+                        <ItemIcon src={p.itemImageUrl} className="size-5" />
+                        {p.itemTypeName}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-sm text-zinc-200 tabular-nums text-right font-medium">
                       {formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}
                     </TableCell>

@@ -146,6 +146,9 @@ export const itemTypes = pgTable('item_types', {
   // stored identically either way; this only tells clients how to present them
   // (currency formatting and decimals vs. plain counts).
   isCurrency: boolean('is_currency').notNull().default(false),
+  // Optional icon for the item, stored as a link rather than a file: the
+  // backend hosts nothing, it only hands the URL to whoever renders it.
+  imageUrl:  text('image_url'),
   isActive:  boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

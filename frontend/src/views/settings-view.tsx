@@ -34,6 +34,7 @@ import {
 } from '@/lib/api-types';
 import { useEffect, useRef } from 'react';
 import { formatAmount } from '@/lib/format';
+import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   factionId: string;
@@ -103,9 +104,11 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   // like "$" vs "$ " that broke formatting downstream.
   const [newName, setNewName] = useState('');
   const [newIsCurrency, setNewIsCurrency] = useState(false);
+  const [newImageUrl, setNewImageUrl] = useState('');
   const [editTarget, setEditTarget] = useState<ItemType | null>(null);
   const [editName, setEditName] = useState('');
   const [editIsCurrency, setEditIsCurrency] = useState(false);
+  const [editImageUrl, setEditImageUrl] = useState('');
   const [editActive, setEditActive] = useState(true);
 
   const { data: itemTypes = [], isLoading } = useQuery({
@@ -120,12 +123,15 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
         name: newName,
         unit: newIsCurrency ? '$' : 'pcs',
         isCurrency: newIsCurrency,
+        // Omitted rather than sent empty: the API only accepts a real URL.
+        ...(newImageUrl.trim() ? { imageUrl: newImageUrl.trim() } : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
       setCreateOpen(false);
       setNewName('');
       setNewIsCurrency(false);
+      setNewImageUrl('');
       toast({ title: 'Item type created' });
     },
     onError: (err: unknown) => {
@@ -144,6 +150,8 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
         unit: editIsCurrency ? '$' : 'pcs',
         isCurrency: editIsCurrency,
         isActive: editActive,
+        // An emptied field means "remove the image", which the API spells null.
+        imageUrl: editImageUrl.trim() || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
@@ -180,6 +188,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
     setEditTarget(t);
     setEditName(t.name);
     setEditIsCurrency(t.isCurrency);
+    setEditImageUrl(t.imageUrl ?? '');
     setEditActive(t.isActive);
     setEditOpen(true);
   };
@@ -216,6 +225,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[52px]"></TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Entries</TableHead>
@@ -226,6 +236,9 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               <TableBody>
                 {itemTypes.map((t: ItemType) => (
                   <TableRow key={t.id} className={!t.isActive ? 'opacity-50' : ''}>
+                    <TableCell>
+                      <ItemIcon src={t.imageUrl} className="size-8" />
+                    </TableCell>
                     <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell>
                       <Badge
@@ -294,6 +307,21 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               </div>
               <Switch checked={newIsCurrency} onCheckedChange={setNewIsCurrency} />
             </div>
+            <div className="space-y-2">
+              <Label>Image URL</Label>
+              <div className="flex items-center gap-3">
+                <ItemIcon src={newImageUrl.trim() || null} className="size-10" />
+                <Input
+                  placeholder="https://example.com/icon.png"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-zinc-500">
+                Optional. Link to an image hosted elsewhere; it appears wherever this item is
+                listed.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -329,6 +357,18 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                 </p>
               </div>
               <Switch checked={editIsCurrency} onCheckedChange={setEditIsCurrency} />
+            </div>
+            <div className="space-y-2">
+              <Label>Image URL</Label>
+              <div className="flex items-center gap-3">
+                <ItemIcon src={editImageUrl.trim() || null} className="size-10" />
+                <Input
+                  placeholder="https://example.com/icon.png"
+                  value={editImageUrl}
+                  onChange={(e) => setEditImageUrl(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-zinc-500">Clear the field to remove the image.</p>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
@@ -575,7 +615,10 @@ function QuotasSection({ factionId }: { factionId: string }) {
                   return (
                     <TableRow key={q.id} className={!q.isActive ? 'opacity-50' : ''}>
                       <TableCell>
-                        <div className="font-medium">{q.itemTypeName}</div>
+                        <div className="font-medium flex items-center gap-2">
+                          <ItemIcon src={q.itemImageUrl} className="size-5" />
+                          {q.itemTypeName}
+                        </div>
                         {q.periodActive && q.periodStartComputed && q.periodEndComputed && (
                           <div className="text-xs text-zinc-500">
                             {q.periodStartComputed} — {q.periodEndComputed}

@@ -127,6 +127,10 @@ router.get('/summary', async (req: Request, res: Response) => {
         itemTypeName: itemTypes.name,
         unit: itemTypes.unit,
         isCurrency: itemTypes.isCurrency,
+        // Aggregated rather than grouped on purpose: this query groups by name,
+        // not by id, so putting the image in the GROUP BY could split a row
+        // that used to be merged.
+        imageUrl: sql<string | null>`MAX(${itemTypes.imageUrl})`,
         total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
         count: sql<number>`COUNT(*)::int`,
         avg: sql<string>`COALESCE(AVG(CAST(amount AS NUMERIC)), 0)`,
@@ -242,6 +246,9 @@ router.get('/comparison', async (req: Request, res: Response) => {
         itemTypeName: itemTypes.name,
         unit: itemTypes.unit,
         isCurrency: itemTypes.isCurrency,
+        // See the note on the summary report: grouped by name, so the image
+        // comes through an aggregate to leave the row count untouched.
+        imageUrl: sql<string | null>`MAX(${itemTypes.imageUrl})`,
         total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
         count: sql<number>`COUNT(*)::int`,
       })

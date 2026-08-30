@@ -197,6 +197,7 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
       itemIsCurrency: itemTypes.isCurrency,
+      itemImageUrl: itemTypes.imageUrl,
       targetAmount: quotas.targetAmount,
       periodType: quotas.periodType,
       periodStart: quotas.periodStart,
