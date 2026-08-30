@@ -57,6 +57,18 @@ import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
 import type { AppView } from '@/lib/store';
 
+/** Tailwind's `lg`: above this the sidebar sits beside the content. */
+const DESKTOP_QUERY = '(min-width: 1024px)';
+const SIDEBAR_STORAGE_KEY = 'faction-accountant:sidebar-open';
+
+function isDesktop() {
+  try {
+    return window.matchMedia(DESKTOP_QUERY).matches;
+  } catch {
+    return true;
+  }
+}
+
 interface NavItem {
   view: AppView;
   label: string;
@@ -77,7 +89,6 @@ export function AppShell() {
   const brandColor = useAppStore((s) => s.brandColor);
   const setBrandColor = useAppStore((s) => s.setBrandColor);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setUser = useAppStore((s) => s.setUser);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -192,9 +203,44 @@ export function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView, selectedFactionId, user]);
 
+  // Put the sidebar back the way it was left. Read after mount rather than as
+  // the store's initial value: this renders on the server too, and reading
+  // localStorage during render would make the two disagree.
+  useEffect(() => {
+    if (isDesktop()) {
+      try {
+        const saved = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+        if (saved !== null) setSidebarOpen(saved === 'true');
+      } catch {
+        // Storage can be unavailable (private mode); the default stands.
+      }
+    } else {
+      // On a narrow screen the sidebar covers the page, so it starts out of
+      // the way instead of over whatever the user came to look at.
+      setSidebarOpen(false);
+    }
+  }, [setSidebarOpen]);
+
+  // Remembered on the deliberate toggle rather than on every change of the
+  // flag: on a narrow screen the sidebar is an overlay, and closing it is part
+  // of navigating rather than a statement about how the app should look.
+  const handleSidebarToggle = () => {
+    const next = !sidebarOpen;
+    setSidebarOpen(next);
+    if (!isDesktop()) return;
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+    } catch {
+      // Nothing to do — the sidebar still works, it just will not be recalled.
+    }
+  };
+
   const handleNavClick = (view: AppView) => {
     if (view === 'member-profile') return;
-    setSidebarOpen(false);
+    // Closing after navigation is a mobile affordance: there the sidebar covers
+    // the page. Beside the content it is not in the way, and collapsing it on
+    // every click threw away whatever the user had chosen.
+    if (!isDesktop()) setSidebarOpen(false);
     if (!selectedFactionId && view !== 'admin-factions' && view !== 'admin-faction-detail') {
       if (isSuperadmin) {
         setCurrentView('admin-factions');
@@ -285,7 +331,7 @@ export function AppShell() {
           )}
           {!sidebarOpen && (
             <button
-              onClick={toggleSidebar}
+              onClick={handleSidebarToggle}
               className="w-full flex justify-center py-1"
               title="Expand sidebar"
               aria-label="Expand sidebar"
@@ -357,7 +403,7 @@ export function AppShell() {
               </Select>
             ) : (
               <button
-                onClick={toggleSidebar}
+                onClick={handleSidebarToggle}
                 className="w-full flex justify-center py-1"
                 title="Expand sidebar"
                 aria-label="Expand sidebar"
@@ -403,7 +449,7 @@ export function AppShell() {
             variant="ghost"
             size="sm"
             className="w-full text-zinc-500 hover:text-zinc-300"
-            onClick={toggleSidebar}
+            onClick={handleSidebarToggle}
           >
             <ChevronLeft className={`h-3.5 w-3.5 transition-transform duration-200 ${!sidebarOpen ? 'rotate-180' : ''}`} />
             {sidebarOpen && <span className="ml-2 text-xs">Collapse</span>}
@@ -428,7 +474,7 @@ export function AppShell() {
               variant="ghost"
               size="icon"
               className="lg:hidden text-zinc-400"
-              onClick={toggleSidebar}
+              onClick={handleSidebarToggle}
               aria-label="Toggle navigation"
             >
               <Menu className="h-5 w-5" />
