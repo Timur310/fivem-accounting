@@ -51,6 +51,7 @@ router.get('/', async (req: Request, res: Response) => {
         ipAddress: auditLogs.ipAddress,
         createdAt: auditLogs.createdAt,
         actorUsername: users.username,
+        actorInGameName: users.inGameName,
         actorDiscordId: users.discordId,
       })
       .from(auditLogs)

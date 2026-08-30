@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users, factionMembers, factions } from '../db/schema.js';
+import type { User } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import {
@@ -144,6 +145,21 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
   success(res, null, 204);
 });
 
+// The public shape of a user's own profile. `inGameName` is null until the
+// player has provided it, which is the signal the UI uses to prompt for it.
+function profilePayload(user: User) {
+  return {
+    id: user.id,
+    discordId: user.discordId,
+    username: user.username,
+    inGameName: user.inGameName,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+  };
+}
+
 // ── GET /auth/me — current user + factions ─────────────
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
   const user = req.user!;
@@ -163,15 +179,50 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     .where(eq(factionMembers.userId, user.id));
 
   success(res, {
-    id: user.id,
-    discordId: user.discordId,
-    username: user.username,
-    avatarUrl: user.avatarUrl,
-    role: user.role,
-    createdAt: user.createdAt,
-    lastLogin: user.lastLogin,
+    ...profilePayload(user),
     factions: memberships,
   });
+});
+
+// ── PATCH /auth/me — update own profile ────────────────
+// Only the in-game name is editable: everything else on the user row is owned
+// by Discord and overwritten on the next login, and `role` is deliberately not
+// something a user can change about themselves.
+const updateProfileSchema = z.object({
+  inGameName: z
+    .string()
+    .trim()
+    .min(2, 'In-game name must be at least 2 characters')
+    .max(50, 'In-game name must be at most 50 characters'),
+});
+
+router.patch('/me', requireAuth, async (req: Request, res: Response) => {
+  const user = req.user!;
+
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  const { inGameName } = parsed.data;
+
+  const [updated] = await db
+    .update(users)
+    .set({ inGameName })
+    .where(eq(users.id, user.id))
+    .returning();
+
+  await createAuditLog({
+    userId: user.id,
+    action: 'update_profile',
+    entityType: 'user',
+    entityId: user.id,
+    details: { inGameName, previousInGameName: user.inGameName },
+    req,
+  });
+
+  success(res, profilePayload(updated!));
 });
 
 export default router;

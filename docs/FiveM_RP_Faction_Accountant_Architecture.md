@@ -199,6 +199,7 @@ FactionMember 1---* MemberNote
 | id | UUID | PK, DEFAULT gen_random_uuid() | Unique user identifier |
 | discord_id | VARCHAR(20) | UNIQUE, NOT NULL | Discord user ID (permanent) |
 | username | VARCHAR(32) | NOT NULL | Discord username |
+| in_game_name | VARCHAR(50) | NULLABLE | Player's in-game character name, set by the player after login |
 | avatar_url | TEXT | NULLABLE | Discord avatar URL |
 | role | VARCHAR(20) | NOT NULL, DEFAULT 'member' | superadmin / faction_admin / member |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation |
@@ -365,6 +366,7 @@ export const users = pgTable('users', {
   id:         uuid('id').defaultRandom().primaryKey(),
   discordId:  varchar('discord_id', { length: 20 }).notNull().unique(),
   username:   varchar('username', { length: 32 }).notNull(),
+  inGameName: varchar('in_game_name', { length: 50 }),
   avatarUrl:  text('avatar_url'),
   role:       varchar('role', { length: 20 }).notNull().default('member'),
   createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -614,6 +616,7 @@ All endpoints under `/api/v1`. All require auth except OAuth callback.
 | GET | `/api/v1/auth/callback` | Public | Handles OAuth callback, issues JWT cookie |
 | POST | `/api/v1/auth/logout` | Authenticated | Clears JWT cookie |
 | GET | `/api/v1/auth/me` | Authenticated | Returns current user profile + role + factions |
+| PATCH | `/api/v1/auth/me` | Authenticated | Updates own profile (in-game name) |
 
 ### 6.2 Faction Management (Superadmin)
 

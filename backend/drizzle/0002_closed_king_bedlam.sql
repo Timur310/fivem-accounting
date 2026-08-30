@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "in_game_name" varchar(50);

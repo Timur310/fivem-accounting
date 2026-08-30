@@ -20,6 +20,10 @@ export const users = pgTable('users', {
   id:        uuid('id').defaultRandom().primaryKey(),
   discordId: varchar('discord_id', { length: 20 }).notNull().unique(),
   username:  varchar('username', { length: 32 }).notNull(),
+  // The character name the player uses in game. Null until the player has
+  // filled it in; the UI asks for it after the first login and shows it in
+  // place of the Discord username once it is set.
+  inGameName: varchar('in_game_name', { length: 50 }),
   avatarUrl: text('avatar_url'),
   role:      varchar('role', { length: 20 }).notNull().default('member'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

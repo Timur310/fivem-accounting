@@ -91,7 +91,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     req,
   });
 
-  success(res, { ...member, username: targetUser.username, avatarUrl: targetUser.avatarUrl, discordId: targetUser.discordId }, 201);
+  success(res, { ...member, username: targetUser.username, inGameName: targetUser.inGameName, avatarUrl: targetUser.avatarUrl, discordId: targetUser.discordId }, 201);
 });
 
 // ── GET / — list faction members ─────────────────────
@@ -106,6 +106,7 @@ router.get('/', async (req: Request, res: Response) => {
       rank: factionMembers.rank,
       joinedAt: factionMembers.joinedAt,
       username: users.username,
+      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
       entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${sql.raw(`'${factionId}'::uuid`)} AND is_deleted = false)::int`,
@@ -295,6 +296,7 @@ router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Requ
         createdAt: auditLogs.createdAt,
         actorId: auditLogs.userId,
         actorUsername: users.username,
+        actorInGameName: users.inGameName,
         actorAvatarUrl: users.avatarUrl,
       })
       .from(auditLogs)
@@ -352,6 +354,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
       joinedAt: factionMembers.joinedAt,
       userId: users.id,
       username: users.username,
+      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
       lastLogin: users.lastLogin,

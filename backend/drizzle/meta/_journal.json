@@ -15,6 +15,13 @@
       "when": 1788017956108,
       "tag": "0001_youthful_misty_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788076526076,
+      "tag": "0002_closed_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

@@ -197,6 +197,7 @@ router.get('/', async (req: Request, res: Response) => {
         customValues: entries.customValues,
         userId: entries.userId,
         username: users.username,
+        inGameName: users.inGameName,
         avatarUrl: users.avatarUrl,
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,
