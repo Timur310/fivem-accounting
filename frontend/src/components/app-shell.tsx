@@ -284,7 +284,7 @@ export function AppShell() {
       case 'leaderboard':
         return selectedFactionId ? <LeaderboardView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'settings':
-        return selectedFactionId ? <SettingsView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <SettingsView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} /> : null;
       case 'audit-logs':
         return selectedFactionId ? <AuditLogsView factionId={selectedFactionId} /> : null;
       case 'reports':
