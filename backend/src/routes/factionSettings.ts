@@ -133,7 +133,13 @@ router.patch(
       // cosmetic — could rewrite their own rank's permission list and hand
       // themselves every permission there is. Renaming and re-levelling ranks
       // stays delegable; only the permission arrays are locked down.
-      const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+      // A global superadmin counts as an admin here even in a faction they
+      // joined as a plain member — `factionRole` follows the membership, which
+      // is what entry creation needs, but it is not the whole authority story.
+      const isAdmin =
+        req.factionRole === 'admin' ||
+        req.factionRole === 'superadmin' ||
+        req.user!.role === 'superadmin';
       if (!isAdmin) {
         const before = new Map(
           (existing.ranks ?? []).map((r) => [r.name, [...(r.permissions ?? [])].sort()]),

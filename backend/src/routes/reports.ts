@@ -155,7 +155,8 @@ router.get('/summary', async (req: Request, res: Response) => {
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))
       .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
-      .where(where)
+      // Anonymous entries belong to the faction, not to a person.
+      .where(and(where, eq(users.isSystem, false)))
       .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
       // Ranked on money, with goods reported alongside rather than mixed in.
       .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}) DESC NULLS LAST`),

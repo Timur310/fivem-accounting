@@ -9,11 +9,18 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
-import { daysSince } from '../lib/date.js';
+import { daysSince, toDateString } from '../lib/date.js';
 import { countActiveStrikes } from '../lib/strikes.js';
 import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/analytics.js';
 
 const router = Router({ mergeParams: true });
+
+/**
+ * Thrown by the role update when the change would leave a faction with no
+ * admin. It travels out through the transaction, so the catch below has to
+ * tell it apart from a genuine failure and answer 400 rather than 500.
+ */
+class LastAdminError extends Error {}
 
 // All routes require faction membership
 router.use(requireAuth, requireFactionMember);
@@ -276,6 +283,28 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
   let updated;
   try {
     updated = await db.transaction(async (tx: TransactionLike) => {
+      // A faction with no admin cannot be repaired from its own screens: the
+      // member management endpoints all need manage_members, which only an
+      // admin or a rank they grant has. DELETE already refuses to remove the
+      // last admin; demoting them is the same hole.
+      //
+      // The admin rows are locked rather than counted, so two admins demoting
+      // each other at the same moment cannot both read "there are 2 of us"
+      // and both succeed.
+      if (parsed.data.role === 'member' && membership.role === 'admin') {
+        const admins = await tx
+          .select({ id: factionMembers.id })
+          .from(factionMembers)
+          .where(
+            and(
+              eq(factionMembers.factionId, factionId),
+              eq(factionMembers.role, 'admin'),
+            ),
+          )
+          .for('update');
+        if (admins.length <= 1) throw new LastAdminError();
+      }
+
       const [row] = await tx
         .update(factionMembers)
         .set(updates)
@@ -316,6 +345,14 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
       return row;
     });
   } catch (err) {
+    if (err instanceof LastAdminError) {
+      error(
+        res,
+        'BAD_REQUEST',
+        'Cannot demote the last admin of a faction. Promote another member first.',
+      );
+      return;
+    }
     console.error('[UPDATE MEMBER ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to update member', 500);
     return;
@@ -494,6 +531,31 @@ router.get('/:userId', async (req: Request, res: Response) => {
   if (!membership) {
     error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
     return;
+  }
+
+  // How long they have held their current rank. Rank changes go through
+  // PATCH /:userId, which audits before/after, so the move *into* the current
+  // rank is the newest audit row whose `after.rank` is it and whose
+  // `before.rank` is something else. Null when nothing recorded that move — a
+  // rank assigned before the audit trail existed, or cleared wholesale by a
+  // settings change — and the client then shows nothing rather than guessing.
+  let rankSince: Date | null = null;
+  if (membership.rank) {
+    const [rankChange] = await db
+      .select({ createdAt: auditLogs.createdAt })
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.factionId, factionId),
+          eq(auditLogs.entityType, 'member'),
+          sql`${auditLogs.details}->>'userId' = ${targetUserId}`,
+          sql`${auditLogs.details}->'after'->>'rank' = ${membership.rank}`,
+          sql`${auditLogs.details}->'before'->>'rank' IS DISTINCT FROM ${membership.rank}`,
+        ),
+      )
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(1);
+    rankSince = rankChange?.createdAt ?? null;
   }
 
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
@@ -684,6 +746,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
     member: {
       ...membership,
       daysInactive: daysSince(lastEntryDate),
+      rankSince,
+      daysInRank: rankSince ? daysSince(toDateString(rankSince)) : null,
     },
     contribution: {
       currencyContributed,

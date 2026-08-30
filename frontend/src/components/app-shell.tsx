@@ -1,7 +1,8 @@
 'use client';
 
-import { useAppStore } from '@/lib/store';
-import { authApi, factionsApi } from '@/lib/api-client';
+import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
+import { authApi, factionSettingsApi } from '@/lib/api-client';
+import type { FactionPermission } from '@/lib/api-types';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -56,11 +57,26 @@ import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
 import type { AppView } from '@/lib/store';
 
+/** Tailwind's `lg`: above this the sidebar sits beside the content. */
+const DESKTOP_QUERY = '(min-width: 1024px)';
+const SIDEBAR_STORAGE_KEY = 'faction-accountant:sidebar-open';
+
+function isDesktop() {
+  try {
+    return window.matchMedia(DESKTOP_QUERY).matches;
+  } catch {
+    return true;
+  }
+}
+
 interface NavItem {
   view: AppView;
   label: string;
   icon: typeof LayoutDashboard;
-  adminOnly?: boolean;
+  /** Any one of these is enough to see the item. */
+  anyPermission?: FactionPermission[];
+  /** Hide unless the user actually belongs to the selected faction. */
+  membersOnly?: boolean;
   superadminOnly?: boolean;
 }
 
@@ -73,26 +89,29 @@ export function AppShell() {
   const brandColor = useAppStore((s) => s.brandColor);
   const setBrandColor = useAppStore((s) => s.setBrandColor);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setUser = useAppStore((s) => s.setUser);
   const [loggingOut, setLoggingOut] = useState(false);
   const selectedMemberUserId = useAppStore((s) => s.selectedMemberUserId);
   const queryClient = useQueryClient();
 
-  // Fetch faction detail for brand color on faction switch
-  const { data: factionDetail } = useQuery({
+  // Brand colour comes from the faction settings endpoint, which any member
+  // can read. It used to come from GET /factions/:id — that route is
+  // superadmin-only, so for everyone else the request 403'd, factionDetail
+  // stayed undefined and the colour silently fell back to the default no
+  // matter what had been saved.
+  const { data: factionSettings } = useQuery({
     queryKey: ['faction-brand', selectedFactionId],
-    queryFn: () => factionsApi.get(selectedFactionId!),
+    queryFn: () => factionSettingsApi.get(selectedFactionId!),
     enabled: !!selectedFactionId,
     staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
-    if (factionDetail?.brandColor) {
-      setBrandColor(factionDetail.brandColor);
+    if (factionSettings?.brandColor) {
+      setBrandColor(factionSettings.brandColor);
     }
-  }, [factionDetail?.brandColor, setBrandColor]);
+  }, [factionSettings?.brandColor, setBrandColor]);
 
   const router = useRouter();
 
@@ -116,6 +135,16 @@ export function AppShell() {
   );
   const isAdmin =
     user?.role === 'superadmin' || currentFactionMembership?.role === 'admin';
+
+  /**
+   * What the caller may do in the selected faction. Members carry the list
+   * their rank grants; a superadmin browsing a faction they do not belong to
+   * has no membership, and the API treats them as holding everything there.
+   */
+  const hasPermission = (permission: FactionPermission) =>
+    currentFactionMembership
+      ? currentFactionMembership.permissions.includes(permission)
+      : user?.role === 'superadmin';
   const isSuperadmin = user?.role === 'superadmin';
   const canLogEntries = !!currentFactionMembership;
 
@@ -134,15 +163,84 @@ export function AppShell() {
     { view: 'members', label: 'Members', icon: Users },
     { view: 'leaderboard', label: 'Leaderboard', icon: Trophy },
     { view: 'strikes', label: 'Strikes', icon: AlertTriangle },
-    { view: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
-    { view: 'audit-logs', label: 'Audit Logs', icon: ScrollText, adminOnly: true },
-    { view: 'reports', label: 'Reports', icon: FileBarChart, adminOnly: true },
+    {
+      view: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      // Mirrors the PATCH guard: either permission opens the settings screen.
+      anyPermission: ['manage_settings', 'manage_customization'],
+    },
+    {
+      view: 'audit-logs',
+      label: 'Audit Logs',
+      icon: ScrollText,
+      anyPermission: ['view_audit_logs'],
+      // Only ever your own faction's history — a superadmin passing through a
+      // faction they do not belong to has no business reading it.
+      membersOnly: true,
+    },
+    { view: 'reports', label: 'Reports', icon: FileBarChart, anyPermission: ['view_reports'] },
     { view: 'admin-factions', label: 'Faction Admin', icon: Shield, superadminOnly: true },
   ];
 
+  const isNavItemVisible = (item: NavItem) => {
+    if (item.superadminOnly) return isSuperadmin;
+    if (item.membersOnly && !currentFactionMembership) return false;
+    if (item.anyPermission) return item.anyPermission.some(hasPermission);
+    return true;
+  };
+
+  // Switching factions can take away the permission that opened the current
+  // screen. Drop back to the dashboard rather than leaving a page up that the
+  // API will refuse to fill.
+  useEffect(() => {
+    const item = navItems.find((i) => i.view === currentView);
+    if (item && !isNavItemVisible(item)) {
+      setCurrentView('dashboard');
+    }
+    // navItems and isNavItemVisible are rebuilt every render; what actually
+    // changes the answer is the view, the faction, and who is asking.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, selectedFactionId, user]);
+
+  // Put the sidebar back the way it was left. Read after mount rather than as
+  // the store's initial value: this renders on the server too, and reading
+  // localStorage during render would make the two disagree.
+  useEffect(() => {
+    if (isDesktop()) {
+      try {
+        const saved = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
+        if (saved !== null) setSidebarOpen(saved === 'true');
+      } catch {
+        // Storage can be unavailable (private mode); the default stands.
+      }
+    } else {
+      // On a narrow screen the sidebar covers the page, so it starts out of
+      // the way instead of over whatever the user came to look at.
+      setSidebarOpen(false);
+    }
+  }, [setSidebarOpen]);
+
+  // Remembered on the deliberate toggle rather than on every change of the
+  // flag: on a narrow screen the sidebar is an overlay, and closing it is part
+  // of navigating rather than a statement about how the app should look.
+  const handleSidebarToggle = () => {
+    const next = !sidebarOpen;
+    setSidebarOpen(next);
+    if (!isDesktop()) return;
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+    } catch {
+      // Nothing to do — the sidebar still works, it just will not be recalled.
+    }
+  };
+
   const handleNavClick = (view: AppView) => {
     if (view === 'member-profile') return;
-    setSidebarOpen(false);
+    // Closing after navigation is a mobile affordance: there the sidebar covers
+    // the page. Beside the content it is not in the way, and collapsing it on
+    // every click threw away whatever the user had chosen.
+    if (!isDesktop()) setSidebarOpen(false);
     if (!selectedFactionId && view !== 'admin-factions' && view !== 'admin-faction-detail') {
       if (isSuperadmin) {
         setCurrentView('admin-factions');
@@ -172,9 +270,9 @@ export function AppShell() {
       case 'dashboard':
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} /> : null;
       case 'entries':
-        return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} /> : null;
+        return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canLogAnonymously={hasPermission('manage_entries')} /> : null;
       case 'payouts':
-        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'treasury':
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':
@@ -186,7 +284,7 @@ export function AppShell() {
       case 'leaderboard':
         return selectedFactionId ? <LeaderboardView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'settings':
-        return selectedFactionId ? <SettingsView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <SettingsView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} /> : null;
       case 'audit-logs':
         return selectedFactionId ? <AuditLogsView factionId={selectedFactionId} /> : null;
       case 'reports':
@@ -205,6 +303,28 @@ export function AppShell() {
     '--brand-color-light': `${brandColor}20`,
     '--brand-color-medium': `${brandColor}40`,
   } as React.CSSProperties;
+
+  // Radix renders dialogs, selects and dropdowns into a portal on <body>,
+  // which is outside this subtree. Scoped to the shell alone, the brand
+  // variables never reached them: `var(--brand-color, #6366f1)` fell through
+  // to the hardcoded default, so a selected button inside a dialog came out
+  // indigo while the rest of the app wore the faction's colour. The document
+  // element is the one ancestor every portal shares.
+  //
+  // The inline style above stays: it covers the shell's own first paint,
+  // before this effect has run.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--brand-color', brandColor);
+    root.style.setProperty('--brand-color-light', `${brandColor}20`);
+    root.style.setProperty('--brand-color-medium', `${brandColor}40`);
+    return () => {
+      // Do not leave a faction's colour behind on the login screen.
+      root.style.removeProperty('--brand-color');
+      root.style.removeProperty('--brand-color-light');
+      root.style.removeProperty('--brand-color-medium');
+    };
+  }, [brandColor]);
 
   // The selector combines memberships (admin/member) and browseable factions
   // (superadmin-only, marked with a Browse badge so the role is clear).
@@ -233,7 +353,7 @@ export function AppShell() {
           )}
           {!sidebarOpen && (
             <button
-              onClick={toggleSidebar}
+              onClick={handleSidebarToggle}
               className="w-full flex justify-center py-1"
               title="Expand sidebar"
               aria-label="Expand sidebar"
@@ -260,24 +380,40 @@ export function AppShell() {
                   <SelectValue placeholder="Select faction" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeFactions.map((f) => (
-                    <SelectItem key={f.factionId} value={f.factionId}>
-                      <span className="flex items-center gap-2">
-                        <span>{f.factionName}</span>
-                        {f.role === 'admin' && (
+                  {activeFactions.map((f) => {
+                    // Every row wears its own faction's colour. Using the store
+                    // value here painted the whole list in the selected
+                    // faction's colour, which told you nothing.
+                    const rowColor = f.factionBrandColor ?? DEFAULT_BRAND_COLOR;
+                    return (
+                      <SelectItem key={f.factionId} value={f.factionId}>
+                        <span className="flex items-center gap-2">
                           <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                            style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
-                          >
-                            Admin
-                          </span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: rowColor }}
+                            aria-hidden="true"
+                          />
+                          <span>{f.factionName}</span>
+                          {f.role === 'admin' && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                              style={{ backgroundColor: `${rowColor}15`, color: rowColor }}
+                            >
+                              Admin
+                            </span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                   {browseableOnly.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       <span className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: b.brandColor ?? DEFAULT_BRAND_COLOR }}
+                          aria-hidden="true"
+                        />
                         <span>{b.name}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-white/[0.06] text-zinc-400">
                           Browse
@@ -289,7 +425,7 @@ export function AppShell() {
               </Select>
             ) : (
               <button
-                onClick={toggleSidebar}
+                onClick={handleSidebarToggle}
                 className="w-full flex justify-center py-1"
                 title="Expand sidebar"
                 aria-label="Expand sidebar"
@@ -303,8 +439,7 @@ export function AppShell() {
         {/* Nav Items */}
         <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
-            if (item.adminOnly && !isAdmin) return null;
-            if (item.superadminOnly && !isSuperadmin) return null;
+            if (!isNavItemVisible(item)) return null;
             const active = currentView === item.view;
             return (
               <button
@@ -336,7 +471,7 @@ export function AppShell() {
             variant="ghost"
             size="sm"
             className="w-full text-zinc-500 hover:text-zinc-300"
-            onClick={toggleSidebar}
+            onClick={handleSidebarToggle}
           >
             <ChevronLeft className={`h-3.5 w-3.5 transition-transform duration-200 ${!sidebarOpen ? 'rotate-180' : ''}`} />
             {sidebarOpen && <span className="ml-2 text-xs">Collapse</span>}
@@ -361,7 +496,7 @@ export function AppShell() {
               variant="ghost"
               size="icon"
               className="lg:hidden text-zinc-400"
-              onClick={toggleSidebar}
+              onClick={handleSidebarToggle}
               aria-label="Toggle navigation"
             >
               <Menu className="h-5 w-5" />

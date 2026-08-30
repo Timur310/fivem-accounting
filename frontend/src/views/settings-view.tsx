@@ -38,11 +38,17 @@ import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   factionId: string;
+  /**
+   * Whether the caller runs this faction. Delegates with manage_settings may
+   * shape the rank list, but who holds which permission is an admin decision —
+   * the API refuses it, so the screen must not offer it.
+   */
+  isFactionAdmin?: boolean;
 }
 
 type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings';
 
-export function SettingsView({ factionId }: Props) {
+export function SettingsView({ factionId, isFactionAdmin }: Props) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('item-types');
 
   return (
@@ -82,7 +88,9 @@ export function SettingsView({ factionId }: Props) {
       {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} />}
       {activeTab === 'quotas' && <QuotasSection factionId={factionId} />}
       {activeTab === 'customization' && <CustomizationSection factionId={factionId} />}
-      {activeTab === 'faction-settings' && <FactionSettingsSection factionId={factionId} />}
+      {activeTab === 'faction-settings' && (
+        <FactionSettingsSection factionId={factionId} isFactionAdmin={!!isFactionAdmin} />
+      )}
     </div>
   );
 }
@@ -1065,7 +1073,13 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 // Faction Settings Section (Phase 5)
 // ══════════════════════════════════════════════════════
 
-function FactionSettingsSection({ factionId }: { factionId: string }) {
+function FactionSettingsSection({
+  factionId,
+  isFactionAdmin,
+}: {
+  factionId: string;
+  isFactionAdmin: boolean;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -1154,7 +1168,10 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
             <CardTitle className="text-sm text-zinc-200">Rank Hierarchy</CardTitle>
             <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Rank</Button>
           </div>
-          <p className="text-xs text-zinc-500 mt-1">Display-only ranks shown on the roster. Permissions gate what each rank can do.</p>
+          <p className="text-xs text-zinc-500 mt-1">
+            Display-only ranks shown on the roster. Permissions gate what each rank can do.
+            {!isFactionAdmin && ' Only a faction admin can change which permissions a rank grants.'}
+          </p>
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
@@ -1184,27 +1201,57 @@ function FactionSettingsSection({ factionId }: { factionId: string }) {
                       />
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
-                    {/* Permissions */}
+                    {/* Permissions. Read-only unless the caller runs the faction:
+                        granting them is how someone would hand themselves the rest,
+                        so it stays an admin decision and the API enforces the same. */}
                     <div className="flex flex-wrap gap-1.5 pl-8">
-                      {FACTION_PERMISSIONS.map((perm) => {
+                      {(isFactionAdmin
+                        ? FACTION_PERMISSIONS
+                        : FACTION_PERMISSIONS.filter((perm) => r.permissions.includes(perm))
+                      ).map((perm) => {
                         const active = r.permissions.includes(perm);
+                        const chipClass = `text-[10px] px-2 py-1 rounded-md border transition-colors ${
+                          active
+                            ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                            : 'bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300'
+                        }`;
+                        const chipStyle = active
+                          ? { borderColor: `${brandColor}40`, backgroundColor: `${brandColor}15`, color: brandColor }
+                          : undefined;
+
+                        if (!isFactionAdmin) {
+                          return (
+                            <span
+                              key={perm}
+                              className={`text-[10px] px-2 py-1 rounded-md border ${
+                                active
+                                  ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                                  : 'bg-white/[0.02] border-white/[0.06] text-zinc-500'
+                              }`}
+                              style={chipStyle}
+                              title={`${PERMISSION_LABELS[perm]} — only a faction admin can change this`}
+                            >
+                              {PERMISSION_LABELS[perm]}
+                            </span>
+                          );
+                        }
+
                         return (
                           <button
                             key={perm}
                             type="button"
                             onClick={() => togglePermission(idx, perm)}
-                            className={`text-[10px] px-2 py-1 rounded-md border transition-colors ${
-                              active
-                                ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
-                                : 'bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300'
-                            }`}
-                            style={active ? { borderColor: `${brandColor}40`, backgroundColor: `${brandColor}15`, color: brandColor } : undefined}
+                            className={chipClass}
+                            style={chipStyle}
                             title={PERMISSION_LABELS[perm]}
                           >
                             {PERMISSION_LABELS[perm]}
                           </button>
                         );
                       })}
+                      {!isFactionAdmin && r.permissions.length === 0 && (
+                        <span className="text-[10px] text-zinc-600">No permissions</span>
+                      )}
                     </div>
                   </div>
                 );

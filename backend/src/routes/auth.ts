@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import axios from 'axios';
 import { db } from '../db/index.js';
-import { users, factionMembers, factions } from '../db/schema.js';
+import { users, factionMembers, factions, FACTION_PERMISSIONS } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { env } from '../lib/env.js';
@@ -39,16 +39,43 @@ async function buildUserResponse(user: typeof users.$inferSelect) {
       joinedAt: factionMembers.joinedAt,
       factionName: factions.name,
       factionActive: factions.isActive,
+      // The faction switcher paints every row, so it needs each faction's own
+      // colour — not just the selected one's.
+      factionBrandColor: factions.brandColor,
+      // Needed to resolve what the member's rank grants, below.
+      rank: factionMembers.rank,
+      factionRanks: factions.ranks,
     })
     .from(factionMembers)
     .innerJoin(factions, eq(factionMembers.factionId, factions.id))
     .where(eq(factionMembers.userId, user.id));
 
+  // What this user may actually do in each faction. The client hides menus by
+  // this, so it has to answer exactly what requireFactionMember would decide
+  // server-side — a menu the API then refuses is worse than no menu at all.
+  //
+  // A superadmin holds every permission everywhere, including in a faction
+  // they joined as a plain member — the middleware resolves it the same way.
+  const membershipsWithPermissions = memberships.map(({ rank, factionRanks, ...m }) => {
+    let permissions: string[];
+    if (m.role === 'admin' || user.role === 'superadmin') {
+      permissions = [...FACTION_PERMISSIONS];
+    } else {
+      const definition = (factionRanks ?? []).find((r) => r.name === rank);
+      // Drop anything the system no longer knows about, in case a rank still
+      // grants a permission that has since been removed.
+      permissions = (definition?.permissions ?? []).filter((perm) =>
+        (FACTION_PERMISSIONS as readonly string[]).includes(perm),
+      );
+    }
+    return { ...m, rank, permissions };
+  });
+
   // Superadmins can browse every active faction even without a membership.
-  let browseableFactions: { id: string; name: string }[] = [];
+  let browseableFactions: { id: string; name: string; brandColor: string | null }[] = [];
   if (user.role === 'superadmin') {
     browseableFactions = await db
-      .select({ id: factions.id, name: factions.name })
+      .select({ id: factions.id, name: factions.name, brandColor: factions.brandColor })
       .from(factions)
       .where(eq(factions.isActive, true));
   }
@@ -62,7 +89,7 @@ async function buildUserResponse(user: typeof users.$inferSelect) {
     role: user.role,
     createdAt: user.createdAt,
     lastLogin: user.lastLogin,
-    factions: memberships,
+    factions: membershipsWithPermissions,
     browseableFactions,
   };
 }

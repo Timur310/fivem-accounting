@@ -1,7 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
-import { entries, itemTypes, users, factions } from '../db/schema.js';
+import {
+  entries,
+  itemTypes,
+  users,
+  factions,
+  ANONYMOUS_DISCORD_ID,
+  ANONYMOUS_USERNAME,
+} from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
@@ -38,7 +45,38 @@ const createEntrySchema = z.object({
   // old regex did not — 2026-02-31 used to pass.
   entryDate: z.string().date().optional(),
   customValues: z.record(z.string(), z.string().max(500)).optional(),
+  /** Log against the anonymous placeholder instead of the caller. */
+  anonymous: z.boolean().optional(),
 });
+
+/**
+ * The user rows carry entries, so income that belongs to nobody in particular
+ * still needs one to hang off. This is that row: a single shared placeholder,
+ * created the first time it is needed rather than seeded by a migration.
+ *
+ * It is deliberately not a faction member, so it never turns up on a roster,
+ * and `isSystem` keeps it out of per-member rankings.
+ */
+async function resolveAnonymousUserId(tx: TransactionLike): Promise<string> {
+  const [existing] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.discordId, ANONYMOUS_DISCORD_ID))
+    .limit(1);
+  if (existing) return existing.id;
+
+  const [created] = await tx
+    .insert(users)
+    .values({
+      discordId: ANONYMOUS_DISCORD_ID,
+      username: ANONYMOUS_USERNAME,
+      role: 'member',
+      isSystem: true,
+    })
+    .returning({ id: users.id });
+  if (!created) throw new Error('Failed to create the anonymous user');
+  return created.id;
+}
 
 const updateEntrySchema = z.object({
   amount: amountField.optional(),
@@ -74,7 +112,14 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const factionId = req.params.id as string;
-  const { itemTypeId, amount, description, entryDate, customValues } = parsed.data;
+  const { itemTypeId, amount, description, entryDate, customValues, anonymous } = parsed.data;
+
+  // Anonymising an entry decides who gets credit for faction income, which is
+  // the same authority as editing entries after the fact.
+  if (anonymous && !(req.factionPermissions ?? []).includes('manage_entries')) {
+    error(res, 'FORBIDDEN', 'You need the "manage_entries" permission to log anonymously', 403);
+    return;
+  }
 
   // Validate custom fields against faction definition
   let validatedCustomValues: Record<string, string> | null = null;
@@ -142,11 +187,13 @@ router.post('/', async (req: Request, res: Response) => {
   let entry;
   try {
     entry = await db.transaction(async (tx: TransactionLike) => {
+      const ownerId = anonymous ? await resolveAnonymousUserId(tx) : req.user!.id;
+
       const [row] = await tx
         .insert(entries)
         .values({
           factionId,
-          userId: req.user!.id,
+          userId: ownerId,
           itemTypeId,
           amount,
           description: description ?? null,
@@ -159,13 +206,22 @@ router.post('/', async (req: Request, res: Response) => {
 
       // Keep amount as a string — the column is decimal, so JS strings round-trip
       // exactly where Number would lose precision past 2^53.
+      // The audit log records who actually did it. Anonymous hides the name
+      // from the leaderboard, not from the faction's own history.
       await createAuditLog({
         userId: req.user!.id,
         factionId,
         action: 'create',
         entityType: 'entry',
         entityId: row.id,
-        details: { itemTypeId, amount, description, entryDate: dateStr, customValues: validatedCustomValues },
+        details: {
+          itemTypeId,
+          amount,
+          description,
+          entryDate: dateStr,
+          customValues: validatedCustomValues,
+          ...(anonymous ? { anonymous: true } : {}),
+        },
         req,
         tx,
       });

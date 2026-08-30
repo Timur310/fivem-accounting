@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "is_system" boolean DEFAULT false NOT NULL;

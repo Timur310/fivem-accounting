@@ -118,32 +118,40 @@ export function rateLimit(opts: RateLimitOptions = {}) {
 }
 
 /**
- * Stricter rate limit for mutation endpoints (POST/PATCH/DELETE).
- * 30 requests per minute per user/IP.
+ * Rate limit for mutation endpoints (POST/PATCH/DELETE).
+ * 120 requests per minute per user/IP — 2/s, which no human hits but a script
+ * hammering the API does. The earlier 30/min was tight enough to bite real
+ * work: adding a batch of item types or ranks, or a CSV import, spends
+ * mutations in bursts.
  */
 export const mutationRateLimit = rateLimit({
   windowMs: 60_000,
-  maxRequests: 30,
+  maxRequests: 120,
   message: 'Too many actions. Please wait a moment.',
 });
 
 /**
- * Standard rate limit for read endpoints.
- * 120 requests per minute per user/IP.
+ * Rate limit for read endpoints.
+ * 600 requests per minute per user/IP. Reads arrive in bursts by design: a
+ * single view mounts several queries at once, and React Query refetches all of
+ * them on every window focus, so the old 120/min could be spent just by
+ * alt-tabbing back and forth on a busy page.
  */
 export const readRateLimit = rateLimit({
   windowMs: 60_000,
-  maxRequests: 120,
+  maxRequests: 600,
   message: 'Too many requests. Please slow down.',
 });
 
 /**
  * Strict rate limit for the OAuth callback — a small, expensive endpoint
  * that exchanges an authorization code for a token. Abuse here is the most
- * common bot attack against OAuth flows.
+ * common bot attack against OAuth flows, so this stays far tighter than the
+ * rest: 20/min per IP leaves room for a few retries after a failed login
+ * without opening the door to code-guessing.
  */
 export const authRateLimit = rateLimit({
   windowMs: 60_000,
-  maxRequests: 10,
+  maxRequests: 20,
   message: 'Too many authentication attempts. Please wait a moment.',
 });

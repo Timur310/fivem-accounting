@@ -19,7 +19,7 @@ export type AppView =
   | 'admin-faction-detail'
   | 'reports';
 
-const DEFAULT_BRAND_COLOR = '#3b82f6';
+export const DEFAULT_BRAND_COLOR = '#3b82f6';
 
 interface AppState {
   // Auth

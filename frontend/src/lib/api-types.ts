@@ -23,7 +23,7 @@ export interface User {
   discordId: string;
   username: string;
   inGameName: string | null;
-  browseableFactions?: { id: string; name: string }[];
+  browseableFactions?: { id: string; name: string; brandColor: string | null }[];
   avatarUrl: string | null;
   role: 'superadmin' | 'faction_admin' | 'member';
   createdAt: string;
@@ -38,6 +38,15 @@ export interface FactionMembership {
   joinedAt: string;
   factionName: string;
   factionActive: boolean;
+  /** This faction's own accent colour; null until an admin picks one. */
+  factionBrandColor: string | null;
+  rank: string | null;
+  /**
+   * What this user may do in this faction — resolved server-side exactly as
+   * the API's own guard resolves it, so hiding a menu by this can never hide
+   * something the API would have allowed, or offer something it refuses.
+   */
+  permissions: FactionPermission[];
 }
 
 // ── Factions ──
@@ -149,6 +158,8 @@ export interface CreateEntryInput {
   description?: string;
   entryDate?: string;
   customValues?: Record<string, string>;
+  /** Credit the faction rather than the person logging it. */
+  anonymous?: boolean;
 }
 
 export interface UpdateEntryInput {
@@ -553,6 +564,10 @@ export interface MemberProfile {
     discordId: string;
     lastLogin: string | null;
     daysInactive: number | null;
+    /** When they moved into their current rank; null if it was never recorded. */
+    rankSince: string | null;
+    /** Whole days in the current rank, from rankSince. Null alongside it. */
+    daysInRank: number | null;
   };
   contribution: {
     /** Money and goods kept apart — they share no unit. */

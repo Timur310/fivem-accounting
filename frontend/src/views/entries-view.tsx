@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -36,12 +37,14 @@ import { formatAmount, displayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
+  /** Whether the caller may credit an entry to the faction instead of themselves. */
+  canLogAnonymously?: boolean;
   factionId: string;
   isAdmin: boolean;
   canLogEntries: boolean;
 }
 
-export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
+export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymously }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -76,6 +79,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
   const [itemTypeDropdownOpen, setItemTypeDropdownOpen] = useState(false);
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newAnonymous, setNewAnonymous] = useState(false);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newCustomValues, setNewCustomValues] = useState<Record<string, string>>({});
 
@@ -119,6 +123,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
         description: newDescription || undefined,
         entryDate: newDate || undefined,
         customValues: Object.keys(newCustomValues).length > 0 ? newCustomValues : undefined,
+        ...(newAnonymous ? { anonymous: true } : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
@@ -178,6 +183,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
     setNewDescription('');
     setNewDate(new Date().toISOString().split('T')[0]);
     setNewCustomValues({});
+    setNewAnonymous(false);
   };
 
   const openEditDialog = (entry: any) => {
@@ -387,11 +393,23 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                 ))}
               </div>
             )}
+            {canLogAnonymously && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="pr-3">
+                  <p className="text-sm font-medium">Anonymous</p>
+                  <p className="text-xs text-zinc-500">
+                    Credits the faction instead of you. Counts towards the treasury, but stays
+                    out of the leaderboard and every other ranking.
+                  </p>
+                </div>
+                <Switch checked={newAnonymous} onCheckedChange={setNewAnonymous} />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={() => createMutation.mutate()} disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending || customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())}>
-              {createMutation.isPending ? 'Logging...' : 'Log Entry'}
+              {createMutation.isPending ? 'Logging...' : newAnonymous ? 'Log Anonymously' : 'Log Entry'}
             </Button>
           </DialogFooter>
         </DialogContent>

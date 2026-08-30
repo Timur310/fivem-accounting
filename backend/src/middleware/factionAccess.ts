@@ -51,7 +51,16 @@ export async function requireFactionMember(req: Request, res: Response, next: Ne
 
   // Admins and superadmins implicitly have all permissions — the role is the
   // source of truth, not the rank list.
-  if (req.factionRole === 'admin' || req.factionRole === 'superadmin') {
+  //
+  // `user.role` is checked separately from `factionRole`: a superadmin who
+  // joined a faction as a plain member takes that membership role (which is
+  // what lets them log entries), and without this they would lose every
+  // permission in the one faction they actually belong to.
+  if (
+    req.factionRole === 'admin' ||
+    req.factionRole === 'superadmin' ||
+    req.user!.role === 'superadmin'
+  ) {
     req.factionPermissions = [...FACTION_PERMISSIONS];
   } else {
     // Members get whatever permissions their assigned rank grants.

@@ -160,6 +160,24 @@ describe('rank permissions are admin-only', () => {
     expect(res.body.data.inactivityThresholdDays).toBe(14);
   });
 
+  it('lets a superadmin who joined as a plain member change them', async () => {
+    // factionRole follows the membership, but the authority does not: the
+    // superadmin is still the person who can put a faction back together.
+    const joined = await api()
+      .post(`${f()}/members`)
+      .set('Cookie', w.admin.cookie)
+      .send({ discordId: w.superadmin.discordId });
+    expect(joined.status).toBe(201);
+
+    const res = await api()
+      .patch(settings())
+      .set('Cookie', w.superadmin.cookie)
+      .send({ ranks: [{ name: 'Capo', level: 1, permissions: ['manage_payouts'] }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.ranks[0].permissions).toEqual(['manage_payouts']);
+  });
+
   it('lets a faction admin change rank permissions', async () => {
     const res = await api()
       .patch(settings())

@@ -52,7 +52,8 @@ router.get('/', requireAuth, requireSuperadmin, async (req: Request, res: Respon
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))
     .innerJoin(factions, eq(entries.factionId, factions.id))
-    .where(where)
+    // Anonymous entries belong to a faction, not to a person.
+    .where(and(where, eq(users.isSystem, false)))
     .groupBy(users.id, users.username, users.inGameName, users.avatarUrl, factions.id, factions.name)
     .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) DESC`)
     .limit(limit);

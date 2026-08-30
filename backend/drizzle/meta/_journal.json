@@ -36,6 +36,13 @@
       "when": 1788110093961,
       "tag": "0004_moaning_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788115752338,
+      "tag": "0005_magenta_dragon_man",
+      "breakpoints": true
     }
   ]
 }
