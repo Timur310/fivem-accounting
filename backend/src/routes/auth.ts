@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import axios from 'axios';
 import { z } from 'zod';
+import axios from 'axios';
 import { db } from '../db/index.js';
 import { users, factionMembers, factions } from '../db/schema.js';
-import { eq, and, notInArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { env } from '../lib/env.js';
 import {
@@ -17,20 +17,25 @@ import {
 } from '../auth/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';
-import type { User } from '../db/schema.js';
 
 const router = Router();
 
+/** Build the canonical CDN avatar URL for a Discord user, or null. */
+function avatarUrl(discordId: string, avatar: string | null): string | null {
+  if (!avatar) return null;
+  return `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png`;
+}
+
 /**
- * Build the full user response payload (used by both GET and PATCH /auth/me).
+ * Build the standard /me response shape from a user record.
  *
- * The frontend's `useAppStore.user` expects this exact shape — anything that
- * replaces the whole user object (e.g. after PATCH /auth/me) MUST include
- * `factions` and `browseableFactions`, otherwise `user.factions.find(...)`
- * in AppShell throws.
+ * Used by both GET /me and PATCH /me so the response is identical regardless
+ * of how the user was reached — clients can refresh their state by calling
+ * either endpoint and trust the shape.
  */
-async function buildUserResponse(user: User) {
-  // Get user's faction memberships
+async function buildUserResponse(user: typeof users.$inferSelect) {
+  // Get user's faction memberships (active factions only — soft-deleted ones
+  // stay in the table for audit history but should not show up here).
   const memberships = await db
     .select({
       id: factionMembers.id,
@@ -44,29 +49,13 @@ async function buildUserResponse(user: User) {
     .innerJoin(factions, eq(factionMembers.factionId, factions.id))
     .where(eq(factionMembers.userId, user.id));
 
-  // Superadmins can browse every active faction from the admin UI, even ones
-  // they aren't a member of. Compute that list here so the SPA doesn't need
-  // a second round-trip. Members / faction admins don't get this list.
-  let browseableFactions: { id: string; name: string }[] | undefined;
+  // Superadmins can browse every active faction even without a membership.
+  let browseableFactions: { id: string; name: string }[] = [];
   if (user.role === 'superadmin') {
-    const memberFactionIds = memberships.map((m) => m.factionId);
-    const browsableRows = memberFactionIds.length > 0
-      ? await db
-        .select({ id: factions.id, name: factions.name })
-        .from(factions)
-        .where(
-          and(
-            eq(factions.isActive, true),
-            notInArray(factions.id, memberFactionIds),
-          ),
-        )
-        .orderBy(factions.name)
-      : await db
-        .select({ id: factions.id, name: factions.name })
-        .from(factions)
-        .where(eq(factions.isActive, true))
-        .orderBy(factions.name);
-    browseableFactions = browsableRows;
+    browseableFactions = await db
+      .select({ id: factions.id, name: factions.name })
+      .from(factions)
+      .where(eq(factions.isActive, true));
   }
 
   return {
@@ -79,15 +68,8 @@ async function buildUserResponse(user: User) {
     createdAt: user.createdAt,
     lastLogin: user.lastLogin,
     factions: memberships,
-    ...(browseableFactions ? { browseableFactions } : {}),
+    browseableFactions,
   };
-}
-
-// ── Helpers ──────────────────────────────────────────
-
-function avatarUrl(discordId: string, avatar: string | null): string | null {
-  if (!avatar) return null;
-  return `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png`;
 }
 
 // ── GET /auth/discord — redirect to Discord OAuth ─────
@@ -122,8 +104,6 @@ router.get('/callback', async (req: Request, res: Response) => {
     return;
   }
 
-  const frontendBase = new URL(env.FRONTEND_URL);
-
   try {
     // Exchange code for token
     const tokenRes = await exchangeCode(code, codeVerifier);
@@ -131,10 +111,9 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Fetch Discord user profile
     const discordUser = await getDiscordUser(tokenRes.access_token);
 
-    // Upsert the user. `inGameName` is intentionally absent from the
-    // `set` clause: once a player has chosen their in-character name we
-    // never overwrite it on re-login, even if their Discord username
-    // changes. Only `username` (the Discord handle) syncs on each login.
+    // Upsert user by discord_id. The on-conflict update keeps username and
+    // avatar fresh without clobbering inGameName (which the user owns) or role
+    // (which is governed by the bootstrap script and faction membership).
     const [user] = await db
       .insert(users)
       .values({
@@ -155,7 +134,10 @@ router.get('/callback', async (req: Request, res: Response) => {
       .returning();
 
     if (!user) {
-      throw new Error('User upsert returned no row');
+      const redirect = new URL(env.FRONTEND_URL);
+      redirect.searchParams.set('auth', 'error');
+      res.redirect(redirect.toString());
+      return;
     }
 
     // Sign JWT
@@ -164,8 +146,9 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Set HTTP-only cookie
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
-    // Audit log — deliberately omit discordId; the user id is enough and
-    // Discord ids are PII we don't need to duplicate across audit rows.
+    // Audit log — Discord ID is deliberately not recorded: a user cannot read
+    // their own audit trail, but reducing the surface we keep here is still
+    // the right move.
     await createAuditLog({
       userId: user.id,
       action: 'login',
@@ -175,25 +158,19 @@ router.get('/callback', async (req: Request, res: Response) => {
       req,
     });
 
-    // Redirect to the frontend with a success marker so the SPA knows to
-    // re-fetch /auth/me. Always 302 to the same origin — never JSON — so
-    // the browser completes the OAuth round-trip cleanly.
-    const redirect = new URL('/', frontendBase);
+    const redirect = new URL(env.FRONTEND_URL);
     redirect.searchParams.set('auth', 'success');
     res.redirect(redirect.toString());
-  } catch (err) {
-    // Don't leak axios response bodies into logs; the message is enough.
+  } catch (err: unknown) {
     if (axios.isAxiosError(err)) {
-      console.error('[AUTH CALLBACK ERROR]', err.message);
+      console.error('[AUTH CALLBACK ERROR]', err.response?.data ?? err.message);
     } else {
-      console.error('[AUTH CALLBACK ERROR]', err instanceof Error ? err.message : err);
+      console.error('[AUTH CALLBACK ERROR]', err);
     }
 
-    // If we haven't started writing a response yet, redirect the user back
-    // to the frontend with an error flag — JSON 500s would render as a
-    // broken page in the browser mid-OAuth-flow.
+    // Send the user home with an error flag — they can try again from there.
     if (!res.headersSent) {
-      const redirect = new URL('/', frontendBase);
+      const redirect = new URL(env.FRONTEND_URL);
       redirect.searchParams.set('auth', 'error');
       res.redirect(redirect.toString());
     }
@@ -211,18 +188,12 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
   });
 
   res.clearCookie(COOKIE_NAME, { path: '/' });
-  // 204 No Content — no body. res.end() rather than res.json(null) so we
-  // don't accidentally send "null" as the JSON body.
   res.status(204).end();
 });
 
-// ── PATCH /auth/me — update the player's in-game name ──
+// ── PATCH /auth/me — update in-game name ──────────────
 const updateMeSchema = z.object({
-  inGameName: z
-    .string()
-    .trim()
-    .min(2, 'In-game name must be at least 2 characters')
-    .max(50, 'In-game name must be at most 50 characters'),
+  inGameName: z.string().trim().min(2).max(50),
 });
 
 router.patch('/me', requireAuth, async (req: Request, res: Response) => {
@@ -232,19 +203,15 @@ router.patch('/me', requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  const before = req.user!.inGameName ?? null;
-  const after = parsed.data.inGameName;
-
-  // No-op if the player re-submitted the same value — still audit log it so
-  // admins can see the attempt.
+  const before = req.user!.inGameName;
   const [updated] = await db
     .update(users)
-    .set({ inGameName: after })
+    .set({ inGameName: parsed.data.inGameName })
     .where(eq(users.id, req.user!.id))
     .returning();
 
   if (!updated) {
-    error(res, 'NOT_FOUND', 'User not found', 404);
+    error(res, 'INTERNAL_ERROR', 'Failed to update profile', 500);
     return;
   }
 
@@ -252,13 +219,11 @@ router.patch('/me', requireAuth, async (req: Request, res: Response) => {
     userId: req.user!.id,
     action: 'update_profile',
     entityType: 'user',
-    entityId: req.user!.id,
-    details: { inGameName: after, previousInGameName: before },
+    entityId: updated.id,
+    details: { inGameName: updated.inGameName, previousInGameName: before },
     req,
   });
 
-  // Return the FULL user shape (same as GET /auth/me) so the frontend can
-  // replace the whole user object without losing `factions` / `browseableFactions`.
   success(res, await buildUserResponse(updated));
 });
 

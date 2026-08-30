@@ -3,6 +3,13 @@ import { auditLogs } from '../db/schema.js';
 import type { Request } from 'express';
 import type { NewAuditLog } from '../db/schema.js';
 
+/**
+ * Write an audit log entry.
+ *
+ * `tx` is optional so the log can participate in the caller's transaction —
+ * if the surrounding mutation rolls back, the audit entry rolls back too,
+ * which keeps the log from claiming an action happened that did not.
+ */
 export async function createAuditLog(params: {
   userId: string;
   factionId?: string | null;
@@ -14,6 +21,7 @@ export async function createAuditLog(params: {
   tx?: TransactionLike;
 }): Promise<void> {
   const { userId, factionId, action, entityType, entityId, details, req, tx } = params;
+  const conn = tx ?? db;
 
   const logEntry: NewAuditLog = {
     userId,
@@ -25,6 +33,5 @@ export async function createAuditLog(params: {
     ipAddress: req?.ip ?? null,
   };
 
-  const conn = tx ?? db;
   await conn.insert(auditLogs).values(logEntry);
 }

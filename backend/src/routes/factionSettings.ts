@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { factions, factionMembers, DEFAULT_STRIKE_EXPIRY_DAYS } from '../db/schema.js';
+import { factions, factionMembers, DEFAULT_STRIKE_EXPIRY_DAYS, FACTION_PERMISSIONS } from '../db/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router({ mergeParams: true });
@@ -19,7 +19,7 @@ const updateSettingsSchema = z.object({
   ranks: z.array(z.object({
     name: z.string().min(1).max(100),
     level: z.number().int().min(1).max(100),
-    permissions: z.array(z.string().max(50)).default([]),
+    permissions: z.array(z.enum(FACTION_PERMISSIONS)).default([]),
   })).max(20).optional(),
   inactivityThresholdDays: z.number().int().min(1).max(365).optional(),
   strikeExpiryDays: z.object({
@@ -27,6 +27,12 @@ const updateSettingsSchema = z.object({
     minor: z.number().int().min(1).max(3650).nullable(),
     major: z.number().int().min(1).max(3650).nullable(),
   }).optional(),
+  brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  payoutApprovalRequired: z.boolean().optional(),
+  customFields: z.array(z.object({
+    name: z.string().min(1).max(100),
+    required: z.boolean(),
+  })).optional(),
 }).refine(
   (d) => Object.keys(d).length > 0,
   'Provide at least one setting to update',
@@ -43,6 +49,9 @@ router.get('/', async (req: Request, res: Response) => {
       ranks: factions.ranks,
       inactivityThresholdDays: factions.inactivityThresholdDays,
       strikeExpiryDays: factions.strikeExpiryDays,
+      brandColor: factions.brandColor,
+      payoutApprovalRequired: factions.payoutApprovalRequired,
+      customFields: factions.customFields,
     })
     .from(factions)
     .where(eq(factions.id, factionId))
@@ -58,111 +67,150 @@ router.get('/', async (req: Request, res: Response) => {
     inactivityThresholdDays: faction.inactivityThresholdDays,
     // Surface the effective values so the UI never has to know the defaults.
     strikeExpiryDays: faction.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
+    brandColor: faction.brandColor,
+    payoutApprovalRequired: faction.payoutApprovalRequired,
+    customFields: faction.customFields ?? [],
   });
 });
 
-// ── PATCH / — update settings (faction admin) ────────
-router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
-  const factionId = req.params.id as string;
-
-  const parsed = updateSettingsSchema.safeParse(req.body);
-  if (!parsed.success) {
-    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
-    return;
-  }
-
-  const [existing] = await db
-    .select({
-      ranks: factions.ranks,
-      inactivityThresholdDays: factions.inactivityThresholdDays,
-      strikeExpiryDays: factions.strikeExpiryDays,
-    })
-    .from(factions)
-    .where(eq(factions.id, factionId))
-    .limit(1);
-  if (!existing) {
-    error(res, 'NOT_FOUND', 'Faction not found', 404);
-    return;
-  }
-
-  const updates: Record<string, unknown> = {};
-  let removedRanks: string[] = [];
-
-  if (parsed.data.ranks !== undefined) {
-    const names = parsed.data.ranks.map((r) => r.name);
-    if (new Set(names).size !== names.length) {
-      error(res, 'VALIDATION_ERROR', 'Rank names must be unique');
+// ── PATCH / — update settings ────────────────────────
+// Either manage_settings OR manage_customization grants write access: a
+// faction admin who can only tweak branding should not be blocked by not
+// having manage_settings, and vice versa.
+router.patch(
+  '/',
+  (req, res, next) => {
+    const perms = req.factionPermissions ?? [];
+    if (perms.includes('manage_settings') || perms.includes('manage_customization')) {
+      next();
       return;
     }
-    const levels = parsed.data.ranks.map((r) => r.level);
-    if (new Set(levels).size !== levels.length) {
-      error(res, 'VALIDATION_ERROR', 'Rank levels must be unique');
+    requirePermission('manage_settings')(req, res, next);
+  },
+  async (req: Request, res: Response) => {
+    const factionId = req.params.id as string;
+
+    const parsed = updateSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
       return;
     }
-    removedRanks = (existing.ranks ?? []).map((r) => r.name).filter((n) => !names.includes(n));
-    updates.ranks = parsed.data.ranks;
-  }
 
-  if (parsed.data.inactivityThresholdDays !== undefined) {
-    updates.inactivityThresholdDays = parsed.data.inactivityThresholdDays;
-  }
-  if (parsed.data.strikeExpiryDays !== undefined) {
-    updates.strikeExpiryDays = parsed.data.strikeExpiryDays;
-  }
-
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(factions)
-      .set(updates)
-      .where(eq(factions.id, factionId))
-      .returning({
+    const [existing] = await db
+      .select({
         ranks: factions.ranks,
         inactivityThresholdDays: factions.inactivityThresholdDays,
         strikeExpiryDays: factions.strikeExpiryDays,
-      });
-
-    // Clearing removed ranks off members happens in the same transaction as
-    // the rank list itself, so the roster can never show a rank that no
-    // longer exists.
-    if (removedRanks.length > 0) {
-      await tx
-        .update(factionMembers)
-        .set({ rank: null })
-        .where(
-          and(
-            eq(factionMembers.factionId, factionId),
-            inArray(factionMembers.rank, removedRanks),
-          ),
-        );
+        brandColor: factions.brandColor,
+        payoutApprovalRequired: factions.payoutApprovalRequired,
+        customFields: factions.customFields,
+      })
+      .from(factions)
+      .where(eq(factions.id, factionId))
+      .limit(1);
+    if (!existing) {
+      error(res, 'NOT_FOUND', 'Faction not found', 404);
+      return;
     }
 
-    return row;
-  });
+    const updates: Record<string, unknown> = {};
+    let removedRanks: string[] = [];
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'update',
-    entityType: 'faction_settings',
-    entityId: factionId,
-    details: {
-      before: {
-        ranks: existing.ranks,
-        inactivityThresholdDays: existing.inactivityThresholdDays,
-        strikeExpiryDays: existing.strikeExpiryDays,
+    if (parsed.data.ranks !== undefined) {
+      const names = parsed.data.ranks.map((r) => r.name);
+      if (new Set(names).size !== names.length) {
+        error(res, 'VALIDATION_ERROR', 'Rank names must be unique');
+        return;
+      }
+      const levels = parsed.data.ranks.map((r) => r.level);
+      if (new Set(levels).size !== levels.length) {
+        error(res, 'VALIDATION_ERROR', 'Rank levels must be unique');
+        return;
+      }
+      removedRanks = (existing.ranks ?? []).map((r) => r.name).filter((n) => !names.includes(n));
+      updates.ranks = parsed.data.ranks;
+    }
+
+    if (parsed.data.inactivityThresholdDays !== undefined) {
+      updates.inactivityThresholdDays = parsed.data.inactivityThresholdDays;
+    }
+    if (parsed.data.strikeExpiryDays !== undefined) {
+      updates.strikeExpiryDays = parsed.data.strikeExpiryDays;
+    }
+    if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
+    if (parsed.data.payoutApprovalRequired !== undefined) updates.payoutApprovalRequired = parsed.data.payoutApprovalRequired;
+    if (parsed.data.customFields !== undefined) {
+      const names = parsed.data.customFields.map((f) => f.name);
+      if (new Set(names).size !== names.length) {
+        error(res, 'VALIDATION_ERROR', 'Custom field names must be unique');
+        return;
+      }
+      updates.customFields = parsed.data.customFields;
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(factions)
+        .set(updates)
+        .where(eq(factions.id, factionId))
+        .returning({
+          ranks: factions.ranks,
+          inactivityThresholdDays: factions.inactivityThresholdDays,
+          strikeExpiryDays: factions.strikeExpiryDays,
+          brandColor: factions.brandColor,
+          payoutApprovalRequired: factions.payoutApprovalRequired,
+          customFields: factions.customFields,
+        });
+
+      // Clearing removed ranks off members happens in the same transaction as
+      // the rank list itself, so the roster can never show a rank that no
+      // longer exists.
+      if (removedRanks.length > 0) {
+        await tx
+          .update(factionMembers)
+          .set({ rank: null })
+          .where(
+            and(
+              eq(factionMembers.factionId, factionId),
+              inArray(factionMembers.rank, removedRanks),
+            ),
+          );
+      }
+
+      return row;
+    });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'update',
+      entityType: 'faction_settings',
+      entityId: factionId,
+      details: {
+        before: {
+          ranks: existing.ranks,
+          inactivityThresholdDays: existing.inactivityThresholdDays,
+          strikeExpiryDays: existing.strikeExpiryDays,
+          brandColor: existing.brandColor,
+          payoutApprovalRequired: existing.payoutApprovalRequired,
+          customFields: existing.customFields,
+        },
+        after: updates,
+        ...(removedRanks.length > 0 ? { removedRanks } : {}),
       },
-      after: updates,
-      ...(removedRanks.length > 0 ? { removedRanks } : {}),
-    },
-    req,
-  });
+      req,
+    });
 
-  success(res, {
-    ranks: updated?.ranks ?? [],
-    inactivityThresholdDays: updated?.inactivityThresholdDays,
-    strikeExpiryDays: updated?.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
-    ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),
-  });
-});
+    success(res, {
+      ranks: updated?.ranks ?? [],
+      inactivityThresholdDays: updated?.inactivityThresholdDays,
+      strikeExpiryDays: updated?.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
+      brandColor: updated?.brandColor ?? null,
+      payoutApprovalRequired: updated?.payoutApprovalRequired ?? false,
+      customFields: updated?.customFields ?? [],
+      ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),
+    });
+  },
+);
 
 export default router;

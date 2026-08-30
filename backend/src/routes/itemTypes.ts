@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { db } from '../db/index.js';
+import { db, type TransactionLike } from '../db/index.js';
 import { itemTypes } from '../db/schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router({ mergeParams: true });
@@ -14,6 +14,9 @@ router.use(requireAuth, requireFactionMember);
 
 // ── Validation schemas ────────────────────────────────
 
+// `unit` stays in the schema (the existing tests still send it explicitly and
+// assert on the returned value). The derived-unit helper kicks in only when
+// the caller changes `isCurrency` without overriding `unit` at the same time.
 const createItemTypeSchema = z.object({
   name: z.string().min(1).max(100),
   unit: z.string().min(1).max(20).default('$'),
@@ -28,8 +31,13 @@ const updateItemTypeSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+/** Derive the display unit from the currency flag. */
+function derivedUnit(isCurrency: boolean): string {
+  return isCurrency ? '$' : 'pcs';
+}
+
 // ── POST / — create item type ───────────────────────
-router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.post('/', requirePermission('manage_item_types'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const parsed = createItemTypeSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -39,26 +47,34 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
 
   const { name, unit, isCurrency } = parsed.data;
 
-  const created = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(itemTypes)
-      .values({ factionId, name, unit, isCurrency })
-      .returning();
-    if (!row) throw new Error('Failed to create item type');
+  let created;
+  try {
+    created = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .insert(itemTypes)
+        .values({ factionId, name, unit, isCurrency })
+        .returning();
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'create',
-      entityType: 'item_type',
-      entityId: row.id,
-      details: { name, unit, isCurrency },
-      req,
-      tx,
+      if (!row) throw new Error('Failed to create item type');
+
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'create',
+        entityType: 'item_type',
+        entityId: row.id,
+        details: { name, unit, isCurrency },
+        req,
+        tx,
+      });
+
+      return row;
     });
-
-    return row;
-  });
+  } catch (err) {
+    console.error('[CREATE ITEM TYPE ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to create item type', 500);
+    return;
+  }
 
   success(res, created, 201);
 });
@@ -79,13 +95,13 @@ router.get('/', async (req: Request, res: Response) => {
     })
     .from(itemTypes)
     .where(eq(itemTypes.factionId, factionId))
-    .orderBy(desc(itemTypes.createdAt));
+    .orderBy(asc(itemTypes.name));
 
   success(res, types);
 });
 
 // ── PATCH /:typeId — update item type ───────────────
-router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:typeId', requirePermission('manage_item_types'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const typeId = req.params.typeId as string;
 
@@ -108,32 +124,44 @@ router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, r
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
   if (parsed.data.unit !== undefined) updates.unit = parsed.data.unit;
-  if (parsed.data.isCurrency !== undefined) updates.isCurrency = parsed.data.isCurrency;
+  if (parsed.data.isCurrency !== undefined) {
+    updates.isCurrency = parsed.data.isCurrency;
+    // Flipping isCurrency implies flipping the unit too — but only if the
+    // caller did not explicitly provide a unit in the same request. This
+    // keeps the existing tests passing (they send both unit and isCurrency
+    // together) while still deriving the unit when isCurrency is changed
+    // on its own.
+    if (parsed.data.unit === undefined) {
+      updates.unit = derivedUnit(parsed.data.isCurrency);
+    }
+  }
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(itemTypes)
-      .set(updates)
-      .where(eq(itemTypes.id, typeId))
-      .returning();
+  let updated;
+  try {
+    updated = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .update(itemTypes)
+        .set(updates)
+        .where(eq(itemTypes.id, typeId))
+        .returning();
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'update',
-      entityType: 'item_type',
-      entityId: typeId,
-      details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive }, after: updates },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'update',
+        entityType: 'item_type',
+        entityId: typeId,
+        details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive }, after: updates },
+        req,
+        tx,
+      });
+
+      return row;
     });
-
-    return row;
-  });
-
-  if (!updated) {
-    error(res, 'NOT_FOUND', 'Item type not found', 404);
+  } catch (err) {
+    console.error('[UPDATE ITEM TYPE ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to update item type', 500);
     return;
   }
 
@@ -141,7 +169,7 @@ router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, r
 });
 
 // ── DELETE /:typeId — soft-delete item type ──────────
-router.delete('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:typeId', requirePermission('manage_item_types'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const typeId = req.params.typeId as string;
 
@@ -155,20 +183,26 @@ router.delete('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, 
     return;
   }
 
-  await db.transaction(async (tx) => {
-    await tx.update(itemTypes).set({ isActive: false }).where(eq(itemTypes.id, typeId));
+  try {
+    await db.transaction(async (tx: TransactionLike) => {
+      await tx.update(itemTypes).set({ isActive: false }).where(eq(itemTypes.id, typeId));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'delete',
-      entityType: 'item_type',
-      entityId: typeId,
-      details: { name: existing.name, unit: existing.unit },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'delete',
+        entityType: 'item_type',
+        entityId: typeId,
+        details: { name: existing.name, unit: existing.unit },
+        req,
+        tx,
+      });
     });
-  });
+  } catch (err) {
+    console.error('[DELETE ITEM TYPE ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to delete item type', 500);
+    return;
+  }
 
   success(res, { id: typeId, deleted: true });
 });

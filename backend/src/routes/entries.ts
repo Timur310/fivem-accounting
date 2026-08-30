@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { db } from '../db/index.js';
+import { db, type TransactionLike } from '../db/index.js';
 import { entries, itemTypes, users, factions } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
@@ -15,25 +15,27 @@ const router = Router({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 
-// ── Helpers ───────────────────────────────────────────
-
-/** Escape LIKE metacharacters in a user-supplied search string. */
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (m) => `\\${m}`);
+/** Escape a user-supplied search string for safe use inside an ilike('%...%')
+ *  pattern. Backslash, %, and _ are escaped so they match literally. */
+function escapeLike(input: string): string {
+  return input.replace(/[%_\\]/g, (m) => '\\' + m);
 }
 
 // ── Validation schemas ────────────────────────────────
 
+// 1-13 integer digits, optional .DD — keeps the column's numeric(15,2) range
+// intact and rejects anything that Number() would silently coerce (e.g. "1e3").
 const amountField = z
   .string()
-  .regex(/^\d{1,13}(\.\d{1,2})?$/, 'Amount must be a positive number with at most 2 decimal places')
+  .regex(/^\d{1,13}(\.\d{1,2})?$/, 'Amount must be a positive number with up to 2 decimal places')
   .refine((v) => Number(v) > 0, 'Amount must be greater than zero');
 
 const createEntrySchema = z.object({
   itemTypeId: z.string().uuid(),
   amount: amountField,
   description: z.string().max(500).optional(),
-  // z.string().date() validates real calendar dates (rejects 2021-02-30 etc.)
+  // z.string().date() validates a real calendar date (YYYY-MM-DD), which the
+  // old regex did not — 2026-02-31 used to pass.
   entryDate: z.string().date().optional(),
   customValues: z.record(z.string(), z.string().max(500)).optional(),
 });
@@ -48,8 +50,8 @@ const updateEntrySchema = z.object({
 const listEntriesQuerySchema = z.object({
   item_type_id: z.string().uuid().optional(),
   user_id: z.string().uuid().optional(),
-  date_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  date_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date_from: z.string().date().optional(),
+  date_to: z.string().date().optional(),
   search: z.string().max(200).optional(),
   page: z.string().optional(),
   page_size: z.string().optional(),
@@ -129,45 +131,52 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Validate date is not in the future. Use a single resolved `dateStr` for
-  // both the comparison and the insert — the old code called
-  // `entryDate ?? todayDateString()` twice and the two calls could land on
-  // different days around midnight. YYYY-MM-DD sorts correctly as a string.
+  // Future-dated entries have nothing to back-date against; the entry_date
+  // column drives dashboards and leaderboards and would mislead them.
   const dateStr = entryDate ?? todayDateString();
-  const todayStr = todayDateString();
-  if (dateStr > todayStr) {
+  if (dateStr > todayDateString()) {
     error(res, 'VALIDATION_ERROR', 'Entry date cannot be in the future');
     return;
   }
 
-  const [entry] = await db
-    .insert(entries)
-    .values({
-      factionId,
-      userId: req.user!.id,
-      itemTypeId,
-      amount: amount,
-      description: description ?? null,
-      entryDate: dateStr,
-      customValues: validatedCustomValues,
-    })
-    .returning();
+  let entry;
+  try {
+    entry = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .insert(entries)
+        .values({
+          factionId,
+          userId: req.user!.id,
+          itemTypeId,
+          amount,
+          description: description ?? null,
+          entryDate: dateStr,
+          customValues: validatedCustomValues,
+        })
+        .returning();
 
-  if (!entry) {
+      if (!row) throw new Error('Failed to create entry');
+
+      // Keep amount as a string — the column is decimal, so JS strings round-trip
+      // exactly where Number would lose precision past 2^53.
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'create',
+        entityType: 'entry',
+        entityId: row.id,
+        details: { itemTypeId, amount, description, entryDate: dateStr, customValues: validatedCustomValues },
+        req,
+        tx,
+      });
+
+      return row;
+    });
+  } catch (err) {
+    console.error('[CREATE ENTRY ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to create entry', 500);
     return;
   }
-
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'create',
-    entityType: 'entry',
-    entityId: entry.id,
-    // Keep amount as a string — Number() loses precision past 2^53.
-    details: { itemTypeId, amount, description, entryDate: dateStr, customValues: validatedCustomValues },
-    req,
-  });
 
   success(res, entry, 201);
 });
@@ -231,7 +240,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ── PATCH /:entryId — edit entry (admin only) ───────
-router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.patch('/:entryId', requirePermission('manage_entries'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const entryId = req.params.entryId as string;
 
@@ -254,7 +263,13 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
-  if (parsed.data.entryDate !== undefined) updates.entryDate = parsed.data.entryDate;
+  if (parsed.data.entryDate !== undefined) {
+    if (parsed.data.entryDate > todayDateString()) {
+      error(res, 'VALIDATION_ERROR', 'Entry date cannot be in the future');
+      return;
+    }
+    updates.entryDate = parsed.data.entryDate;
+  }
   if (parsed.data.customValues !== undefined) {
     // Validate custom values against faction definition
     const [faction] = await db
@@ -279,32 +294,34 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
     updates.customValues = Object.keys(filtered).length > 0 ? filtered : null;
   }
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(entries)
-      .set(updates)
-      .where(eq(entries.id, entryId))
-      .returning();
+  let updated;
+  try {
+    updated = await db.transaction(async (tx: TransactionLike) => {
+      const [row] = await tx
+        .update(entries)
+        .set(updates)
+        .where(eq(entries.id, entryId))
+        .returning();
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'update',
-      entityType: 'entry',
-      entityId: entryId,
-      details: {
-        before: { amount: existing.amount, description: existing.description, entryDate: existing.entryDate, customValues: existing.customValues },
-        after: updates,
-      },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'update',
+        entityType: 'entry',
+        entityId: entryId,
+        details: {
+          before: { amount: existing.amount, description: existing.description, entryDate: existing.entryDate, customValues: existing.customValues },
+          after: updates,
+        },
+        req,
+        tx,
+      });
+
+      return row;
     });
-
-    return row;
-  });
-
-  if (!updated) {
-    error(res, 'NOT_FOUND', 'Entry not found', 404);
+  } catch (err) {
+    console.error('[UPDATE ENTRY ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to update entry', 500);
     return;
   }
 
@@ -312,7 +329,7 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
 });
 
 // ── DELETE /:entryId — soft-delete entry (admin) ────
-router.delete('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+router.delete('/:entryId', requirePermission('manage_entries'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const entryId = req.params.entryId as string;
 
@@ -326,23 +343,29 @@ router.delete('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request,
     return;
   }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(entries)
-      .set({ isDeleted: true, updatedAt: new Date() })
-      .where(eq(entries.id, entryId));
+  try {
+    await db.transaction(async (tx: TransactionLike) => {
+      await tx
+        .update(entries)
+        .set({ isDeleted: true, updatedAt: new Date() })
+        .where(eq(entries.id, entryId));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'delete',
-      entityType: 'entry',
-      entityId: entryId,
-      details: { amount: existing.amount, itemTypeId: existing.itemTypeId, entryDate: existing.entryDate },
-      req,
-      tx,
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId,
+        action: 'delete',
+        entityType: 'entry',
+        entityId: entryId,
+        details: { amount: existing.amount, itemTypeId: existing.itemTypeId, entryDate: existing.entryDate },
+        req,
+        tx,
+      });
     });
-  });
+  } catch (err) {
+    console.error('[DELETE ENTRY ERROR]', err);
+    error(res, 'INTERNAL_ERROR', 'Failed to delete entry', 500);
+    return;
+  }
 
   success(res, { id: entryId, deleted: true });
 });

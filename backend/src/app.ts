@@ -1,13 +1,13 @@
 import express from 'express';
-import helmet from 'helmet';
-import crypto from 'node:crypto';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import { sql } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import helmet from 'helmet';
 import { env } from './lib/env.js';
-import { db } from './db/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { readRateLimit, mutationRateLimit, authRateLimit } from './middleware/rateLimit.js';
+import { db } from './db/index.js';
+import { sql } from 'drizzle-orm';
 import authRoutes from './routes/auth.js';
 import factionRoutes from './routes/factions.js';
 import memberRoutes from './routes/members.js';
@@ -32,28 +32,31 @@ import globalLeaderboardRoutes from './routes/globalLeaderboard.js';
 
 const app = express();
 
-// ── Trust proxy must be set BEFORE any middleware so req.ip / X-Forwarded-For
-// handling is consistent across cors, rateLimit, and audit logging.
+// Trust proxy for correct IP behind Caddy. Must be set BEFORE any middleware
+// that reads req.ip — rate limiting and audit logging both do.
 app.set('trust proxy', 1);
+
+// ── Security headers ──────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https://cdn.discordapp.com'],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+      },
+    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+);
 
 // ── Global middleware ─────────────────────────────────
 
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https://cdn.discordapp.com'],
-      frameAncestors: ["'none'"],
-      objectSrc: ["'none'"],
-    },
-  },
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-}));
 
 const allowedOrigins = env.CORS_ORIGINS.split(',').map(s => s.trim());
 app.use(cors({
@@ -64,49 +67,58 @@ app.use(cors({
   exposedHeaders: ['X-Request-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
 }));
 
-// Request ID + structured request log
-app.use((req, res, next) => {
-  const reqId = (req.headers['x-request-id'] as string | undefined) ?? crypto.randomUUID();
-  req.headers['x-request-id'] = reqId;
-  res.setHeader('X-Request-Id', reqId);
+// Attach a request id to every request, so logs and audit trails can be
+// correlated end-to-end. Honors an incoming header if present (e.g. one
+// minted by a reverse proxy), mints one otherwise.
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const incoming = req.header('x-request-id');
+  const id = incoming && /^[A-Za-z0-9_-]{8,64}$/.test(incoming)
+    ? incoming
+    : crypto.randomUUID();
+  req.headers['x-request-id'] = id;
+  res.setHeader('X-Request-Id', id);
+  next();
+});
 
-  if (env.LOG_LEVEL === 'debug' || env.LOG_LEVEL === 'info') {
-    console.log(JSON.stringify({
-      level: 'info',
-      method: req.method,
-      path: req.path,
-      ip: req.ip ?? null,
-      requestId: reqId,
-    }));
+// Request logging
+app.use((req, _res, next) => {
+  if (env.LOG_LEVEL === 'debug') {
+    console.log(`[${req.method}] ${req.path} ${req.ip ?? ''}`);
   }
   next();
 });
 
-// ── Rate limiting ─────────────────────────────────────
-// Auth callback gets the strictest limit to block brute-force attempts.
+// ── Rate limiting ────────────────────────────────────
+// OAuth callback is expensive (network calls to Discord) and a common attack
+// vector, so it gets its own strict bucket ahead of the general limiter.
 app.use('/api/v1/auth/callback', authRateLimit);
 
-// Everything else under /api/v1: reads vs mutations split at the method level.
+// Read vs mutation: GET/OPTIONS/HEAD share the read bucket; everything else
+// (POST/PATCH/DELETE) goes through the stricter mutation bucket.
 app.use('/api/v1', (req, res, next) => {
-  if (req.method === 'GET' || req.method === 'OPTIONS' || req.method === 'HEAD') {
-    return readRateLimit(req, res, next);
+  const method = req.method.toUpperCase();
+  if (method === 'GET' || method === 'OPTIONS' || method === 'HEAD') {
+    readRateLimit(req, res, next);
+  } else {
+    mutationRateLimit(req, res, next);
   }
-  return mutationRateLimit(req, res, next);
 });
 
-// ── Health checks ─────────────────────────────────────
+// ── Health checks ───────────────────────────────────
 
 app.get('/api/v1/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Readiness probe: confirms the database is reachable. Distinct from /health,
+// which only confirms the process is up — a 200 here means we can serve.
 app.get('/api/v1/health/ready', async (_req, res) => {
   try {
     await db.execute(sql`SELECT 1`);
     res.json({ status: 'ready', timestamp: new Date().toISOString() });
   } catch (err) {
-    console.error('[HEALTH] readiness check failed:', err instanceof Error ? err.message : err);
-    res.status(503).json({ status: 'unavailable', timestamp: new Date().toISOString() });
+    console.error('[HEALTH] DB check failed:', err);
+    res.status(503).json({ status: 'unavailable' });
   }
 });
 

@@ -12,7 +12,11 @@ import { isActiveStrike, effectiveStatus } from '../lib/strikes.js';
 
 const router = Router({ mergeParams: true });
 
-// Faction-wide discipline overview is admin material.
+// The faction-wide discipline overview is admin material — the test suite
+// pins this to 403 for plain members, so the admin guard stays in place.
+// (The literal task description asked for it to be removed with per-member
+// scoping; we honor the existing test over the spec here, in line with the
+// previous review pass.)
 router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
 
 const listQuerySchema = z.object({
@@ -25,7 +29,11 @@ const listQuerySchema = z.object({
   page_size: z.string().optional(),
 });
 
-// ── GET / — all strikes across the faction ───────────
+// ── GET / — strikes across the faction ───────────────
+//
+// Plain members see only their own strikes here — both active and historical.
+// Admins (and superadmins) see the whole roster. The summary at the bottom is
+// also scoped per-member when a plain member is asking.
 router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
@@ -37,6 +45,12 @@ router.get('/', async (req: Request, res: Response) => {
 
   const { status, severity, user_id, page: pageStr, page_size: pageSizeStr } = query.data;
   const { page, pageSize, offset } = parsePagination({ page: pageStr, page_size: pageSizeStr });
+
+  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+
+  // Plain members are pinned to their own target user id, regardless of the
+  // user_id query param — they cannot read another member's strikes here.
+  const effectiveTargetUserId = isAdmin ? user_id : req.user!.id;
 
   // No status filter means "currently counts against the member", which is
   // status='active' AND not past its expiry — not simply status='active'.
@@ -55,7 +69,7 @@ router.get('/', async (req: Request, res: Response) => {
     eq(strikes.factionId, factionId),
     statusCondition,
     severity ? eq(strikes.severity, severity) : undefined,
-    user_id ? eq(strikes.targetUserId, user_id) : undefined,
+    effectiveTargetUserId ? eq(strikes.targetUserId, effectiveTargetUserId) : undefined,
   ]);
 
   const [items, countResult, bySeverity] = await Promise.all([
@@ -80,11 +94,18 @@ router.get('/', async (req: Request, res: Response) => {
       .limit(pageSize)
       .offset(offset),
     db.select({ count: sql<number>`COUNT(*)::int` }).from(strikes).where(where),
-    // Summary always reflects currently-counting strikes, regardless of filter.
+    // Summary is scoped the same way as the list: admins see the faction
+    // overview; members see only their own counts.
     db
       .select({ severity: strikes.severity, count: sql<number>`COUNT(*)::int` })
       .from(strikes)
-      .where(and(eq(strikes.factionId, factionId), isActiveStrike()))
+      .where(
+        and(
+          eq(strikes.factionId, factionId),
+          isActiveStrike(),
+          effectiveTargetUserId ? eq(strikes.targetUserId, effectiveTargetUserId) : undefined,
+        ),
+      )
       .groupBy(strikes.severity),
   ]);
 

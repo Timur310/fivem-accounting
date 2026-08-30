@@ -20,10 +20,8 @@ export const users = pgTable('users', {
   id:        uuid('id').defaultRandom().primaryKey(),
   discordId: varchar('discord_id', { length: 20 }).notNull().unique(),
   username:  varchar('username', { length: 32 }).notNull(),
-  // In-character name shown across the UI. Null means the player hasn't been
-  // asked yet — the frontend prompts them once on first login. Players can
-  // update it themselves via PATCH /auth/me; the field is never overwritten
-  // by Discord login (unlike `username`).
+  // Player-chosen display name, set once after first login. null until they
+  // either save one or dismiss the prompt — both are valid client states.
   inGameName: varchar('in_game_name', { length: 50 }),
   avatarUrl: text('avatar_url'),
   role:      varchar('role', { length: 20 }).notNull().default('member'),
@@ -54,8 +52,8 @@ export const factions = pgTable('factions', {
   // admin before it can be completed.
   payoutApprovalRequired: boolean('payout_approval_required').notNull().default(false),
   // Display-only rank hierarchy (Boss, Underboss, Capo, ...). Access control
-  // still runs off faction_members.role; `permissions` is reserved for future
-  // use and is not enforced anywhere yet.
+  // still runs off faction_members.role; `permissions` here is the list of
+  // FACTION_PERMISSIONS granted to anyone holding the rank.
   ranks: jsonb('ranks').$type<{ name: string; level: number; permissions: string[] }[]>(),
   // Days without a logged entry before a member is flagged as inactive.
   inactivityThresholdDays: integer('inactivity_threshold_days').notNull().default(7),
@@ -84,6 +82,37 @@ export const factionsRelations = relations(factions, ({ one, many }) => ({
 
 export type Faction = typeof factions.$inferSelect;
 export type NewFaction = typeof factions.$inferInsert;
+
+// ── Faction permissions ───────────────────────────────
+// Members get these per-rank via factions.ranks[].permissions.
+// Admins and superadmins implicitly hold every permission.
+export const FACTION_PERMISSIONS = [
+  'manage_members',
+  'manage_payouts',
+  'manage_entries',
+  'manage_strikes',
+  'manage_quotas',
+  'manage_item_types',
+  'manage_settings',
+  'manage_customization',
+  'view_audit_logs',
+  'view_reports',
+] as const;
+export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
+
+/** Human-readable labels for the permission enum. */
+export const PERMISSION_LABELS: Record<FactionPermission, string> = {
+  manage_members: 'Manage Members',
+  manage_payouts: 'Manage Payouts',
+  manage_entries: 'Edit/Delete Entries',
+  manage_strikes: 'Manage Strikes',
+  manage_quotas: 'Manage Quotas',
+  manage_item_types: 'Manage Item Types',
+  manage_settings: 'Manage Settings',
+  manage_customization: 'Manage Customization',
+  view_audit_logs: 'View Audit Logs',
+  view_reports: 'View Reports',
+};
 
 // ── faction_members ────────────────────────────────────
 export const factionMembers = pgTable('faction_members', {
@@ -264,6 +293,9 @@ export const quotas = pgTable('quotas', {
   id:           uuid('id').defaultRandom().primaryKey(),
   factionId:    uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
   itemTypeId:   uuid('item_type_id').notNull().references(() => itemTypes.id),
+  // null means the quota applies faction-wide; a user id scopes it to that
+  // member only — used for per-member targets on top of the faction target.
+  targetUserId: uuid('target_user_id').references(() => users.id, { onDelete: 'cascade' }),
   targetAmount: decimal('target_amount', { precision: 15, scale: 2 }).notNull(),
   periodType:   varchar('period_type', { length: 10 }).notNull(),
   periodStart:  date('period_start').notNull(),
@@ -272,8 +304,9 @@ export const quotas = pgTable('quotas', {
 });
 
 export const quotasRelations = relations(quotas, ({ one }) => ({
-  faction:  one(factions,  { fields: [quotas.factionId],  references: [factions.id] }),
-  itemType: one(itemTypes, { fields: [quotas.itemTypeId], references: [itemTypes.id] }),
+  faction:    one(factions,  { fields: [quotas.factionId],    references: [factions.id] }),
+  itemType:   one(itemTypes, { fields: [quotas.itemTypeId],   references: [itemTypes.id] }),
+  targetUser: one(users,    { fields: [quotas.targetUserId], references: [users.id] }),
 }));
 
 export type Quota = typeof quotas.$inferSelect;
