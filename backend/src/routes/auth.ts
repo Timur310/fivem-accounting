@@ -17,8 +17,71 @@ import {
 } from '../auth/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';
+import type { User } from '../db/schema.js';
 
 const router = Router();
+
+/**
+ * Build the full user response payload (used by both GET and PATCH /auth/me).
+ *
+ * The frontend's `useAppStore.user` expects this exact shape — anything that
+ * replaces the whole user object (e.g. after PATCH /auth/me) MUST include
+ * `factions` and `browseableFactions`, otherwise `user.factions.find(...)`
+ * in AppShell throws.
+ */
+async function buildUserResponse(user: User) {
+  // Get user's faction memberships
+  const memberships = await db
+    .select({
+      id: factionMembers.id,
+      factionId: factionMembers.factionId,
+      role: factionMembers.role,
+      joinedAt: factionMembers.joinedAt,
+      factionName: factions.name,
+      factionActive: factions.isActive,
+    })
+    .from(factionMembers)
+    .innerJoin(factions, eq(factionMembers.factionId, factions.id))
+    .where(eq(factionMembers.userId, user.id));
+
+  // Superadmins can browse every active faction from the admin UI, even ones
+  // they aren't a member of. Compute that list here so the SPA doesn't need
+  // a second round-trip. Members / faction admins don't get this list.
+  let browseableFactions: { id: string; name: string }[] | undefined;
+  if (user.role === 'superadmin') {
+    const memberFactionIds = memberships.map((m) => m.factionId);
+    const browsableRows = memberFactionIds.length > 0
+      ? await db
+        .select({ id: factions.id, name: factions.name })
+        .from(factions)
+        .where(
+          and(
+            eq(factions.isActive, true),
+            notInArray(factions.id, memberFactionIds),
+          ),
+        )
+        .orderBy(factions.name)
+      : await db
+        .select({ id: factions.id, name: factions.name })
+        .from(factions)
+        .where(eq(factions.isActive, true))
+        .orderBy(factions.name);
+    browseableFactions = browsableRows;
+  }
+
+  return {
+    id: user.id,
+    discordId: user.discordId,
+    username: user.username,
+    inGameName: user.inGameName,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    factions: memberships,
+    ...(browseableFactions ? { browseableFactions } : {}),
+  };
+}
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -194,72 +257,14 @@ router.patch('/me', requireAuth, async (req: Request, res: Response) => {
     req,
   });
 
-  success(res, {
-    id: updated.id,
-    discordId: updated.discordId,
-    username: updated.username,
-    inGameName: updated.inGameName,
-    avatarUrl: updated.avatarUrl,
-    role: updated.role,
-  });
+  // Return the FULL user shape (same as GET /auth/me) so the frontend can
+  // replace the whole user object without losing `factions` / `browseableFactions`.
+  success(res, await buildUserResponse(updated));
 });
 
 // ── GET /auth/me — current user + factions ─────────────
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
-  const user = req.user!;
-
-  // Get user's faction memberships
-  const memberships = await db
-    .select({
-      id: factionMembers.id,
-      factionId: factionMembers.factionId,
-      role: factionMembers.role,
-      joinedAt: factionMembers.joinedAt,
-      factionName: factions.name,
-      factionActive: factions.isActive,
-    })
-    .from(factionMembers)
-    .innerJoin(factions, eq(factionMembers.factionId, factions.id))
-    .where(eq(factionMembers.userId, user.id));
-
-  // Superadmins can browse every faction from the admin UI, even ones they
-  // aren't a member of. Compute that list here so the SPA doesn't need a
-  // second round-trip. Members / faction admins don't get this list — they
-  // only see what they belong to.
-  let browseableFactions: { id: string; name: string }[] | undefined;
-  if (user.role === 'superadmin') {
-    const memberFactionIds = memberships.map((m) => m.factionId);
-    const browsableRows = memberFactionIds.length > 0
-      ? await db
-          .select({ id: factions.id, name: factions.name })
-          .from(factions)
-          .where(
-            and(
-              eq(factions.isActive, true),
-              notInArray(factions.id, memberFactionIds),
-            ),
-          )
-          .orderBy(factions.name)
-      : await db
-          .select({ id: factions.id, name: factions.name })
-          .from(factions)
-          .where(eq(factions.isActive, true))
-          .orderBy(factions.name);
-    browseableFactions = browsableRows;
-  }
-
-  success(res, {
-    id: user.id,
-    discordId: user.discordId,
-    username: user.username,
-    inGameName: user.inGameName,
-    avatarUrl: user.avatarUrl,
-    role: user.role,
-    createdAt: user.createdAt,
-    lastLogin: user.lastLogin,
-    factions: memberships,
-    ...(browseableFactions ? { browseableFactions } : {}),
-  });
+  success(res, await buildUserResponse(req.user!));
 });
 
 export default router;
