@@ -54,12 +54,11 @@ async function buildUserResponse(user: typeof users.$inferSelect) {
   // this, so it has to answer exactly what requireFactionMember would decide
   // server-side — a menu the API then refuses is worse than no menu at all.
   //
-  // Note this follows the membership role even for a superadmin: someone who
-  // joined a faction as a plain member is treated as one there, which is what
-  // the middleware does too.
+  // A superadmin holds every permission everywhere, including in a faction
+  // they joined as a plain member — the middleware resolves it the same way.
   const membershipsWithPermissions = memberships.map(({ rank, factionRanks, ...m }) => {
     let permissions: string[];
-    if (m.role === 'admin') {
+    if (m.role === 'admin' || user.role === 'superadmin') {
       permissions = [...FACTION_PERMISSIONS];
     } else {
       const definition = (factionRanks ?? []).find((r) => r.name === rank);

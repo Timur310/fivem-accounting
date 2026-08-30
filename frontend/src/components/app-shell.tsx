@@ -272,7 +272,7 @@ export function AppShell() {
       case 'entries':
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canLogAnonymously={hasPermission('manage_entries')} /> : null;
       case 'payouts':
-        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'treasury':
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':

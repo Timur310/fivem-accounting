@@ -56,9 +56,11 @@ const TERMINAL_STATUSES: PayoutStatus[] = ['completed', 'rejected'];
 
 interface Props {
   factionId: string;
+  /** Superadmins may also remove a payout that has already been settled. */
+  isSuperadmin?: boolean;
 }
 
-export function PayoutsView({ factionId }: Props) {
+export function PayoutsView({ factionId, isSuperadmin }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const user = useAppStore((s) => s.user);
@@ -389,9 +391,18 @@ export function PayoutsView({ factionId }: Props) {
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {/* Delete (non-terminal) */}
-                        {!isTerminal && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-red-300" onClick={() => setDeleteId(p.id)}>
+                        {/* Delete. Settled payouts stay closed to faction admins —
+                            the amount has already moved through the treasury — but a
+                            superadmin needs a way to take out one that should never
+                            have been recorded. */}
+                        {(!isTerminal || isSuperadmin) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-red-300"
+                            title={isTerminal ? 'Delete (superadmin)' : 'Delete'}
+                            onClick={() => setDeleteId(p.id)}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}
