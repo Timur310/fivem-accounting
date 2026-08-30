@@ -18,6 +18,7 @@ import { AlertTriangle, Shield, Ban, RotateCcw, MessageSquare } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { StrikeEffectiveStatus } from '@/lib/api-types';
+import { displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -139,9 +140,9 @@ export function StrikesView({ factionId }: Props) {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={s.targetAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[8px]">{(s.targetUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[8px]">{displayName({ username: s.targetUsername || '?', inGameName: s.targetInGameName ?? null }).slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <span className="text-sm text-zinc-300">{s.targetUsername || 'Unknown'}</span>
+                        <span className="text-sm text-zinc-300">{displayName({ username: s.targetUsername || '?', inGameName: s.targetInGameName ?? null })}</span>
                       </div>
                     </TableCell>
                     <TableCell>

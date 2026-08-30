@@ -15,26 +15,33 @@ const router = Router({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 
+// ── Helpers ───────────────────────────────────────────
+
+/** Escape LIKE metacharacters in a user-supplied search string. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (m) => `\\${m}`);
+}
+
 // ── Validation schemas ────────────────────────────────
+
+const amountField = z
+  .string()
+  .regex(/^\d{1,13}(\.\d{1,2})?$/, 'Amount must be a positive number with at most 2 decimal places')
+  .refine((v) => Number(v) > 0, 'Amount must be greater than zero');
 
 const createEntrySchema = z.object({
   itemTypeId: z.string().uuid(),
-  amount: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) > 0,
-    'Amount must be a positive number',
-  ),
+  amount: amountField,
   description: z.string().max(500).optional(),
-  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // z.string().date() validates real calendar dates (rejects 2021-02-30 etc.)
+  entryDate: z.string().date().optional(),
   customValues: z.record(z.string(), z.string().max(500)).optional(),
 });
 
 const updateEntrySchema = z.object({
-  amount: z.string().refine(
-    (v) => !isNaN(Number(v)) && Number(v) > 0,
-    'Amount must be a positive number',
-  ).optional(),
+  amount: amountField.optional(),
   description: z.string().max(500).nullable().optional(),
-  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  entryDate: z.string().date().optional(),
   customValues: z.record(z.string(), z.string().max(500)).optional(),
 });
 
@@ -122,11 +129,13 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Validate date is not in the future
-  const date = entryDate ? new Date(entryDate + 'T00:00:00') : new Date();
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (date > today) {
+  // Validate date is not in the future. Use a single resolved `dateStr` for
+  // both the comparison and the insert — the old code called
+  // `entryDate ?? todayDateString()` twice and the two calls could land on
+  // different days around midnight. YYYY-MM-DD sorts correctly as a string.
+  const dateStr = entryDate ?? todayDateString();
+  const todayStr = todayDateString();
+  if (dateStr > todayStr) {
     error(res, 'VALIDATION_ERROR', 'Entry date cannot be in the future');
     return;
   }
@@ -139,7 +148,7 @@ router.post('/', async (req: Request, res: Response) => {
       itemTypeId,
       amount: amount,
       description: description ?? null,
-      entryDate: entryDate ?? todayDateString(),
+      entryDate: dateStr,
       customValues: validatedCustomValues,
     })
     .returning();
@@ -155,7 +164,8 @@ router.post('/', async (req: Request, res: Response) => {
     action: 'create',
     entityType: 'entry',
     entityId: entry.id,
-    details: { itemTypeId, amount: Number(amount), description, entryDate, customValues: validatedCustomValues },
+    // Keep amount as a string — Number() loses precision past 2^53.
+    details: { itemTypeId, amount, description, entryDate: dateStr, customValues: validatedCustomValues },
     req,
   });
 
@@ -182,7 +192,7 @@ router.get('/', async (req: Request, res: Response) => {
     user_id ? eq(entries.userId, user_id) : undefined,
     date_from ? gte(entries.entryDate, date_from) : undefined,
     date_to ? lte(entries.entryDate, date_to) : undefined,
-    search ? ilike(entries.description, `%${search}%`) : undefined,
+    search ? ilike(entries.description, `%${escapeLike(search)}%`) : undefined,
   ]);
 
   const [items, countResult] = await Promise.all([
@@ -269,24 +279,34 @@ router.patch('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request, 
     updates.customValues = Object.keys(filtered).length > 0 ? filtered : null;
   }
 
-  const [updated] = await db
-    .update(entries)
-    .set(updates)
-    .where(eq(entries.id, entryId))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(entries)
+      .set(updates)
+      .where(eq(entries.id, entryId))
+      .returning();
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'update',
-    entityType: 'entry',
-    entityId: entryId,
-    details: {
-      before: { amount: existing.amount, description: existing.description, entryDate: existing.entryDate, customValues: existing.customValues },
-      after: updates,
-    },
-    req,
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'update',
+      entityType: 'entry',
+      entityId: entryId,
+      details: {
+        before: { amount: existing.amount, description: existing.description, entryDate: existing.entryDate, customValues: existing.customValues },
+        after: updates,
+      },
+      req,
+      tx,
+    });
+
+    return row;
   });
+
+  if (!updated) {
+    error(res, 'NOT_FOUND', 'Entry not found', 404);
+    return;
+  }
 
   success(res, updated);
 });
@@ -306,19 +326,22 @@ router.delete('/:entryId', requireFactionAdminOrSuperadmin, async (req: Request,
     return;
   }
 
-  await db
-    .update(entries)
-    .set({ isDeleted: true, updatedAt: new Date() })
-    .where(eq(entries.id, entryId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(entries)
+      .set({ isDeleted: true, updatedAt: new Date() })
+      .where(eq(entries.id, entryId));
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'delete',
-    entityType: 'entry',
-    entityId: entryId,
-    details: { amount: existing.amount, itemTypeId: existing.itemTypeId, entryDate: existing.entryDate },
-    req,
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'delete',
+      entityType: 'entry',
+      entityId: entryId,
+      details: { amount: existing.amount, itemTypeId: existing.itemTypeId, entryDate: existing.entryDate },
+      req,
+      tx,
+    });
   });
 
   success(res, { id: entryId, deleted: true });

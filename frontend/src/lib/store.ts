@@ -21,6 +21,16 @@ export type AppView =
 
 const DEFAULT_BRAND_COLOR = '#3b82f6';
 
+/**
+ * Sidebar should be open by default on desktop and collapsed on mobile/tablet.
+ * Guarded for SSR where `window` is undefined — the layout is server-rendered
+ * with the sidebar open and reconciled on mount.
+ */
+function defaultSidebarOpen(): boolean {
+  if (typeof window === 'undefined') return true;
+  return window.matchMedia('(min-width: 1024px)').matches;
+}
+
 interface AppState {
   // Auth
   user: User | null;
@@ -50,6 +60,12 @@ interface AppState {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+
+  // In-game name prompt — controls whether the one-time modal re-appears
+  // this session. The modal shows when user.inGameName === null AND the
+  // prompt hasn't been dismissed this session.
+  inGameNamePromptDismissed: boolean;
+  setInGameNamePromptDismissed: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -60,6 +76,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentView: (view) => set({ currentView: view }),
 
   selectedFactionId: null,
+  // Reset brand color on faction switch so the new faction's brand doesn't
+  // briefly inherit the previous one's colour before its detail loads.
   setSelectedFactionId: (id) => set({ selectedFactionId: id, brandColor: DEFAULT_BRAND_COLOR }),
 
   selectedMemberUserId: null,
@@ -71,7 +89,10 @@ export const useAppStore = create<AppState>((set) => ({
   adminDetailFactionId: null,
   setAdminDetailFactionId: (id) => set({ adminDetailFactionId: id }),
 
-  sidebarOpen: true,
+  sidebarOpen: defaultSidebarOpen(),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+
+  inGameNamePromptDismissed: false,
+  setInGameNamePromptDismissed: (v) => set({ inGameNamePromptDismissed: v }),
 }));

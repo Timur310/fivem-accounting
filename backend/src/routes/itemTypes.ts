@@ -39,24 +39,25 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
 
   const { name, unit, isCurrency } = parsed.data;
 
-  const [created] = await db
-    .insert(itemTypes)
-    .values({ factionId, name, unit, isCurrency })
-    .returning();
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(itemTypes)
+      .values({ factionId, name, unit, isCurrency })
+      .returning();
+    if (!row) throw new Error('Failed to create item type');
 
-  if (!created) {
-    error(res, 'INTERNAL_ERROR', 'Failed to create item type', 500);
-    return;
-  }
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'create',
+      entityType: 'item_type',
+      entityId: row.id,
+      details: { name, unit, isCurrency },
+      req,
+      tx,
+    });
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'create',
-    entityType: 'item_type',
-    entityId: created.id,
-    details: { name, unit, isCurrency },
-    req,
+    return row;
   });
 
   success(res, created, 201);
@@ -110,21 +111,31 @@ router.patch('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, r
   if (parsed.data.isCurrency !== undefined) updates.isCurrency = parsed.data.isCurrency;
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
 
-  const [updated] = await db
-    .update(itemTypes)
-    .set(updates)
-    .where(eq(itemTypes.id, typeId))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(itemTypes)
+      .set(updates)
+      .where(eq(itemTypes.id, typeId))
+      .returning();
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'update',
-    entityType: 'item_type',
-    entityId: typeId,
-    details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive }, after: updates },
-    req,
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'update',
+      entityType: 'item_type',
+      entityId: typeId,
+      details: { before: { name: existing.name, unit: existing.unit, isCurrency: existing.isCurrency, isActive: existing.isActive }, after: updates },
+      req,
+      tx,
+    });
+
+    return row;
   });
+
+  if (!updated) {
+    error(res, 'NOT_FOUND', 'Item type not found', 404);
+    return;
+  }
 
   success(res, updated);
 });
@@ -144,16 +155,19 @@ router.delete('/:typeId', requireFactionAdminOrSuperadmin, async (req: Request, 
     return;
   }
 
-  await db.update(itemTypes).set({ isActive: false }).where(eq(itemTypes.id, typeId));
+  await db.transaction(async (tx) => {
+    await tx.update(itemTypes).set({ isActive: false }).where(eq(itemTypes.id, typeId));
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'delete',
-    entityType: 'item_type',
-    entityId: typeId,
-    details: { name: existing.name, unit: existing.unit },
-    req,
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'delete',
+      entityType: 'item_type',
+      entityId: typeId,
+      details: { name: existing.name, unit: existing.unit },
+      req,
+      tx,
+    });
   });
 
   success(res, { id: typeId, deleted: true });

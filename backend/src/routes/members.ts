@@ -87,11 +87,28 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     action: 'create',
     entityType: 'member',
     entityId: member.id,
-    details: { addedUserId: targetUser.id, discordId: targetUser.discordId, username: targetUser.username },
+    // Include `userId` alongside `addedUserId` so the /history endpoint can
+    // match this join event by either key.
+    details: {
+      userId: targetUser.id,
+      addedUserId: targetUser.id,
+      discordId: targetUser.discordId,
+      username: targetUser.username,
+    },
     req,
   });
 
-  success(res, { ...member, username: targetUser.username, inGameName: targetUser.inGameName, avatarUrl: targetUser.avatarUrl, discordId: targetUser.discordId }, 201);
+  success(
+    res,
+    {
+      ...member,
+      username: targetUser.username,
+      inGameName: targetUser.inGameName,
+      avatarUrl: targetUser.avatarUrl,
+      discordId: targetUser.discordId,
+    },
+    201,
+  );
 });
 
 // ── GET / — list faction members ─────────────────────
@@ -109,8 +126,12 @@ router.get('/', async (req: Request, res: Response) => {
       inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
-      entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${sql.raw(`'${factionId}'::uuid`)} AND is_deleted = false)::int`,
-      lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = users.id AND faction_id = ${sql.raw(`'${factionId}'::uuid`)} AND is_deleted = false)`,
+      // Parameterised sub-selects so a malformed factionId can't escape
+      // into raw SQL — the previous `sql.raw` interpolation was safe here
+      // only because Express's uuid route param happens to be validated by
+      // the FK lookup, but it's a pattern we shouldn't ship.
+      entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)::int`,
+      lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)`,
     })
     .from(factionMembers)
     .innerJoin(users, eq(factionMembers.userId, users.id))
@@ -184,35 +205,54 @@ router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, r
     updates.rank = parsed.data.rank;
   }
 
+  // Capture before-state BEFORE the transaction so the audit log shows
+  // the values that were actually there at the start of the request.
   const oldRole = membership.role;
   const oldRank = membership.rank;
-  const [updated] = await db
-    .update(factionMembers)
-    .set(updates)
-    .where(eq(factionMembers.id, membership.id))
-    .returning();
 
-  // If promoting to admin, update user's global role
-  if (parsed.data.role === 'admin') {
-    const [targetUser] = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
-    if (targetUser && targetUser.role === 'member') {
-      await db.update(users).set({ role: 'faction_admin' }).where(eq(users.id, targetUserId));
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(factionMembers)
+      .set(updates)
+      .where(eq(factionMembers.id, membership.id))
+      .returning();
+
+    // If promoting to admin, bump the user's global role from 'member' to
+    // 'faction_admin' so the SPA can show admin chrome elsewhere. Done in
+    // the same transaction so a failure rolls both writes back.
+    if (parsed.data.role === 'admin') {
+      const [targetUser] = await tx
+        .select({ role: users.role })
+        .from(users)
+        .where(eq(users.id, targetUserId))
+        .limit(1);
+      if (targetUser && targetUser.role === 'member') {
+        await tx.update(users).set({ role: 'faction_admin' }).where(eq(users.id, targetUserId));
+      }
     }
-  }
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'update',
-    entityType: 'member',
-    entityId: membership.id,
-    details: {
-      userId: targetUserId,
-      before: { role: oldRole, rank: oldRank },
-      after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
-    },
-    req,
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'update',
+      entityType: 'member',
+      entityId: membership.id,
+      details: {
+        userId: targetUserId,
+        before: { role: oldRole, rank: oldRank },
+        after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
+      },
+      req,
+      tx,
+    });
+
+    return row;
   });
+
+  if (!updated) {
+    error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
+    return;
+  }
 
   success(res, updated);
 });
@@ -254,16 +294,23 @@ router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, 
     }
   }
 
-  await db.delete(factionMembers).where(eq(factionMembers.id, membership.id));
+  await db.transaction(async (tx) => {
+    await tx.delete(factionMembers).where(eq(factionMembers.id, membership.id));
 
-  await createAuditLog({
-    userId: req.user!.id,
-    factionId,
-    action: 'delete',
-    entityType: 'member',
-    entityId: membership.id,
-    details: { removedUserId: targetUserId, role: membership.role },
-    req,
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId,
+      action: 'delete',
+      entityType: 'member',
+      entityId: membership.id,
+      details: {
+        userId: targetUserId,
+        removedUserId: targetUserId,
+        role: membership.role,
+      },
+      req,
+      tx,
+    });
   });
 
   success(res, { removed: true });
@@ -284,7 +331,14 @@ router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Requ
   const where = and(
     eq(auditLogs.factionId, factionId),
     eq(auditLogs.entityType, 'member'),
-    sql`${auditLogs.details}->>'userId' = ${targetUserId}`,
+    // Match any of the member-lifecycle keys we write — different actions
+    // populate different ones (addedUserId on join, removedUserId on leave,
+    // userId on role change) and we want them all to surface here.
+    sql`(
+      ${auditLogs.details}->>'userId' = ${targetUserId}
+      OR ${auditLogs.details}->>'addedUserId' = ${targetUserId}
+      OR ${auditLogs.details}->>'removedUserId' = ${targetUserId}
+    )`,
   );
 
   const [items, countResult] = await Promise.all([
@@ -373,6 +427,44 @@ router.get('/:userId', async (req: Request, res: Response) => {
 
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
 
+  // recentPayouts are admin-only material (the /payouts index returns 403 to
+  // plain members). Don't leak them through this aggregate endpoint — gate
+  // the entire query behind isAdmin so members get an empty array instead.
+  type RecentPayoutRow = {
+    id: string;
+    amount: string;
+    description: string | null;
+    payoutDate: string;
+    status: string;
+    itemTypeName: string;
+    itemUnit: string;
+    itemIsCurrency: boolean;
+  };
+  const recentPayoutsPromise: Promise<RecentPayoutRow[]> = isAdmin
+    ? (db
+        .select({
+          id: payouts.id,
+          amount: payouts.amount,
+          description: payouts.description,
+          payoutDate: payouts.payoutDate,
+          status: payouts.status,
+          itemTypeName: itemTypes.name,
+          itemUnit: itemTypes.unit,
+          itemIsCurrency: itemTypes.isCurrency,
+        })
+        .from(payouts)
+        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
+        .where(
+          and(
+            eq(payouts.factionId, factionId),
+            eq(payouts.recipientUserId, targetUserId),
+            eq(payouts.isDeleted, false),
+          ),
+        )
+        .orderBy(desc(payouts.createdAt))
+        .limit(20) as Promise<RecentPayoutRow[]>)
+    : Promise.resolve([] as RecentPayoutRow[]);
+
   const [contribution, byItemType, payoutStats, recentEntries, recentPayouts, activeQuotas] =
     await Promise.all([
       db
@@ -452,28 +544,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
         )
         .orderBy(desc(entries.createdAt))
         .limit(20),
-      db
-        .select({
-          id: payouts.id,
-          amount: payouts.amount,
-          description: payouts.description,
-          payoutDate: payouts.payoutDate,
-          status: payouts.status,
-          itemTypeName: itemTypes.name,
-          itemUnit: itemTypes.unit,
-          itemIsCurrency: itemTypes.isCurrency,
-        })
-        .from(payouts)
-        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
-        .where(
-          and(
-            eq(payouts.factionId, factionId),
-            eq(payouts.recipientUserId, targetUserId),
-            eq(payouts.isDeleted, false),
-          ),
-        )
-        .orderBy(desc(payouts.createdAt))
-        .limit(20),
+      recentPayoutsPromise,
       db
         .select({
           id: quotas.id,

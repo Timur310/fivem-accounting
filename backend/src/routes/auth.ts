@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
+import axios from 'axios';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users, factionMembers, factions } from '../db/schema.js';
-import type { User } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and, notInArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
+import { env } from '../lib/env.js';
 import {
   buildDiscordAuthUrl,
   exchangeCode,
@@ -16,15 +17,85 @@ import {
 } from '../auth/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';
+import type { User } from '../db/schema.js';
 
 const router = Router();
+
+/**
+ * Build the full user response payload (used by both GET and PATCH /auth/me).
+ *
+ * The frontend's `useAppStore.user` expects this exact shape — anything that
+ * replaces the whole user object (e.g. after PATCH /auth/me) MUST include
+ * `factions` and `browseableFactions`, otherwise `user.factions.find(...)`
+ * in AppShell throws.
+ */
+async function buildUserResponse(user: User) {
+  // Get user's faction memberships
+  const memberships = await db
+    .select({
+      id: factionMembers.id,
+      factionId: factionMembers.factionId,
+      role: factionMembers.role,
+      joinedAt: factionMembers.joinedAt,
+      factionName: factions.name,
+      factionActive: factions.isActive,
+    })
+    .from(factionMembers)
+    .innerJoin(factions, eq(factionMembers.factionId, factions.id))
+    .where(eq(factionMembers.userId, user.id));
+
+  // Superadmins can browse every active faction from the admin UI, even ones
+  // they aren't a member of. Compute that list here so the SPA doesn't need
+  // a second round-trip. Members / faction admins don't get this list.
+  let browseableFactions: { id: string; name: string }[] | undefined;
+  if (user.role === 'superadmin') {
+    const memberFactionIds = memberships.map((m) => m.factionId);
+    const browsableRows = memberFactionIds.length > 0
+      ? await db
+        .select({ id: factions.id, name: factions.name })
+        .from(factions)
+        .where(
+          and(
+            eq(factions.isActive, true),
+            notInArray(factions.id, memberFactionIds),
+          ),
+        )
+        .orderBy(factions.name)
+      : await db
+        .select({ id: factions.id, name: factions.name })
+        .from(factions)
+        .where(eq(factions.isActive, true))
+        .orderBy(factions.name);
+    browseableFactions = browsableRows;
+  }
+
+  return {
+    id: user.id,
+    discordId: user.discordId,
+    username: user.username,
+    inGameName: user.inGameName,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    factions: memberships,
+    ...(browseableFactions ? { browseableFactions } : {}),
+  };
+}
+
+// ── Helpers ──────────────────────────────────────────
+
+function avatarUrl(discordId: string, avatar: string | null): string | null {
+  if (!avatar) return null;
+  return `https://cdn.discordapp.com/avatars/${discordId}/${avatar}.png`;
+}
 
 // ── GET /auth/discord — redirect to Discord OAuth ─────
 router.get('/discord', async (_req: Request, res: Response) => {
   try {
     const { url } = await buildDiscordAuthUrl();
     res.redirect(url);
-  } catch (err) {
+  } catch {
     error(res, 'OAUTH_ERROR', 'Failed to initiate Discord OAuth', 500);
   }
 });
@@ -51,6 +122,8 @@ router.get('/callback', async (req: Request, res: Response) => {
     return;
   }
 
+  const frontendBase = new URL(env.FRONTEND_URL);
+
   try {
     // Exchange code for token
     const tokenRes = await exchangeCode(code, codeVerifier);
@@ -58,75 +131,71 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Fetch Discord user profile
     const discordUser = await getDiscordUser(tokenRes.access_token);
 
-    // Upsert user
-    const [existing] = await db
-      .select()
-      .from(users)
-      .where(eq(users.discordId, discordUser.id))
-      .limit(1);
-
-    let userId: string;
-
-    if (existing) {
-      await db
-        .update(users)
-        .set({
+    // Upsert the user. `inGameName` is intentionally absent from the
+    // `set` clause: once a player has chosen their in-character name we
+    // never overwrite it on re-login, even if their Discord username
+    // changes. Only `username` (the Discord handle) syncs on each login.
+    const [user] = await db
+      .insert(users)
+      .values({
+        discordId: discordUser.id,
+        username: discordUser.username,
+        avatarUrl: avatarUrl(discordUser.id, discordUser.avatar),
+        role: 'member',
+        lastLogin: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: users.discordId,
+        set: {
           username: discordUser.username,
-          avatarUrl: discordUser.avatar
-            ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
-            : null,
+          avatarUrl: avatarUrl(discordUser.id, discordUser.avatar),
           lastLogin: new Date(),
-        })
-        .where(eq(users.id, existing.id));
-      userId = existing.id;
-    } else {
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          discordId: discordUser.id,
-          username: discordUser.username,
-          avatarUrl: discordUser.avatar
-            ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
-            : null,
-          role: 'member',
-          lastLogin: new Date(),
-        })
-        .returning();
-      userId = newUser!.id;
+        },
+      })
+      .returning();
+
+    if (!user) {
+      throw new Error('User upsert returned no row');
     }
 
-    // Fetch final user record for JWT
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-
     // Sign JWT
-    const token = signJwt({ userId: user!.id, role: user!.role });
+    const token = signJwt({ userId: user.id, role: user.role });
 
     // Set HTTP-only cookie
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
-    // Audit log
+    // Audit log — deliberately omit discordId; the user id is enough and
+    // Discord ids are PII we don't need to duplicate across audit rows.
     await createAuditLog({
-      userId: user!.id,
+      userId: user.id,
       action: 'login',
       entityType: 'user',
-      entityId: user!.id,
-      details: { method: 'discord_oauth', discordId: discordUser.id },
+      entityId: user.id,
+      details: { method: 'discord_oauth' },
       req,
     });
 
-    // Redirect directly to the Next.js Frontend URL (Port 3000)
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(frontendUrl);
-  } catch (err: any) {
-    console.error('[AUTH CALLBACK ERROR]', err?.response?.data || err?.message || err);
+    // Redirect to the frontend with a success marker so the SPA knows to
+    // re-fetch /auth/me. Always 302 to the same origin — never JSON — so
+    // the browser completes the OAuth round-trip cleanly.
+    const redirect = new URL('/', frontendBase);
+    redirect.searchParams.set('auth', 'success');
+    res.redirect(redirect.toString());
+  } catch (err) {
+    // Don't leak axios response bodies into logs; the message is enough.
+    if (axios.isAxiosError(err)) {
+      console.error('[AUTH CALLBACK ERROR]', err.message);
+    } else {
+      console.error('[AUTH CALLBACK ERROR]', err instanceof Error ? err.message : err);
+    }
 
-    // Check if headers have already been sent before responding with an error
+    // If we haven't started writing a response yet, redirect the user back
+    // to the frontend with an error flag — JSON 500s would render as a
+    // broken page in the browser mid-OAuth-flow.
     if (!res.headersSent) {
-      error(res, 'OAUTH_ERROR', 'Failed to complete authentication', 500);
+      const redirect = new URL('/', frontendBase);
+      redirect.searchParams.set('auth', 'error');
+      res.redirect(redirect.toString());
     }
   }
 });
@@ -142,53 +211,13 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
   });
 
   res.clearCookie(COOKIE_NAME, { path: '/' });
-  success(res, null, 204);
+  // 204 No Content — no body. res.end() rather than res.json(null) so we
+  // don't accidentally send "null" as the JSON body.
+  res.status(204).end();
 });
 
-// The public shape of a user's own profile. `inGameName` is null until the
-// player has provided it, which is the signal the UI uses to prompt for it.
-function profilePayload(user: User) {
-  return {
-    id: user.id,
-    discordId: user.discordId,
-    username: user.username,
-    inGameName: user.inGameName,
-    avatarUrl: user.avatarUrl,
-    role: user.role,
-    createdAt: user.createdAt,
-    lastLogin: user.lastLogin,
-  };
-}
-
-// ── GET /auth/me — current user + factions ─────────────
-router.get('/me', requireAuth, async (req: Request, res: Response) => {
-  const user = req.user!;
-
-  // Get user's faction memberships
-  const memberships = await db
-    .select({
-      id: factionMembers.id,
-      factionId: factionMembers.factionId,
-      role: factionMembers.role,
-      joinedAt: factionMembers.joinedAt,
-      factionName: factions.name,
-      factionActive: factions.isActive,
-    })
-    .from(factionMembers)
-    .innerJoin(factions, eq(factionMembers.factionId, factions.id))
-    .where(eq(factionMembers.userId, user.id));
-
-  success(res, {
-    ...profilePayload(user),
-    factions: memberships,
-  });
-});
-
-// ── PATCH /auth/me — update own profile ────────────────
-// Only the in-game name is editable: everything else on the user row is owned
-// by Discord and overwritten on the next login, and `role` is deliberately not
-// something a user can change about themselves.
-const updateProfileSchema = z.object({
+// ── PATCH /auth/me — update the player's in-game name ──
+const updateMeSchema = z.object({
   inGameName: z
     .string()
     .trim()
@@ -197,32 +226,45 @@ const updateProfileSchema = z.object({
 });
 
 router.patch('/me', requireAuth, async (req: Request, res: Response) => {
-  const user = req.user!;
-
-  const parsed = updateProfileSchema.safeParse(req.body);
+  const parsed = updateMeSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
     return;
   }
 
-  const { inGameName } = parsed.data;
+  const before = req.user!.inGameName ?? null;
+  const after = parsed.data.inGameName;
 
+  // No-op if the player re-submitted the same value — still audit log it so
+  // admins can see the attempt.
   const [updated] = await db
     .update(users)
-    .set({ inGameName })
-    .where(eq(users.id, user.id))
+    .set({ inGameName: after })
+    .where(eq(users.id, req.user!.id))
     .returning();
 
+  if (!updated) {
+    error(res, 'NOT_FOUND', 'User not found', 404);
+    return;
+  }
+
   await createAuditLog({
-    userId: user.id,
+    userId: req.user!.id,
     action: 'update_profile',
     entityType: 'user',
-    entityId: user.id,
-    details: { inGameName, previousInGameName: user.inGameName },
+    entityId: req.user!.id,
+    details: { inGameName: after, previousInGameName: before },
     req,
   });
 
-  success(res, profilePayload(updated!));
+  // Return the FULL user shape (same as GET /auth/me) so the frontend can
+  // replace the whole user object without losing `factions` / `browseableFactions`.
+  success(res, await buildUserResponse(updated));
+});
+
+// ── GET /auth/me — current user + factions ─────────────
+router.get('/me', requireAuth, async (req: Request, res: Response) => {
+  success(res, await buildUserResponse(req.user!));
 });
 
 export default router;

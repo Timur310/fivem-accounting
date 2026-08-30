@@ -32,7 +32,7 @@ import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } fro
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
-import { formatAmount } from '@/lib/format';
+import { formatAmount, displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -222,7 +222,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
             <div className="flex-1" />
             <Button variant="outline" size="sm" onClick={() => {
               const url = exportApi.entriesUrl(factionId, { date_from: dateFrom || undefined, date_to: dateTo || undefined, item_type_id: itemTypeIdFilter === 'all' ? undefined : itemTypeIdFilter });
-              window.open(url, '_blank');
+              window.open(url, '_blank', 'noopener,noreferrer');
             }}>
               <Download className="mr-1.5 h-3.5 w-3.5" />CSV
             </Button>
@@ -268,9 +268,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
                               <AvatarImage src={entry.avatarUrl ?? undefined} />
-                              <AvatarFallback className="text-[9px]">{entry.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                              <AvatarFallback className="text-[9px]">{displayName(entry).slice(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm text-zinc-300">{entry.username}</span>
+                            <span className="text-sm text-zinc-300">{displayName(entry)}</span>
                           </div>
                         </TableCell>
                         <TableCell>

@@ -22,11 +22,13 @@ export interface User {
   id: string;
   discordId: string;
   username: string;
+  inGameName: string | null;
   avatarUrl: string | null;
   role: 'superadmin' | 'faction_admin' | 'member';
   createdAt: string;
   lastLogin: string | null;
   factions: FactionMembership[];
+  browseableFactions?: { id: string; name: string }[];
 }
 
 export interface FactionMembership {
@@ -82,6 +84,7 @@ export interface Member {
   rank: string | null;
   joinedAt: string;
   username: string;
+  inGameName: string | null;
   avatarUrl: string | null;
   discordId: string;
   entryCount: number;
@@ -127,6 +130,7 @@ export interface Entry {
   customValues: Record<string, string> | null;
   userId: string;
   username: string;
+  inGameName: string | null;
   avatarUrl: string | null;
   itemTypeName: string;
   itemUnit: string;
@@ -172,6 +176,7 @@ export interface DashboardData {
   topContributors: {
     userId: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     totalContributed: number;
     entryCount: number;
@@ -183,6 +188,7 @@ export interface DashboardData {
     entryDate: string;
     createdAt: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     itemTypeName: string;
     itemUnit: string;
@@ -191,6 +197,7 @@ export interface DashboardData {
   inactiveMembers?: {
     userId: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     lastEntryDate: string | null;
     daysInactive: number | null;
@@ -243,6 +250,7 @@ export interface AuditLog {
   ipAddress: string | null;
   createdAt: string;
   actorUsername: string;
+  actorInGameName: string | null;
   actorDiscordId: string;
 }
 
@@ -253,6 +261,7 @@ export interface ChartData {
   memberContributions: {
     userId: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     total: number;
     entryCount: number;
@@ -273,6 +282,7 @@ export interface ChartData {
   memberItemBreakdown: {
     userId: string;
     username: string;
+    inGameName: string | null;
     itemTypeId: string;
     itemTypeName: string;
     unit: string;
@@ -297,6 +307,7 @@ export interface AdminAnalytics {
   recentSignups: {
     id: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     role: string;
     createdAt: string;
@@ -347,6 +358,7 @@ export interface ReportSummary {
   }[];
   memberRanking: {
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     /** Ranked on currencyTotal; itemTotal is reported alongside. */
     currencyTotal: number;
@@ -401,6 +413,7 @@ export interface Payout {
   approvedAt: string | null;
   recipientUserId: string;
   recipientUsername: string;
+  recipientInGameName: string | null;
   recipientAvatarUrl: string | null;
   itemTypeId: string;
   itemTypeName: string;
@@ -477,6 +490,7 @@ export interface TreasuryData {
     payoutDate: string;
     status: PayoutStatus;
     recipientUsername: string;
+    recipientInGameName: string | null;
     recipientAvatarUrl: string | null;
     itemTypeName: string;
     itemUnit: string;
@@ -514,6 +528,7 @@ export interface MemberProfile {
     joinedAt: string;
     userId: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     discordId: string;
     lastLogin: string | null;
@@ -603,6 +618,7 @@ export interface MemberHistoryEntry {
   createdAt: string;
   actorId: string;
   actorUsername: string;
+  actorInGameName: string | null;
   actorAvatarUrl: string | null;
 }
 
@@ -619,6 +635,7 @@ export interface MemberNote {
   updatedAt: string | null;
   authorId: string;
   authorUsername: string;
+  authorInGameName: string | null;
   authorAvatarUrl: string | null;
 }
 
@@ -651,9 +668,11 @@ export interface Strike {
   updatedAt: string | null;
   issuedBy: string;
   issuerUsername: string;
+  issuerInGameName: string | null;
   issuerAvatarUrl: string | null;
   targetUserId?: string;
   targetUsername?: string;
+  targetInGameName?: string | null;
   targetAvatarUrl?: string | null;
 }
 
@@ -721,6 +740,7 @@ export interface LeaderboardRanking {
   rank: number;
   userId: string;
   username: string;
+  inGameName: string | null;
   avatarUrl: string | null;
   total: number;
   entryCount: number;
@@ -738,6 +758,7 @@ export interface GlobalLeaderboardRanking {
   rank: number;
   userId: string;
   username: string;
+  inGameName: string | null;
   avatarUrl: string | null;
   factionId: string;
   factionName: string;
