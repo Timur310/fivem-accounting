@@ -77,6 +77,7 @@ router.get('/', async (req: Request, res: Response) => {
         payoutDate: payouts.payoutDate,
         status: payouts.status,
         recipientUsername: users.username,
+        recipientInGameName: users.inGameName,
         recipientAvatarUrl: users.avatarUrl,
         itemTypeName: itemTypes.name,
         itemUnit: itemTypes.unit,

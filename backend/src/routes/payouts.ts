@@ -234,6 +234,7 @@ router.get('/', async (req: Request, res: Response) => {
         approvedAt: payouts.approvedAt,
         recipientUserId: payouts.recipientUserId,
         recipientUsername: users.username,
+        recipientInGameName: users.inGameName,
         recipientAvatarUrl: users.avatarUrl,
         itemTypeId: payouts.itemTypeId,
         itemTypeName: itemTypes.name,

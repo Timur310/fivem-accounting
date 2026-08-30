@@ -65,6 +65,7 @@ router.get('/', async (req: Request, res: Response) => {
       .select({
         userId: users.id,
         username: users.username,
+        inGameName: users.inGameName,
         avatarUrl: users.avatarUrl,
         total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
         entryCount: sql<number>`COUNT(*)::int`,
@@ -72,7 +73,7 @@ router.get('/', async (req: Request, res: Response) => {
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))
       .where(where)
-      .groupBy(users.id, users.username, users.avatarUrl)
+      .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
       .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) DESC`)
       .limit(limit),
     // Per-item-type split for the same window, joined in memory below.
@@ -108,6 +109,7 @@ router.get('/', async (req: Request, res: Response) => {
       rank,
       userId: row.userId,
       username: row.username,
+      inGameName: row.inGameName,
       avatarUrl: row.avatarUrl,
       total,
       entryCount: row.entryCount,

@@ -67,6 +67,7 @@ router.get('/', async (_req: Request, res: Response) => {
       .select({
         id: users.id,
         username: users.username,
+        inGameName: users.inGameName,
         avatarUrl: users.avatarUrl,
         role: users.role,
         createdAt: users.createdAt,

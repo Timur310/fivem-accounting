@@ -40,6 +40,7 @@ router.get('/', async (req: Request, res: Response) => {
     .select({
       userId: users.id,
       username: users.username,
+      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
       entryCount: sql<number>`COUNT(*)::int`,
@@ -47,7 +48,7 @@ router.get('/', async (req: Request, res: Response) => {
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))
     .where(baseWhere)
-    .groupBy(users.id, users.username, users.avatarUrl)
+    .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
     .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
 
   // ── 2. Item type distribution (pie chart) ──────────
@@ -102,6 +103,7 @@ router.get('/', async (req: Request, res: Response) => {
     .select({
       userId: users.id,
       username: users.username,
+      inGameName: users.inGameName,
       itemTypeId: itemTypes.id,
       itemTypeName: itemTypes.name,
       unit: itemTypes.unit,
@@ -112,7 +114,7 @@ router.get('/', async (req: Request, res: Response) => {
     .innerJoin(users, eq(entries.userId, users.id))
     .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
     .where(baseWhere)
-    .groupBy(users.id, users.username, itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency)
+    .groupBy(users.id, users.username, users.inGameName, itemTypes.id, itemTypes.name, itemTypes.unit, itemTypes.isCurrency)
     .orderBy(sql`SUM(CAST(amount AS NUMERIC)) DESC`);
 
   success(res, {

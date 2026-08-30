@@ -121,6 +121,7 @@ router.get('/', async (req: Request, res: Response) => {
       updatedAt: memberNotes.updatedAt,
       authorId: memberNotes.authorId,
       authorUsername: users.username,
+      authorInGameName: users.inGameName,
       authorAvatarUrl: users.avatarUrl,
     })
     .from(memberNotes)

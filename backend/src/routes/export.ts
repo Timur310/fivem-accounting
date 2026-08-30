@@ -58,6 +58,7 @@ router.get('/entries', async (req: Request, res: Response) => {
   const rows = await db
     .select({
       username: users.username,
+      inGameName: users.inGameName,
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
       amount: entries.amount,
@@ -73,13 +74,15 @@ router.get('/entries', async (req: Request, res: Response) => {
 
   setCsvHeaders(res, `entries-${factionId.slice(0, 8)}-${todayDateString()}.csv`);
 
-  // Write header
-  res.write('Member,Item Type,Amount,Description,Entry Date,Created At\n');
+  // Write header. The in-game name is appended rather than placed next to the
+  // Discord name so the existing columns keep their position for anything
+  // already parsing this export.
+  res.write('Member,Item Type,Amount,Description,Entry Date,Created At,In-Game Name\n');
 
   // Write rows
   for (const row of rows) {
     res.write(
-      `${csvEscape(row.username)},${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.amount).toFixed(2))},${csvEscape(row.description)},${csvEscape(row.entryDate)},${csvEscape(formatDateValue(row.createdAt))}\n`,
+      `${csvEscape(row.username)},${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.amount).toFixed(2))},${csvEscape(row.description)},${csvEscape(row.entryDate)},${csvEscape(formatDateValue(row.createdAt))},${csvEscape(row.inGameName)}\n`,
     );
   }
 

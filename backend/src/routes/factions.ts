@@ -183,6 +183,7 @@ router.get('/:id', requireAuth, requireSuperadmin, async (req: Request, res: Res
       role: factionMembers.role,
       joinedAt: factionMembers.joinedAt,
       username: users.username,
+      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
     })

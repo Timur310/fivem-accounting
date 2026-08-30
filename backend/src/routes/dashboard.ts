@@ -62,6 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
     .select({
       userId: users.id,
       username: users.username,
+      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       totalContributed: sum(entries.amount).mapWith(Number),
       entryCount: sql`COUNT(*)::int`,
@@ -69,7 +70,7 @@ router.get('/', async (req: Request, res: Response) => {
     .from(entries)
     .innerJoin(users, eq(entries.userId, users.id))
     .where(and(eq(entries.factionId, factionId), eq(entries.isDeleted, false)))
-    .groupBy(users.id, users.username, users.avatarUrl)
+    .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
     .orderBy(sql`SUM(entries.amount) DESC`)
     .limit(10);
 
@@ -82,6 +83,7 @@ router.get('/', async (req: Request, res: Response) => {
       entryDate: entries.entryDate,
       createdAt: entries.createdAt,
       username: users.username,
+      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
@@ -112,6 +114,7 @@ router.get('/', async (req: Request, res: Response) => {
   let inactiveMembers: {
     userId: string;
     username: string;
+    inGameName: string | null;
     avatarUrl: string | null;
     lastEntryDate: string | null;
     daysInactive: number | null;
@@ -124,6 +127,7 @@ router.get('/', async (req: Request, res: Response) => {
         userId: factionMembers.userId,
         joinedAt: factionMembers.joinedAt,
         username: users.username,
+        inGameName: users.inGameName,
         avatarUrl: users.avatarUrl,
         lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = ${factionMembers.userId} AND faction_id = ${factionId} AND is_deleted = false)`,
       })
@@ -150,6 +154,7 @@ router.get('/', async (req: Request, res: Response) => {
       .map((m) => ({
         userId: m.userId,
         username: m.username,
+        inGameName: m.inGameName,
         avatarUrl: m.avatarUrl,
         lastEntryDate: m.lastEntryDate,
         daysInactive: daysSince(m.lastEntryDate),

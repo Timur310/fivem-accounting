@@ -69,6 +69,7 @@ router.get('/', async (req: Request, res: Response) => {
         createdAt: strikes.createdAt,
         targetUserId: strikes.targetUserId,
         targetUsername: users.username,
+        targetInGameName: users.inGameName,
         targetAvatarUrl: users.avatarUrl,
         issuedBy: strikes.issuedBy,
       })
