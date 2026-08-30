@@ -18,7 +18,6 @@ import { AlertTriangle, Shield, Ban, RotateCcw, MessageSquare } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { StrikeEffectiveStatus } from '@/lib/api-types';
-import { displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -41,6 +40,11 @@ export function StrikesView({ factionId }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
+  // Need the current user to determine admin status — members only see their
+  // own strikes (the backend filters), and the action buttons (Revoke /
+  // Reinstate) are admin-only.
+  const user = useAppStore((s) => s.user);
+  const isAdmin = user?.role === 'superadmin' || (user?.factions.some((f) => f.factionId === factionId && f.role === 'admin') ?? false);
 
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -140,9 +144,9 @@ export function StrikesView({ factionId }: Props) {
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={s.targetAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[8px]">{displayName({ username: s.targetUsername || '?', inGameName: s.targetInGameName ?? null }).slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[8px]">{(s.targetUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <span className="text-sm text-zinc-300">{displayName({ username: s.targetUsername || '?', inGameName: s.targetInGameName ?? null })}</span>
+                        <span className="text-sm text-zinc-300">{s.targetUsername || 'Unknown'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -159,7 +163,7 @@ export function StrikesView({ factionId }: Props) {
                     </TableCell>
                     <TableCell className="text-xs text-zinc-600 tabular-nums">{new Date(s.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {s.effectiveStatus === 'active' && s.targetUserId && (
+                      {isAdmin && s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <MessageSquare className="h-3 w-3" />
@@ -169,7 +173,7 @@ export function StrikesView({ factionId }: Props) {
                           </Button>
                         </div>
                       )}
-                      {s.effectiveStatus === 'appealed' && s.targetUserId && (
+                      {isAdmin && s.effectiveStatus === 'appealed' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <RotateCcw className="h-3 w-3" />

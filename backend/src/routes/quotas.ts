@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { quotas, entries, itemTypes } from '../db/schema.js';
-import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
+import { quotas, entries, itemTypes, users, factionMembers } from '../db/schema.js';
+import { eq, and, sql, desc, gte, lte, isNull } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
@@ -19,9 +19,12 @@ router.use(requireAuth, requireFactionMember);
 /**
  * Check if a quota's current period has started (period_start <= today)
  * and compute the actual sum of entries for that period.
+ *
+ * If the quota has a `targetUserId`, only that member's entries count;
+ * otherwise (null) it's a faction-wide quota and every member's entries count.
  */
 async function computeQuotaProgress(
-  quota: { itemTypeId: string; targetAmount: string; periodType: string; periodStart: string; isActive: boolean },
+  quota: { itemTypeId: string; targetAmount: string; periodType: string; periodStart: string; isActive: boolean; targetUserId: string | null },
   factionId: string,
 ) {
   const today = new Date();
@@ -39,6 +42,12 @@ async function computeQuotaProgress(
 
   const range = getPeriodRange(quota.periodType, today);
 
+  // Per-member quotas only count that member's entries; faction-wide quotas
+  // (targetUserId === null) count every member's entries.
+  const userCondition = quota.targetUserId
+    ? eq(entries.userId, quota.targetUserId)
+    : undefined;
+
   const [result] = await db
     .select({
       total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
@@ -51,6 +60,7 @@ async function computeQuotaProgress(
         gte(entries.entryDate, range.start),
         lte(entries.entryDate, range.end),
         eq(entries.isDeleted, false),
+        ...(userCondition ? [userCondition] : []),
       ),
     );
 
@@ -78,6 +88,9 @@ const createQuotaSchema = z.object({
   ),
   periodType: z.enum(['weekly', 'monthly']),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD format'),
+  // Optional: if set, this is a per-member quota (only that member's entries
+  // count). If null/omitted, it's a faction-wide quota.
+  targetUserId: z.string().uuid().nullable().optional(),
 });
 
 const updateQuotaSchema = z.object({
@@ -88,6 +101,7 @@ const updateQuotaSchema = z.object({
   periodType: z.enum(['weekly', 'monthly']).optional(),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD format').optional(),
   isActive: z.boolean().optional(),
+  targetUserId: z.string().uuid().nullable().optional(),
 });
 
 // ── POST / — create quota ───────────────────────────
@@ -99,7 +113,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  const { itemTypeId, targetAmount, periodType, periodStart } = parsed.data;
+  const { itemTypeId, targetAmount, periodType, periodStart, targetUserId } = parsed.data;
 
   // Validate item type belongs to this faction
   const [itemType] = await db
@@ -112,27 +126,43 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  // Check for duplicate active quota on same item type + period type
+  // If targetUserId is set, validate the user is a member of this faction.
+  if (targetUserId) {
+    const [membership] = await db
+      .select({ id: factionMembers.id })
+      .from(factionMembers)
+      .where(and(eq(factionMembers.factionId, factionId), eq(factionMembers.userId, targetUserId)))
+      .limit(1);
+    if (!membership) {
+      error(res, 'VALIDATION_ERROR', 'Target user is not a member of this faction');
+      return;
+    }
+  }
+
+  // Check for duplicate active quota on same item type + period type + target.
+  // A faction-wide quota and a per-member quota for the same item type are
+  // allowed to coexist — they're different scopes.
+  const duplicateConditions = [
+    eq(quotas.factionId, factionId),
+    eq(quotas.itemTypeId, itemTypeId),
+    eq(quotas.periodType, periodType),
+    eq(quotas.isActive, true),
+    // Match the same scope: both null (faction-wide) or both the same userId.
+    targetUserId ? eq(quotas.targetUserId, targetUserId) : isNull(quotas.targetUserId),
+  ];
   const [duplicate] = await db
     .select()
     .from(quotas)
-    .where(
-      and(
-        eq(quotas.factionId, factionId),
-        eq(quotas.itemTypeId, itemTypeId),
-        eq(quotas.periodType, periodType),
-        eq(quotas.isActive, true),
-      ),
-    )
+    .where(and(...duplicateConditions))
     .limit(1);
   if (duplicate) {
-    error(res, 'BAD_REQUEST', 'An active quota already exists for this item type and period type. Deactivate it first.', 400);
+    error(res, 'BAD_REQUEST', `An active ${targetUserId ? 'per-member' : 'faction-wide'} quota already exists for this item type and period type. Deactivate it first.`, 400);
     return;
   }
 
   const [created] = await db
     .insert(quotas)
-    .values({ factionId, itemTypeId, targetAmount, periodType, periodStart })
+    .values({ factionId, itemTypeId, targetAmount, periodType, periodStart, targetUserId: targetUserId ?? null })
     .returning();
 
   if (!created) {
@@ -146,7 +176,7 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     action: 'create',
     entityType: 'quota',
     entityId: created.id,
-    details: { itemTypeId, targetAmount: Number(targetAmount), periodType, periodStart },
+    details: { itemTypeId, targetAmount: Number(targetAmount), periodType, periodStart, targetUserId: targetUserId ?? null, scope: targetUserId ? 'member' : 'faction' },
     req,
   });
 
@@ -164,6 +194,9 @@ router.get('/', async (req: Request, res: Response) => {
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
       itemIsCurrency: itemTypes.isCurrency,
+      targetUserId: quotas.targetUserId,
+      targetUsername: users.username,
+      targetAvatarUrl: users.avatarUrl,
       targetAmount: quotas.targetAmount,
       periodType: quotas.periodType,
       periodStart: quotas.periodStart,
@@ -172,6 +205,7 @@ router.get('/', async (req: Request, res: Response) => {
     })
     .from(quotas)
     .innerJoin(itemTypes, eq(quotas.itemTypeId, itemTypes.id))
+    .leftJoin(users, eq(quotas.targetUserId, users.id))
     .where(eq(quotas.factionId, factionId))
     .orderBy(desc(quotas.createdAt));
 
@@ -194,6 +228,7 @@ router.get('/', async (req: Request, res: Response) => {
           periodType: q.periodType,
           periodStart: q.periodStart,
           isActive: q.isActive,
+          targetUserId: q.targetUserId,
         },
         factionId,
       );

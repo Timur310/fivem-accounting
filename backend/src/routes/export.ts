@@ -58,7 +58,6 @@ router.get('/entries', async (req: Request, res: Response) => {
   const rows = await db
     .select({
       username: users.username,
-      inGameName: users.inGameName,
       itemTypeName: itemTypes.name,
       itemUnit: itemTypes.unit,
       amount: entries.amount,
@@ -74,14 +73,13 @@ router.get('/entries', async (req: Request, res: Response) => {
 
   setCsvHeaders(res, `entries-${factionId.slice(0, 8)}-${todayDateString()}.csv`);
 
-  // Write header — In-Game Name is appended at the END so existing CSV column
-  // positions stay stable for any consumer that parses by index.
-  res.write('Member,Item Type,Amount,Description,Entry Date,Created At,In-Game Name\n');
+  // Write header
+  res.write('Member,Item Type,Amount,Description,Entry Date,Created At\n');
 
   // Write rows
   for (const row of rows) {
     res.write(
-      `${csvEscape(row.username)},${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.amount).toFixed(2))},${csvEscape(row.description)},${csvEscape(row.entryDate)},${csvEscape(formatDateValue(row.createdAt))},${csvEscape(row.inGameName)}\n`,
+      `${csvEscape(row.username)},${csvEscape(row.itemTypeName)},${csvEscape(row.itemUnit + Number(row.amount).toFixed(2))},${csvEscape(row.description)},${csvEscape(row.entryDate)},${csvEscape(formatDateValue(row.createdAt))}\n`,
     );
   }
 

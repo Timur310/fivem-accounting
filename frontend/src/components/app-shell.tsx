@@ -3,7 +3,6 @@
 import { useAppStore } from '@/lib/store';
 import { authApi, factionsApi } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -37,7 +36,6 @@ import {
   ArrowDownToLine,
   Trophy,
   AlertTriangle,
-  X,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
@@ -55,16 +53,8 @@ import { LeaderboardView } from '@/views/leaderboard-view';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AppView } from '@/lib/store';
-import { displayName } from '@/lib/format';
-
-type FactionOption = {
-  factionId: string;
-  factionName: string;
-  role: 'admin' | 'member' | 'browse';
-};
 
 export function AppShell() {
-  const queryClient = useQueryClient();
   const user = useAppStore((s) => s.user);
   const currentView = useAppStore((s) => s.currentView);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
@@ -93,16 +83,6 @@ export function AppShell() {
     }
   }, [factionDetail?.brandColor, setBrandColor]);
 
-  // Re-evaluate the sidebar's open/closed default when the viewport crosses
-  // the lg breakpoint (e.g. rotating a tablet, resizing a browser window).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mql = window.matchMedia('(min-width: 1024px)');
-    const handler = (e: MediaQueryListEvent) => setSidebarOpen(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, [setSidebarOpen]);
-
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -110,33 +90,14 @@ export function AppShell() {
     try {
       await authApi.logout();
     } catch { /* ignore */ }
-    // Purge cached user/faction/permission data so a different user logging in
-    // next can't briefly see the previous user's data.
-    queryClient.clear();
     setUser(null);
-    setSelectedFactionId(null);
     setCurrentView('login');
     router.refresh();
   };
 
-  // Build the dropdown options: active memberships first, then superadmin
-  // browseable factions they're not a member of. Sorted alphabetically.
-  const factionOptions: FactionOption[] = (() => {
-    const membershipOpts: FactionOption[] = (user?.factions ?? [])
-      .filter((f) => f.factionActive)
-      .map((f) => ({ factionId: f.factionId, factionName: f.factionName, role: f.role }));
-    const membershipIds = new Set(membershipOpts.map((o) => o.factionId));
-    const browseOpts: FactionOption[] = (user?.browseableFactions ?? [])
-      .filter((b) => !membershipIds.has(b.id))
-      .map((b) => ({ factionId: b.id, factionName: b.name, role: 'browse' as const }));
-    return [...membershipOpts, ...browseOpts].sort((a, b) =>
-      a.factionName.localeCompare(b.factionName, undefined, { sensitivity: 'base' }),
-    );
-  })();
-
-  // Look up the current faction's membership (NOT .filter().find()).
-  const currentFactionMembership = user?.factions.find(
-    (f) => f.factionId === selectedFactionId && f.factionActive,
+  const activeFactions = user?.factions.filter((f) => f.factionActive) ?? [];
+  const currentFactionMembership = activeFactions.find(
+    (f) => f.factionId === selectedFactionId,
   );
   const isAdmin =
     user?.role === 'superadmin' || currentFactionMembership?.role === 'admin';
@@ -144,17 +105,65 @@ export function AppShell() {
   const canLogEntries = !!currentFactionMembership;
 
   const navItems = [
-    { view: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-    { view: 'entries' as const, label: 'Entries', icon: List },
-    { view: 'payouts' as const, label: 'Payouts', icon: ArrowDownToLine, adminOnly: true },
-    { view: 'treasury' as const, label: 'Treasury', icon: Wallet },
-    { view: 'members' as const, label: 'Members', icon: Users, adminOnly: true },
-    { view: 'leaderboard' as const, label: 'Leaderboard', icon: Trophy },
-    { view: 'strikes' as const, label: 'Strikes', icon: AlertTriangle, adminOnly: true },
-    { view: 'settings' as const, label: 'Settings', icon: Settings, adminOnly: true },
-    { view: 'audit-logs' as const, label: 'Audit Logs', icon: ScrollText, adminOnly: true },
-    { view: 'reports' as const, label: 'Reports', icon: FileBarChart, adminOnly: true },
-    { view: 'admin-factions' as const, label: 'Faction Admin', icon: Shield, superadminOnly: true },
+    {
+      view: 'dashboard' as const,
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+    },
+    {
+      view: 'entries' as const,
+      label: 'Entries',
+      icon: List,
+    },
+    {
+      view: 'payouts' as const,
+      label: 'Payouts',
+      icon: ArrowDownToLine,
+    },
+    {
+      view: 'treasury' as const,
+      label: 'Treasury',
+      icon: Wallet,
+    },
+    {
+      view: 'members' as const,
+      label: 'Members',
+      icon: Users,
+    },
+    {
+      view: 'leaderboard' as const,
+      label: 'Leaderboard',
+      icon: Trophy,
+    },
+    {
+      view: 'strikes' as const,
+      label: 'Strikes',
+      icon: AlertTriangle,
+    },
+    {
+      view: 'settings' as const,
+      label: 'Settings',
+      icon: Settings,
+      adminOnly: true,
+    },
+    {
+      view: 'audit-logs' as const,
+      label: 'Audit Logs',
+      icon: ScrollText,
+      adminOnly: true,
+    },
+    {
+      view: 'reports' as const,
+      label: 'Reports',
+      icon: FileBarChart,
+      adminOnly: true,
+    },
+    {
+      view: 'admin-factions' as const,
+      label: 'Faction Admin',
+      icon: Shield,
+      superadminOnly: true,
+    },
   ];
 
   const handleNavClick = (view: string) => {
@@ -166,28 +175,17 @@ export function AppShell() {
       }
     }
     setCurrentView(view as AppView);
-    // Auto-collapse the sidebar on mobile after navigation.
-    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 1024px)').matches) {
-      setSidebarOpen(false);
-    }
   };
 
   const renderView = () => {
     if (!selectedFactionId && currentView !== 'admin-factions' && currentView !== 'admin-faction-detail') {
       if (isSuperadmin) {
-        // queueMicrotask avoids the "cannot update component while rendering
-        // a different component" warning that requestAnimationFrame sometimes
-        // triggers during a React commit phase.
-        queueMicrotask(() => setCurrentView('admin-factions'));
+        requestAnimationFrame(() => setCurrentView('admin-factions'));
         return null;
       }
       return (
-        <div className="flex flex-col items-center justify-center h-full text-center text-zinc-500 gap-3 py-12">
+        <div className="flex items-center justify-center h-full text-zinc-500">
           <p>You are not a member of any faction. Contact a superadmin.</p>
-          <Button variant="outline" size="sm" onClick={handleLogout} disabled={loggingOut}>
-            <LogOut className="mr-1.5 h-3.5 w-3.5" />
-            {loggingOut ? 'Signing out...' : 'Sign out'}
-          </Button>
         </div>
       );
     }
@@ -235,12 +233,11 @@ export function AppShell() {
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/[0.06] bg-[#09090b] transition-all duration-300 lg:relative lg:z-auto ${sidebarOpen ? 'w-60' : 'w-0 lg:w-[52px]'}`}
-        aria-label="Main navigation"
       >
         {/* Sidebar Header */}
         <div className="flex h-14 items-center gap-2.5 border-b border-white/[0.06] px-3">
           {sidebarOpen && (
-            <div className="flex items-center gap-2.5 overflow-hidden flex-1">
+            <div className="flex items-center gap-2.5 overflow-hidden">
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-lg"
                 style={{ backgroundColor: `${brandColor}18` }}
@@ -257,28 +254,14 @@ export function AppShell() {
               onClick={toggleSidebar}
               className="w-full flex justify-center py-1"
               title="Expand sidebar"
-              aria-label="Expand sidebar"
             >
               <Coins className="h-4.5 w-4.5" style={{ color: brandColor }} />
             </button>
           )}
-          {/* Mobile-only close button — visible only when sidebar is open */}
-          {sidebarOpen && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden h-8 w-8 text-zinc-500 hover:text-zinc-200 shrink-0"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close sidebar"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
         </div>
 
-        {/* Faction Selector — show whenever there's at least one option (so
-            superadmins with no memberships still see their browseable factions). */}
-        {factionOptions.length > 0 && (
+        {/* Faction Selector */}
+        {activeFactions.length > 0 && (
           <div className="px-2.5 py-2.5 border-b border-white/[0.06]">
             {sidebarOpen ? (
               <Select
@@ -294,21 +277,16 @@ export function AppShell() {
                   <SelectValue placeholder="Select faction" />
                 </SelectTrigger>
                 <SelectContent>
-                  {factionOptions.map((o) => (
-                    <SelectItem key={o.factionId} value={o.factionId}>
+                  {activeFactions.map((f) => (
+                    <SelectItem key={f.factionId} value={f.factionId}>
                       <span className="flex items-center gap-2">
-                        <span>{o.factionName}</span>
-                        {o.role === 'admin' && (
+                        <span>{f.factionName}</span>
+                        {f.role === 'admin' && (
                           <span
                             className="text-[10px] px-1.5 py-0.5 rounded font-medium"
                             style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
                           >
                             Admin
-                          </span>
-                        )}
-                        {o.role === 'browse' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border border-white/[0.06] bg-white/[0.03] text-zinc-500">
-                            Browse
                           </span>
                         )}
                       </span>
@@ -321,7 +299,6 @@ export function AppShell() {
                 onClick={toggleSidebar}
                 className="w-full flex justify-center py-1"
                 title="Expand sidebar"
-                aria-label="Expand sidebar"
               >
                 <Coins className="h-4 w-4 text-zinc-500" />
               </button>
@@ -339,7 +316,6 @@ export function AppShell() {
               <button
                 key={item.view}
                 onClick={() => handleNavClick(item.view)}
-                aria-current={active ? 'page' : undefined}
                 className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
                   active
                     ? 'text-white font-medium'
@@ -351,7 +327,6 @@ export function AppShell() {
                   color: brandColor,
                 } : undefined}
                 title={!sidebarOpen ? item.label : undefined}
-                aria-label={item.label}
               >
                 <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
                 {sidebarOpen && <span className="truncate">{item.label}</span>}
@@ -367,7 +342,6 @@ export function AppShell() {
             size="sm"
             className="w-full text-zinc-500 hover:text-zinc-300"
             onClick={toggleSidebar}
-            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             <ChevronLeft className={`h-3.5 w-3.5 transition-transform duration-200 ${!sidebarOpen ? 'rotate-180' : ''}`} />
             {sidebarOpen && <span className="ml-2 text-xs">Collapse</span>}
@@ -393,7 +367,6 @@ export function AppShell() {
               size="icon"
               className="lg:hidden text-zinc-400"
               onClick={toggleSidebar}
-              aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </Button>
@@ -404,23 +377,20 @@ export function AppShell() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 hover:bg-white/[0.04]" aria-label="Account menu">
+              <Button variant="ghost" className="flex items-center gap-2 hover:bg-white/[0.04]">
                 <Avatar className="h-7 w-7">
                   <AvatarImage src={user?.avatarUrl ?? undefined} />
                   <AvatarFallback className="text-[10px]">
-                    {(user ? displayName(user) : 'U').slice(0, 2).toUpperCase()}
+                    {user?.username?.slice(0, 2).toUpperCase() ?? 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="hidden sm:inline text-sm text-zinc-300">
-                  {user ? displayName(user) : ''}
+                  {user?.username}
                 </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
-                {/* The dropdown keeps the Discord handle as a secondary identifier
-                    (useful for verifying which Discord account you're logged in as)
-                    alongside the role line beneath. */}
                 <div className="text-zinc-200">{user?.username}</div>
                 <div className="text-xs text-zinc-500 font-normal">
                   {user?.role === 'superadmin'

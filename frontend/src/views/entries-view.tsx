@@ -28,11 +28,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
-import { formatAmount, displayName } from '@/lib/format';
+import { formatAmount } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -71,6 +71,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newItemTypeId, setNewItemTypeId] = useState('');
+  const [itemTypeSearch, setItemTypeSearch] = useState('');
+  const [itemTypeDropdownOpen, setItemTypeDropdownOpen] = useState(false);
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
@@ -222,7 +224,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
             <div className="flex-1" />
             <Button variant="outline" size="sm" onClick={() => {
               const url = exportApi.entriesUrl(factionId, { date_from: dateFrom || undefined, date_to: dateTo || undefined, item_type_id: itemTypeIdFilter === 'all' ? undefined : itemTypeIdFilter });
-              window.open(url, '_blank', 'noopener,noreferrer');
+              window.open(url, '_blank');
             }}>
               <Download className="mr-1.5 h-3.5 w-3.5" />CSV
             </Button>
@@ -268,9 +270,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
                               <AvatarImage src={entry.avatarUrl ?? undefined} />
-                              <AvatarFallback className="text-[9px]">{displayName(entry).slice(0, 2).toUpperCase()}</AvatarFallback>
+                              <AvatarFallback className="text-[9px]">{entry.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm text-zinc-300">{displayName(entry)}</span>
+                            <span className="text-sm text-zinc-300">{entry.username}</span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -346,12 +348,55 @@ export function EntriesView({ factionId, isAdmin, canLogEntries }: Props) {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Item Type</Label>
-              <Select value={newItemTypeId} onValueChange={setNewItemTypeId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select item type" /></SelectTrigger>
-                <SelectContent>
-                  {activeItemTypes.map((t: ItemType) => (<SelectItem key={t.id} value={t.id}>{t.name} ({t.unit})</SelectItem>))}
-                </SelectContent>
-              </Select>
+              {/* Searchable item type dropdown — works with the alphabetically
+                  sorted list from the backend. When there are many item types
+                  a plain Select is hard to navigate. */}
+              {newItemTypeId ? (
+                <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] p-2">
+                  <span className="text-sm text-zinc-200 flex-1">
+                    {activeItemTypes.find((t) => t.id === newItemTypeId)?.name ?? 'Unknown'}
+                  </span>
+                  <button
+                    onClick={() => { setNewItemTypeId(''); setItemTypeSearch(''); setItemTypeDropdownOpen(true); }}
+                    className="text-zinc-500 hover:text-zinc-300"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                  <Input
+                    placeholder="Search item type..."
+                    value={itemTypeSearch}
+                    onChange={(e) => { setItemTypeSearch(e.target.value); setItemTypeDropdownOpen(true); }}
+                    onFocus={() => setItemTypeDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setItemTypeDropdownOpen(false), 150)}
+                    className="pl-9"
+                    autoFocus
+                  />
+                  {itemTypeDropdownOpen && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border border-white/[0.06] bg-[#0d0d0f] divide-y divide-white/[0.04] shadow-lg">
+                      {activeItemTypes.filter((t) => t.name.toLowerCase().includes(itemTypeSearch.toLowerCase())).length === 0 ? (
+                        <p className="p-3 text-xs text-zinc-600 text-center">No item types found</p>
+                      ) : (
+                        activeItemTypes
+                          .filter((t) => t.name.toLowerCase().includes(itemTypeSearch.toLowerCase()))
+                          .map((t: ItemType) => (
+                            <button
+                              key={t.id}
+                              onClick={() => { setNewItemTypeId(t.id); setItemTypeSearch(''); setItemTypeDropdownOpen(false); }}
+                              className="w-full flex items-center gap-2 p-2 hover:bg-white/[0.04] text-left"
+                            >
+                              <span className="text-sm text-zinc-300 flex-1 truncate">{t.name}</span>
+                              <span className="text-[10px] text-zinc-600">{t.isCurrency ? '$' : 'pcs'}</span>
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Amount</Label>

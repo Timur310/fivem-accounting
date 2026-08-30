@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { factions, factionMembers, users, itemTypes, auditLogs } from '../db/schema.js';
-import { eq, ilike, desc, sql, and } from 'drizzle-orm';
+import { eq, ilike, desc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
@@ -14,13 +14,6 @@ const router = Router({ mergeParams: true });
 // NOTE: auth is applied per-route, not via router.use(). This router is mounted
 // at /api/v1/factions, which prefix-matches the nested faction-scoped routers
 // (/factions/:id/entries etc.); router-level middleware would run for those too.
-
-// ── Helpers ───────────────────────────────────────────
-
-/** Escape LIKE metacharacters in a user-supplied search string. */
-function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, (m) => `\\${m}`);
-}
 
 // ── Validation schemas ────────────────────────────────
 
@@ -44,7 +37,6 @@ const updateFactionSchema = z.object({
 
 const listQuerySchema = z.object({
   search: z.string().optional(),
-  active: z.enum(['true', 'false']).optional(),
   page: z.string().optional(),
   page_size: z.string().optional(),
 });
@@ -97,9 +89,10 @@ router.post('/', requireAuth, requireSuperadmin, async (req: Request, res: Respo
         role: 'admin',
       });
 
-      // Seed default item types. Both are currency: treasury totals
-      // roll up only currency rows, so seeding these without `isCurrency`
-      // would silently hide the seeded money types from the dashboard.
+      // Seed default item types — Dirty/Clean Money are currency by default
+      // so they immediately count toward the treasury netBalance roll-up.
+      // The unit symbol is derived from isCurrency ('$' for currency, 'pcs'
+      // for goods) — see routes/itemTypes.ts.
       await tx.insert(itemTypes).values([
         { factionId: faction.id, name: 'Dirty Money', unit: '$', isCurrency: true },
         { factionId: faction.id, name: 'Clean Money', unit: '$', isCurrency: true },
@@ -113,6 +106,7 @@ router.post('/', requireAuth, requireSuperadmin, async (req: Request, res: Respo
           .where(eq(users.id, adminUser.id));
       }
 
+      // Audit log
       await tx.insert(auditLogs).values({
         userId: req.user!.id,
         factionId: faction.id,
@@ -127,20 +121,12 @@ router.post('/', requireAuth, requireSuperadmin, async (req: Request, res: Respo
     });
 
     success(res, result, 201);
-  } catch (err: unknown) {
-    // The pre-check above already handles the common case; this catches
-    // the race where two requests pass the pre-check and the DB constraint
-    // fires. Treat 23505 (unique_violation) as a 409, anything else as 500.
-    if (
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as { code?: string }).code === '23505'
-    ) {
+  } catch (err: any) {
+    if (err?.code === '23505') {
       error(res, 'CONFLICT', 'A faction with this name already exists', 409);
       return;
     }
-    console.error('[CREATE FACTION ERROR]', err instanceof Error ? err.message : err);
+    console.error('[CREATE FACTION ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to create faction', 500);
   }
 });
@@ -153,21 +139,10 @@ router.get('/', requireAuth, requireSuperadmin, async (req: Request, res: Respon
     return;
   }
 
-  const { search, active, page: pageStr, page_size: pageSizeStr } = query.data;
+  const { search, page: pageStr, page_size: pageSizeStr } = query.data;
   const { page, pageSize, offset } = parsePagination({ page: pageStr, page_size: pageSizeStr });
 
-  // Build the filter as a conditions array so each predicate is optional and
-  // the combined WHERE is still parameterised (no string interpolation).
-  const conditions = [];
-  if (search) {
-    conditions.push(ilike(factions.name, `%${escapeLike(search)}%`));
-  }
-  if (active === 'true') {
-    conditions.push(eq(factions.isActive, true));
-  } else if (active === 'false') {
-    conditions.push(eq(factions.isActive, false));
-  }
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = search ? ilike(factions.name, `%${search}%`) : undefined;
 
   const [items, countResult] = await Promise.all([
     db
@@ -211,7 +186,6 @@ router.get('/:id', requireAuth, requireSuperadmin, async (req: Request, res: Res
       role: factionMembers.role,
       joinedAt: factionMembers.joinedAt,
       username: users.username,
-      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
     })
@@ -262,34 +236,24 @@ router.patch('/:id', requireAuth, requireSuperadmin, async (req: Request, res: R
     updates.customFields = parsed.data.customFields;
   }
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(factions)
-      .set(updates)
-      .where(eq(factions.id, id))
-      .returning();
+  const [updated] = await db
+    .update(factions)
+    .set(updates)
+    .where(eq(factions.id, id))
+    .returning();
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId: id,
-      action: 'update',
-      entityType: 'faction',
-      entityId: id,
-      details: {
-        before: { name: existing.name, description: existing.description, isActive: existing.isActive },
-        after: updates,
-      },
-      req,
-      tx,
-    });
-
-    return row;
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId: id,
+    action: 'update',
+    entityType: 'faction',
+    entityId: id,
+    details: {
+      before: { name: existing.name, description: existing.description, isActive: existing.isActive },
+      after: updates,
+    },
+    req,
   });
-
-  if (!updated) {
-    error(res, 'NOT_FOUND', 'Faction not found', 404);
-    return;
-  }
 
   success(res, updated);
 });
@@ -303,19 +267,16 @@ router.delete('/:id', requireAuth, requireSuperadmin, async (req: Request, res: 
     return;
   }
 
-  await db.transaction(async (tx) => {
-    await tx.update(factions).set({ isActive: false }).where(eq(factions.id, id));
+  await db.update(factions).set({ isActive: false }).where(eq(factions.id, id));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId: id,
-      action: 'delete',
-      entityType: 'faction',
-      entityId: id,
-      details: { name: existing.name },
-      req,
-      tx,
-    });
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId: id,
+    action: 'delete',
+    entityType: 'faction',
+    entityId: id,
+    details: { name: existing.name },
+    req,
   });
 
   success(res, { id, deleted: true });

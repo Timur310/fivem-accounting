@@ -1,4 +1,4 @@
-import { db, type TransactionLike } from '../db/index.js';
+import { db } from '../db/index.js';
 import { auditLogs } from '../db/schema.js';
 import type { Request } from 'express';
 import type { NewAuditLog } from '../db/schema.js';
@@ -11,9 +11,8 @@ export async function createAuditLog(params: {
   entityId?: string | null;
   details?: Record<string, unknown> | null;
   req?: Request;
-  tx?: TransactionLike;
 }): Promise<void> {
-  const { userId, factionId, action, entityType, entityId, details, req, tx } = params;
+  const { userId, factionId, action, entityType, entityId, details, req } = params;
 
   const logEntry: NewAuditLog = {
     userId,
@@ -25,6 +24,5 @@ export async function createAuditLog(params: {
     ipAddress: req?.ip ?? null,
   };
 
-  const conn = tx ?? db;
-  await conn.insert(auditLogs).values(logEntry);
+  await db.insert(auditLogs).values(logEntry);
 }

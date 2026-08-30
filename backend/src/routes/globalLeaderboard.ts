@@ -42,7 +42,6 @@ router.get('/', requireAuth, requireSuperadmin, async (req: Request, res: Respon
     .select({
       userId: users.id,
       username: users.username,
-      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       factionId: factions.id,
       factionName: factions.name,
@@ -53,7 +52,7 @@ router.get('/', requireAuth, requireSuperadmin, async (req: Request, res: Respon
     .innerJoin(users, eq(entries.userId, users.id))
     .innerJoin(factions, eq(entries.factionId, factions.id))
     .where(where)
-    .groupBy(users.id, users.username, users.inGameName, users.avatarUrl, factions.id, factions.name)
+    .groupBy(users.id, users.username, users.avatarUrl, factions.id, factions.name)
     .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) DESC`)
     .limit(limit);
 
@@ -68,7 +67,6 @@ router.get('/', requireAuth, requireSuperadmin, async (req: Request, res: Respon
       rank,
       userId: row.userId,
       username: row.username,
-      inGameName: row.inGameName,
       avatarUrl: row.avatarUrl,
       factionId: row.factionId,
       factionName: row.factionName,

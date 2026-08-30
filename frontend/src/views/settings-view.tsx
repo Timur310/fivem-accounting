@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemTypesApi, quotasApi, factionsApi, factionSettingsApi } from '@/lib/api-client';
+import { itemTypesApi, quotasApi, factionSettingsApi, membersApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -96,11 +96,9 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<ItemType | null>(null);
 
   const [newName, setNewName] = useState('');
-  const [newUnit, setNewUnit] = useState('$');
   const [newIsCurrency, setNewIsCurrency] = useState(false);
   const [editTarget, setEditTarget] = useState<ItemType | null>(null);
   const [editName, setEditName] = useState('');
-  const [editUnit, setEditUnit] = useState('');
   const [editIsCurrency, setEditIsCurrency] = useState(false);
   const [editActive, setEditActive] = useState(true);
 
@@ -111,12 +109,11 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => itemTypesApi.create(factionId, { name: newName, unit: newUnit, isCurrency: newIsCurrency }),
+    mutationFn: () => itemTypesApi.create(factionId, { name: newName, isCurrency: newIsCurrency }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
       setCreateOpen(false);
       setNewName('');
-      setNewUnit('$');
       setNewIsCurrency(false);
       toast({ title: 'Item type created' });
     },
@@ -133,7 +130,6 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
     mutationFn: () =>
       itemTypesApi.update(factionId, editTarget!.id, {
         name: editName,
-        unit: editUnit,
         isCurrency: editIsCurrency,
         isActive: editActive,
       }),
@@ -171,7 +167,6 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
   const openEdit = (t: ItemType) => {
     setEditTarget(t);
     setEditName(t.name);
-    setEditUnit(t.unit);
     setEditIsCurrency(t.isCurrency);
     setEditActive(t.isActive);
     setEditOpen(true);
@@ -210,7 +205,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Unit</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Entries</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
@@ -220,15 +215,10 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                 {itemTypes.map((t: ItemType) => (
                   <TableRow key={t.id} className={!t.isActive ? 'opacity-50' : ''}>
                     <TableCell className="font-medium">{t.name}</TableCell>
-                    <TableCell className="font-mono text-sm">
-                      <span className="inline-flex items-center gap-1.5">
-                        {t.unit}
-                        {t.isCurrency && (
-                          <Badge variant="secondary" className="font-sans text-[10px] px-1.5 py-0">
-                            Currency
-                          </Badge>
-                        )}
-                      </span>
+                    <TableCell>
+                      <Badge variant={t.isCurrency ? 'default' : 'secondary'} className="text-[10px]">
+                        {t.isCurrency ? 'Currency ($)' : 'Goods (pcs)'}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{t.entryCount ?? 0}</TableCell>
                     <TableCell>
@@ -274,13 +264,6 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
               <Label>Name</Label>
               <Input placeholder="e.g. Weapons" value={newName} onChange={(e) => setNewName(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Unit Symbol</Label>
-              <Input placeholder="$" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} />
-              <p className="text-xs text-zinc-500">
-                Displayed before amounts, e.g. "$1,000” or “5 pcs”.
-              </p>
-            </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Currency</p>
@@ -314,10 +297,6 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
             <div className="space-y-2">
               <Label>Name</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Unit Symbol</Label>
-              <Input value={editUnit} onChange={(e) => setEditUnit(e.target.value)} />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
@@ -390,6 +369,10 @@ function QuotasSection({ factionId }: { factionId: string }) {
   const [newItemTypeId, setNewItemTypeId] = useState('');
   const [newTargetAmount, setNewTargetAmount] = useState('');
   const [newPeriodType, setNewPeriodType] = useState<'weekly' | 'monthly'>('weekly');
+  // 'faction' = faction-wide quota (every member's entries count).
+  // 'member' = per-member quota (only the selected member's entries count).
+  const [newScope, setNewScope] = useState<'faction' | 'member'>('faction');
+  const [newTargetUserId, setNewTargetUserId] = useState<string>('');
   const [newPeriodStart, setNewPeriodStart] = useState(() => {
     // Default to upcoming Monday
     const d = new Date();
@@ -419,6 +402,13 @@ function QuotasSection({ factionId }: { factionId: string }) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Fetch members for the per-member quota selector.
+  const { data: membersList = [] } = useQuery({
+    queryKey: ['members', factionId],
+    queryFn: () => membersApi.list(factionId),
+    staleTime: 60 * 1000,
+  });
+
   const activeItemTypes = itemTypes.filter((t: ItemType) => t.isActive);
 
   const createMutation = useMutation({
@@ -428,6 +418,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
         targetAmount: newTargetAmount,
         periodType: newPeriodType,
         periodStart: newPeriodStart,
+        targetUserId: newScope === 'member' ? newTargetUserId : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
@@ -487,6 +478,8 @@ function QuotasSection({ factionId }: { factionId: string }) {
     setNewItemTypeId('');
     setNewTargetAmount('');
     setNewPeriodType('weekly');
+    setNewScope('faction');
+    setNewTargetUserId('');
     const d = new Date();
     const day = d.getDay();
     const diff = day === 0 ? 1 : 8 - day;
@@ -538,6 +531,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Item Type</TableHead>
+                  <TableHead>Scope</TableHead>
                   <TableHead>Period</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Progress</TableHead>
@@ -557,6 +551,15 @@ function QuotasSection({ factionId }: { factionId: string }) {
                           <div className="text-xs text-zinc-500">
                             {q.periodStartComputed} — {q.periodEndComputed}
                           </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {q.targetUserId ? (
+                          <Badge variant="outline" className="text-[10px]">
+                            {q.targetUsername ?? 'Member'}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[10px]">Faction-wide</Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -650,6 +653,31 @@ function QuotasSection({ factionId }: { factionId: string }) {
                 onChange={(e) => setNewTargetAmount(e.target.value)}
               />
             </div>
+            {/* Scope: faction-wide (every member's entries count) or per-member
+                (only the selected member's entries count). */}
+            <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select value={newScope} onValueChange={(v: any) => setNewScope(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="faction">Faction-wide (all members)</SelectItem>
+                  <SelectItem value="member">Per-member (specific member)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {newScope === 'member' && (
+              <div className="space-y-2">
+                <Label>Target Member</Label>
+                <Select value={newTargetUserId} onValueChange={setNewTargetUserId}>
+                  <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                  <SelectContent>
+                    {membersList.map((m) => (
+                      <SelectItem key={m.userId} value={m.userId}>{m.username}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Period Type</Label>
               <Select value={newPeriodType} onValueChange={(v: any) => setNewPeriodType(v)}>
@@ -676,7 +704,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               onClick={() => createMutation.mutate()}
-              disabled={!newItemTypeId || !newTargetAmount || Number(newTargetAmount) <= 0 || createMutation.isPending}
+              disabled={!newItemTypeId || !newTargetAmount || Number(newTargetAmount) <= 0 || (newScope === 'member' && !newTargetUserId) || createMutation.isPending}
             >
               {createMutation.isPending ? 'Creating...' : 'Create Quota'}
             </Button>
@@ -774,9 +802,11 @@ function CustomizationSection({ factionId }: { factionId: string }) {
   const { toast } = useToast();
   const updateGlobalBrandColor = useAppStore((s) => s.setBrandColor);
 
-  const { data: faction, isLoading } = useQuery({
-    queryKey: ['faction-detail', factionId],
-    queryFn: () => factionsApi.get(factionId),
+  // Use the faction-settings endpoint (faction admin accessible) instead of
+  // factionsApi.update (superadmin-only) so faction admins can customize.
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
     staleTime: 30 * 1000,
   });
 
@@ -788,21 +818,21 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
   const initialized = useRef(false);
   useEffect(() => {
-    if (faction && !initialized.current) {
-      setBrandColor(faction.brandColor ?? '#3b82f6');
-      setCustomFields(faction.customFields ?? []);
-      setPayoutApprovalRequired(faction.payoutApprovalRequired ?? false);
+    if (settings && !initialized.current) {
+      setBrandColor(settings.brandColor ?? '#3b82f6');
+      setCustomFields(settings.customFields ?? []);
+      setPayoutApprovalRequired(settings.payoutApprovalRequired ?? false);
       initialized.current = true;
     }
-  }, [faction]);
+  }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      factionsApi.update(factionId, { brandColor, customFields, payoutApprovalRequired }),
+      factionSettingsApi.update(factionId, { brandColor, customFields, payoutApprovalRequired }),
     onSuccess: () => {
       // Immediately update the global brand color in the store
       updateGlobalBrandColor(brandColor);
-      queryClient.invalidateQueries({ queryKey: ['faction-detail', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
       queryClient.invalidateQueries({ queryKey: ['faction-brand', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       toast({ title: 'Customization saved' });

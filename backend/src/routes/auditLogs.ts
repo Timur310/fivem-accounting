@@ -13,39 +13,9 @@ const router = Router({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
 
-// Allow-list the action / entity_type query params so a client can't
-// scan arbitrary strings (which would also be a small DoS vector via
-// repeated ILIKE on unindexed text). Keep these in sync with the audit
-// actions actually written by the route files.
-const KNOWN_ACTIONS = [
-  'login',
-  'logout',
-  'create',
-  'update',
-  'delete',
-  'update_profile',
-  'bulk_create',
-  'bulk_delete',
-  'import',
-] as const;
-
-const KNOWN_ENTITY_TYPES = [
-  'user',
-  'faction',
-  'member',
-  'item_type',
-  'entry',
-  'payout',
-  'payout_batch',
-  'member_note',
-  'strike',
-  'quota',
-  'faction_settings',
-] as const;
-
 const listAuditQuerySchema = z.object({
-  action: z.enum(KNOWN_ACTIONS).optional(),
-  entity_type: z.enum(KNOWN_ENTITY_TYPES).optional(),
+  action: z.string().optional(),
+  entity_type: z.string().optional(),
   user_id: z.string().uuid().optional(),
   page: z.string().optional(),
   page_size: z.string().optional(),
@@ -81,7 +51,6 @@ router.get('/', async (req: Request, res: Response) => {
         ipAddress: auditLogs.ipAddress,
         createdAt: auditLogs.createdAt,
         actorUsername: users.username,
-        actorInGameName: users.inGameName,
         actorDiscordId: users.discordId,
       })
       .from(auditLogs)

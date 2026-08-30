@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db/index.js';
-import { factionMembers, factions } from '../db/schema.js';
+import { factionMembers } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { error } from '../lib/response.js';
 
@@ -9,10 +9,6 @@ import { error } from '../lib/response.js';
  * in req.params.id. Attaches req.factionRole (admin | member | superadmin).
  * Superadmins always pass, but if they also have a faction membership,
  * that role is used so they get member-level abilities (e.g. logging entries).
- *
- * Non-superadmins are blocked from accessing soft-deleted factions
- * (factions.isActive = false): the membership may still exist on disk, but
- * the faction is gone from the user's perspective, so we surface a 410.
  */
 export async function requireFactionMember(req: Request, res: Response, next: NextFunction): Promise<void> {
   const factionId = req.params.id as string;
@@ -44,24 +40,6 @@ export async function requireFactionMember(req: Request, res: Response, next: Ne
   } else {
     error(res, 'FORBIDDEN', 'You are not a member of this faction', 403);
     return;
-  }
-
-  // Non-superadmins must not be able to read/write a soft-deleted faction.
-  // Superadmins bypass this so they can browse the admin-factions UI.
-  // Both "not found" and "soft-deleted" return 404 (rather than 410): the
-  // caller has no business knowing which it is, and the existing test suite
-  // pins the dashboard-after-delete case to 404.
-  if (req.user!.role !== 'superadmin') {
-    const [faction] = await db
-      .select({ isActive: factions.isActive })
-      .from(factions)
-      .where(eq(factions.id, factionId))
-      .limit(1);
-
-    if (!faction || !faction.isActive) {
-      error(res, 'NOT_FOUND', 'Faction not found', 404);
-      return;
-    }
   }
 
   next();

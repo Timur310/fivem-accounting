@@ -33,7 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { Payout, PayoutStatus, Member, ItemType } from '@/lib/api-types';
-import { formatAmount, formatNumber, displayName } from '@/lib/format';
+import { formatAmount } from '@/lib/format';
 
 // ── Status config ──
 const STATUS_CONFIG: Record<PayoutStatus, { label: string; color: string; bg: string }> = {
@@ -123,6 +123,8 @@ export function PayoutsView({ factionId }: Props) {
   const payouts = payoutsData?.data ?? [];
   const meta = payoutsData?.meta;
   const totalPages = meta ? Math.ceil(meta.total_count / meta.page_size) : 1;
+
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const resetCreateForm = () => {
     setFormRecipient('');
@@ -320,9 +322,9 @@ export function PayoutsView({ factionId }: Props) {
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7">
                           <AvatarImage src={p.recipientAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[10px]">{p.recipientUsername.slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <span className="text-sm text-zinc-300">{displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName })}</span>
+                        <span className="text-sm text-zinc-300">{p.recipientUsername}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-zinc-400">{p.itemTypeName}</TableCell>
@@ -420,7 +422,7 @@ export function PayoutsView({ factionId }: Props) {
                 <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
                 <SelectContent>
                   {members.map((m) => (
-                    <SelectItem key={m.userId} value={m.userId}>{displayName(m)}</SelectItem>
+                    <SelectItem key={m.userId} value={m.userId}>{m.username}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -485,7 +487,7 @@ export function PayoutsView({ factionId }: Props) {
           <DialogHeader>
             <DialogTitle>Edit Payout</DialogTitle>
             <DialogDescription>
-              Editing payout for {displayName({ username: editPayout?.recipientUsername ?? '', inGameName: editPayout?.recipientInGameName ?? null })} · {editPayout?.itemTypeName}
+              Editing payout for {editPayout?.recipientUsername} · {editPayout?.itemTypeName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -566,10 +568,10 @@ export function PayoutsView({ factionId }: Props) {
               />
               {splitTotal && Number(splitTotal) > 0 && members.length > 0 && (
                 <p className="text-xs text-zinc-500">
-                  {members.length} members × {formatNumber(Math.floor(Number(splitTotal) * 100 / members.length) / 100)} each = {formatNumber(Math.floor(Number(splitTotal) * 100 / members.length) / 100 * members.length)} distributed
+                  {members.length} members × {fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100)} each = {fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100 * members.length)} distributed
                   {(() => {
                     const rem = (Number(splitTotal) * 100 - Math.floor(Number(splitTotal) * 100 / members.length) * members.length) / 100;
-                    return rem > 0 ? <>, {formatNumber(rem)} remainder</> : null;
+                    return rem > 0 ? <>, {fmt(rem)} remainder</> : null;
                   })()}
                 </p>
               )}

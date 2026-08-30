@@ -6,14 +6,16 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
 import { isActiveStrike, effectiveStatus } from '../lib/strikes.js';
 
 const router = Router({ mergeParams: true });
 
-// Faction-wide discipline overview is admin material.
-router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
+// All routes require faction membership. Reads are open to every member:
+// admins see every strike in the faction; plain members only see their own
+// (active and inactive). Mutations live on memberStrikes.ts and are admin-only.
+router.use(requireAuth, requireFactionMember);
 
 const listQuerySchema = z.object({
   // Default view is what still counts against members; pass status=all to see
@@ -51,11 +53,17 @@ router.get('/', async (req: Request, res: Response) => {
     statusCondition = eq(strikes.status, status);
   }
 
+  // Plain members only see their own strikes (active and inactive). Admins
+  // and superadmins see every strike in the faction.
+  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+  const memberFilter = isAdmin ? undefined : eq(strikes.targetUserId, req.user!.id);
+
   const where = buildWhere([
     eq(strikes.factionId, factionId),
     statusCondition,
     severity ? eq(strikes.severity, severity) : undefined,
     user_id ? eq(strikes.targetUserId, user_id) : undefined,
+    memberFilter,
   ]);
 
   const [items, countResult, bySeverity] = await Promise.all([
@@ -69,7 +77,6 @@ router.get('/', async (req: Request, res: Response) => {
         createdAt: strikes.createdAt,
         targetUserId: strikes.targetUserId,
         targetUsername: users.username,
-        targetInGameName: users.inGameName,
         targetAvatarUrl: users.avatarUrl,
         issuedBy: strikes.issuedBy,
       })
@@ -81,10 +88,15 @@ router.get('/', async (req: Request, res: Response) => {
       .offset(offset),
     db.select({ count: sql<number>`COUNT(*)::int` }).from(strikes).where(where),
     // Summary always reflects currently-counting strikes, regardless of filter.
+    // For members it's their own; for admins it's faction-wide.
     db
       .select({ severity: strikes.severity, count: sql<number>`COUNT(*)::int` })
       .from(strikes)
-      .where(and(eq(strikes.factionId, factionId), isActiveStrike()))
+      .where(and(
+        eq(strikes.factionId, factionId),
+        isActiveStrike(),
+        ...(memberFilter ? [memberFilter] : []),
+      ))
       .groupBy(strikes.severity),
   ]);
 

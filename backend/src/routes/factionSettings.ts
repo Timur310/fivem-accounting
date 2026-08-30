@@ -27,6 +27,15 @@ const updateSettingsSchema = z.object({
     minor: z.number().int().min(1).max(3650).nullable(),
     major: z.number().int().min(1).max(3650).nullable(),
   }).optional(),
+  // These three were previously on PATCH /factions/:id (superadmin-only),
+  // which blocked faction admins from customizing their own faction. Moved
+  // here so faction admins can manage them.
+  brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  payoutApprovalRequired: z.boolean().optional(),
+  customFields: z.array(z.object({
+    name: z.string().min(1).max(100),
+    required: z.boolean(),
+  })).optional(),
 }).refine(
   (d) => Object.keys(d).length > 0,
   'Provide at least one setting to update',
@@ -43,6 +52,9 @@ router.get('/', async (req: Request, res: Response) => {
       ranks: factions.ranks,
       inactivityThresholdDays: factions.inactivityThresholdDays,
       strikeExpiryDays: factions.strikeExpiryDays,
+      brandColor: factions.brandColor,
+      payoutApprovalRequired: factions.payoutApprovalRequired,
+      customFields: factions.customFields,
     })
     .from(factions)
     .where(eq(factions.id, factionId))
@@ -58,6 +70,9 @@ router.get('/', async (req: Request, res: Response) => {
     inactivityThresholdDays: faction.inactivityThresholdDays,
     // Surface the effective values so the UI never has to know the defaults.
     strikeExpiryDays: faction.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
+    brandColor: faction.brandColor,
+    payoutApprovalRequired: faction.payoutApprovalRequired,
+    customFields: faction.customFields ?? [],
   });
 });
 
@@ -76,6 +91,9 @@ router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Res
       ranks: factions.ranks,
       inactivityThresholdDays: factions.inactivityThresholdDays,
       strikeExpiryDays: factions.strikeExpiryDays,
+      brandColor: factions.brandColor,
+      payoutApprovalRequired: factions.payoutApprovalRequired,
+      customFields: factions.customFields,
     })
     .from(factions)
     .where(eq(factions.id, factionId))
@@ -109,6 +127,22 @@ router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Res
   if (parsed.data.strikeExpiryDays !== undefined) {
     updates.strikeExpiryDays = parsed.data.strikeExpiryDays;
   }
+  // Customization fields — moved from PATCH /factions/:id (superadmin-only)
+  // so faction admins can manage their own faction's appearance and approval.
+  if (parsed.data.brandColor !== undefined) {
+    updates.brandColor = parsed.data.brandColor;
+  }
+  if (parsed.data.payoutApprovalRequired !== undefined) {
+    updates.payoutApprovalRequired = parsed.data.payoutApprovalRequired;
+  }
+  if (parsed.data.customFields !== undefined) {
+    const names = parsed.data.customFields.map((f) => f.name);
+    if (new Set(names).size !== names.length) {
+      error(res, 'VALIDATION_ERROR', 'Custom field names must be unique');
+      return;
+    }
+    updates.customFields = parsed.data.customFields;
+  }
 
   const updated = await db.transaction(async (tx) => {
     const [row] = await tx
@@ -119,6 +153,9 @@ router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Res
         ranks: factions.ranks,
         inactivityThresholdDays: factions.inactivityThresholdDays,
         strikeExpiryDays: factions.strikeExpiryDays,
+        brandColor: factions.brandColor,
+        payoutApprovalRequired: factions.payoutApprovalRequired,
+        customFields: factions.customFields,
       });
 
     // Clearing removed ranks off members happens in the same transaction as
@@ -150,6 +187,9 @@ router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Res
         ranks: existing.ranks,
         inactivityThresholdDays: existing.inactivityThresholdDays,
         strikeExpiryDays: existing.strikeExpiryDays,
+        brandColor: existing.brandColor,
+        payoutApprovalRequired: existing.payoutApprovalRequired,
+        customFields: existing.customFields,
       },
       after: updates,
       ...(removedRanks.length > 0 ? { removedRanks } : {}),
@@ -161,6 +201,9 @@ router.patch('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Res
     ranks: updated?.ranks ?? [],
     inactivityThresholdDays: updated?.inactivityThresholdDays,
     strikeExpiryDays: updated?.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
+    brandColor: updated?.brandColor,
+    payoutApprovalRequired: updated?.payoutApprovalRequired,
+    customFields: updated?.customFields ?? [],
     ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),
   });
 });

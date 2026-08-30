@@ -141,7 +141,6 @@ router.get('/summary', async (req: Request, res: Response) => {
     db
       .select({
         username: users.username,
-        inGameName: users.inGameName,
         avatarUrl: users.avatarUrl,
         currencyTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}), 0)`,
         itemTotal: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE NOT ${itemTypes.isCurrency}), 0)`,
@@ -151,7 +150,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       .innerJoin(users, eq(entries.userId, users.id))
       .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where)
-      .groupBy(users.id, users.username, users.inGameName, users.avatarUrl)
+      .groupBy(users.id, users.username, users.avatarUrl)
       // Ranked on money, with goods reported alongside rather than mixed in.
       .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) FILTER (WHERE ${itemTypes.isCurrency}) DESC NULLS LAST`),
 

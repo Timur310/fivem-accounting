@@ -49,72 +49,33 @@ import type {
   GrowthData,
 } from './api-types';
 
-// Default to relative — same image works across dev/staging/prod via Caddy
-// reverse proxy. Override with NEXT_PUBLIC_API_URL only when the API lives on
-// a different origin (e.g. local dev against a remote backend).
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
-  baseURL: API_BASE ? `${API_BASE}/api/v1` : '/api/v1',
+  baseURL: `${API_BASE}/api/v1`,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15_000,
 });
 
-// ── 401 interceptor ──
-// Expired sessions shouldn't leave the UI in a stale half-state. Lazy-import
-// the store to avoid a top-level cycle (store.ts → api-types.ts → here).
-api.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      void import('./store').then(({ useAppStore }) => {
-        useAppStore.getState().setUser(null);
-        useAppStore.getState().setCurrentView('login');
-        useAppStore.getState().setSelectedFactionId(null);
-      });
-    }
-    return Promise.reject(error);
-  },
-);
+// No redirect on 401 — the checkAuth() in page.tsx handles it gracefully.
 
-// ── Helpers ──
-
+// ── Helper ──
 function unwrap<T>(res: { data: ApiSuccessResponse<T> }): T {
   return res.data.data;
-}
-
-/**
- * Pull a human-readable message out of an unknown error. Prefers the backend's
- * structured `error.message` field, then falls back to axios's `message`, then
- * a caller-supplied default.
- */
-export function apiErrorMessage(err: unknown, fallback = 'Unknown error'): string {
-  if (axios.isAxiosError(err)) {
-    const data = err.response?.data as { error?: { message?: string } } | undefined;
-    return data?.error?.message ?? err.message ?? fallback;
-  }
-  if (err instanceof Error) return err.message ?? fallback;
-  return fallback;
 }
 
 // ── Auth ──
 
 export const authApi = {
-  getMe: (signal?: AbortSignal) =>
-    api.get<ApiSuccessResponse<User>>('/auth/me', { signal }).then(unwrap),
+  getMe: () => api.get<ApiSuccessResponse<User>>('/auth/me').then(unwrap),
   logout: () => api.post('/auth/logout'),
-  getDiscordLoginUrl: () =>
-    API_BASE ? `${API_BASE}/api/v1/auth/discord` : '/api/v1/auth/discord',
-  /** Update the authenticated user's own profile (currently: in-game name). */
-  updateMe: (input: { inGameName: string }) =>
-    api.patch<ApiSuccessResponse<User>>('/auth/me', input).then(unwrap),
+  getDiscordLoginUrl: () => `${API_BASE}/api/v1/auth/discord`,
 };
 
 // ── Factions (superadmin) ──
 
 export const factionsApi = {
-  list: (params?: { search?: string; page?: number; page_size?: number; active?: 'true' | 'false' }) =>
+  list: (params?: { search?: string; page?: number; page_size?: number }) =>
     api
       .get<ApiSuccessResponse<Faction[]>>('/factions', { params })
       .then((r) => ({ data: r.data.data, meta: r.data.meta })),
@@ -134,16 +95,32 @@ export const factionsApi = {
 // ── Members ──
 
 export const membersApi = {
-  list: (factionId: string, signal?: AbortSignal) =>
+  list: (factionId: string) =>
     api
-      .get<ApiSuccessResponse<Member[]>>(`/factions/${factionId}/members`, { signal })
+      .get<ApiSuccessResponse<Member[]>>(`/factions/${factionId}/members`)
       .then(unwrap),
 
-  add: (factionId: string, discordId: string) =>
+  add: (factionId: string, discordIdOrUserId: string) =>
     api
       .post<ApiSuccessResponse<Member>>(`/factions/${factionId}/members`, {
-        discordId,
+        // The backend accepts either `discordId` or `userId`. We send the
+        // value as `userId` if it looks like a UUID, otherwise as `discordId`
+        // — this keeps the existing call sites working (they pass a Discord
+        // ID string) while the new Add Member dialog passes a user UUID.
+        ...(discordIdOrUserId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+          ? { userId: discordIdOrUserId }
+          : { discordId: discordIdOrUserId }),
       })
+      .then(unwrap),
+
+  /** Search users who have logged in but are not yet members of this faction.
+   *  Powers the Add Member dialog's searchable dropdown. */
+  search: (factionId: string, query: string) =>
+    api
+      .get<ApiSuccessResponse<{ id: string; username: string; avatarUrl: string | null; discordId: string }[]>>(
+        `/factions/${factionId}/members/search`,
+        { params: { q: query } },
+      )
       .then(unwrap),
 
   updateRole: (factionId: string, userId: string, role: 'admin' | 'member') =>
@@ -259,9 +236,9 @@ export const factionSettingsApi = {
 // ── Item Types ──
 
 export const itemTypesApi = {
-  list: (factionId: string, signal?: AbortSignal) =>
+  list: (factionId: string) =>
     api
-      .get<ApiSuccessResponse<ItemType[]>>(`/factions/${factionId}/item-types`, { signal })
+      .get<ApiSuccessResponse<ItemType[]>>(`/factions/${factionId}/item-types`)
       .then(unwrap),
 
   create: (factionId: string, input: CreateItemTypeInput) =>
@@ -295,12 +272,10 @@ export const entriesApi = {
       page?: number;
       page_size?: number;
     },
-    signal?: AbortSignal,
   ) =>
     api
       .get<ApiSuccessResponse<Entry[]>>(`/factions/${factionId}/entries`, {
         params,
-        signal,
       })
       .then((r) => ({ data: r.data.data, meta: r.data.meta })),
 
@@ -342,12 +317,10 @@ export const auditLogsApi = {
       page?: number;
       page_size?: number;
     },
-    signal?: AbortSignal,
   ) =>
     api
       .get<ApiSuccessResponse<AuditLog[]>>(`/factions/${factionId}/audit-logs`, {
         params,
-        signal,
       })
       .then((r) => ({ data: r.data.data, meta: r.data.meta })),
 };
@@ -450,9 +423,7 @@ export const chartsApi = {
 export const exportApi = {
   /** Returns the full URL for the browser to download directly */
   entriesUrl: (factionId: string, params?: { date_from?: string; date_to?: string; item_type_id?: string }) => {
-    const base = API_BASE
-      ? `${API_BASE}/api/v1/factions/${factionId}/export/entries`
-      : `/api/v1/factions/${factionId}/export/entries`;
+    const base = `${API_BASE}/api/v1/factions/${factionId}/export/entries`;
     const query = new URLSearchParams();
     if (params?.date_from) query.set('date_from', params.date_from);
     if (params?.date_to) query.set('date_to', params.date_to);
@@ -462,9 +433,7 @@ export const exportApi = {
   },
 
   quotaReportUrl: (factionId: string) =>
-    API_BASE
-      ? `${API_BASE}/api/v1/factions/${factionId}/export/quota-report`
-      : `/api/v1/factions/${factionId}/export/quota-report`,
+    `${API_BASE}/api/v1/factions/${factionId}/export/quota-report`,
 };
 
 // ── Admin Analytics ──

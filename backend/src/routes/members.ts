@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { factionMembers, users, entries, factions, itemTypes, payouts, quotas, auditLogs } from '../db/schema.js';
-import { eq, and, sql, desc, gte, lte, count as countFn } from 'drizzle-orm';
+import { eq, and, sql, desc, gte, lte, ilike, notInArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -18,11 +18,27 @@ const router = Router({ mergeParams: true });
 // All routes require faction membership
 router.use(requireAuth, requireFactionMember);
 
+// ── Helpers ───────────────────────────────────────────
+
+/** Escape ILIKE wildcard characters so a user-supplied `%` or `_` is treated
+ *  as a literal character, not as a wildcard. */
+function escapeLike(s: string): string {
+  return s.replace(/[%_]/g, (m) => `\\${m}`);
+}
+
 // ── Validation schemas ────────────────────────────────
 
+// Accept EITHER a discordId OR a userId. The frontend "Add Member" dialog
+// now shows a searchable dropdown of users who have already logged in;
+// selecting one sends `userId`. Typing a Discord ID manually still works
+// via `discordId` for backwards compatibility.
 const addMemberSchema = z.object({
-  discordId: z.string().min(1, 'Discord ID is required'),
-});
+  discordId: z.string().min(1, 'Discord ID is required').optional(),
+  userId: z.string().uuid().optional(),
+}).refine(
+  (d) => d.discordId || d.userId,
+  'Provide either discordId or userId',
+);
 
 const updateMemberSchema = z.object({
   role: z.enum(['admin', 'member']).optional(),
@@ -33,6 +49,58 @@ const updateMemberSchema = z.object({
   'Provide at least one of: role, rank',
 );
 
+// ── GET /search — find users NOT already in this faction ──
+// Used by the Add Member dialog's searchable dropdown. Returns users who
+// have logged in at least once (so they have a row in `users`) but are not
+// yet members of this faction.
+router.get('/search', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+  const query = (req.query.q as string | undefined)?.trim() ?? '';
+
+  // First get the user IDs that are already members of this faction so we
+  // can exclude them.
+  const existingMembers = await db
+    .select({ userId: factionMembers.userId })
+    .from(factionMembers)
+    .where(eq(factionMembers.factionId, factionId));
+  const existingIds = existingMembers.map((m) => m.userId);
+
+  // Search by username. If no query, return the most recent signups so the
+  // dropdown isn't empty on first open. Exclude users already in this faction.
+  let rows;
+  if (query) {
+    const escaped = escapeLike(query);
+    rows = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        avatarUrl: users.avatarUrl,
+        discordId: users.discordId,
+      })
+      .from(users)
+      .where(and(
+        ilike(users.username, `%${escaped}%`),
+        ...(existingIds.length > 0 ? [notInArray(users.id, existingIds)] : []),
+      ))
+      .orderBy(desc(users.lastLogin))
+      .limit(20);
+  } else {
+    rows = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        avatarUrl: users.avatarUrl,
+        discordId: users.discordId,
+      })
+      .from(users)
+      .where(existingIds.length > 0 ? notInArray(users.id, existingIds) : undefined)
+      .orderBy(desc(users.lastLogin))
+      .limit(20);
+  }
+
+  success(res, rows);
+});
+
 // ── POST / — add member to faction ───────────────────
 router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
@@ -42,16 +110,26 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     return;
   }
 
-  const { discordId } = parsed.data;
+  const { discordId, userId } = parsed.data;
 
-  // Find user by Discord ID
-  const [targetUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.discordId, discordId))
-    .limit(1);
+  // Find user by Discord ID OR by user ID (the new preferred path — the
+  // frontend Add Member dialog picks from a list of already-logged-in users).
+  let targetUser;
+  if (userId) {
+    [targetUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+  } else if (discordId) {
+    [targetUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordId, discordId))
+      .limit(1);
+  }
   if (!targetUser) {
-    error(res, 'NOT_FOUND', `No user found with Discord ID: ${discordId}. They must log in first.`);
+    error(res, 'NOT_FOUND', 'User not found. They must log in to the system at least once before they can be added to a faction.');
     return;
   }
 
@@ -87,28 +165,11 @@ router.post('/', requireFactionAdminOrSuperadmin, async (req: Request, res: Resp
     action: 'create',
     entityType: 'member',
     entityId: member.id,
-    // Include `userId` alongside `addedUserId` so the /history endpoint can
-    // match this join event by either key.
-    details: {
-      userId: targetUser.id,
-      addedUserId: targetUser.id,
-      discordId: targetUser.discordId,
-      username: targetUser.username,
-    },
+    details: { addedUserId: targetUser.id, discordId: targetUser.discordId, username: targetUser.username },
     req,
   });
 
-  success(
-    res,
-    {
-      ...member,
-      username: targetUser.username,
-      inGameName: targetUser.inGameName,
-      avatarUrl: targetUser.avatarUrl,
-      discordId: targetUser.discordId,
-    },
-    201,
-  );
+  success(res, { ...member, username: targetUser.username, avatarUrl: targetUser.avatarUrl, discordId: targetUser.discordId }, 201);
 });
 
 // ── GET / — list faction members ─────────────────────
@@ -123,15 +184,10 @@ router.get('/', async (req: Request, res: Response) => {
       rank: factionMembers.rank,
       joinedAt: factionMembers.joinedAt,
       username: users.username,
-      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
-      // Parameterised sub-selects so a malformed factionId can't escape
-      // into raw SQL — the previous `sql.raw` interpolation was safe here
-      // only because Express's uuid route param happens to be validated by
-      // the FK lookup, but it's a pattern we shouldn't ship.
-      entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)::int`,
-      lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)`,
+      entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${sql.raw(`'${factionId}'::uuid`)} AND is_deleted = false)::int`,
+      lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = users.id AND faction_id = ${sql.raw(`'${factionId}'::uuid`)} AND is_deleted = false)`,
     })
     .from(factionMembers)
     .innerJoin(users, eq(factionMembers.userId, users.id))
@@ -205,54 +261,35 @@ router.patch('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, r
     updates.rank = parsed.data.rank;
   }
 
-  // Capture before-state BEFORE the transaction so the audit log shows
-  // the values that were actually there at the start of the request.
   const oldRole = membership.role;
   const oldRank = membership.rank;
+  const [updated] = await db
+    .update(factionMembers)
+    .set(updates)
+    .where(eq(factionMembers.id, membership.id))
+    .returning();
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(factionMembers)
-      .set(updates)
-      .where(eq(factionMembers.id, membership.id))
-      .returning();
-
-    // If promoting to admin, bump the user's global role from 'member' to
-    // 'faction_admin' so the SPA can show admin chrome elsewhere. Done in
-    // the same transaction so a failure rolls both writes back.
-    if (parsed.data.role === 'admin') {
-      const [targetUser] = await tx
-        .select({ role: users.role })
-        .from(users)
-        .where(eq(users.id, targetUserId))
-        .limit(1);
-      if (targetUser && targetUser.role === 'member') {
-        await tx.update(users).set({ role: 'faction_admin' }).where(eq(users.id, targetUserId));
-      }
+  // If promoting to admin, update user's global role
+  if (parsed.data.role === 'admin') {
+    const [targetUser] = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
+    if (targetUser && targetUser.role === 'member') {
+      await db.update(users).set({ role: 'faction_admin' }).where(eq(users.id, targetUserId));
     }
-
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'update',
-      entityType: 'member',
-      entityId: membership.id,
-      details: {
-        userId: targetUserId,
-        before: { role: oldRole, rank: oldRank },
-        after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
-      },
-      req,
-      tx,
-    });
-
-    return row;
-  });
-
-  if (!updated) {
-    error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
-    return;
   }
+
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'update',
+    entityType: 'member',
+    entityId: membership.id,
+    details: {
+      userId: targetUserId,
+      before: { role: oldRole, rank: oldRank },
+      after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
+    },
+    req,
+  });
 
   success(res, updated);
 });
@@ -294,23 +331,16 @@ router.delete('/:userId', requireFactionAdminOrSuperadmin, async (req: Request, 
     }
   }
 
-  await db.transaction(async (tx) => {
-    await tx.delete(factionMembers).where(eq(factionMembers.id, membership.id));
+  await db.delete(factionMembers).where(eq(factionMembers.id, membership.id));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'delete',
-      entityType: 'member',
-      entityId: membership.id,
-      details: {
-        userId: targetUserId,
-        removedUserId: targetUserId,
-        role: membership.role,
-      },
-      req,
-      tx,
-    });
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'delete',
+    entityType: 'member',
+    entityId: membership.id,
+    details: { removedUserId: targetUserId, role: membership.role },
+    req,
   });
 
   success(res, { removed: true });
@@ -331,14 +361,7 @@ router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Requ
   const where = and(
     eq(auditLogs.factionId, factionId),
     eq(auditLogs.entityType, 'member'),
-    // Match any of the member-lifecycle keys we write — different actions
-    // populate different ones (addedUserId on join, removedUserId on leave,
-    // userId on role change) and we want them all to surface here.
-    sql`(
-      ${auditLogs.details}->>'userId' = ${targetUserId}
-      OR ${auditLogs.details}->>'addedUserId' = ${targetUserId}
-      OR ${auditLogs.details}->>'removedUserId' = ${targetUserId}
-    )`,
+    sql`${auditLogs.details}->>'userId' = ${targetUserId}`,
   );
 
   const [items, countResult] = await Promise.all([
@@ -350,7 +373,6 @@ router.get('/:userId/history', requireFactionAdminOrSuperadmin, async (req: Requ
         createdAt: auditLogs.createdAt,
         actorId: auditLogs.userId,
         actorUsername: users.username,
-        actorInGameName: users.inGameName,
         actorAvatarUrl: users.avatarUrl,
       })
       .from(auditLogs)
@@ -408,7 +430,6 @@ router.get('/:userId', async (req: Request, res: Response) => {
       joinedAt: factionMembers.joinedAt,
       userId: users.id,
       username: users.username,
-      inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
       lastLogin: users.lastLogin,
@@ -426,44 +447,6 @@ router.get('/:userId', async (req: Request, res: Response) => {
   }
 
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
-
-  // recentPayouts are admin-only material (the /payouts index returns 403 to
-  // plain members). Don't leak them through this aggregate endpoint — gate
-  // the entire query behind isAdmin so members get an empty array instead.
-  type RecentPayoutRow = {
-    id: string;
-    amount: string;
-    description: string | null;
-    payoutDate: string;
-    status: string;
-    itemTypeName: string;
-    itemUnit: string;
-    itemIsCurrency: boolean;
-  };
-  const recentPayoutsPromise: Promise<RecentPayoutRow[]> = isAdmin
-    ? (db
-        .select({
-          id: payouts.id,
-          amount: payouts.amount,
-          description: payouts.description,
-          payoutDate: payouts.payoutDate,
-          status: payouts.status,
-          itemTypeName: itemTypes.name,
-          itemUnit: itemTypes.unit,
-          itemIsCurrency: itemTypes.isCurrency,
-        })
-        .from(payouts)
-        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
-        .where(
-          and(
-            eq(payouts.factionId, factionId),
-            eq(payouts.recipientUserId, targetUserId),
-            eq(payouts.isDeleted, false),
-          ),
-        )
-        .orderBy(desc(payouts.createdAt))
-        .limit(20) as Promise<RecentPayoutRow[]>)
-    : Promise.resolve([] as RecentPayoutRow[]);
 
   const [contribution, byItemType, payoutStats, recentEntries, recentPayouts, activeQuotas] =
     await Promise.all([
@@ -544,7 +527,28 @@ router.get('/:userId', async (req: Request, res: Response) => {
         )
         .orderBy(desc(entries.createdAt))
         .limit(20),
-      recentPayoutsPromise,
+      db
+        .select({
+          id: payouts.id,
+          amount: payouts.amount,
+          description: payouts.description,
+          payoutDate: payouts.payoutDate,
+          status: payouts.status,
+          itemTypeName: itemTypes.name,
+          itemUnit: itemTypes.unit,
+          itemIsCurrency: itemTypes.isCurrency,
+        })
+        .from(payouts)
+        .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
+        .where(
+          and(
+            eq(payouts.factionId, factionId),
+            eq(payouts.recipientUserId, targetUserId),
+            eq(payouts.isDeleted, false),
+          ),
+        )
+        .orderBy(desc(payouts.createdAt))
+        .limit(20),
       db
         .select({
           id: quotas.id,

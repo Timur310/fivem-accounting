@@ -14,7 +14,6 @@ import { Trophy, Medal, TrendingUp, Crown, ChevronLeft, ChevronRight } from 'luc
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
-import { formatNumber, displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -57,6 +56,8 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   const rankings = showGlobal ? (globalData?.rankings ?? []) : (lbData?.rankings ?? []);
   const myRank = showGlobal ? null : (lbData?.myRank ?? null);
   const periodLabel = showGlobal ? (globalData?.period?.label ?? '') : (lbData?.period?.label ?? '');
+
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const rankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="h-4 w-4 text-amber-400" />;
@@ -145,11 +146,11 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     {/* Avatar + Name */}
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarImage src={r.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-[10px]">{r.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>
-                        {displayName(r)}
+                        {r.username}
                         {isMe && <span className="text-[10px] text-zinc-500 ml-1">(you)</span>}
                       </p>
                       {'factionName' in r && (
@@ -162,7 +163,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                       <div className="hidden lg:flex items-center gap-2">
                         {Object.entries(r.itemBreakdown).slice(0, 3).map(([name, val]) => (
                           <Badge key={name} variant="outline" className="text-[10px] text-zinc-500 border-white/[0.06]">
-                            {name}: {formatNumber(val)}
+                            {name}: {fmt(val)}
                           </Badge>
                         ))}
                       </div>
@@ -170,7 +171,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
 
                     {/* Stats */}
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-medium tabular-nums text-zinc-100">{formatNumber(r.total)}</p>
+                      <p className="text-sm font-medium tabular-nums text-zinc-100">{fmt(r.total)}</p>
                       <p className="text-[10px] text-zinc-600">{r.entryCount} entries</p>
                     </div>
                   </div>

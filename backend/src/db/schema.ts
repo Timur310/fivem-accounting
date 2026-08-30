@@ -20,11 +20,6 @@ export const users = pgTable('users', {
   id:        uuid('id').defaultRandom().primaryKey(),
   discordId: varchar('discord_id', { length: 20 }).notNull().unique(),
   username:  varchar('username', { length: 32 }).notNull(),
-  // In-character name shown across the UI. Null means the player hasn't been
-  // asked yet — the frontend prompts them once on first login. Players can
-  // update it themselves via PATCH /auth/me; the field is never overwritten
-  // by Discord login (unlike `username`).
-  inGameName: varchar('in_game_name', { length: 50 }),
   avatarUrl: text('avatar_url'),
   role:      varchar('role', { length: 20 }).notNull().default('member'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -264,6 +259,11 @@ export const quotas = pgTable('quotas', {
   id:           uuid('id').defaultRandom().primaryKey(),
   factionId:    uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
   itemTypeId:   uuid('item_type_id').notNull().references(() => itemTypes.id),
+  // null = faction-wide quota (every member's entries count toward it).
+  // A userId = per-member quota (only that member's entries count).
+  // This lets admins set both "the faction must produce $100k/week" and
+  // "each member must produce $5k/week" as separate quotas.
+  targetUserId: uuid('target_user_id').references(() => users.id, { onDelete: 'cascade' }),
   targetAmount: decimal('target_amount', { precision: 15, scale: 2 }).notNull(),
   periodType:   varchar('period_type', { length: 10 }).notNull(),
   periodStart:  date('period_start').notNull(),
@@ -274,6 +274,7 @@ export const quotas = pgTable('quotas', {
 export const quotasRelations = relations(quotas, ({ one }) => ({
   faction:  one(factions,  { fields: [quotas.factionId],  references: [factions.id] }),
   itemType: one(itemTypes, { fields: [quotas.itemTypeId], references: [itemTypes.id] }),
+  targetUser: one(users, { fields: [quotas.targetUserId], references: [users.id] }),
 }));
 
 export type Quota = typeof quotas.$inferSelect;

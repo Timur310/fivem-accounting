@@ -55,11 +55,7 @@ router.post('/members', async (req: Request, res: Response) => {
     return;
   }
 
-  // Insert in one batch. Audit log goes in its own transaction so a failure
-  // to write the audit row doesn't roll back the inserts themselves — but a
-  // crash mid-batch-insert will still leave the inserts rolled back by the
-  // DB. We accept either outcome (committed batch + audit, or rolled back
-  // batch + no audit) over a half-committed batch with no audit trail.
+  // Insert in one batch
   const values = toAdd.map((u) => ({
     factionId,
     userId: u.id,
@@ -68,21 +64,18 @@ router.post('/members', async (req: Request, res: Response) => {
 
   const inserted = await db.insert(factionMembers).values(values).returning();
 
-  await db.transaction(async (tx) => {
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'bulk_create',
-      entityType: 'member',
-      details: {
-        addedCount: inserted.length,
-        unknownDiscordIds: unknownIds,
-        alreadyMembers: discordIds.length - unknownIds.length - toAdd.length,
-        addedUsers: toAdd.map((u) => ({ discordId: u.discordId, username: u.username })),
-      },
-      req,
-      tx,
-    });
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'bulk_create',
+    entityType: 'member',
+    details: {
+      addedCount: inserted.length,
+      unknownDiscordIds: unknownIds,
+      alreadyMembers: discordIds.length - unknownIds.length - toAdd.length,
+      addedUsers: toAdd.map((u) => ({ discordId: u.discordId, username: u.username })),
+    },
+    req,
   });
 
   success(res, {
@@ -127,21 +120,18 @@ router.post('/entries/bulk-delete', async (req: Request, res: Response) => {
     return;
   }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(entries)
-      .set({ isDeleted: true, updatedAt: new Date() })
-      .where(inArray(entries.id, validIds));
+  await db
+    .update(entries)
+    .set({ isDeleted: true, updatedAt: new Date() })
+    .where(inArray(entries.id, validIds));
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'bulk_delete',
-      entityType: 'entry',
-      details: { deletedCount: validIds.length, requestedCount: entryIds.length },
-      req,
-      tx,
-    });
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'bulk_delete',
+    entityType: 'entry',
+    details: { deletedCount: validIds.length, requestedCount: entryIds.length },
+    req,
   });
 
   success(res, { deletedCount: validIds.length });
@@ -149,13 +139,8 @@ router.post('/entries/bulk-delete', async (req: Request, res: Response) => {
 
 // ── POST /entries/import — CSV import ─────────────────
 const csvImportSchema = z.object({
-  // Cap the payload to keep a malicious or runaway CSV from exhausting memory.
-  // 500k chars is ~5–10k rows, far above any realistic one-shot import.
-  csv: z.string().min(10).max(500_000, 'CSV payload too large'),
+  csv: z.string().min(10),
 });
-
-// Hard limit on rows per import. Above this we ask the user to chunk their file.
-const MAX_CSV_ROWS = 1000;
 
 router.post('/entries/import', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
@@ -186,11 +171,6 @@ router.post('/entries/import', async (req: Request, res: Response) => {
   const lines = parsed.data.csv.trim().split('\n');
   if (lines.length < 2) {
     error(res, 'BAD_REQUEST', 'CSV must have a header row and at least one data row');
-    return;
-  }
-
-  if (lines.length - 1 > MAX_CSV_ROWS) {
-    error(res, 'BAD_REQUEST', `CSV has too many rows (max ${MAX_CSV_ROWS}). Please split the file and import in batches.`);
     return;
   }
 
@@ -241,29 +221,18 @@ router.post('/entries/import', async (req: Request, res: Response) => {
       continue;
     }
 
-    // Find user by username if provided, otherwise use importing user.
-    // The importing user is already a verified faction member (middleware),
-    // but a per-row username has to be re-checked against the roster —
-    // otherwise the importer could log entries under a non-member's name.
+    // Find user by username if provided, otherwise use importing user
     let userId = req.user!.id;
     if (memberName) {
       const [target] = await db
         .select({ id: users.id })
         .from(users)
-        .innerJoin(factionMembers, eq(factionMembers.userId, users.id))
-        .where(
-          and(
-            eq(users.username, memberName),
-            eq(factionMembers.factionId, factionId),
-          ),
-        )
+        .where(eq(users.username, memberName))
         .limit(1);
       if (target) {
         userId = target.id;
       } else {
-        results.errors.push(`Row ${i + 1}: User "${memberName}" is not a member of this faction, skipping`);
-        results.skipped++;
-        continue;
+        results.errors.push(`Row ${i + 1}: User "${memberName}" not found, using importer`);
       }
     }
 
@@ -278,62 +247,51 @@ router.post('/entries/import', async (req: Request, res: Response) => {
     results.imported++;
   }
 
-  // Batch insert + audit log share a transaction so a failure mid-insert
-  // leaves the audit log un-written rather than recording entries that
-  // didn't actually persist.
-  await db.transaction(async (tx) => {
-    if (rows.length > 0) {
-      await tx.insert(entries).values(rows);
-    }
+  // Batch insert
+  if (rows.length > 0) {
+    await db.insert(entries).values(rows);
+  }
 
-    await createAuditLog({
-      userId: req.user!.id,
-      factionId,
-      action: 'import',
-      entityType: 'entry',
-      details: { ...results, totalRows: lines.length - 1 },
-      req,
-      tx,
-    });
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'import',
+    entityType: 'entry',
+    details: { ...results, totalRows: lines.length - 1 },
+    req,
   });
 
   success(res, results);
 });
 
 // ── CSV line parser (handles quoted fields) ──────────
-// Build each field in a buffer array and join at the end: `string += ch` in a
-// loop is O(n²) for V8 because strings are immutable, and CSV rows can be
-// long enough to make that noticeable.
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
-  const buffer: string[] = [];
+  let current = '';
   let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
-    // charAt returns '' past the end of the string, so we don't have to
-    // sprinkle `string | undefined` checks through the parser body.
-    const ch = line.charAt(i);
-    const next = line.charAt(i + 1);
+    const ch = line[i];
     if (inQuotes) {
-      if (ch === '"' && next === '"') {
-        buffer.push('"');
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
         i++;
       } else if (ch === '"') {
         inQuotes = false;
       } else {
-        buffer.push(ch);
+        current += ch;
       }
     } else {
       if (ch === '"') {
         inQuotes = true;
       } else if (ch === ',') {
-        result.push(buffer.join(''));
-        buffer.length = 0;
+        result.push(current);
+        current = '';
       } else {
-        buffer.push(ch);
+        current += ch;
       }
     }
   }
-  result.push(buffer.join(''));
+  result.push(current);
   return result;
 }
 

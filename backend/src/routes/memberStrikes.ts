@@ -108,7 +108,6 @@ router.get('/', async (req: Request, res: Response) => {
       updatedAt: strikes.updatedAt,
       issuedBy: strikes.issuedBy,
       issuerUsername: users.username,
-      issuerInGameName: users.inGameName,
       issuerAvatarUrl: users.avatarUrl,
     })
     .from(strikes)
