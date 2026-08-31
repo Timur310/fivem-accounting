@@ -258,7 +258,7 @@ export function ProvisionalUsersPanel() {
             <AlertDialogTitle>Remove &ldquo;{deleteTarget?.inGameName?.trim() || deleteTarget?.username}&rdquo;?</AlertDialogTitle>
             <AlertDialogDescription>
               This deletes the registration and any faction memberships it has. It is refused
-              if the player already carries entries, payouts or strikes — those are real
+              if the player already carries entries, withdrawals or strikes — those are real
               records, so clear them first.
             </AlertDialogDescription>
           </AlertDialogHeader>

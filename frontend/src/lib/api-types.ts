@@ -753,7 +753,7 @@ export const FACTION_PERMISSIONS = [
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 export const PERMISSION_LABELS: Record<FactionPermission, string> = {
-  manage_members: 'Manage Members', manage_payouts: 'Manage Payouts',
+  manage_members: 'Manage Members', manage_payouts: 'Manage Withdrawals',
   manage_entries: 'Edit/Delete Entries', manage_strikes: 'Manage Strikes',
   manage_quotas: 'Manage Quotas', manage_item_types: 'Manage Item Types',
   manage_settings: 'Manage Settings', manage_customization: 'Manage Customization',

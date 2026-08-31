@@ -1182,6 +1182,11 @@ crontab -e
 
 ### 12.1 Phase 4: Treasury & Payouts
 
+> **Wording.** The UI calls these **withdrawals**, not payouts: what leaves the
+> vault is as often ammunition or drugs as it is money. The API, the database
+> and the `manage_payouts` permission still say *payout* — the rename was
+> deliberately kept to the screens.
+
 #### Why This Matters
 
 The current system only tracks money IN (contributions/deposits). In FiveM RP, factions are equally concerned with money OUT — paying members their cut, buying equipment, laundering fees, bribes, and operational costs. Without payout tracking, faction leaders have no idea what their actual treasury balance is. They cannot answer "how much money do we actually have in the stash?" without manually subtracting from a spreadsheet. This phase transforms the app from a "contribution tracker" into a full "treasury management system."

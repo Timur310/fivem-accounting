@@ -184,7 +184,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       payoutDate: formDate || undefined,
     }),
     onSuccess: () => {
-      toast({ title: 'Payout created' });
+      toast({ title: 'Withdrawal created' });
       setCreateOpen(false);
       resetCreateForm();
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
@@ -200,7 +200,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
     mutationFn: ({ payoutId, input }: { payoutId: string; input: Record<string, unknown> }) =>
       payoutsApi.update(factionId, payoutId, input as any),
     onSuccess: () => {
-      toast({ title: 'Payout updated' });
+      toast({ title: 'Withdrawal updated' });
       setEditPayout(null);
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
@@ -214,7 +214,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
   const deleteMutation = useMutation({
     mutationFn: (payoutId: string) => payoutsApi.remove(factionId, payoutId),
     onSuccess: () => {
-      toast({ title: 'Payout deleted' });
+      toast({ title: 'Withdrawal deleted' });
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
@@ -233,7 +233,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       payoutDate: splitDate || undefined,
     }),
     onSuccess: (result) => {
-      toast({ title: `Even split created: ${result.created} payouts`, description: `${result.perMember.toFixed(2)} per member, ${result.remainder.toFixed(2)} remainder stays in vault` });
+      toast({ title: `Even split created: ${result.created} withdrawals`, description: `${result.perMember.toFixed(2)} per member, ${result.remainder.toFixed(2)} remainder stays in vault` });
       setEvenSplitOpen(false);
       setSplitItemType('');
       setSplitTotal('');
@@ -288,8 +288,8 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-medium tracking-tight text-zinc-100">Payouts</h2>
-          <p className="text-zinc-500 text-sm mt-0.5">Manage money going out of the faction treasury</p>
+          <h2 className="text-xl font-medium tracking-tight text-zinc-100">Withdrawals</h2>
+          <p className="text-zinc-500 text-sm mt-0.5">Manage what leaves the faction treasury</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setEvenSplitOpen(true)}>
@@ -298,7 +298,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)} style={{ backgroundColor: brandColor }}>
             <Plus className="h-4 w-4 mr-1.5" />
-            New Payout
+            New Withdrawal
           </Button>
         </div>
       </div>
@@ -357,7 +357,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             </TableHeader>
             <TableBody>
               {payouts.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">No payouts found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">No withdrawals found.</TableCell></TableRow>
               ) : payouts.map((p) => {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
@@ -478,8 +478,8 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetCreateForm(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Payout</DialogTitle>
-            <DialogDescription>Record a payout from the faction treasury to a member.</DialogDescription>
+            <DialogTitle>New Withdrawal</DialogTitle>
+            <DialogDescription>Record something leaving the faction treasury for a member.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -541,7 +541,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
               onClick={() => createMutation.mutate()}
               style={{ backgroundColor: brandColor }}
             >
-              {createMutation.isPending ? 'Creating...' : 'Create Payout'}
+              {createMutation.isPending ? 'Creating...' : 'Create Withdrawal'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -551,9 +551,9 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <Dialog open={!!editPayout} onOpenChange={(open) => { if (!open) setEditPayout(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Payout</DialogTitle>
+            <DialogTitle>Edit Withdrawal</DialogTitle>
             <DialogDescription>
-              Editing payout for {editPayout ? fullDisplayName({ username: editPayout.recipientUsername, inGameName: editPayout.recipientInGameName }) : ''} · {editPayout?.itemTypeName}
+              Editing withdrawal for {editPayout ? fullDisplayName({ username: editPayout.recipientUsername, inGameName: editPayout.recipientInGameName }) : ''} · {editPayout?.itemTypeName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -609,7 +609,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
-              This will create individual payout records for each of the {members.length} member{members.length !== 1 ? 's' : ''} in this faction.
+              This will create individual withdrawal records for each of the {members.length} member{members.length !== 1 ? 's' : ''} in this faction.
             </div>
             <div className="space-y-2">
               <Label>Item Type *</Label>
@@ -678,9 +678,9 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Payout</AlertDialogTitle>
+            <AlertDialogTitle>Delete Withdrawal</AlertDialogTitle>
             <AlertDialogDescription>
-              This will soft-delete this payout. If it was completed, the treasury balance will be adjusted accordingly.
+              This will soft-delete this withdrawal. If it was completed, the treasury balance will be adjusted accordingly.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

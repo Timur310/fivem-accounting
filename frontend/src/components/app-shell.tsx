@@ -197,7 +197,7 @@ export function AppShell() {
   const navItems: NavItem[] = [
     { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { view: 'entries', label: 'Entries', icon: List },
-    { view: 'payouts', label: 'Payouts', icon: ArrowDownToLine },
+    { view: 'payouts', label: 'Withdrawals', icon: ArrowDownToLine },
     { view: 'treasury', label: 'Treasury', icon: Wallet },
     {
       view: 'laundering',
