@@ -34,6 +34,7 @@ import {
   ArrowDownToLine,
   Trophy,
   AlertTriangle,
+  WashingMachine,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
@@ -47,6 +48,7 @@ import { AdminFactionsView } from '@/views/admin-factions-view';
 import { AdminFactionDetailView } from '@/views/admin-faction-detail-view';
 import { MemberProfileView } from '@/views/member-profile-view';
 import { StrikesView } from '@/views/strikes-view';
+import { LaunderingView } from '@/views/laundering-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -197,6 +199,12 @@ export function AppShell() {
     { view: 'entries', label: 'Entries', icon: List },
     { view: 'payouts', label: 'Payouts', icon: ArrowDownToLine },
     { view: 'treasury', label: 'Treasury', icon: Wallet },
+    {
+      view: 'laundering',
+      label: 'Laundering',
+      icon: WashingMachine,
+      anyPermission: ['manage_laundering'],
+    },
     { view: 'members', label: 'Members', icon: Users },
     { view: 'leaderboard', label: 'Leaderboard', icon: Trophy },
     { view: 'strikes', label: 'Strikes', icon: AlertTriangle },
@@ -310,6 +318,8 @@ export function AppShell() {
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canLogAnonymously={hasPermission('manage_entries')} /> : null;
       case 'payouts':
         return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
+      case 'laundering':
+        return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
       case 'treasury':
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':

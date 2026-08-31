@@ -105,6 +105,7 @@ export const FACTION_PERMISSIONS = [
   'manage_customization',
   'view_audit_logs',
   'view_reports',
+  'manage_laundering',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -120,6 +121,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_customization: 'Manage Customization',
   view_audit_logs: 'View Audit Logs',
   view_reports: 'View Reports',
+  manage_laundering: 'Launder Money',
 };
 
 // ── faction_members ────────────────────────────────────
