@@ -65,7 +65,17 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentView: (view) => set({ currentView: view }),
 
   selectedFactionId: null,
-  setSelectedFactionId: (id) => set({ selectedFactionId: id, brandColor: DEFAULT_BRAND_COLOR }),
+  // Switching factions drops the colour back to the default so the previous
+  // faction's accent does not linger over the new one while its settings load.
+  // Re-picking the faction you are already on is not a switch: the settings
+  // query answers from cache with the same value, so the effect that restores
+  // the colour never re-runs and clearing it here would strand the UI on the
+  // default until something else refetched.
+  setSelectedFactionId: (id) => set((state) => (
+    state.selectedFactionId === id
+      ? { selectedFactionId: id }
+      : { selectedFactionId: id, brandColor: DEFAULT_BRAND_COLOR }
+  )),
 
   selectedMemberUserId: null,
   setSelectedMemberUserId: (id) => set({ selectedMemberUserId: id }),

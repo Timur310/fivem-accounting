@@ -105,11 +105,13 @@ export function AppShell() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Keyed on the faction as well as the colour: two factions can share an
+  // accent, and re-selecting has to re-apply it either way.
   useEffect(() => {
     if (factionSettings?.brandColor) {
       setBrandColor(factionSettings.brandColor);
     }
-  }, [factionSettings?.brandColor, setBrandColor]);
+  }, [factionSettings?.brandColor, selectedFactionId, setBrandColor]);
 
   const router = useRouter();
 
