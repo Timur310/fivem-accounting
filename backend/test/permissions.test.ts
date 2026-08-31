@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { api, resetDatabase, seedBasicWorld, type BasicWorld } from './helpers.js';
+import { addMember, api, createUser, resetDatabase, seedBasicWorld, type BasicWorld } from './helpers.js';
 
 let w: BasicWorld;
 const f = () => `/api/v1/factions/${w.faction.id}`;
@@ -186,5 +186,97 @@ describe('rank permissions are admin-only', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.ranks[0].permissions).toEqual(['manage_payouts']);
+  });
+});
+
+/**
+ * `manage_members` is the roster permission: add people, remove them, set
+ * their rank. The admin seat is not part of it — an admin implicitly holds
+ * every permission, so a delegate who could hand it out (to themselves, most
+ * of all) would be holding all of them already.
+ */
+describe('member roles are admin-only', () => {
+  const patchMember = (userId: string) => `${f()}/members/${userId}`;
+
+  it('refuses to let a delegate promote themselves to admin', async () => {
+    await giveMemberRank(['manage_members']);
+
+    const res = await api()
+      .patch(patchMember(w.member.id))
+      .set('Cookie', w.member.cookie)
+      .send({ role: 'admin' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+
+    // And nothing leaked through: they are still a plain member.
+    const roster = await api().get(`${f()}/members`).set('Cookie', w.admin.cookie);
+    const row = roster.body.data.find((m: { userId: string }) => m.userId === w.member.id);
+    expect(row.role).toBe('member');
+  });
+
+  it('refuses to let a delegate demote an admin', async () => {
+    // A second admin, so the refusal is about the permission rather than the
+    // last-admin guard.
+    const other = await createUser('second_admin', 'faction_admin');
+    await addMember(w.faction.id, other.id, 'admin');
+    await giveMemberRank(['manage_members']);
+
+    const res = await api()
+      .patch(patchMember(other.id))
+      .set('Cookie', w.member.cookie)
+      .send({ role: 'member' });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('still lets a delegate set a rank, which is theirs to set', async () => {
+    await giveMemberRank(['manage_members']);
+
+    const res = await api()
+      .patch(patchMember(w.member.id))
+      .set('Cookie', w.member.cookie)
+      .send({ rank: 'Capo' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.rank).toBe('Capo');
+  });
+
+  it('lets a role field through when it repeats what the member already holds', async () => {
+    await giveMemberRank(['manage_members']);
+
+    const res = await api()
+      .patch(patchMember(w.member.id))
+      .set('Cookie', w.member.cookie)
+      .send({ role: 'member', rank: 'Capo' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.rank).toBe('Capo');
+  });
+
+  it('still lets the faction admin promote a member', async () => {
+    const res = await api()
+      .patch(patchMember(w.member.id))
+      .set('Cookie', w.admin.cookie)
+      .send({ role: 'admin' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.role).toBe('admin');
+  });
+
+  it('lets a superadmin who joined as a plain member promote someone', async () => {
+    const joined = await api()
+      .post(`${f()}/members`)
+      .set('Cookie', w.admin.cookie)
+      .send({ discordId: w.superadmin.discordId });
+    expect(joined.status).toBe(201);
+
+    const res = await api()
+      .patch(patchMember(w.member.id))
+      .set('Cookie', w.superadmin.cookie)
+      .send({ role: 'admin' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.role).toBe('admin');
   });
 });

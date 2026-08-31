@@ -13,9 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -95,6 +93,17 @@ export function MemberProfileView({ factionId, userId }: Props) {
     staleTime: 0,
   });
 
+  // Notes need `manage_members` — they are never shown to their subject —
+  // while history is also your own to read. The profile response reports both.
+  // Falling back to Overview matters when the same screen is reused for the
+  // next member, whose file may be closed.
+  const visibleTabs: ProfileTab[] = [
+    'overview',
+    ...(profile?.canViewNotes ? ['notes' as const] : []),
+    ...(profile?.canViewHistory ? ['history' as const] : []),
+  ];
+  const activeTab: ProfileTab = visibleTabs.includes(tab) ? tab : 'overview';
+
   const { data: notes = [], isLoading: notesLoading } = useQuery({
     queryKey: ['member-notes', factionId, userId],
     queryFn: () => notesApi.list(factionId, userId),
@@ -117,7 +126,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
   const { data: historyData } = useQuery({
     queryKey: ['member-history', factionId, userId],
     queryFn: () => membersApi.getHistory(factionId, userId, 1, 50),
-    enabled: tab === 'history',
+    enabled: activeTab === 'history' && profile?.canViewHistory === true,
     staleTime: 0,
   });
 
@@ -247,15 +256,16 @@ export function MemberProfileView({ factionId, userId }: Props) {
         )}
       </div>
 
-      {/* Tabs: admin sees notes + history */}
-      {isAdmin && (
+      {/* Notes and history are your own file, or anyone's with
+          `manage_members` — the API decides, these flags report it. */}
+      {visibleTabs.length > 1 && (
         <div className="flex gap-1 border-b border-white/[0.06] pb-px">
-          {(['overview', 'notes', 'history'] as ProfileTab[]).map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-sm font-medium capitalize transition-colors ${tab === t ? 'border-b-2 border-[var(--brand-color)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-              style={tab === t ? { borderColor: brandColor, color: brandColor } : undefined}
+              className={`px-3 py-1.5 text-sm font-medium capitalize transition-colors ${activeTab === t ? 'border-b-2 border-[var(--brand-color)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              style={activeTab === t ? { borderColor: brandColor, color: brandColor } : undefined}
             >
               {t === 'notes' ? `Notes${notes.length > 0 ? ` (${notes.length})` : ''}` : t}
             </button>
@@ -263,7 +273,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
         </div>
       )}
 
-      {tab === 'overview' && (
+      {activeTab === 'overview' && (
         <div className="space-y-4">
           {/* ── Top Stats Row ── */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -537,7 +547,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
       )}
 
       {/* ── Notes Tab ── */}
-      {tab === 'notes' && (
+      {activeTab === 'notes' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-zinc-500">{notes.length} note{notes.length !== 1 ? 's' : ''}</p>
@@ -573,7 +583,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
       )}
 
       {/* ── History Tab ── */}
-      {tab === 'history' && (
+      {activeTab === 'history' && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-zinc-400" /> Member History</CardTitle>
@@ -609,10 +619,12 @@ export function MemberProfileView({ factionId, userId }: Props) {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select value={noteCategory} onValueChange={(v) => setNoteCategory(v as NoteCategory)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{NOTE_CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-              </Select>
+              <SearchableSelect
+                value={noteCategory}
+                onValueChange={(v) => setNoteCategory(v as NoteCategory)}
+                options={NOTE_CATEGORIES}
+                aria-label="Note category"
+              />
             </div>
             <div className="space-y-2">
               <Label>Content</Label>

@@ -6,18 +6,17 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
 import { isActiveStrike, effectiveStatus } from '../lib/strikes.js';
 
 const router = Router({ mergeParams: true });
 
-// The faction-wide discipline overview is admin material — the test suite
-// pins this to 403 for plain members, so the admin guard stays in place.
-// (The literal task description asked for it to be removed with per-member
-// scoping; we honor the existing test over the spec here, in line with the
-// previous review pass.)
-router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
+// Membership is enough to reach this route — what it answers with depends on
+// who is asking. A member has to be able to see the strikes held against them,
+// including the ones that no longer count; reading the rest of the faction's
+// discipline record is what `manage_strikes` is for.
+router.use(requireAuth, requireFactionMember);
 
 const listQuerySchema = z.object({
   // Default view is what still counts against members; pass status=all to see
@@ -31,9 +30,12 @@ const listQuerySchema = z.object({
 
 // ── GET / — strikes across the faction ───────────────
 //
-// Plain members see only their own strikes here — both active and historical.
-// Admins (and superadmins) see the whole roster. The summary at the bottom is
-// also scoped per-member when a plain member is asking.
+// Holders of `manage_strikes` — admins and superadmins among them, since a
+// role implies every permission — see the whole roster and default to the
+// strikes that still count. Everyone else sees their own record and defaults
+// to all of it: a member reading their own history has nothing to gain from
+// hiding the revoked and expired entries, and the expiry date is the part
+// they most often want to check. The summary is scoped the same way.
 router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
 
@@ -46,17 +48,20 @@ router.get('/', async (req: Request, res: Response) => {
   const { status, severity, user_id, page: pageStr, page_size: pageSizeStr } = query.data;
   const { page, pageSize, offset } = parsePagination({ page: pageStr, page_size: pageSizeStr });
 
-  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+  const canSeeEveryone = (req.factionPermissions ?? []).includes('manage_strikes');
 
-  // Plain members are pinned to their own target user id, regardless of the
-  // user_id query param — they cannot read another member's strikes here.
-  const effectiveTargetUserId = isAdmin ? user_id : req.user!.id;
+  // Without that permission the caller is pinned to their own target user id,
+  // regardless of the user_id query param — they cannot read another member's
+  // strikes here.
+  const effectiveTargetUserId = canSeeEveryone ? user_id : req.user!.id;
 
-  // No status filter means "currently counts against the member", which is
-  // status='active' AND not past its expiry — not simply status='active'.
+  // For the faction-wide view, no status filter means "currently counts
+  // against the member", which is status='active' AND not past its expiry —
+  // not simply status='active'. Reading your own record defaults to the whole
+  // history instead.
   let statusCondition;
   if (!status) {
-    statusCondition = isActiveStrike();
+    statusCondition = canSeeEveryone ? isActiveStrike() : undefined;
   } else if (status === 'expired') {
     statusCondition = sql`${strikes.status} = 'active' AND ${strikes.expiresAt} IS NOT NULL AND ${strikes.expiresAt} <= NOW()`;
   } else if (status === 'active') {

@@ -64,3 +64,15 @@ export function todayLocalDateString(d: Date = new Date()): string {
 export function displayName(user: { username: string; inGameName?: string | null }): string {
   return user.inGameName?.trim() || user.username;
 }
+
+/**
+ * Both names at once: "Vito Corleone (vito_c)".
+ *
+ * Payouts are matched against a Discord account but paid to a character, so a
+ * single name is never enough to identify who a row is about. Collapses to the
+ * Discord name alone when no in-game name has been set.
+ */
+export function fullDisplayName(user: { username: string; inGameName?: string | null }): string {
+  const inGame = user.inGameName?.trim();
+  return inGame ? `${inGame} (${user.username})` : user.username;
+}

@@ -9,8 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -21,6 +21,12 @@ import type { StrikeEffectiveStatus } from '@/lib/api-types';
 
 interface Props {
   factionId: string;
+  /**
+   * Whether the caller may act on other members' strikes. Without it the API
+   * answers with their own record only, so the screen turns into a personal
+   * discipline history: no roster column, no buttons.
+   */
+  canManageStrikes?: boolean;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -36,18 +42,30 @@ const STATUS_COLORS: Record<StrikeEffectiveStatus, string> = {
   expired: 'text-zinc-600',
 };
 
-export function StrikesView({ factionId }: Props) {
+// The empty value is the unfiltered case, so it doubles as a way to clear.
+const STATUS_FILTER_OPTIONS: SearchableSelectOption[] = [
+  { value: '', label: 'All Statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'appealed', label: 'Appealed' },
+  { value: 'revoked', label: 'Revoked' },
+  { value: 'expired', label: 'Expired' },
+];
+
+const SEVERITY_FILTER_OPTIONS: SearchableSelectOption[] = [
+  { value: '', label: 'All Severities' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'minor', label: 'Minor' },
+  { value: 'major', label: 'Major' },
+];
+
+export function StrikesView({ factionId, canManageStrikes }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
-  const user = useAppStore((s) => s.user);
 
-  // Backend already filters the list to a member's own strikes when they
-  // aren't an admin. The buttons that mutate strike status (Revoke,
-  // Reinstate, Appeal) are only meaningful for admins — hide them for
-  // plain members so the UI doesn't invite a 403.
-  const activeFaction = user?.factions.find((f) => f.factionId === factionId);
-  const isAdmin = user?.role === 'superadmin' || activeFaction?.role === 'admin';
+  // The backend scopes the list to the caller's own strikes without
+  // `manage_strikes`, so the status buttons (Revoke, Reinstate) would only
+  // invite a 403 — and the Member column would repeat one name down the page.
 
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -104,25 +122,24 @@ export function StrikesView({ factionId }: Props) {
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        <Select value={statusFilter || '_all'} onValueChange={(v) => { setStatusFilter(v === '_all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_all">All Statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="appealed">Appealed</SelectItem>
-            <SelectItem value="revoked">Revoked</SelectItem>
-            <SelectItem value="expired">Expired</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={severityFilter || '_all'} onValueChange={(v) => { setSeverityFilter(v === '_all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="Severity" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_all">All Severities</SelectItem>
-            <SelectItem value="warning">Warning</SelectItem>
-            <SelectItem value="minor">Minor</SelectItem>
-            <SelectItem value="major">Major</SelectItem>
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          className="w-[140px]"
+          triggerClassName="h-8 text-xs"
+          aria-label="Filter by status"
+          value={statusFilter}
+          onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
+          options={STATUS_FILTER_OPTIONS}
+          placeholder="All Statuses"
+        />
+        <SearchableSelect
+          className="w-[140px]"
+          triggerClassName="h-8 text-xs"
+          aria-label="Filter by severity"
+          value={severityFilter}
+          onValueChange={(v) => { setSeverityFilter(v); setPage(1); }}
+          options={SEVERITY_FILTER_OPTIONS}
+          placeholder="All Severities"
+        />
       </div>
 
       {/* Table */}
@@ -136,7 +153,7 @@ export function StrikesView({ factionId }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Member</TableHead>
+                  {canManageStrikes && <TableHead>Member</TableHead>}
                   <TableHead>Severity</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="hidden md:table-cell">Reason</TableHead>
@@ -147,15 +164,17 @@ export function StrikesView({ factionId }: Props) {
               <TableBody>
                 {strikes.map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarImage src={s.targetAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[8px]">{(s.targetInGameName || s.targetUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm text-zinc-300">{s.targetInGameName?.trim() || s.targetUsername || 'Unknown'}</span>
-                      </div>
-                    </TableCell>
+                    {canManageStrikes && (
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={s.targetAvatarUrl ?? undefined} />
+                            <AvatarFallback className="text-[8px]">{(s.targetInGameName || s.targetUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm text-zinc-300">{s.targetInGameName?.trim() || s.targetUsername || 'Unknown'}</span>
+                        </div>
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{s.severity}</Badge>
                     </TableCell>
@@ -170,7 +189,7 @@ export function StrikesView({ factionId }: Props) {
                     </TableCell>
                     <TableCell className="text-xs text-zinc-600 tabular-nums">{new Date(s.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {isAdmin && s.effectiveStatus === 'active' && s.targetUserId && (
+                      {canManageStrikes && s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <MessageSquare className="h-3 w-3" />
@@ -180,7 +199,7 @@ export function StrikesView({ factionId }: Props) {
                           </Button>
                         </div>
                       )}
-                      {isAdmin && s.effectiveStatus === 'appealed' && s.targetUserId && (
+                      {canManageStrikes && s.effectiveStatus === 'appealed' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <RotateCcw className="h-3 w-3" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { membersApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -31,9 +31,15 @@ import { displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
+  /**
+   * Whether the caller runs this faction. `manage_members` covers the roster,
+   * but handing out the admin seat stays with the faction admin — the API
+   * refuses it, so the screen must not offer it.
+   */
+  isFactionAdmin?: boolean;
 }
 
-export function MembersView({ factionId }: Props) {
+export function MembersView({ factionId, isFactionAdmin }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -68,6 +74,12 @@ export function MembersView({ factionId }: Props) {
   });
 
   const sortedRanks = (settings?.ranks ?? []).sort((a, b) => a.level - b.level);
+
+  // The empty value clears the rank, matching what the dialog submits.
+  const rankOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: 'No rank (clear)' },
+    ...sortedRanks.map((r) => ({ value: r.name, label: r.name, hint: `(Level ${r.level})` })),
+  ], [sortedRanks]);
 
   const addMutation = useMutation({
     mutationFn: () => membersApi.add(factionId, selectedUser ? selectedUser.id : discordId),
@@ -266,15 +278,17 @@ export function MembersView({ factionId }: Props) {
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title="View Profile">
                             <Eye className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
-                            setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
-                            // Start on the role they hold, so the highlighted
-                            // button always says what is true right now.
-                            setNewRole(m.role === 'admin' ? 'admin' : 'member');
-                            setRoleDialogOpen(true);
-                          }} title="Change Role">
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                          {isFactionAdmin && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
+                              setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
+                              // Start on the role they hold, so the highlighted
+                              // button always says what is true right now.
+                              setNewRole(m.role === 'admin' ? 'admin' : 'member');
+                              setRoleDialogOpen(true);
+                            }} title="Change Role">
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -429,15 +443,14 @@ export function MembersView({ factionId }: Props) {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Rank</Label>
-              <Select value={newRank || '_none'} onValueChange={(v) => setNewRank(v === '_none' ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="No rank" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">No rank (clear)</SelectItem>
-                  {sortedRanks.map((r) => (
-                    <SelectItem key={r.name} value={r.name}>{r.name} (Level {r.level})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={newRank}
+                onValueChange={setNewRank}
+                options={rankOptions}
+                placeholder="No rank"
+                searchPlaceholder="Search ranks..."
+                emptyMessage="No ranks match."
+              />
               <p className="text-xs text-zinc-600">Ranks are display-only. Configure them in Settings &rarr; Faction Settings.</p>
             </div>
           </div>

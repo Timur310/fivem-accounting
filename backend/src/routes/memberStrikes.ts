@@ -91,8 +91,12 @@ router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
-  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
-  if (!isAdmin && targetUserId !== req.user!.id) {
+  // Same rule as the faction-wide list: `manage_strikes` reads anyone's
+  // record, everyone else reads their own. Issuing and revoking already run
+  // on that permission, so reading was the one place a delegate was still
+  // treated as a plain member.
+  const canSeeEveryone = (req.factionPermissions ?? []).includes('manage_strikes');
+  if (!canSeeEveryone && targetUserId !== req.user!.id) {
     error(res, 'FORBIDDEN', 'You can only view your own strikes', 403);
     return;
   }

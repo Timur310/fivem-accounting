@@ -5,14 +5,27 @@ import { memberNotes, users, factionMembers, NOTE_CATEGORIES } from '../db/schem
 import { eq, and, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireFactionMember, requireFactionAdminOrSuperadmin } from '../middleware/factionAccess.js';
+import { requireFactionMember } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router({ mergeParams: true });
 
-// Notes are private admin material: the member they describe must never be
-// able to read them, so admin rights are required for every operation here.
-router.use(requireAuth, requireFactionMember, requireFactionAdminOrSuperadmin);
+router.use(requireAuth, requireFactionMember);
+
+/**
+ * Notes are private management material and stay invisible to the member they
+ * describe — read included. Admins write them expecting that, and a note the
+ * subject can read is a different, more guarded thing than the one this
+ * feature is for.
+ *
+ * The gate is `manage_members` rather than the admin role, so a rank trusted
+ * with the roster can keep the file that goes with it.
+ */
+function requireNoteAccess(req: Request, res: Response): boolean {
+  if ((req.factionPermissions ?? []).includes('manage_members')) return true;
+  error(res, 'FORBIDDEN', 'You need the "manage_members" permission to do this', 403);
+  return false;
+}
 
 // ── Validation schemas ────────────────────────────────
 
@@ -45,6 +58,8 @@ async function assertFactionMember(factionId: string, userId: string): Promise<b
 
 // ── POST / — write a note about a member ─────────────
 router.post('/', async (req: Request, res: Response) => {
+  if (!requireNoteAccess(req, res)) return;
+
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -95,6 +110,8 @@ router.post('/', async (req: Request, res: Response) => {
 
 // ── GET / — list notes about a member ────────────────
 router.get('/', async (req: Request, res: Response) => {
+  if (!requireNoteAccess(req, res)) return;
+
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
 
@@ -134,6 +151,8 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ── PATCH /:noteId — edit content, category or flag ──
 router.patch('/:noteId', async (req: Request, res: Response) => {
+  if (!requireNoteAccess(req, res)) return;
+
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
   const noteId = req.params.noteId as string;
@@ -191,6 +210,8 @@ router.patch('/:noteId', async (req: Request, res: Response) => {
 
 // ── DELETE /:noteId — remove a note ──────────────────
 router.delete('/:noteId', async (req: Request, res: Response) => {
+  if (!requireNoteAccess(req, res)) return;
+
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
   const noteId = req.params.noteId as string;
