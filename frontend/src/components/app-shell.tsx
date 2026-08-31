@@ -325,7 +325,11 @@ export function AppShell() {
       case 'members':
         return selectedFactionId ? <MembersView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} /> : null;
       case 'member-profile':
-        return (selectedFactionId && selectedMemberUserId) ? <MemberProfileView factionId={selectedFactionId} userId={selectedMemberUserId} /> : null;
+        return (selectedFactionId && selectedMemberUserId) ? <MemberProfileView
+            factionId={selectedFactionId}
+            userId={selectedMemberUserId}
+            canManageStrikes={hasPermission('manage_strikes')}
+          /> : null;
       case 'strikes':
         return selectedFactionId ? <StrikesView factionId={selectedFactionId} canManageStrikes={hasPermission('manage_strikes')} /> : null;
       case 'leaderboard':
