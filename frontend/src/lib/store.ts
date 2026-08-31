@@ -9,6 +9,7 @@ export type AppView =
   | 'entries'
   | 'payouts'
   | 'treasury'
+  | 'laundering'
   | 'members'
   | 'member-profile'
   | 'strikes'

@@ -744,7 +744,7 @@ export interface FactionRank {
 export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
-  'view_audit_logs', 'view_reports',
+  'view_audit_logs', 'view_reports', 'manage_laundering',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 export const PERMISSION_LABELS: Record<FactionPermission, string> = {
@@ -753,7 +753,41 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_quotas: 'Manage Quotas', manage_item_types: 'Manage Item Types',
   manage_settings: 'Manage Settings', manage_customization: 'Manage Customization',
   view_audit_logs: 'View Audit Logs', view_reports: 'View Reports',
+  manage_laundering: 'Launder Money',
 };
+
+// ── Laundering ─────────────────────────────────────────
+
+/** A currency the faction deals in, with what the vault holds of it. */
+export interface LaunderableCurrency {
+  itemTypeId: string;
+  itemTypeName: string;
+  unit: string;
+  balance: number;
+}
+
+export interface LaunderingOverview {
+  currencies: LaunderableCurrency[];
+}
+
+export interface LaunderInput {
+  fromItemTypeId: string;
+  amountIn: string;
+  toItemTypeId: string;
+  amountOut: string;
+  description?: string;
+  date?: string;
+}
+
+export interface LaunderResult {
+  from: { itemTypeId: string; itemTypeName: string; unit: string; amount: string };
+  to: { itemTypeId: string; itemTypeName: string; unit: string; amount: string };
+  date: string;
+  /** The completed payout that took the dirty currency out of the vault. */
+  payoutId: string;
+  /** The entry that put the clean currency back in. */
+  entryId: string;
+}
 
 export interface FactionSettings {
   ranks: FactionRank[];

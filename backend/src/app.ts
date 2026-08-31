@@ -23,6 +23,7 @@ import bulkRoutes from './routes/bulk.js';
 import reportRoutes from './routes/reports.js';
 import payoutRoutes from './routes/payouts.js';
 import treasuryRoutes from './routes/treasury.js';
+import launderingRoutes from './routes/laundering.js';
 import memberNoteRoutes from './routes/memberNotes.js';
 import memberStrikeRoutes from './routes/memberStrikes.js';
 import factionStrikeRoutes from './routes/factionStrikes.js';
@@ -150,6 +151,7 @@ app.use('/api/v1/factions/:id/reports', reportRoutes);
 app.use('/api/v1/factions/:id/bulk', bulkRoutes);
 app.use('/api/v1/factions/:id/payouts', payoutRoutes);
 app.use('/api/v1/factions/:id/treasury', treasuryRoutes);
+app.use('/api/v1/factions/:id/laundering', launderingRoutes);
 
 // ── 404 handler ───────────────────────────────────────
 

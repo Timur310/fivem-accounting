@@ -1360,6 +1360,55 @@ that only ever worked while logged in as superadmin) should be re-tested.
 Phase 4 frontend work — treasury tab, balance cards, payout management page,
 create dialog and the pending-approval queue — is still open.
 
+#### 12.1.9 Laundering Desk
+
+Converts one of the faction's currencies into another: dirty money in, clean
+money back, minus whatever the washer kept.
+
+| Method | Endpoint | Who | Notes |
+|---|---|---|---|
+| GET | `/api/v1/factions/{id}/laundering` | `manage_laundering` | The faction's active currencies with the treasury balance of each |
+| POST | `/api/v1/factions/{id}/laundering` | `manage_laundering` | Performs one conversion |
+
+```jsonc
+// POST body
+{
+  "fromItemTypeId": "uuid",   // currency leaving the vault
+  "amountIn":       "10000",
+  "toItemTypeId":   "uuid",   // currency coming back
+  "amountOut":      "7500",
+  "description":    "optional note",
+  "date":           "2026-08-31"   // optional, defaults to today
+}
+```
+
+Design notes, in the order they usually get asked about:
+
+- **No new kind of record.** A conversion is written as the two movements the
+  treasury already derives its balances from: a **completed payout** of the
+  source currency and an **entry** of the target one, both against the
+  anonymous placeholder (`system:anonymous`, `is_system = true`). Nobody's
+  contribution score or payout history moves, and the vault ends up correct
+  without a second source of truth.
+- **The rate is not configured.** Whoever runs the wash types both amounts;
+  the cut depends on who did it. The UI shows the resulting percentage so the
+  numbers can be sanity-checked before submitting.
+- **Its own permission.** `manage_laundering` is separate from
+  `manage_payouts` and `manage_entries` — holding either of those does not
+  open the desk, and the menu is hidden without it.
+- **Currencies only.** Both sides must be active item types with
+  `isCurrency = true`; converting counted goods would be an inventory
+  correction wearing a laundering costume.
+- **The vault has to hold it.** The source balance is checked inside the
+  transaction, so two conversions cannot spend the same money; a short vault
+  answers `400` and writes nothing.
+- The payout is created `completed` and skips `payoutApprovalRequired`: there
+  is no member on the receiving end to four-eyes, and the balance has to move
+  at once for the entry beside it to make sense.
+- Each conversion writes one audit log row with `entity_type = 'laundering'`,
+  carrying both amounts, both item types, and the ids of the payout and entry
+  it produced.
+
 ---
 
 ### 12.2 Phase 5: Member Tools & Discipline

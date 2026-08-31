@@ -47,6 +47,9 @@ import type {
   LeaderboardData,
   GlobalLeaderboardData,
   GrowthData,
+  LaunderingOverview,
+  LaunderInput,
+  LaunderResult,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -433,6 +436,20 @@ export const treasuryApi = {
       .get<ApiSuccessResponse<TreasuryData>>(`/factions/${factionId}/treasury`, {
         params: trendDays ? { trend_days: trendDays } : undefined,
       })
+      .then(unwrap),
+};
+
+// ── Laundering ──
+
+export const launderingApi = {
+  get: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<LaunderingOverview>>(`/factions/${factionId}/laundering`)
+      .then(unwrap),
+
+  launder: (factionId: string, input: LaunderInput) =>
+    api
+      .post<ApiSuccessResponse<LaunderResult>>(`/factions/${factionId}/laundering`, input)
       .then(unwrap),
 };
 

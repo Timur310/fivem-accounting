@@ -6,8 +6,6 @@ import {
   itemTypes,
   users,
   factions,
-  ANONYMOUS_DISCORD_ID,
-  ANONYMOUS_USERNAME,
 } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
@@ -15,6 +13,7 @@ import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
 
@@ -48,35 +47,6 @@ const createEntrySchema = z.object({
   /** Log against the anonymous placeholder instead of the caller. */
   anonymous: z.boolean().optional(),
 });
-
-/**
- * The user rows carry entries, so income that belongs to nobody in particular
- * still needs one to hang off. This is that row: a single shared placeholder,
- * created the first time it is needed rather than seeded by a migration.
- *
- * It is deliberately not a faction member, so it never turns up on a roster,
- * and `isSystem` keeps it out of per-member rankings.
- */
-async function resolveAnonymousUserId(tx: TransactionLike): Promise<string> {
-  const [existing] = await tx
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.discordId, ANONYMOUS_DISCORD_ID))
-    .limit(1);
-  if (existing) return existing.id;
-
-  const [created] = await tx
-    .insert(users)
-    .values({
-      discordId: ANONYMOUS_DISCORD_ID,
-      username: ANONYMOUS_USERNAME,
-      role: 'member',
-      isSystem: true,
-    })
-    .returning({ id: users.id });
-  if (!created) throw new Error('Failed to create the anonymous user');
-  return created.id;
-}
 
 const updateEntrySchema = z.object({
   amount: amountField.optional(),
