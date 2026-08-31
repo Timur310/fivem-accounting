@@ -29,6 +29,12 @@ export const users = pgTable('users', {
   // against, so per-member rankings can leave it out without matching on a
   // magic username.
   isSystem:  boolean('is_system').notNull().default(false),
+  // A person a superadmin registered by Discord ID before they ever logged in.
+  // The row is a full user from the start — it can hold entries, payouts and
+  // strikes — and the OAuth callback clears the flag the first time they sign
+  // in, so their history carries over rather than starting again. Until then
+  // there is nobody behind it, so inactivity does not apply.
+  isProvisional: boolean('is_provisional').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   lastLogin: timestamp('last_login', { withTimezone: true }),
 });

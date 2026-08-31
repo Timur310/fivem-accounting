@@ -1072,18 +1072,18 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-200">Payout Approval</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">Withdrawal Approval</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-zinc-500">
-            When enabled, payouts created by one admin must be approved by a different admin before completion. Single-admin factions auto-complete regardless.
+            When enabled, withdrawals created by one admin must be approved by a different admin before completion. Single-admin factions auto-complete regardless.
           </p>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch
               checked={payoutApprovalRequired}
               onCheckedChange={setPayoutApprovalRequired}
             />
-            <span className="text-sm text-zinc-300">Require approval for payouts</span>
+            <span className="text-sm text-zinc-300">Require approval for withdrawals</span>
           </label>
         </CardContent>
       </Card>

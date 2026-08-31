@@ -336,12 +336,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card>
               <CardHeader className="pb-1">
                 <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Zap className="h-3 w-3" /> Payouts Received
+                  <Zap className="h-3 w-3" /> Withdrawals Received
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">{payoutStats.payoutCount} payout{payoutStats.payoutCount !== 1 ? 's' : ''}</p>
+                <p className="text-[11px] text-zinc-600 mt-1">{payoutStats.payoutCount} withdrawal{payoutStats.payoutCount !== 1 ? 's' : ''}</p>
                 {payoutStats.itemReceived > 0 && (
                   <p className="text-[11px] text-zinc-600 mt-0.5">+ {fmtItems(payoutStats.itemReceived)}</p>
                 )}

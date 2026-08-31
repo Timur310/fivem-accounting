@@ -253,6 +253,11 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                       <TableCell className="text-sm text-zinc-400 text-right tabular-nums hidden sm:table-cell">{m.entryCount}</TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1.5">
+                          {m.isProvisional && (
+                            <Badge variant="outline" className="text-[10px] border-white/[0.08] text-zinc-500">
+                              Provisional
+                            </Badge>
+                          )}
                           {isInactive && (
                             <Badge variant="outline" className="text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
                               <Clock className="h-2.5 w-2.5 mr-0.5" />

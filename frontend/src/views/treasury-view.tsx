@@ -63,7 +63,7 @@ export function TreasuryView({ factionId }: Props) {
       {/* Header */}
       <div>
         <h2 className="text-xl font-medium tracking-tight text-zinc-100">Treasury</h2>
-        <p className="text-zinc-500 text-sm mt-0.5">Faction vault balances — inflow minus completed payouts</p>
+        <p className="text-zinc-500 text-sm mt-0.5">Faction vault balances — inflow minus completed withdrawals</p>
       </div>
 
       {/* ══ Summary Cards ══ */}
@@ -116,7 +116,7 @@ export function TreasuryView({ factionId }: Props) {
                 {fmt(totalOutflow)}
               </span>
             </div>
-            <p className="text-xs text-zinc-500 mt-1.5">completed payouts · currency only</p>
+            <p className="text-xs text-zinc-500 mt-1.5">completed withdrawals · currency only</p>
           </CardContent>
         </Card>
       </div>
@@ -131,7 +131,7 @@ export function TreasuryView({ factionId }: Props) {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-amber-300">
-                  {pending.count} Pending Payout{pending.count !== 1 ? 's' : ''}
+                  {pending.count} Pending Withdrawal{pending.count !== 1 ? 's' : ''}
                 </p>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {fmt(pending.total)} waiting for approval or completion
@@ -248,11 +248,11 @@ export function TreasuryView({ factionId }: Props) {
       {/* ══ Recent Completed Payouts ══ */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-zinc-200">Recent Payouts</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">Recent Withdrawals</CardTitle>
         </CardHeader>
         <CardContent>
           {recentPayouts.length === 0 ? (
-            <p className="text-zinc-600 text-sm text-center py-8">No completed payouts yet.</p>
+            <p className="text-zinc-600 text-sm text-center py-8">No completed withdrawals yet.</p>
           ) : (
             <div className="space-y-1">
               {recentPayouts.map((p) => (

@@ -79,7 +79,7 @@ export function InGameNameModal() {
           <DialogTitle>Set your in-game name</DialogTitle>
           <DialogDescription>
             This is what other members will see across the faction roster,
-            entries, payouts and leaderboards. You can change it any time from
+            entries, withdrawals and leaderboards. You can change it any time from
             your profile.
           </DialogDescription>
         </DialogHeader>

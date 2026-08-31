@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { entriesApi, itemTypesApi, exportApi, factionsApi } from '@/lib/api-client';
+import { entriesApi, itemTypesApi, exportApi, factionsApi, membersApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,13 +34,18 @@ import { ItemIcon } from '@/components/item-icon';
 
 interface Props {
   /** Whether the caller may credit an entry to the faction instead of themselves. */
-  canLogAnonymously?: boolean;
+  /**
+   * `manage_entries`: lets the caller credit the faction (anonymous) or another
+   * member instead of themselves — the same authority either way, since both
+   * decide who gets credit for faction income.
+   */
+  canManageEntries?: boolean;
   factionId: string;
   isAdmin: boolean;
   canLogEntries: boolean;
 }
 
-export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymously }: Props) {
+export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntries }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -74,6 +79,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newAnonymous, setNewAnonymous] = useState(false);
+  // Empty means "me" — the ordinary case, and what everyone without
+  // `manage_entries` is limited to.
+  const [newOwnerId, setNewOwnerId] = useState('');
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newCustomValues, setNewCustomValues] = useState<Record<string, string>>({});
 
@@ -109,6 +117,28 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
 
   const activeItemTypes = useMemo(() => itemTypes.filter((t: ItemType) => t.isActive), [itemTypes]);
 
+  const { data: members = [] } = useQuery({
+    queryKey: ['members', factionId],
+    queryFn: () => membersApi.list(factionId),
+    enabled: !!canManageEntries,
+    staleTime: 30 * 1000,
+  });
+
+  const memberOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: 'Me' },
+    ...members.map((m) => ({
+      value: m.userId,
+      label: displayName(m),
+      hint: m.inGameName?.trim() ? `(${m.username})` : undefined,
+      icon: (
+        <Avatar className="size-5">
+          <AvatarImage src={m.avatarUrl ?? undefined} />
+          <AvatarFallback className="text-[9px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+      ),
+    })),
+  ], [members]);
+
   const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((t: ItemType) => ({
     value: t.id,
     label: t.name,
@@ -130,6 +160,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
         entryDate: newDate || undefined,
         customValues: Object.keys(newCustomValues).length > 0 ? newCustomValues : undefined,
         ...(newAnonymous ? { anonymous: true } : {}),
+        ...(newOwnerId && !newAnonymous ? { userId: newOwnerId } : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
@@ -188,6 +219,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
     setNewDate(new Date().toISOString().split('T')[0]);
     setNewCustomValues({});
     setNewAnonymous(false);
+    setNewOwnerId('');
   };
 
   const openEditDialog = (entry: any) => {
@@ -399,7 +431,25 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
                 ))}
               </div>
             )}
-            {canLogAnonymously && (
+            {canManageEntries && (
+              <div className="space-y-2">
+                <Label>Credit to</Label>
+                <SearchableSelect
+                  value={newOwnerId}
+                  onValueChange={setNewOwnerId}
+                  options={memberOptions}
+                  disabled={newAnonymous}
+                  placeholder="Me"
+                  searchPlaceholder="Search members..."
+                  emptyMessage="No members match."
+                />
+                <p className="text-xs text-zinc-500">
+                  Book what someone else handed in — including a member who was registered by
+                  Discord ID and has never logged in.
+                </p>
+              </div>
+            )}
+            {canManageEntries && (
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="pr-3">
                   <p className="text-sm font-medium">Anonymous</p>
@@ -408,7 +458,10 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
                     out of the leaderboard and every other ranking.
                   </p>
                 </div>
-                <Switch checked={newAnonymous} onCheckedChange={setNewAnonymous} />
+                <Switch
+                  checked={newAnonymous}
+                  onCheckedChange={(on) => { setNewAnonymous(on); if (on) setNewOwnerId(''); }}
+                />
               </div>
             )}
           </div>
