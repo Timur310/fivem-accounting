@@ -37,6 +37,12 @@ import { ItemIcon } from '@/components/item-icon';
 interface Props {
   factionId: string;
   userId: string;
+  /**
+   * Whether the caller may issue and settle strikes. The API runs those on
+   * `manage_strikes`, so gating them on the admin role here hid the buttons
+   * from a rank that was allowed to use them.
+   */
+  canManageStrikes?: boolean;
 }
 
 type ProfileTab = 'overview' | 'notes' | 'history';
@@ -62,7 +68,7 @@ const EFFECTIVE_STATUS_COLORS: Record<StrikeEffectiveStatus, string> = {
   expired: 'text-zinc-600',
 };
 
-export function MemberProfileView({ factionId, userId }: Props) {
+export function MemberProfileView({ factionId, userId, canManageStrikes }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -208,7 +214,6 @@ export function MemberProfileView({ factionId, userId }: Props) {
   }
 
   const { member, contribution, payouts: payoutStats, quotaProgress, streak, performance, recentEntries, recentPayouts } = profile;
-  const isAdmin = useAppStore.getState().user?.role === 'superadmin' || useAppStore.getState().user?.factions.find(f => f.factionId === factionId)?.role === 'admin';
 
   return (
     <div className="space-y-6">
@@ -248,7 +253,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
             )}
           </p>
         </div>
-        {isAdmin && (
+        {canManageStrikes && (
           <Button variant="outline" size="sm" onClick={() => setStrikeOpen(true)} className="text-amber-400 border-amber-500/20 hover:bg-amber-500/10">
             <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
             Issue Strike
@@ -430,7 +435,7 @@ export function MemberProfileView({ factionId, userId }: Props) {
                           <span className="text-[10px] text-zinc-600">{new Date(s.createdAt).toLocaleDateString()}</span>
                         </div>
                         <p className="text-xs text-zinc-400 line-clamp-2">{s.reason}</p>
-                        {isAdmin && s.effectiveStatus === 'active' && (
+                        {canManageStrikes && s.effectiveStatus === 'active' && (
                           <div className="flex gap-1 pt-1">
                             <Button variant="ghost" size="sm" className="h-6 text-[11px] text-blue-400 hover:text-blue-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'appealed' })}>Appeal</Button>
                             <Button variant="ghost" size="sm" className="h-6 text-[11px] text-zinc-500 hover:text-zinc-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'revoked' })}>Revoke</Button>

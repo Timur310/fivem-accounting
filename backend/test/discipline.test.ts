@@ -184,6 +184,29 @@ describe('strikes', () => {
     expect(other.status).toBe(403);
   });
 
+  it('lets a rank granted manage_strikes issue and settle one', async () => {
+    // The profile screen offers these buttons on this permission, so the API
+    // has to answer to it and not to the admin role.
+    const other = await createUser('strike_target');
+    await addMember(w.faction.id, other.id);
+    await api().patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ ranks: [{ name: 'Sergeant', level: 1, permissions: ['manage_strikes'] }] });
+    await api().patch(`/api/v1/factions/${w.faction.id}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: 'Sergeant' });
+
+    const target = `/api/v1/factions/${w.faction.id}/members/${other.id}/strikes`;
+    const issued = await api().post(target).set('Cookie', w.member.cookie)
+      .send({ severity: 'minor', reason: 'issued by a delegate' });
+    expect(issued.status).toBe(201);
+
+    const revoked = await api().patch(`${target}/${issued.body.data.id}`)
+      .set('Cookie', w.member.cookie).send({ status: 'revoked' });
+    expect(revoked.status).toBe(200);
+    expect(revoked.body.data.effectiveStatus).toBe('revoked');
+  });
+
   it('walks active -> appealed -> revoked and stops there', async () => {
     const created = await api().post(memberStrikes()).set('Cookie', w.admin.cookie)
       .send({ severity: 'minor', reason: 'x' });
