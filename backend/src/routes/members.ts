@@ -200,6 +200,7 @@ router.get('/', async (req: Request, res: Response) => {
       inGameName: users.inGameName,
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
+      isProvisional: users.isProvisional,
       entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)::int`,
       lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = users.id AND faction_id = ${factionId} AND is_deleted = false)`,
     })
@@ -216,7 +217,9 @@ router.get('/', async (req: Request, res: Response) => {
     res,
     memberList.map((m) => ({
       ...m,
-      daysInactive: daysSince(m.lastEntryDate),
+      // A registration nobody has signed into yet cannot be idle: there is no
+      // one to have gone quiet.
+      daysInactive: m.isProvisional ? null : daysSince(m.lastEntryDate),
       ...(strikeCounts ? { activeStrikeCount: strikeCounts.get(m.userId) ?? 0 } : {}),
     })),
   );
@@ -549,6 +552,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
       avatarUrl: users.avatarUrl,
       discordId: users.discordId,
       lastLogin: users.lastLogin,
+      isProvisional: users.isProvisional,
     })
     .from(factionMembers)
     .innerJoin(users, eq(factionMembers.userId, users.id))
@@ -776,7 +780,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
   success(res, {
     member: {
       ...membership,
-      daysInactive: daysSince(lastEntryDate),
+      daysInactive: membership.isProvisional ? null : daysSince(lastEntryDate),
       rankSince,
       daysInRank: rankSince ? daysSince(toDateString(rankSince)) : null,
     },

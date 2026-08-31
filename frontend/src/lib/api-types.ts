@@ -96,6 +96,8 @@ export interface Member {
   inGameName: string | null;
   avatarUrl: string | null;
   discordId: string;
+  /** Registered by a superadmin and never signed in. No inactivity clock. */
+  isProvisional: boolean;
   entryCount: number;
   lastEntryDate: string | null;
   daysInactive: number | null;
@@ -157,6 +159,8 @@ export interface CreateEntryInput {
   amount: string;
   description?: string;
   entryDate?: string;
+  /** Credit another member instead of yourself — needs `manage_entries`. */
+  userId?: string;
   customValues?: Record<string, string>;
   /** Credit the faction rather than the person logging it. */
   anonymous?: boolean;
@@ -563,6 +567,7 @@ export interface MemberProfile {
     avatarUrl: string | null;
     discordId: string;
     lastLogin: string | null;
+    isProvisional: boolean;
     daysInactive: number | null;
     /** When they moved into their current rank; null if it was never recorded. */
     rankSince: string | null;
@@ -755,6 +760,31 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   view_audit_logs: 'View Audit Logs', view_reports: 'View Reports',
   manage_laundering: 'Launder Money',
 };
+
+// ── Provisional users (superadmin) ─────────────────────
+
+/** Someone registered by Discord ID who has never logged in. */
+export interface ProvisionalUser {
+  id: string;
+  discordId: string;
+  username: string;
+  inGameName: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  factionCount: number;
+  entryCount: number;
+}
+
+export interface CreateProvisionalUserInput {
+  discordId: string;
+  username: string;
+  inGameName?: string;
+}
+
+export interface UpdateProvisionalUserInput {
+  username?: string;
+  inGameName?: string | null;
+}
 
 // ── Laundering ─────────────────────────────────────────
 

@@ -202,6 +202,8 @@ FactionMember 1---* MemberNote
 | in_game_name | VARCHAR(50) | NULLABLE | Player's in-game character name, set by the player after login |
 | avatar_url | TEXT | NULLABLE | Discord avatar URL |
 | role | VARCHAR(20) | NOT NULL, DEFAULT 'member' | superadmin / faction_admin / member |
+| is_system | BOOLEAN | NOT NULL, DEFAULT false | Not a person — the placeholder anonymous entries and laundering hang off. Excluded from every ranking |
+| is_provisional | BOOLEAN | NOT NULL, DEFAULT false | Registered by a superadmin before this person ever signed in. Counts as a member everywhere, but has no inactivity clock. Cleared on their first login |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation |
 | last_login | TIMESTAMPTZ | NULLABLE | Last login timestamp |
 
@@ -768,7 +770,9 @@ HTTP status codes: 400 (validation), 401 (unauthenticated), 403 (unauthorized), 
 ### 8.2 Member Management
 
 - Faction admins add members by Discord ID or username
-- User must have authenticated at least once before being added
+- The user row has to exist first. Normally that happens when they log in;
+  a superadmin can also register someone by Discord ID up front (see
+  **Provisional players** below), and that row is then addable like any other
 - Default role: `member`. Multiple admins per faction allowed.
 - Promote/demote between admin and member roles — faction admins and
   superadmins only. A rank granted `manage_members` runs the roster (add,
@@ -777,6 +781,39 @@ HTTP status codes: 400 (validation), 401 (unauthenticated), 403 (unauthorized), 
   holding all of them already.
 - Removing a member preserves their contribution entries
 - All member management actions audit-logged
+
+#### Provisional players
+
+Someone can play in a faction for weeks before they ever open this app. A
+superadmin registers them by Discord ID (`POST /api/v1/admin/provisional-users`
+with `discordId`, `username`, optional `inGameName`), which creates a normal
+`users` row with `is_provisional = true`.
+
+- **They are a member in every other respect.** They join factions, hold ranks,
+  receive payouts, take strikes, and appear in rosters and rankings. Nothing
+  about them is special-cased except the two points below.
+- **No inactivity.** The dashboard's inactive list skips them and the roster
+  reports `daysInactive: null`: there is nobody behind the row yet, so there is
+  nobody to have gone quiet. The clock starts at their first login.
+- **Logging in converts them.** The OAuth callback upserts on `discord_id`, so
+  they land on the same row: `is_provisional` clears, Discord's username and
+  avatar take over, the in-game name the superadmin typed survives, and every
+  entry, payout, rank and strike they had is already theirs. The id never
+  changes, so nothing is migrated.
+- Superadmin-only, and only while unclaimed: `PATCH` fixes the two names,
+  `DELETE` takes the registration back, and refuses once it carries entries,
+  payouts or strikes. `GET` lists the ones still waiting.
+- The Discord ID is checked for shape (17–20 digits) and uniqueness. A wrong
+  ID is the one real failure mode: the person's real login would create a
+  second row, leaving this one's history orphaned.
+
+Because a provisional player cannot log anything themselves, `POST
+/factions/{id}/entries` accepts a `userId` — credit the entry to another member
+instead of the caller. It needs `manage_entries` (the same permission that
+allows anonymous entries, for the same reason: both decide who gets credit for
+faction income), the target has to be a member of that faction, and it cannot
+be combined with `anonymous`. The audit log records the real author alongside
+`onBehalfOf`.
 
 ### 8.3 Entry (Contribution) Tracking
 

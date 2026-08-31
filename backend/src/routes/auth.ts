@@ -136,6 +136,12 @@ router.get('/callback', async (req: Request, res: Response) => {
     // Upsert user by discord_id. The on-conflict update keeps username and
     // avatar fresh without clobbering inGameName (which the user owns) or role
     // (which is governed by the bootstrap script and faction membership).
+    //
+    // This is also where a provisional registration becomes a real account: a
+    // superadmin may have created the row by Discord ID before this person
+    // ever signed in, and landing on the same row is what carries their
+    // entries, payouts, ranks and strikes over. Clearing `isProvisional` is
+    // the whole conversion — the id never changes, so nothing has to move.
     const [user] = await db
       .insert(users)
       .values({
@@ -151,6 +157,7 @@ router.get('/callback', async (req: Request, res: Response) => {
           username: discordUser.username,
           avatarUrl: resolveAvatarUrl(discordUser),
           lastLogin: new Date(),
+          isProvisional: false,
         },
       })
       .returning();

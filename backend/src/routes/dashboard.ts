@@ -136,6 +136,7 @@ router.get('/', async (req: Request, res: Response) => {
         username: users.username,
         inGameName: users.inGameName,
         avatarUrl: users.avatarUrl,
+        isProvisional: users.isProvisional,
         lastEntryDate: sql<string | null>`(SELECT MAX(entry_date) FROM entries WHERE user_id = ${factionMembers.userId} AND faction_id = ${factionId} AND is_deleted = false)`,
       })
       .from(factionMembers)
@@ -147,6 +148,9 @@ router.get('/', async (req: Request, res: Response) => {
 
     inactiveMembers = roster
       .filter((m) => {
+        // Nobody is behind a provisional registration yet, so there is nobody
+        // to chase: their clock starts when they first sign in.
+        if (m.isProvisional) return false;
         // Someone who joined more recently than the threshold has not had the
         // chance to go quiet for that long yet.
         const memberDays = daysSince(toDateString(m.joinedAt));

@@ -23,6 +23,7 @@ import { Plus, Pencil, Trash2, Eye, Search, Shield, ChevronLeft, ChevronRight, B
 import { useAppStore } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import type { Faction } from '@/lib/api-types';
+import { ProvisionalUsersPanel } from '@/views/provisional-users-panel';
 
 export function AdminFactionsView() {
   const queryClient = useQueryClient();
@@ -144,6 +145,8 @@ export function AdminFactionsView() {
           )}
         </CardContent>
       </Card>
+
+      <ProvisionalUsersPanel />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>

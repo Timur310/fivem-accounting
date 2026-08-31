@@ -6,6 +6,7 @@ import {
   itemTypes,
   users,
   factions,
+  factionMembers,
 } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
@@ -46,7 +47,16 @@ const createEntrySchema = z.object({
   customValues: z.record(z.string(), z.string().max(500)).optional(),
   /** Log against the anonymous placeholder instead of the caller. */
   anonymous: z.boolean().optional(),
-});
+  /**
+   * Credit the entry to another member instead of the caller. Someone has to
+   * be able to book what a member handed in — most of all a member registered
+   * by Discord ID who has never signed in and so cannot log anything.
+   */
+  userId: z.string().uuid().optional(),
+}).refine(
+  (d) => !(d.anonymous && d.userId),
+  'An entry is either anonymous or credited to a member, not both',
+);
 
 const updateEntrySchema = z.object({
   amount: amountField.optional(),
@@ -83,12 +93,42 @@ router.post('/', async (req: Request, res: Response) => {
 
   const factionId = req.params.id as string;
   const { itemTypeId, amount, description, entryDate, customValues, anonymous } = parsed.data;
+  // Logging for yourself is the ordinary case, and naming yourself explicitly
+  // is the same thing.
+  const onBehalfOf = parsed.data.userId && parsed.data.userId !== req.user!.id
+    ? parsed.data.userId
+    : undefined;
 
-  // Anonymising an entry decides who gets credit for faction income, which is
-  // the same authority as editing entries after the fact.
+  // Anonymising an entry, or hanging it on someone else, decides who gets
+  // credit for faction income — the same authority as editing entries after
+  // the fact.
   if (anonymous && !(req.factionPermissions ?? []).includes('manage_entries')) {
     error(res, 'FORBIDDEN', 'You need the "manage_entries" permission to log anonymously', 403);
     return;
+  }
+  if (onBehalfOf && !(req.factionPermissions ?? []).includes('manage_entries')) {
+    error(
+      res,
+      'FORBIDDEN',
+      'You need the "manage_entries" permission to log an entry for another member',
+      403,
+    );
+    return;
+  }
+
+  // The credit has to land on someone who is actually in this faction.
+  if (onBehalfOf) {
+    const [target] = await db
+      .select({ id: factionMembers.id })
+      .from(factionMembers)
+      .where(
+        and(eq(factionMembers.factionId, factionId), eq(factionMembers.userId, onBehalfOf)),
+      )
+      .limit(1);
+    if (!target) {
+      error(res, 'NOT_FOUND', 'Member not found in this faction', 404);
+      return;
+    }
   }
 
   // Validate custom fields against faction definition
@@ -157,7 +197,9 @@ router.post('/', async (req: Request, res: Response) => {
   let entry;
   try {
     entry = await db.transaction(async (tx: TransactionLike) => {
-      const ownerId = anonymous ? await resolveAnonymousUserId(tx) : req.user!.id;
+      const ownerId = anonymous
+        ? await resolveAnonymousUserId(tx)
+        : (onBehalfOf ?? req.user!.id);
 
       const [row] = await tx
         .insert(entries)
@@ -191,6 +233,7 @@ router.post('/', async (req: Request, res: Response) => {
           entryDate: dateStr,
           customValues: validatedCustomValues,
           ...(anonymous ? { anonymous: true } : {}),
+          ...(onBehalfOf ? { onBehalfOf } : {}),
         },
         req,
         tx,

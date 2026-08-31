@@ -315,7 +315,7 @@ export function AppShell() {
       case 'dashboard':
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} /> : null;
       case 'entries':
-        return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canLogAnonymously={hasPermission('manage_entries')} /> : null;
+        return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canManageEntries={hasPermission('manage_entries')} /> : null;
       case 'payouts':
         return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'laundering':

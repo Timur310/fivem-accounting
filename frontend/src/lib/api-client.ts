@@ -47,6 +47,9 @@ import type {
   LeaderboardData,
   GlobalLeaderboardData,
   GrowthData,
+  ProvisionalUser,
+  CreateProvisionalUserInput,
+  UpdateProvisionalUserInput,
   LaunderingOverview,
   LaunderInput,
   LaunderResult,
@@ -437,6 +440,27 @@ export const treasuryApi = {
         params: trendDays ? { trend_days: trendDays } : undefined,
       })
       .then(unwrap),
+};
+
+// ── Provisional users (superadmin) ──
+
+export const provisionalUsersApi = {
+  list: () =>
+    api
+      .get<ApiSuccessResponse<ProvisionalUser[]>>('/admin/provisional-users')
+      .then(unwrap),
+
+  create: (input: CreateProvisionalUserInput) =>
+    api
+      .post<ApiSuccessResponse<ProvisionalUser>>('/admin/provisional-users', input)
+      .then(unwrap),
+
+  update: (userId: string, input: UpdateProvisionalUserInput) =>
+    api
+      .patch<ApiSuccessResponse<ProvisionalUser>>(`/admin/provisional-users/${userId}`, input)
+      .then(unwrap),
+
+  remove: (userId: string) => api.delete(`/admin/provisional-users/${userId}`),
 };
 
 // ── Laundering ──

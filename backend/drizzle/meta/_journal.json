@@ -43,6 +43,13 @@
       "when": 1788115752338,
       "tag": "0005_magenta_dragon_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788205652435,
+      "tag": "0006_even_the_call",
+      "breakpoints": true
     }
   ]
 }

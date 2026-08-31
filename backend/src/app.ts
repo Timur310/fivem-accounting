@@ -19,6 +19,7 @@ import quotaRoutes from './routes/quotas.js';
 import chartRoutes from './routes/charts.js';
 import exportRoutes from './routes/export.js';
 import adminAnalyticsRoutes from './routes/adminAnalytics.js';
+import provisionalUserRoutes from './routes/provisionalUsers.js';
 import bulkRoutes from './routes/bulk.js';
 import reportRoutes from './routes/reports.js';
 import payoutRoutes from './routes/payouts.js';
@@ -128,6 +129,7 @@ app.get('/api/v1/health/ready', async (_req, res) => {
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/factions', factionRoutes);
 app.use('/api/v1/admin/analytics', adminAnalyticsRoutes);
+app.use('/api/v1/admin/provisional-users', provisionalUserRoutes);
 // Cross-faction ranking (superadmin) — not scoped to a faction.
 app.use('/api/v1/leaderboard', globalLeaderboardRoutes);
 
