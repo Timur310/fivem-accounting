@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,12 +8,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import { Trophy, Medal, TrendingUp, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
+import { ItemIcon } from '@/components/item-icon';
+
+const PERIOD_OPTIONS: SearchableSelectOption[] = [
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'all', label: 'All Time' },
+];
 
 interface Props {
   factionId: string;
@@ -32,6 +39,17 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
     queryFn: () => itemTypesApi.list(factionId),
     staleTime: 5 * 60 * 1000,
   });
+
+  // The empty value is the unfiltered case, so it doubles as a way to clear.
+  const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: 'All Types' },
+    ...itemTypes.map((t: ItemType) => ({
+      value: t.id,
+      label: t.name,
+      hint: t.unit ? `(${t.unit})` : undefined,
+      icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+    })),
+  ], [itemTypes]);
 
   // Faction leaderboard
   const { data: lbData, isLoading: lbLoading } = useQuery({
@@ -85,24 +103,26 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
               {showGlobal ? 'Global' : 'Faction'}
             </Button>
           )}
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="all">All Time</SelectItem>
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            className="w-[120px]"
+            triggerClassName="h-8 text-xs"
+            aria-label="Leaderboard period"
+            value={period}
+            onValueChange={setPeriod}
+            options={PERIOD_OPTIONS}
+          />
           {!showGlobal && (
-            <Select value={itemTypeId || '_all'} onValueChange={(v) => setItemTypeId(v === '_all' ? '' : v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="All Types" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Types</SelectItem>
-                {itemTypes.map((t: ItemType) => (
-                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              className="w-[140px]"
+              triggerClassName="h-8 text-xs"
+              aria-label="Filter by item type"
+              value={itemTypeId}
+              onValueChange={setItemTypeId}
+              options={itemTypeFilterOptions}
+              placeholder="All Types"
+              searchPlaceholder="Search item types..."
+              emptyMessage="No item types match."
+            />
           )}
         </div>
       </div>

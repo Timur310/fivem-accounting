@@ -647,7 +647,11 @@ export interface MemberProfile {
       seniorityBonus: number;
     };
   };
+  /** May read and write the notes on this profile — `manage_members` only,
+   *  never the member they are about. */
   canViewNotes: boolean;
+  /** Your own history, or anyone's with `manage_members`. */
+  canViewHistory: boolean;
 }
 
 export interface MemberHistoryEntry {

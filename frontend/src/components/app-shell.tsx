@@ -16,12 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import {
   LayoutDashboard,
   List,
@@ -52,7 +48,7 @@ import { AdminFactionDetailView } from '@/views/admin-faction-detail-view';
 import { MemberProfileView } from '@/views/member-profile-view';
 import { StrikesView } from '@/views/strikes-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
 import type { AppView } from '@/lib/store';
@@ -154,6 +150,47 @@ export function AppShell() {
   const browseableOnly = browseableFactions.filter(
     (b) => !activeFactions.some((m) => m.factionId === b.id),
   );
+
+  // Every row wears its own faction's colour. Using the store value here
+  // painted the whole list in the selected faction's colour, which told you
+  // nothing.
+  const factionOptions = useMemo<SearchableSelectOption[]>(() => {
+    const swatch = (color: string) => (
+      <span
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: color }}
+        aria-hidden="true"
+      />
+    );
+    return [
+      ...activeFactions.map((f) => {
+        const rowColor = f.factionBrandColor ?? DEFAULT_BRAND_COLOR;
+        return {
+          value: f.factionId,
+          label: f.factionName,
+          icon: swatch(rowColor),
+          badge: f.role === 'admin' ? (
+            <span
+              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+              style={{ backgroundColor: `${rowColor}15`, color: rowColor }}
+            >
+              Admin
+            </span>
+          ) : undefined,
+        };
+      }),
+      ...browseableOnly.map((b) => ({
+        value: b.id,
+        label: b.name,
+        icon: swatch(b.brandColor ?? DEFAULT_BRAND_COLOR),
+        badge: (
+          <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+            Browse
+          </span>
+        ),
+      })),
+    ];
+  }, [activeFactions, browseableOnly]);
 
   const navItems: NavItem[] = [
     { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -276,11 +313,11 @@ export function AppShell() {
       case 'treasury':
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':
-        return selectedFactionId ? <MembersView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <MembersView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} /> : null;
       case 'member-profile':
         return (selectedFactionId && selectedMemberUserId) ? <MemberProfileView factionId={selectedFactionId} userId={selectedMemberUserId} /> : null;
       case 'strikes':
-        return selectedFactionId ? <StrikesView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <StrikesView factionId={selectedFactionId} canManageStrikes={hasPermission('manage_strikes')} /> : null;
       case 'leaderboard':
         return selectedFactionId ? <LeaderboardView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'settings':
@@ -367,7 +404,8 @@ export function AppShell() {
         {showFactionSelector && (
           <div className="px-2.5 py-2.5 border-b border-white/[0.06]">
             {sidebarOpen ? (
-              <Select
+              <SearchableSelect
+                aria-label="Select faction"
                 value={selectedFactionId ?? ''}
                 onValueChange={(val) => {
                   setSelectedFactionId(val);
@@ -375,54 +413,11 @@ export function AppShell() {
                     setCurrentView('dashboard');
                   }
                 }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select faction" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeFactions.map((f) => {
-                    // Every row wears its own faction's colour. Using the store
-                    // value here painted the whole list in the selected
-                    // faction's colour, which told you nothing.
-                    const rowColor = f.factionBrandColor ?? DEFAULT_BRAND_COLOR;
-                    return (
-                      <SelectItem key={f.factionId} value={f.factionId}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: rowColor }}
-                            aria-hidden="true"
-                          />
-                          <span>{f.factionName}</span>
-                          {f.role === 'admin' && (
-                            <span
-                              className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                              style={{ backgroundColor: `${rowColor}15`, color: rowColor }}
-                            >
-                              Admin
-                            </span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                  {browseableOnly.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: b.brandColor ?? DEFAULT_BRAND_COLOR }}
-                          aria-hidden="true"
-                        />
-                        <span>{b.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-white/[0.06] text-zinc-400">
-                          Browse
-                        </span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={factionOptions}
+                placeholder="Select faction"
+                searchPlaceholder="Search factions..."
+                emptyMessage="No factions match."
+              />
             ) : (
               <button
                 onClick={handleSidebarToggle}

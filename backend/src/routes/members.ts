@@ -248,6 +248,25 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
     return;
   }
 
+  // The admin seat is not a delegated power. `manage_members` lets a rank run
+  // the roster — add, remove, set ranks — but promoting someone to admin (or
+  // demoting one) would let a delegate hand out the very role that grants
+  // every permission, including the one that defines their own rank. That
+  // stays with the faction admin and the superadmin.
+  //
+  // A global superadmin counts as an admin here even in a faction they joined
+  // as a plain member: `factionRole` follows the membership. A role field that
+  // repeats what the member already holds is allowed through, so a client that
+  // echoes back the row it read does not get a 403 for changing nothing.
+  const callerIsAdmin =
+    req.factionRole === 'admin' ||
+    req.factionRole === 'superadmin' ||
+    req.user!.role === 'superadmin';
+  if (!callerIsAdmin && parsed.data.role !== undefined && parsed.data.role !== membership.role) {
+    error(res, 'FORBIDDEN', "Only a faction admin can change a member's role", 403);
+    return;
+  }
+
   // Capture before-state outside the transaction so the audit details are
   // correct even if the write itself fails.
   const oldRole = membership.role;
@@ -429,9 +448,19 @@ router.delete('/:userId', requirePermission('manage_members'), async (req: Reque
 // ── GET /:userId/history — join / leave / role changes ──
 // Reads the existing audit log rather than keeping a second table: member
 // lifecycle events are already recorded there with entity_type='member'.
-router.get('/:userId/history', requirePermission('manage_members'), async (req: Request, res: Response) => {
+//
+// Scoped like the notes beside it: `manage_members` reads anyone's history,
+// everyone else reads their own. When they joined, what rank they were given
+// and when — a member is entitled to their own record of it.
+router.get('/:userId/history', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const targetUserId = req.params.userId as string;
+
+  const canManageMembers = (req.factionPermissions ?? []).includes('manage_members');
+  if (!canManageMembers && targetUserId !== req.user!.id) {
+    error(res, 'FORBIDDEN', 'You can only view your own history', 403);
+    return;
+  }
 
   const { page, pageSize, offset } = parsePagination({
     page: req.query.page as string | undefined,
@@ -559,6 +588,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
   }
 
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+  const canManageMembers = (req.factionPermissions ?? []).includes('manage_members');
+  const isSelf = targetUserId === req.user!.id;
 
   // Payouts are admin-only material — members cannot see what others earned.
   // Use Promise.resolve([]) to keep the Promise.all shape uniform.
@@ -781,9 +812,11 @@ router.get('/:userId', async (req: Request, res: Response) => {
     // days is far larger than the rest of this response.
     streak,
     performance,
-    // Notes are admin-only and paginated separately; this flag tells the UI
-    // whether to show the tab at all.
-    canViewNotes: isAdmin,
+    // Notes and history are paginated separately; these flags tell the UI
+    // which tabs to show. Notes stay management-only, read included; history
+    // is a member's own record, so they may read theirs.
+    canViewNotes: canManageMembers,
+    canViewHistory: canManageMembers || isSelf,
   });
 });
 

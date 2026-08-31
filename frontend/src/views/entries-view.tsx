@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { entriesApi, itemTypesApi, exportApi, factionsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
@@ -10,12 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -29,7 +25,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
@@ -75,8 +71,6 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newItemTypeId, setNewItemTypeId] = useState('');
-  const [itemTypeSearch, setItemTypeSearch] = useState('');
-  const [itemTypeDropdownOpen, setItemTypeDropdownOpen] = useState(false);
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newAnonymous, setNewAnonymous] = useState(false);
@@ -113,7 +107,19 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
     staleTime: 5 * 60 * 1000,
   });
 
-  const activeItemTypes = itemTypes.filter((t: ItemType) => t.isActive);
+  const activeItemTypes = useMemo(() => itemTypes.filter((t: ItemType) => t.isActive), [itemTypes]);
+
+  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((t: ItemType) => ({
+    value: t.id,
+    label: t.name,
+    hint: t.unit ? `(${t.unit})` : undefined,
+    icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+  })), [activeItemTypes]);
+
+  const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
+    () => [{ value: 'all', label: 'All Types' }, ...itemTypeOptions],
+    [itemTypeOptions],
+  );
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -177,8 +183,6 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
 
   const resetCreateForm = () => {
     setNewItemTypeId('');
-    setItemTypeSearch('');
-    setItemTypeDropdownOpen(false);
     setNewAmount('');
     setNewDescription('');
     setNewDate(new Date().toISOString().split('T')[0]);
@@ -214,13 +218,16 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-zinc-500">Item Type</Label>
-              <Select value={itemTypeIdFilter} onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}>
-                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {activeItemTypes.map((t: ItemType) => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                className="w-[160px]"
+                aria-label="Filter by item type"
+                value={itemTypeIdFilter}
+                onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}
+                options={itemTypeFilterOptions}
+                placeholder="All Types"
+                searchPlaceholder="Search item types..."
+                emptyMessage="No item types match."
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-zinc-500">From</Label>
@@ -358,14 +365,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Item Type</Label>
-              <SearchableItemTypeSelect
-                itemTypes={activeItemTypes}
-                selectedId={newItemTypeId}
-                onSelect={(id) => { setNewItemTypeId(id); setItemTypeDropdownOpen(false); setItemTypeSearch(''); }}
-                search={itemTypeSearch}
-                onSearchChange={setItemTypeSearch}
-                open={itemTypeDropdownOpen}
-                onOpenChange={setItemTypeDropdownOpen}
+              <SearchableSelect
+                value={newItemTypeId}
+                onValueChange={setNewItemTypeId}
+                options={itemTypeOptions}
+                placeholder="Select item type"
+                searchPlaceholder="Search item types..."
+                emptyMessage="No item types match."
               />
             </div>
             <div className="space-y-2">
@@ -471,105 +477,6 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canLogAnonymous
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────
-// Searchable item type dropdown.
-//
-// A plain <Select> becomes painful once a faction has 15+ item types —
-// you have to scroll to find what you want. This component keeps the
-// manual entry path (the dialog still uses item type IDs) while making
-// the picker feel like a combobox: type to filter, click to pick, click
-// the chip to clear. Falls back to nothing-selected if the user clears
-// and submits, which the dialog's existing validation already catches.
-// ────────────────────────────────────────────────────────────
-
-interface SearchableItemTypeSelectProps {
-  itemTypes: ItemType[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-  search: string;
-  onSearchChange: (v: string) => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-function SearchableItemTypeSelect({
-  itemTypes,
-  selectedId,
-  onSelect,
-  search,
-  onSearchChange,
-  open,
-  onOpenChange,
-}: SearchableItemTypeSelectProps) {
-  const selected = itemTypes.find((t) => t.id === selectedId);
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? itemTypes.filter((t) => t.name.toLowerCase().includes(q))
-    : itemTypes;
-
-  // Selected item shows as a chip; click X to clear and search again.
-  if (selected && !open) {
-    return (
-      <div className="flex h-9 w-full items-center justify-between rounded-md border border-white/[0.08] bg-transparent px-3 text-sm">
-        <span className="flex items-center gap-2 truncate">
-          <span className="text-zinc-200">{selected.name}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-zinc-500 border border-white/[0.06]">
-            {selected.isCurrency ? 'Currency' : 'Goods'}
-          </span>
-        </span>
-        <button
-          type="button"
-          onClick={() => { onSelect(''); onSearchChange(''); }}
-          className="text-zinc-500 hover:text-zinc-300"
-          aria-label="Clear selected item type"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
-        <Input
-          placeholder={selected ? selected.name : 'Search item types...'}
-          value={search}
-          onChange={(e) => { onSearchChange(e.target.value); onOpenChange(true); }}
-          onFocus={() => onOpenChange(true)}
-          className="pl-9"
-        />
-      </div>
-      {open && (
-        <>
-          {/* click-away */}
-          <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
-          <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-white/[0.08] bg-[#0a0a0c] shadow-lg">
-            {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-zinc-500">No item types match.</div>
-            ) : (
-              filtered.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => { onSelect(t.id); onOpenChange(false); onSearchChange(''); }}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left text-zinc-300 hover:bg-white/[0.04]"
-                >
-                  <span className="truncate">{t.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-zinc-500 border border-white/[0.06]">
-                    {t.isCurrency ? 'Currency' : 'Goods'}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </>
-      )}
     </div>
   );
 }

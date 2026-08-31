@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { api, resetDatabase, seedBasicWorld, MISSING_UUID, type BasicWorld } from './helpers.js';
+import { addMember, api, createUser, resetDatabase, seedBasicWorld, MISSING_UUID, type BasicWorld } from './helpers.js';
 import { db } from '../src/db/index.js';
 import { strikes } from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -43,6 +43,36 @@ describe('member notes', () => {
     await api().post(notes()).set('Cookie', w.admin.cookie).send({ content: 'private' });
     const res = await api().get(notes()).set('Cookie', w.member.cookie);
     expect(res.status).toBe(403);
+  });
+
+  it('lets a rank granted manage_members read and write anyone’s notes', async () => {
+    const other = await createUser('note_subject_two');
+    await addMember(w.faction.id, other.id);
+    await api().patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ ranks: [{ name: 'Lieutenant', level: 1, permissions: ['manage_members'] }] });
+    await api().patch(`/api/v1/factions/${w.faction.id}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: 'Lieutenant' });
+
+    const written = await api()
+      .post(`/api/v1/factions/${w.faction.id}/members/${other.id}/notes`)
+      .set('Cookie', w.member.cookie)
+      .send({ category: 'performance', content: 'Carried the last two runs' });
+    expect(written.status).toBe(201);
+
+    const read = await api()
+      .get(`/api/v1/factions/${w.faction.id}/members/${other.id}/notes`)
+      .set('Cookie', w.member.cookie);
+    expect(read.status).toBe(200);
+    expect(read.body.data).toHaveLength(1);
+
+    // Their own file too — the permission is what opens it, not the subject.
+    const ownWrite = await api().post(notes()).set('Cookie', w.member.cookie)
+      .send({ content: 'note to self' });
+    expect(ownWrite.status).toBe(201);
+    const ownRead = await api().get(notes()).set('Cookie', w.member.cookie);
+    expect(ownRead.status).toBe(200);
   });
 
   it('keeps the note body out of the audit log', async () => {
@@ -209,8 +239,77 @@ describe('strikes', () => {
     expect(res.body.data.activeSummary).toEqual({ warning: 0, minor: 1, major: 1 });
   });
 
-  it('forbids a plain member from the faction-wide overview', async () => {
+  it('shows a plain member their own record, every status of it', async () => {
+    // One that still counts, one that was revoked. The member should see both:
+    // hiding the revoked one leaves them unable to check what came of an
+    // appeal they filed.
+    await api().post(memberStrikes()).set('Cookie', w.admin.cookie)
+      .send({ severity: 'minor', reason: 'still counts' });
+    const revoked = await api().post(memberStrikes()).set('Cookie', w.admin.cookie)
+      .send({ severity: 'major', reason: 'taken back' });
+    await api().patch(`${memberStrikes()}/${revoked.body.data.id}`)
+      .set('Cookie', w.admin.cookie).send({ status: 'revoked' });
+
     const res = await api().get(factionStrikes()).set('Cookie', w.member.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.strikes).toHaveLength(2);
+    expect(res.body.data.strikes.map((s: { effectiveStatus: string }) => s.effectiveStatus).sort())
+      .toEqual(['active', 'revoked']);
+    // The summary still counts only what is held against them right now.
+    expect(res.body.data.activeSummary).toEqual({ warning: 0, minor: 1, major: 0 });
+  });
+
+  it('does not leak another member’s strikes to a plain member', async () => {
+    const other = await createUser('third_wheel');
+    await addMember(w.faction.id, other.id);
+    await api()
+      .post(`/api/v1/factions/${w.faction.id}/members/${other.id}/strikes`)
+      .set('Cookie', w.admin.cookie)
+      .send({ severity: 'major', reason: 'not yours to read' });
+
+    // Asking for them by id changes nothing — the scope is the caller, not
+    // the query string.
+    const res = await api()
+      .get(`${factionStrikes()}?user_id=${other.id}`)
+      .set('Cookie', w.member.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.strikes).toHaveLength(0);
+  });
+
+  it('shows the whole faction to a rank granted manage_strikes', async () => {
+    await api().post(memberStrikes()).set('Cookie', w.admin.cookie)
+      .send({ severity: 'minor', reason: 'theirs' });
+    const other = await createUser('fourth_wheel');
+    await addMember(w.faction.id, other.id);
+    await api()
+      .post(`/api/v1/factions/${w.faction.id}/members/${other.id}/strikes`)
+      .set('Cookie', w.admin.cookie)
+      .send({ severity: 'warning', reason: 'someone else' });
+
+    await api().patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ ranks: [{ name: 'Sergeant', level: 1, permissions: ['manage_strikes'] }] });
+    await api().patch(`/api/v1/factions/${w.faction.id}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: 'Sergeant' });
+
+    const res = await api().get(factionStrikes()).set('Cookie', w.member.cookie);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.strikes).toHaveLength(2);
+
+    // And the per-member endpoint follows the same rule.
+    const theirs = await api()
+      .get(`/api/v1/factions/${w.faction.id}/members/${other.id}/strikes`)
+      .set('Cookie', w.member.cookie);
+    expect(theirs.status).toBe(200);
+    expect(theirs.body.data).toHaveLength(1);
+  });
+
+  it('keeps the faction overview closed to someone outside the faction', async () => {
+    const res = await api().get(factionStrikes()).set('Cookie', w.outsider.cookie);
     expect(res.status).toBe(403);
   });
 });

@@ -770,7 +770,11 @@ HTTP status codes: 400 (validation), 401 (unauthenticated), 403 (unauthorized), 
 - Faction admins add members by Discord ID or username
 - User must have authenticated at least once before being added
 - Default role: `member`. Multiple admins per faction allowed.
-- Promote/demote between admin and member roles
+- Promote/demote between admin and member roles — faction admins and
+  superadmins only. A rank granted `manage_members` runs the roster (add,
+  remove, set ranks) but cannot hand out or take away the admin seat: an admin
+  implicitly holds every permission, so a delegate able to grant it would be
+  holding all of them already.
 - Removing a member preserves their contribution entries
 - All member management actions audit-logged
 
@@ -837,6 +841,20 @@ HTTP status codes: 400 (validation), 401 (unauthenticated), 403 (unauthorized), 
 - **Modals:** ConfirmDialog, EntryDetailModal, MemberDetailModal
 - **UI primitives:** shadcn/ui (Button, Input, Dialog, DropdownMenu, Table, etc.)
 - Components are self-contained with TypeScript types, thin and composable
+
+**Dropdowns (as built).** Every dropdown in the app goes through one component,
+`components/ui/searchable-select.tsx`, which takes the same `value` /
+`onValueChange` shape a Radix `Select` trigger took. It shows a filter box once
+the list reaches eight options, so member and item-type lists can be typed into
+while a three-item enum stays a plain dropdown. The shadcn `Select` primitive
+was removed with the last caller; a second way to build a dropdown is the thing
+this component exists to prevent.
+
+Options carry an optional `hint` (matched by the filter alongside the label),
+an `icon`, and a `badge` for a styled tag. Members are listed the same way
+everywhere they appear — in-game name as the label, Discord name in parentheses
+as the hint — so either name finds the person, and a member who never set an
+in-game name still reads as their Discord name alone.
 
 ### 9.3 State Management
 
@@ -1261,7 +1279,9 @@ balance summary can be rendered without a second request.
 `GET /payouts` query parameters: `item_type_id`, `recipient_user_id`, `status`,
 `date_from`, `date_to`, `page`, `page_size`. List rows are already joined with
 the recipient and item type, so no extra lookups are needed:
-`recipientUsername`, `recipientAvatarUrl`, `itemTypeName`, `itemUnit`.
+`recipientUsername`, `recipientInGameName`, `recipientAvatarUrl`, `itemTypeName`,
+`itemUnit`. A payout is owed to a character but tied to a Discord account, so
+the UI shows both names: the in-game one, with the Discord one in parentheses.
 
 ##### Response shapes
 
@@ -1376,7 +1396,9 @@ Displays:
 - Activity heatmap (Phase 7, shows empty state until built)
 - Streak info (current streak, best streak)
 - Admin notes list (admin-only visibility)
-- Strike history (admin-only, member sees own strikes)
+- Strike history (`manage_strikes` sees the faction, a member sees their own)
+- Notes (`manage_members` only, hidden from the member they are about) and
+  join/rank history (`manage_members` reads anyone's, a member reads their own)
 - Recent entries (last 20)
 - Recent payouts received (last 20)
 
@@ -1481,13 +1503,13 @@ differs from the specification above, this section is authoritative.
 | Method | Endpoint | Access | Purpose |
 |--------|----------|--------|---------|
 | GET | `/factions/{id}/members/{userId}` | Any faction member | Member profile aggregate |
-| GET | `/factions/{id}/members/{userId}/history` | Faction admin | Join / role / rank changes from the audit log |
+| GET | `/factions/{id}/members/{userId}/history` | `manage_members`, or the member themselves | Join / role / rank changes from the audit log |
 | PATCH | `/factions/{id}/members/{userId}` | Faction admin | Now also accepts `rank` |
-| POST/GET | `/factions/{id}/members/{userId}/notes` | Faction admin | Private admin notes |
-| PATCH/DELETE | `/factions/{id}/members/{userId}/notes/{noteId}` | Faction admin | Edit / remove a note |
-| POST/GET | `/factions/{id}/members/{userId}/strikes` | Admin issues; member reads own | Strikes for one member |
-| PATCH | `/factions/{id}/members/{userId}/strikes/{strikeId}` | Faction admin | Appeal, revoke, reinstate |
-| GET | `/factions/{id}/strikes` | Faction admin | Faction-wide discipline overview |
+| POST/GET | `/factions/{id}/members/{userId}/notes` | `manage_members` | Private management notes; never shown to their subject |
+| PATCH/DELETE | `/factions/{id}/members/{userId}/notes/{noteId}` | `manage_members` | Edit / remove a note |
+| POST/GET | `/factions/{id}/members/{userId}/strikes` | `manage_strikes` issues and reads anyone; a member reads their own | Strikes for one member |
+| PATCH | `/factions/{id}/members/{userId}/strikes/{strikeId}` | `manage_strikes` | Appeal, revoke, reinstate |
+| GET | `/factions/{id}/strikes` | Any faction member | Faction-wide with `manage_strikes`, own record without it |
 | GET | `/factions/{id}/settings` | Any faction member | Ranks, inactivity threshold, strike expiry |
 | PATCH | `/factions/{id}/settings` | Faction admin | Update those settings |
 
@@ -1541,13 +1563,22 @@ defines.
 
 ##### Rules the UI must respect
 
-1. **Notes are invisible to their subject.** Every note endpoint requires admin
-   rights, including read. Never surface a note to the member it is about. The
-   profile response carries `canViewNotes` so the tab can be hidden outright.
+1. **Notes are invisible to their subject.** Every note endpoint needs
+   `manage_members` — read included — so a member never sees what was written
+   about them. Member history is the opposite case: a member may read their
+   own, and `manage_members` reads anyone's. The profile response carries
+   `canViewNotes` and `canViewHistory` so the UI can hide each tab on its
+   own.
 2. **Note bodies are deliberately kept out of the audit log** — audit logs are
    readable by every faction admin, so only the category and flag are recorded.
 3. **Strikes are visible to their subject.** A member may read their own
-   strikes; reading anyone else's returns 403.
+   strikes; reading anyone else's returns 403 unless their rank grants
+   `manage_strikes`, which reads the whole faction. `GET /factions/{id}/strikes`
+   answers accordingly: the faction-wide overview for a holder of that
+   permission, the caller's own record for everyone else. The two differ in
+   their default filter as well — the overview defaults to the strikes that
+   still count, while a member reading their own history gets every status,
+   revoked and expired included.
 4. **Expiry is evaluated at read time.** There is no scheduler, so a strike past
    `expiresAt` still has `status: "active"` stored. Use **`effectiveStatus`**,
    which every strike response includes, and ignore the raw `status` for

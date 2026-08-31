@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   payoutsApi,
@@ -24,16 +24,16 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import {
   Plus, ArrowDownToLine, Pencil, Trash2, Check, X, Split, Filter,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { Payout, PayoutStatus, Member, ItemType } from '@/lib/api-types';
-import { formatAmount } from '@/lib/format';
+import type { Payout, PayoutStatus } from '@/lib/api-types';
+import { formatAmount, displayName, fullDisplayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 
 // ── Status config ──
@@ -53,6 +53,15 @@ const ALLOWED_TRANSITIONS: Record<PayoutStatus, PayoutStatus[]> = {
 };
 
 const TERMINAL_STATUSES: PayoutStatus[] = ['completed', 'rejected'];
+
+// The empty value is the unfiltered case, so it doubles as a way to clear.
+const STATUS_FILTER_OPTIONS: SearchableSelectOption[] = [
+  { value: '', label: 'All Statuses' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'rejected', label: 'Rejected' },
+];
 
 interface Props {
   factionId: string;
@@ -122,6 +131,34 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
     queryFn: () => itemTypesApi.list(factionId),
     staleTime: 30 * 1000,
   });
+
+  // ── Dropdown options ──
+  // Members read as "in-game name (Discord name)" so a payout can be traced to
+  // the character it was paid to and the account that owns it; searching by
+  // either name finds the row, since the hint is matched too.
+  const memberOptions = useMemo<SearchableSelectOption[]>(() => members.map((m) => ({
+    value: m.userId,
+    label: displayName(m),
+    hint: m.inGameName?.trim() ? `(${m.username})` : undefined,
+    icon: (
+      <Avatar className="size-5">
+        <AvatarImage src={m.avatarUrl ?? undefined} />
+        <AvatarFallback className="text-[9px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
+      </Avatar>
+    ),
+  })), [members]);
+
+  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => itemTypes.map((t) => ({
+    value: t.id,
+    label: t.name,
+    hint: t.unit ? `(${t.unit})` : undefined,
+    icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+  })), [itemTypes]);
+
+  const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
+    () => [{ value: '', label: 'All Types' }, ...itemTypeOptions],
+    [itemTypeOptions],
+  );
 
   const payouts = payoutsData?.data ?? [];
   const meta = payoutsData?.meta;
@@ -271,23 +308,28 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
         <CardContent className="py-3">
           <div className="flex flex-wrap items-center gap-3">
             <Filter className="h-4 w-4 text-zinc-500 shrink-0" />
-            <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v === '_all' ? '' : v); setPage(1); }}>
-              <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue placeholder="All Statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterItemTypeId} onValueChange={(v) => { setFilterItemTypeId(v === '_all' ? '' : v); setPage(1); }}>
-              <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue placeholder="All Types" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Types</SelectItem>
-                {itemTypes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              className="w-[140px]"
+              triggerClassName="h-8 text-xs"
+              aria-label="Filter by status"
+              value={filterStatus}
+              onValueChange={(v) => { setFilterStatus(v); setPage(1); }}
+              options={STATUS_FILTER_OPTIONS}
+              placeholder="All Statuses"
+              searchPlaceholder="Search statuses..."
+              emptyMessage="No statuses match."
+            />
+            <SearchableSelect
+              className="w-[150px]"
+              triggerClassName="h-8 text-xs"
+              aria-label="Filter by item type"
+              value={filterItemTypeId}
+              onValueChange={(v) => { setFilterItemTypeId(v); setPage(1); }}
+              options={itemTypeFilterOptions}
+              placeholder="All Types"
+              searchPlaceholder="Search item types..."
+              emptyMessage="No item types match."
+            />
             <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
             <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
             {(filterStatus || filterItemTypeId || filterDateFrom || filterDateTo) && (
@@ -325,9 +367,16 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7">
                           <AvatarImage src={p.recipientAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{p.recipientUsername.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[10px]">
+                            {displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
                         </Avatar>
-                        <span className="text-sm text-zinc-300">{p.recipientUsername}</span>
+                        <span className="text-sm text-zinc-300">
+                          {displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName })}
+                          {p.recipientInGameName?.trim() && (
+                            <span className="ml-1.5 text-xs text-zinc-500">({p.recipientUsername})</span>
+                          )}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-zinc-400">
@@ -435,25 +484,25 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Recipient *</Label>
-              <Select value={formRecipient} onValueChange={setFormRecipient}>
-                <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
-                <SelectContent>
-                  {members.map((m) => (
-                    <SelectItem key={m.userId} value={m.userId}>{m.username}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={formRecipient}
+                onValueChange={setFormRecipient}
+                options={memberOptions}
+                placeholder="Select member"
+                searchPlaceholder="Search members..."
+                emptyMessage="No members match."
+              />
             </div>
             <div className="space-y-2">
               <Label>Item Type *</Label>
-              <Select value={formItemType} onValueChange={setFormItemType}>
-                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                <SelectContent>
-                  {itemTypes.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.unit})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={formItemType}
+                onValueChange={setFormItemType}
+                options={itemTypeOptions}
+                placeholder="Select type"
+                searchPlaceholder="Search item types..."
+                emptyMessage="No item types match."
+              />
             </div>
             <div className="space-y-2">
               <Label>Amount *</Label>
@@ -504,7 +553,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
           <DialogHeader>
             <DialogTitle>Edit Payout</DialogTitle>
             <DialogDescription>
-              Editing payout for {editPayout?.recipientUsername} · {editPayout?.itemTypeName}
+              Editing payout for {editPayout ? fullDisplayName({ username: editPayout.recipientUsername, inGameName: editPayout.recipientInGameName }) : ''} · {editPayout?.itemTypeName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -564,14 +613,14 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             </div>
             <div className="space-y-2">
               <Label>Item Type *</Label>
-              <Select value={splitItemType} onValueChange={setSplitItemType}>
-                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                <SelectContent>
-                  {itemTypes.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.unit})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={splitItemType}
+                onValueChange={setSplitItemType}
+                options={itemTypeOptions}
+                placeholder="Select type"
+                searchPlaceholder="Search item types..."
+                emptyMessage="No item types match."
+              />
             </div>
             <div className="space-y-2">
               <Label>Total Amount *</Label>

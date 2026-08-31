@@ -223,11 +223,17 @@ describe('GET /members/:userId — profile', () => {
     expect(res.body.data.performance.score).toBeGreaterThan(0);
   });
 
-  it('flags note visibility by role', async () => {
+  it('flags what the caller may do with the notes and history', async () => {
     const asAdmin = await api().get(`${base()}/${w.member.id}`).set('Cookie', w.admin.cookie);
-    expect(asAdmin.body.data.canViewNotes).toBe(true);
-    const asMember = await api().get(`${base()}/${w.member.id}`).set('Cookie', w.member.cookie);
-    expect(asMember.body.data.canViewNotes).toBe(false);
+    expect(asAdmin.body.data).toMatchObject({ canViewNotes: true, canViewHistory: true });
+
+    // Their own profile: the history is theirs to read, the notes are not.
+    const own = await api().get(`${base()}/${w.member.id}`).set('Cookie', w.member.cookie);
+    expect(own.body.data).toMatchObject({ canViewNotes: false, canViewHistory: true });
+
+    // Someone else's: closed on both counts.
+    const other = await api().get(`${base()}/${w.admin.id}`).set('Cookie', w.member.cookie);
+    expect(other.body.data).toMatchObject({ canViewNotes: false, canViewHistory: false });
   });
 
   it('404s for a non-member', async () => {
@@ -262,8 +268,14 @@ describe('GET /members/:userId/history', () => {
     expect(res.body.data[0].action).toBe('update');
   });
 
-  it('forbids a plain member', async () => {
+  it('lets a member read their own history', async () => {
+    await api().patch(`${base()}/${w.member.id}`).set('Cookie', w.admin.cookie).send({ rank: null });
     const res = await api().get(`${base()}/${w.member.id}/history`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+  });
+
+  it('forbids a plain member from reading someone else’s', async () => {
+    const res = await api().get(`${base()}/${w.admin.id}/history`).set('Cookie', w.member.cookie);
     expect(res.status).toBe(403);
   });
 });

@@ -9,8 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -32,9 +32,20 @@ import {
   PERMISSION_LABELS,
   type FactionPermission,
 } from '@/lib/api-types';
-import { useEffect, useRef } from 'react';
-import { formatAmount } from '@/lib/format';
+import { useEffect, useMemo, useRef } from 'react';
+import { formatAmount, displayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
+const SCOPE_OPTIONS: SearchableSelectOption[] = [
+  { value: 'faction', label: 'Faction-wide' },
+  { value: 'member', label: 'Per-member' },
+];
+
+const PERIOD_TYPE_OPTIONS: SearchableSelectOption[] = [
+  { value: 'weekly', label: 'Weekly (Monday–Sunday)' },
+  { value: 'monthly', label: 'Monthly (Calendar month)' },
+];
 
 interface Props {
   factionId: string;
@@ -479,7 +490,28 @@ function QuotasSection({ factionId }: { factionId: string }) {
     staleTime: 60 * 1000,
   });
 
-  const activeItemTypes = itemTypes.filter((t: ItemType) => t.isActive);
+  const activeItemTypes = useMemo(() => itemTypes.filter((t: ItemType) => t.isActive), [itemTypes]);
+
+  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((t: ItemType) => ({
+    value: t.id,
+    label: t.name,
+    hint: t.unit ? `(${t.unit})` : undefined,
+    icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+  })), [activeItemTypes]);
+
+  // Same shape as everywhere else members are listed: in-game name first, the
+  // Discord name in parentheses, both of them searchable.
+  const memberOptions = useMemo<SearchableSelectOption[]>(() => members.map((m: Member) => ({
+    value: m.userId,
+    label: displayName(m),
+    hint: m.inGameName?.trim() ? `(${m.username})` : undefined,
+    icon: (
+      <Avatar className="size-5">
+        <AvatarImage src={m.avatarUrl ?? undefined} />
+        <AvatarFallback className="text-[9px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
+      </Avatar>
+    ),
+  })), [members]);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -713,30 +745,26 @@ function QuotasSection({ factionId }: { factionId: string }) {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Item Type</Label>
-              <Select value={newItemTypeId} onValueChange={setNewItemTypeId}>
-                <SelectTrigger><SelectValue placeholder="Select item type" /></SelectTrigger>
-                <SelectContent>
-                  {activeItemTypes.map((t: ItemType) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.unit})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={newItemTypeId}
+                onValueChange={setNewItemTypeId}
+                options={itemTypeOptions}
+                placeholder="Select item type"
+                searchPlaceholder="Search item types..."
+                emptyMessage="No item types match."
+              />
             </div>
             <div className="space-y-2">
               <Label>Scope</Label>
-              <Select
+              <SearchableSelect
+                aria-label="Quota scope"
                 value={newScope}
-                onValueChange={(v: 'faction' | 'member') => {
-                  setNewScope(v);
+                onValueChange={(v) => {
+                  setNewScope(v as 'faction' | 'member');
                   if (v === 'faction') setNewTargetUserId('');
                 }}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="faction">Faction-wide</SelectItem>
-                  <SelectItem value="member">Per-member</SelectItem>
-                </SelectContent>
-              </Select>
+                options={SCOPE_OPTIONS}
+              />
               <p className="text-xs text-zinc-500">
                 {newScope === 'faction'
                   ? 'Counts every member\u2019s contributions toward the target.'
@@ -746,14 +774,14 @@ function QuotasSection({ factionId }: { factionId: string }) {
             {newScope === 'member' && (
               <div className="space-y-2">
                 <Label>Member</Label>
-                <Select value={newTargetUserId} onValueChange={setNewTargetUserId}>
-                  <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
-                  <SelectContent>
-                    {members.map((m: Member) => (
-                      <SelectItem key={m.userId} value={m.userId}>{m.username}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={newTargetUserId}
+                  onValueChange={setNewTargetUserId}
+                  options={memberOptions}
+                  placeholder="Select member"
+                  searchPlaceholder="Search members..."
+                  emptyMessage="No members match."
+                />
               </div>
             )}
             <div className="space-y-2">
@@ -769,13 +797,12 @@ function QuotasSection({ factionId }: { factionId: string }) {
             </div>
             <div className="space-y-2">
               <Label>Period Type</Label>
-              <Select value={newPeriodType} onValueChange={(v: 'weekly' | 'monthly') => setNewPeriodType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Weekly (Monday–Sunday)</SelectItem>
-                  <SelectItem value="monthly">Monthly (Calendar month)</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                aria-label="Quota period type"
+                value={newPeriodType}
+                onValueChange={(v) => setNewPeriodType(v as 'weekly' | 'monthly')}
+                options={PERIOD_TYPE_OPTIONS}
+              />
             </div>
             <div className="space-y-2">
               <Label>Start Date</Label>
@@ -827,13 +854,12 @@ function QuotasSection({ factionId }: { factionId: string }) {
             </div>
             <div className="space-y-2">
               <Label>Period Type</Label>
-              <Select value={editPeriodType} onValueChange={(v: 'weekly' | 'monthly') => setEditPeriodType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Weekly (Monday–Sunday)</SelectItem>
-                  <SelectItem value="monthly">Monthly (Calendar month)</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                aria-label="Quota period type"
+                value={editPeriodType}
+                onValueChange={(v) => setEditPeriodType(v as 'weekly' | 'monthly')}
+                options={PERIOD_TYPE_OPTIONS}
+              />
             </div>
             <div className="space-y-2">
               <Label>Start Date</Label>

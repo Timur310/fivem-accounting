@@ -5,8 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { auditLogsApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -24,6 +24,24 @@ const ACTION_STYLES: Record<string, string> = {
   login: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   logout: 'bg-white/[0.04] text-zinc-500 border-white/[0.06]',
 };
+
+const ACTION_FILTER_OPTIONS: SearchableSelectOption[] = [
+  { value: 'all', label: 'All Actions' },
+  { value: 'create', label: 'Create' },
+  { value: 'update', label: 'Update' },
+  { value: 'delete', label: 'Delete' },
+  { value: 'login', label: 'Login' },
+  { value: 'logout', label: 'Logout' },
+];
+
+const ENTITY_FILTER_OPTIONS: SearchableSelectOption[] = [
+  { value: 'all', label: 'All Entities' },
+  { value: 'faction', label: 'Faction' },
+  { value: 'member', label: 'Member' },
+  { value: 'entry', label: 'Entry' },
+  { value: 'item_type', label: 'Item Type' },
+  { value: 'user', label: 'User' },
+];
 
 export function AuditLogsView({ factionId }: Props) {
   const [page, setPage] = useState(1);
@@ -47,31 +65,23 @@ export function AuditLogsView({ factionId }: Props) {
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-zinc-500">Action</label>
-              <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v); setPage(1); }}>
-                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Actions</SelectItem>
-                  <SelectItem value="create">Create</SelectItem>
-                  <SelectItem value="update">Update</SelectItem>
-                  <SelectItem value="delete">Delete</SelectItem>
-                  <SelectItem value="login">Login</SelectItem>
-                  <SelectItem value="logout">Logout</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                className="w-[140px]"
+                aria-label="Filter by action"
+                value={actionFilter}
+                onValueChange={(v) => { setActionFilter(v); setPage(1); }}
+                options={ACTION_FILTER_OPTIONS}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-zinc-500">Entity</label>
-              <Select value={entityFilter} onValueChange={(v) => { setEntityFilter(v); setPage(1); }}>
-                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Entities</SelectItem>
-                  <SelectItem value="faction">Faction</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="entry">Entry</SelectItem>
-                  <SelectItem value="item_type">Item Type</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                className="w-[140px]"
+                aria-label="Filter by entity"
+                value={entityFilter}
+                onValueChange={(v) => { setEntityFilter(v); setPage(1); }}
+                options={ENTITY_FILTER_OPTIONS}
+              />
             </div>
           </div>
         </CardContent>
