@@ -37,13 +37,11 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-1313}@pgbouncer:5432/faction_accountant
       PORT: "8000"
-    ports:
-      - "8000:8000"
+    # PORTS REMOVED: Now protected behind Nginx
     depends_on:
       pgbouncer:
         condition: service_started
     healthcheck:
-      # Fixed: Use localhost inside the container for internal health checks
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/api/v1/health"]
       interval: 15s
       timeout: 5s
@@ -56,16 +54,28 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Passes the public API URL at image build time
-        NEXT_PUBLIC_API_URL: http://152.53.185.62:8000
+        # UPDATED: Now points to the secure HTTPS Nginx endpoint
+        NEXT_PUBLIC_API_URL: https://152.53.185.62
     env_file:
       - path: ./frontend/.env
         required: false
-    ports:
-      - "3000:3000"
+    # PORTS REMOVED: Now protected behind Nginx
     depends_on:
       backend:
         condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/ssl/certs:ro
+    depends_on:
+      - frontend
+      - backend
     restart: unless-stopped
 
 volumes:
