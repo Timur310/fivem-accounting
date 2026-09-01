@@ -54,6 +54,9 @@ import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
 import type { AppView } from '@/lib/store';
+import { LanguageSwitcher } from '@/components/language-switcher';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
 
 /** Tailwind's `lg`: above this the sidebar sits beside the content. */
 const DESKTOP_QUERY = '(min-width: 1024px)';
@@ -69,7 +72,8 @@ function isDesktop() {
 
 interface NavItem {
   view: AppView;
-  label: string;
+  /** Translation key rather than text: the sidebar has to follow the language. */
+  label: TranslationKey;
   icon: typeof LayoutDashboard;
   /** Any one of these is enough to see the item. */
   anyPermission?: FactionPermission[];
@@ -79,6 +83,7 @@ interface NavItem {
 }
 
 export function AppShell() {
+  const { t } = useTranslation();
   const user = useAppStore((s) => s.user);
   const currentView = useAppStore((s) => s.currentView);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
@@ -178,7 +183,7 @@ export function AppShell() {
               className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
               style={{ backgroundColor: `${rowColor}15`, color: rowColor }}
             >
-              Admin
+              {t('role.admin')}
             </span>
           ) : undefined,
         };
@@ -189,45 +194,45 @@ export function AppShell() {
         icon: swatch(b.brandColor ?? DEFAULT_BRAND_COLOR),
         badge: (
           <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
-            Browse
+            {t('faction.browse')}
           </span>
         ),
       })),
     ];
-  }, [activeFactions, browseableOnly]);
+  }, [activeFactions, browseableOnly, t]);
 
   const navItems: NavItem[] = [
-    { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { view: 'entries', label: 'Entries', icon: List },
-    { view: 'payouts', label: 'Withdrawals', icon: ArrowDownToLine },
-    { view: 'treasury', label: 'Treasury', icon: Wallet },
+    { view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
+    { view: 'entries', label: 'nav.entries', icon: List },
+    { view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine },
+    { view: 'treasury', label: 'nav.treasury', icon: Wallet },
     {
       view: 'laundering',
-      label: 'Laundering',
+      label: 'nav.laundering',
       icon: WashingMachine,
       anyPermission: ['manage_laundering'],
     },
-    { view: 'members', label: 'Members', icon: Users },
-    { view: 'leaderboard', label: 'Leaderboard', icon: Trophy },
-    { view: 'strikes', label: 'Strikes', icon: AlertTriangle },
+    { view: 'members', label: 'nav.members', icon: Users },
+    { view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
+    { view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
     {
       view: 'settings',
-      label: 'Settings',
+      label: 'nav.settings',
       icon: Settings,
       // Mirrors the PATCH guard: either permission opens the settings screen.
       anyPermission: ['manage_settings', 'manage_customization'],
     },
     {
       view: 'audit-logs',
-      label: 'Audit Logs',
+      label: 'nav.auditLogs',
       icon: ScrollText,
       anyPermission: ['view_audit_logs'],
       // Only ever your own faction's history — a superadmin passing through a
       // faction they do not belong to has no business reading it.
       membersOnly: true,
     },
-    { view: 'reports', label: 'Reports', icon: FileBarChart, anyPermission: ['view_reports'] },
-    { view: 'admin-factions', label: 'Faction Admin', icon: Shield, superadminOnly: true },
+    { view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'] },
+    { view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
   ];
 
   const isNavItemVisible = (item: NavItem) => {
@@ -305,9 +310,9 @@ export function AppShell() {
       }
       return (
         <div className="flex flex-col items-center justify-center h-full text-zinc-500 gap-3 py-12">
-          <p>You are not a member of any faction. Contact a superadmin.</p>
+          <p>{t('faction.noneForYou')}</p>
           <Button variant="outline" size="sm" onClick={handleLogout} disabled={loggingOut}>
-            <LogOut className="mr-2 h-4 w-4" /> Sign out
+            <LogOut className="mr-2 h-4 w-4" /> {t('auth.signOut')}
           </Button>
         </div>
       );
@@ -400,7 +405,7 @@ export function AppShell() {
                 <Coins className="h-4 w-4" style={{ color: brandColor }} />
               </div>
               <span className="font-medium text-sm tracking-tight truncate text-zinc-200">
-                Faction Accountant
+                {t('app.name')}
               </span>
             </div>
           )}
@@ -408,8 +413,8 @@ export function AppShell() {
             <button
               onClick={handleSidebarToggle}
               className="w-full flex justify-center py-1"
-              title="Expand sidebar"
-              aria-label="Expand sidebar"
+              title={t('nav.expandSidebar')}
+              aria-label={t('nav.expandSidebar')}
             >
               <Coins className="h-4.5 w-4.5" style={{ color: brandColor }} />
             </button>
@@ -421,7 +426,7 @@ export function AppShell() {
           <div className="px-2.5 py-2.5 border-b border-white/[0.06]">
             {sidebarOpen ? (
               <SearchableSelect
-                aria-label="Select faction"
+                aria-label={t('faction.select')}
                 value={selectedFactionId ?? ''}
                 onValueChange={(val) => {
                   setSelectedFactionId(val);
@@ -430,16 +435,16 @@ export function AppShell() {
                   }
                 }}
                 options={factionOptions}
-                placeholder="Select faction"
-                searchPlaceholder="Search factions..."
-                emptyMessage="No factions match."
+                placeholder={t('faction.select')}
+                searchPlaceholder={t('faction.search')}
+                emptyMessage={t('faction.noneMatch')}
               />
             ) : (
               <button
                 onClick={handleSidebarToggle}
                 className="w-full flex justify-center py-1"
-                title="Expand sidebar"
-                aria-label="Expand sidebar"
+                title={t('nav.expandSidebar')}
+                aria-label={t('nav.expandSidebar')}
               >
                 <Coins className="h-4 w-4 text-zinc-500" />
               </button>
@@ -467,10 +472,10 @@ export function AppShell() {
                   boxShadow: `inset 0 0 0 1px ${brandColor}25`,
                   color: brandColor,
                 } : undefined}
-                title={!sidebarOpen ? item.label : undefined}
+                title={!sidebarOpen ? t(item.label) : undefined}
               >
                 <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
-                {sidebarOpen && <span className="truncate">{item.label}</span>}
+                {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
               </button>
             );
           })}
@@ -485,7 +490,7 @@ export function AppShell() {
             onClick={handleSidebarToggle}
           >
             <ChevronLeft className={`h-3.5 w-3.5 transition-transform duration-200 ${!sidebarOpen ? 'rotate-180' : ''}`} />
-            {sidebarOpen && <span className="ml-2 text-xs">Collapse</span>}
+            {sidebarOpen && <span className="ml-2 text-xs">{t('nav.collapse')}</span>}
           </Button>
         </div>
       </aside>
@@ -508,14 +513,19 @@ export function AppShell() {
               size="icon"
               className="lg:hidden text-zinc-400"
               onClick={handleSidebarToggle}
-              aria-label="Toggle navigation"
+              aria-label={t('nav.toggle')}
             >
               <Menu className="h-5 w-5" />
             </Button>
             <h1 className="text-sm font-medium text-zinc-300">
-              {currentView === 'member-profile' ? 'Member Profile' : (navItems.find((i) => i.view === currentView)?.label ?? 'Faction Accountant')}
+              {currentView === 'member-profile'
+                ? t('nav.memberProfile')
+                : t(navItems.find((i) => i.view === currentView)?.label ?? 'app.name')}
             </h1>
           </div>
+
+          <div className="flex items-center gap-1">
+          <LanguageSwitcher className="text-zinc-400" />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -536,19 +546,20 @@ export function AppShell() {
                 <div className="text-zinc-200">{user ? displayName(user) : ''}</div>
                 <div className="text-xs text-zinc-500 font-normal">
                   {user?.role === 'superadmin'
-                    ? 'Superadmin'
+                    ? t('role.superadmin')
                     : user?.role === 'faction_admin'
-                      ? 'Faction Admin'
-                      : 'Member'}
+                      ? t('role.factionAdmin')
+                      : t('role.member')}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} disabled={loggingOut}>
                 <LogOut className="mr-2 h-4 w-4" />
-                {loggingOut ? 'Signing out...' : 'Sign out'}
+                {loggingOut ? t('auth.signingOut') : t('auth.signOut')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </header>
 
         {/* Page Content */}

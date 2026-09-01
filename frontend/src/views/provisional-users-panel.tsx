@@ -21,6 +21,7 @@ import {
 import { UserPlus, Pencil, Trash2, UserCog } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ProvisionalUser } from '@/lib/api-types';
+import { useTranslation } from '@/providers/i18n-provider';
 
 /**
  * Players a superadmin registered by Discord ID before they ever signed in.
@@ -32,6 +33,7 @@ import type { ProvisionalUser } from '@/lib/api-types';
  * to fix.
  */
 export function ProvisionalUsersPanel() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -69,10 +71,10 @@ export function ProvisionalUsersPanel() {
       setDiscordId('');
       setUsername('');
       setInGameName('');
-      toast({ title: 'Player registered' });
+      toast({ title: t('provisional.registered') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Failed to register', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('provisional.registerFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -84,10 +86,10 @@ export function ProvisionalUsersPanel() {
     onSuccess: () => {
       invalidate();
       setEditTarget(null);
-      toast({ title: 'Player updated' });
+      toast({ title: t('provisional.updated') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Update failed', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('common.updateFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -96,10 +98,10 @@ export function ProvisionalUsersPanel() {
     onSuccess: () => {
       invalidate();
       setDeleteTarget(null);
-      toast({ title: 'Registration removed' });
+      toast({ title: t('provisional.removed') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Could not remove', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('provisional.removeFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -116,16 +118,12 @@ export function ProvisionalUsersPanel() {
           <div>
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
               <UserCog className="h-4 w-4 text-zinc-400" />
-              Registered Players
+              {t('provisional.title')}
             </CardTitle>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              People added by Discord ID who have never signed in. They can join factions and
-              have entries booked for them; the first time they log in, this becomes their own
-              account with everything it already holds.
-            </p>
+            <p className="text-[11px] text-zinc-500 mt-1">{t('provisional.description')}</p>
           </div>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <UserPlus className="mr-1.5 h-4 w-4" />Register Player
+            <UserPlus className="mr-1.5 h-4 w-4" />{t('provisional.registerPlayer')}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
@@ -133,16 +131,16 @@ export function ProvisionalUsersPanel() {
             <div className="p-6 space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : pending.length === 0 ? (
             <p className="px-6 py-10 text-center text-sm text-zinc-600">
-              Nobody registered yet.
+              {t('provisional.none')}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Player</TableHead>
-                  <TableHead>Discord ID</TableHead>
-                  <TableHead className="text-right">Factions</TableHead>
-                  <TableHead className="text-right">Entries</TableHead>
+                  <TableHead>{t('provisional.player')}</TableHead>
+                  <TableHead>{t('members.discordId')}</TableHead>
+                  <TableHead className="text-right">{t('admin.factions')}</TableHead>
+                  <TableHead className="text-right">{t('nav.entries')}</TableHead>
                   <TableHead className="w-[90px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -160,10 +158,10 @@ export function ProvisionalUsersPanel() {
                     <TableCell className="text-sm text-zinc-400 tabular-nums text-right">{u.entryCount}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-0.5">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title="Edit" onClick={() => openEdit(u)}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(u)}>
                           <Pencil className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title="Remove" onClick={() => setDeleteTarget(u)}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.remove')} onClick={() => setDeleteTarget(u)}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -180,42 +178,36 @@ export function ProvisionalUsersPanel() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Register Player</DialogTitle>
-            <DialogDescription>
-              Add someone by their Discord ID so they can be managed before they ever log in.
-            </DialogDescription>
+            <DialogTitle>{t('provisional.registerPlayer')}</DialogTitle>
+            <DialogDescription>{t('provisional.registerHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Discord ID *</Label>
+              <Label>{t('provisional.discordIdRequired')}</Label>
               <Input
                 placeholder="123456789012345678"
                 value={discordId}
                 onChange={(e) => setDiscordId(e.target.value)}
                 className="tabular-nums"
               />
-              <p className="text-xs text-zinc-500">
-                Has to be the real one — it is what links this record to their account when
-                they sign in. Discord: Settings &rarr; Advanced &rarr; Developer Mode, then
-                right-click the user &rarr; Copy User ID.
-              </p>
+              <p className="text-xs text-zinc-500">{t('provisional.discordIdHint')}</p>
             </div>
             <div className="space-y-2">
-              <Label>Discord Name *</Label>
-              <Input placeholder="How Discord shows them" value={username} onChange={(e) => setUsername(e.target.value)} maxLength={32} />
+              <Label>{t('provisional.discordNameRequired')}</Label>
+              <Input placeholder={t('provisional.discordNamePlaceholder')} value={username} onChange={(e) => setUsername(e.target.value)} maxLength={32} />
             </div>
             <div className="space-y-2">
-              <Label>In-Game Name</Label>
-              <Input placeholder="Their character" value={inGameName} onChange={(e) => setInGameName(e.target.value)} maxLength={50} />
+              <Label>{t('inGameName.label')}</Label>
+              <Input placeholder={t('provisional.inGameNamePlaceholder')} value={inGameName} onChange={(e) => setInGameName(e.target.value)} maxLength={50} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
             <Button
               onClick={() => createMutation.mutate()}
               disabled={!/^\d{17,20}$/.test(discordId.trim()) || !username.trim() || createMutation.isPending}
             >
-              {createMutation.isPending ? 'Registering...' : 'Register'}
+              {createMutation.isPending ? t('provisional.registering') : t('provisional.register')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -225,27 +217,24 @@ export function ProvisionalUsersPanel() {
       <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Registration</DialogTitle>
-            <DialogDescription>
-              Both names are editable only until they sign in — after that, Discord owns the
-              username and they own their in-game name.
-            </DialogDescription>
+            <DialogTitle>{t('provisional.editTitle')}</DialogTitle>
+            <DialogDescription>{t('provisional.editHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Discord Name</Label>
+              <Label>{t('provisional.discordName')}</Label>
               <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} maxLength={32} />
             </div>
             <div className="space-y-2">
-              <Label>In-Game Name</Label>
+              <Label>{t('inGameName.label')}</Label>
               <Input value={editInGameName} onChange={(e) => setEditInGameName(e.target.value)} maxLength={50} />
             </div>
-            <p className="text-xs text-zinc-500">Discord ID: {editTarget?.discordId}</p>
+            <p className="text-xs text-zinc-500">{t('members.discordId')}: {editTarget?.discordId}</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>{t('common.cancel')}</Button>
             <Button onClick={() => updateMutation.mutate()} disabled={!editUsername.trim() || updateMutation.isPending}>
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -255,21 +244,17 @@ export function ProvisionalUsersPanel() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove &ldquo;{deleteTarget?.inGameName?.trim() || deleteTarget?.username}&rdquo;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This deletes the registration and any faction memberships it has. It is refused
-              if the player already carries entries, withdrawals or strikes — those are real
-              records, so clear them first.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('provisional.removeConfirmTitle', { name: deleteTarget?.inGameName?.trim() || deleteTarget?.username || '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('provisional.removeConfirmBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
               className="bg-red-500 text-white hover:bg-red-600"
             >
-              {deleteMutation.isPending ? 'Removing...' : 'Remove'}
+              {deleteMutation.isPending ? t('common.removing') : t('common.remove')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -15,6 +15,7 @@ import { ArrowRight, WashingMachine } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, todayLocalDateString } from '@/lib/format';
+import { useTranslation } from '@/providers/i18n-provider';
 
 interface Props {
   factionId: string;
@@ -29,6 +30,7 @@ interface Props {
  * what the conversion costs, and to make the treasury match reality afterwards.
  */
 export function LaunderingView({ factionId }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -79,7 +81,7 @@ export function LaunderingView({ factionId }: Props) {
     }),
     onSuccess: (result) => {
       toast({
-        title: 'Laundered',
+        title: t('laundering.done'),
         description: `${formatAmount(result.from.amount, result.from.unit, true)} ${result.from.itemTypeName} → ${formatAmount(result.to.amount, result.to.unit, true)} ${result.to.itemTypeName}`,
       });
       reset();
@@ -92,7 +94,7 @@ export function LaunderingView({ factionId }: Props) {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Laundering failed', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('laundering.failed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -106,12 +108,8 @@ export function LaunderingView({ factionId }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-medium tracking-tight text-zinc-100">Laundering</h2>
-        <p className="text-zinc-500 text-sm mt-0.5">
-          Convert one faction currency into another. The dirty side leaves the treasury and the
-          clean side comes back, both under the anonymous placeholder — no member is charged or
-          credited.
-        </p>
+        <h2 className="text-xl font-medium tracking-tight text-zinc-100">{t('nav.laundering')}</h2>
+        <p className="text-zinc-500 text-sm mt-0.5">{t('laundering.intro')}</p>
       </div>
 
       {/* What there is to work with */}
@@ -134,8 +132,7 @@ export function LaunderingView({ factionId }: Props) {
         <Card>
           <CardContent className="py-10 text-center text-sm text-zinc-500">
             <WashingMachine className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            Laundering needs at least two active currency item types. Add one in
-            Settings &rarr; Item Types.
+            {t('laundering.needsTwoCurrencies')}
           </CardContent>
         </Card>
       ) : (
@@ -143,14 +140,14 @@ export function LaunderingView({ factionId }: Props) {
           <CardContent className="py-5 space-y-5">
             <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
               <div className="space-y-2">
-                <Label>From *</Label>
+                <Label>{t('laundering.from')}</Label>
                 <SearchableSelect
                   value={fromId}
                   onValueChange={setFromId}
                   options={options}
-                  placeholder="Currency to wash"
-                  searchPlaceholder="Search currencies..."
-                  emptyMessage="No currencies match."
+                  placeholder={t('laundering.currencyToWash')}
+                  searchPlaceholder={t('laundering.searchCurrencies')}
+                  emptyMessage={t('laundering.noCurrenciesMatch')}
                 />
                 <Input
                   type="number"
@@ -164,7 +161,7 @@ export function LaunderingView({ factionId }: Props) {
                 />
                 {overBalance && from && (
                   <p className="text-xs text-red-400">
-                    The treasury holds {formatAmount(from.balance, from.unit, true)}.
+                    {t('laundering.treasuryHolds', { amount: formatAmount(from.balance, from.unit, true) })}
                   </p>
                 )}
               </div>
@@ -174,14 +171,14 @@ export function LaunderingView({ factionId }: Props) {
               </div>
 
               <div className="space-y-2">
-                <Label>To *</Label>
+                <Label>{t('laundering.to')}</Label>
                 <SearchableSelect
                   value={toId}
                   onValueChange={setToId}
                   options={options.filter((o) => o.value !== fromId)}
-                  placeholder="Currency to receive"
-                  searchPlaceholder="Search currencies..."
-                  emptyMessage="No currencies match."
+                  placeholder={t('laundering.currencyToReceive')}
+                  searchPlaceholder={t('laundering.searchCurrencies')}
+                  emptyMessage={t('laundering.noCurrenciesMatch')}
                 />
                 <Input
                   type="number"
@@ -195,27 +192,32 @@ export function LaunderingView({ factionId }: Props) {
               </div>
             </div>
 
+            {/* One sentence, one key: the clause order differs between
+                languages, so splitting it around the highlighted percentage
+                would leave a fragment no translator could reassemble. */}
             {ratio !== null && from && to && (
               <p className="text-xs text-zinc-500">
-                {formatAmount(inNum, from.unit, true)} {from.itemTypeName} becomes{' '}
-                {formatAmount(outNum, to.unit, true)} {to.itemTypeName} —{' '}
-                <span className="text-zinc-300">{(ratio * 100).toFixed(1)}%</span> comes back,{' '}
-                {formatAmount(inNum - outNum, from.unit, true)} is the cut.
+                {t('laundering.conversionSummary', {
+                  amountIn: `${formatAmount(inNum, from.unit, true)} ${from.itemTypeName}`,
+                  amountOut: `${formatAmount(outNum, to.unit, true)} ${to.itemTypeName}`,
+                  percent: (ratio * 100).toFixed(1),
+                  cut: formatAmount(inNum - outNum, from.unit, true),
+                })}
               </p>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Note</Label>
+                <Label>{t('laundering.note')}</Label>
                 <Input
-                  placeholder="Who washed it, where, anything worth remembering"
+                  placeholder={t('laundering.notePlaceholder')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={500}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Date</Label>
+                <Label>{t('common.date')}</Label>
                 <Input
                   type="date"
                   value={date}
@@ -231,7 +233,7 @@ export function LaunderingView({ factionId }: Props) {
                 onClick={() => launderMutation.mutate()}
                 style={{ backgroundColor: brandColor }}
               >
-                {launderMutation.isPending ? 'Washing...' : 'Launder'}
+                {launderMutation.isPending ? t('laundering.washing') : t('laundering.launder')}
               </Button>
             </div>
           </CardContent>

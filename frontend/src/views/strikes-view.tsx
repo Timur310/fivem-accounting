@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionStrikesApi, memberStrikesApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,9 @@ import { AlertTriangle, Shield, Ban, RotateCcw, MessageSquare } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { StrikeEffectiveStatus } from '@/lib/api-types';
+import { formatDate } from '@/lib/format';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
 
 interface Props {
   factionId: string;
@@ -42,23 +45,28 @@ const STATUS_COLORS: Record<StrikeEffectiveStatus, string> = {
   expired: 'text-zinc-600',
 };
 
-// The empty value is the unfiltered case, so it doubles as a way to clear.
-const STATUS_FILTER_OPTIONS: SearchableSelectOption[] = [
-  { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'appealed', label: 'Appealed' },
-  { value: 'revoked', label: 'Revoked' },
-  { value: 'expired', label: 'Expired' },
-];
+const STATUS_KEYS: Record<string, TranslationKey> = {
+  active: 'strikes.status.active',
+  appealed: 'strikes.status.appealed',
+  revoked: 'strikes.status.revoked',
+  expired: 'strikes.status.expired',
+};
 
-const SEVERITY_FILTER_OPTIONS: SearchableSelectOption[] = [
-  { value: '', label: 'All Severities' },
-  { value: 'warning', label: 'Warning' },
-  { value: 'minor', label: 'Minor' },
-  { value: 'major', label: 'Major' },
-];
+const SEVERITY_KEYS: Record<string, TranslationKey> = {
+  warning: 'strikes.severity.warning',
+  minor: 'strikes.severity.minor',
+  major: 'strikes.severity.major',
+};
+
+/** The summary tile above each severity column, which reads as a plural. */
+const ACTIVE_SUMMARY_KEYS: Record<string, TranslationKey> = {
+  warning: 'strikes.activeWarnings',
+  minor: 'strikes.activeMinors',
+  major: 'strikes.activeMajors',
+};
 
 export function StrikesView({ factionId, canManageStrikes }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -87,16 +95,27 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
       memberStrikesApi.update(factionId, targetUserId, strikeId, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faction-strikes', factionId] });
-      toast({ title: 'Strike updated' });
+      toast({ title: t('strikes.updated') });
     },
     onError: (err: unknown) => {
       // Lazy import keeps the bundle from pulling axios types at module
       // load time.
       import('@/lib/api-client').then(({ apiErrorMessage }) => {
-        toast({ title: 'Failed', description: apiErrorMessage(err), variant: 'destructive' });
+        toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
       });
     },
   });
+
+  // The empty value is the unfiltered case, so it doubles as a way to clear.
+  const statusOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: t('strikes.allStatuses') },
+    ...Object.entries(STATUS_KEYS).map(([value, key]) => ({ value, label: t(key) })),
+  ], [t]);
+
+  const severityOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: t('strikes.allSeverities') },
+    ...Object.entries(SEVERITY_KEYS).map(([value, key]) => ({ value, label: t(key) })),
+  ], [t]);
 
   const strikes = data?.data?.strikes ?? [];
   const summary = data?.data?.activeSummary ?? { warning: 0, minor: 0, major: 0 };
@@ -111,7 +130,7 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
           <Card key={sev} className={summary[sev] > 0 ? SEVERITY_COLORS[sev] + ' border' : ''}>
             <CardContent className="py-4 flex items-center justify-between">
               <div>
-                <p className="text-xs text-zinc-500 capitalize">Active {sev}s</p>
+                <p className="text-xs text-zinc-500">{t(ACTIVE_SUMMARY_KEYS[sev])}</p>
                 <p className="text-2xl font-medium tabular-nums mt-0.5">{summary[sev]}</p>
               </div>
               <AlertTriangle className={`h-5 w-5 ${summary[sev] > 0 ? 'opacity-80' : 'opacity-20'}`} />
@@ -125,20 +144,20 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
         <SearchableSelect
           className="w-[140px]"
           triggerClassName="h-8 text-xs"
-          aria-label="Filter by status"
+          aria-label={t('strikes.filterByStatus')}
           value={statusFilter}
           onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
-          options={STATUS_FILTER_OPTIONS}
-          placeholder="All Statuses"
+          options={statusOptions}
+          placeholder={t('strikes.allStatuses')}
         />
         <SearchableSelect
           className="w-[140px]"
           triggerClassName="h-8 text-xs"
-          aria-label="Filter by severity"
+          aria-label={t('strikes.filterBySeverity')}
           value={severityFilter}
           onValueChange={(v) => { setSeverityFilter(v); setPage(1); }}
-          options={SEVERITY_FILTER_OPTIONS}
-          placeholder="All Severities"
+          options={severityOptions}
+          placeholder={t('strikes.allSeverities')}
         />
       </div>
 
@@ -148,16 +167,16 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : strikes.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600"><AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">No strikes found.</p></div>
+            <div className="p-12 text-center text-zinc-600"><AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">{t('strikes.none')}</p></div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  {canManageStrikes && <TableHead>Member</TableHead>}
-                  <TableHead>Severity</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="hidden md:table-cell">Reason</TableHead>
-                  <TableHead>Issued</TableHead>
+                  {canManageStrikes && <TableHead>{t('role.member')}</TableHead>}
+                  <TableHead>{t('strikes.severityColumn')}</TableHead>
+                  <TableHead>{t('common.status')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('strikes.reason')}</TableHead>
+                  <TableHead>{t('strikes.issued')}</TableHead>
                   <TableHead className="w-[100px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -171,40 +190,40 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
                             <AvatarImage src={s.targetAvatarUrl ?? undefined} />
                             <AvatarFallback className="text-[8px]">{(s.targetInGameName || s.targetUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
-                          <span className="text-sm text-zinc-300">{s.targetInGameName?.trim() || s.targetUsername || 'Unknown'}</span>
+                          <span className="text-sm text-zinc-300">{s.targetInGameName?.trim() || s.targetUsername || t('common.unknown')}</span>
                         </div>
                       </TableCell>
                     )}
                     <TableCell>
-                      <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{s.severity}</Badge>
+                      <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
                     </TableCell>
                     <TableCell>
-                      <span className={`text-xs font-medium ${STATUS_COLORS[s.effectiveStatus] || 'text-zinc-400'}`}>{s.effectiveStatus}</span>
+                      <span className={`text-xs font-medium ${STATUS_COLORS[s.effectiveStatus] || 'text-zinc-400'}`}>{STATUS_KEYS[s.effectiveStatus] ? t(STATUS_KEYS[s.effectiveStatus]) : s.effectiveStatus}</span>
                       {s.expiresAt && s.effectiveStatus === 'active' && (
-                        <p className="text-[10px] text-zinc-600">exp {new Date(s.expiresAt).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-zinc-600">{t('strikes.expiresOn', { date: formatDate(s.expiresAt) })}</p>
                       )}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
                       <p className="text-xs text-zinc-400 max-w-[250px] truncate">{s.reason}</p>
                     </TableCell>
-                    <TableCell className="text-xs text-zinc-600 tabular-nums">{new Date(s.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-xs text-zinc-600 tabular-nums">{formatDate(s.createdAt)}</TableCell>
                     <TableCell>
                       {canManageStrikes && s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <MessageSquare className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title="Revoke" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title={t('strikes.revoke')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>
                       )}
                       {canManageStrikes && s.effectiveStatus === 'appealed' && s.targetUserId && (
                         <div className="flex gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title="Reinstate" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <RotateCcw className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title="Revoke" onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title={t('strikes.revoke')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>
@@ -221,9 +240,9 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-          <span className="text-xs text-zinc-500">Page {page} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</Button>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t('common.previous')}</Button>
+          <span className="text-xs text-zinc-500">{t('common.pageOf', { page, pages: totalPages })}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>{t('common.next')}</Button>
         </div>
       )}
     </div>

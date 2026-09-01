@@ -10,14 +10,24 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
-import { formatAmount, displayName } from '@/lib/format';
+import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
+
+/** Quota period names as the API spells them. */
+const QUOTA_PERIOD_KEYS: Record<string, TranslationKey> = {
+  daily: 'quota.period.daily',
+  weekly: 'quota.period.weekly',
+  monthly: 'quota.period.monthly',
+};
 
 interface Props {
   factionId: string;
 }
 
 export function DashboardView({ factionId }: Props) {
+  const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
 
@@ -51,7 +61,7 @@ export function DashboardView({ factionId }: Props) {
     return (
       <Card className="border-red-500/20">
         <CardContent className="p-6 text-center text-red-400">
-          Failed to load dashboard. Make sure the backend is running.
+          {t('dashboard.loadFailed')}
         </CardContent>
       </Card>
     );
@@ -62,7 +72,7 @@ export function DashboardView({ factionId }: Props) {
 
   // Currency summaries are prefixed with $; the goods breakdown uses
   // formatAmount() with the type-specific unit instead.
-  const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (n: number) => `$${formatNumber(n)}`;
 
   return (
     <div className="space-y-6">
@@ -79,7 +89,7 @@ export function DashboardView({ factionId }: Props) {
         {/* Hero Card — Grand Total with Glow */}
         <Card className="faction-glow border-highlight lg:col-span-1 sm:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Net Treasury Balance</CardTitle>
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.netTreasuryBalance')}</CardTitle>
           </CardHeader>
           <CardContent className="relative z-10">
             {(() => {
@@ -99,10 +109,10 @@ export function DashboardView({ factionId }: Props) {
                   <p className="text-xs text-zinc-500 mt-1.5">
                     {hasTreasury
                       ? <>
-                          inflow {fmt(totalIn)} &middot; outflow {fmt(totalOut)}
-                          {goodsCount > 0 && <> &middot; currency only</>}
+                          {t('dashboard.inflowOutflow', { inflow: fmt(totalIn), outflow: fmt(totalOut) })}
+                          {goodsCount > 0 && <> &middot; {t('dashboard.currencyOnly')}</>}
                         </>
-                      : 'across all item types'
+                      : t('treasury.totalsNoteAll')
                     }
                   </p>
                 </>
@@ -114,33 +124,33 @@ export function DashboardView({ factionId }: Props) {
         {/* Stat: Total Entries */}
         <Card className="border-highlight">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Entries</CardTitle>
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</CardTitle>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalEntries.toLocaleString()}</div>
-            <p className="text-xs text-zinc-500 mt-1.5">logged contributions</p>
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{formatCount(totalEntries)}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.loggedContributions')}</p>
           </CardContent>
         </Card>
 
         {/* Stat: Members */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Members</CardTitle>
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.members')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-medium tabular-nums tracking-tight">{memberCount}</div>
-            <p className="text-xs text-zinc-500 mt-1.5">{adminCount} admin{adminCount !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.adminCount', { count: adminCount })}</p>
           </CardContent>
         </Card>
 
         {/* Stat: Item Types */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">Categories</CardTitle>
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.categories')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-medium tabular-nums tracking-tight">{totalsByType.length}</div>
-            <p className="text-xs text-zinc-500 mt-1.5">active item types</p>
+            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.activeItemTypes')}</p>
           </CardContent>
         </Card>
       </div>
@@ -151,7 +161,7 @@ export function DashboardView({ factionId }: Props) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
               <Target className="h-4 w-4 text-zinc-400" />
-              Quota Progress
+              {t('dashboard.quotaProgress')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -166,11 +176,11 @@ export function DashboardView({ factionId }: Props) {
                         <ItemIcon src={q.itemImageUrl} />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-zinc-200 truncate">{q.itemTypeName}</p>
-                          <p className="text-[11px] text-zinc-500 capitalize">{q.periodType}</p>
+                          <p className="text-[11px] text-zinc-500">{QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</p>
                         </div>
                       </div>
                       <Badge variant={met ? 'outline' : 'default'} className={met ? 'border-emerald-500/30 text-emerald-400' : ''}>
-                        {met ? 'Met' : `${pct.toFixed(1)}%`}
+                        {met ? t('quota.met') : `${pct.toFixed(1)}%`}
                       </Badge>
                     </div>
                     {/* Energy bar */}
@@ -182,7 +192,7 @@ export function DashboardView({ factionId }: Props) {
                     </div>
                     <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
                       <span>{formatAmount(q.currentAmount ?? 0, q.itemUnit, q.itemIsCurrency)}</span>
-                      <span>of {formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency)}</span>
+                      <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency) })}</span>
                     </div>
                   </div>
                 );
@@ -199,12 +209,12 @@ export function DashboardView({ factionId }: Props) {
           <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
               <TrendingUp className="h-4 w-4 text-zinc-400" />
-              Top Contributors
+              {t('dashboard.topContributors')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {topContributors.length === 0 ? (
-              <p className="text-zinc-600 text-sm text-center py-8">No contributions yet.</p>
+              <p className="text-zinc-600 text-sm text-center py-8">{t('dashboard.noContributions')}</p>
             ) : (
               <div className="space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
@@ -216,9 +226,9 @@ export function DashboardView({ factionId }: Props) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-300 truncate">{displayName(c)}</p>
-                      <p className="text-[11px] text-zinc-600">{c.entryCount} entries</p>
+                      <p className="text-[11px] text-zinc-600">{t('entries.count', { count: c.entryCount })}</p>
                     </div>
-                    <span className="text-sm font-medium tabular-nums text-zinc-200">{`$${c.totalContributed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+                    <span className="text-sm font-medium tabular-nums text-zinc-200">{fmt(c.totalContributed)}</span>
                   </div>
                 ))}
               </div>
@@ -232,20 +242,20 @@ export function DashboardView({ factionId }: Props) {
             <CardTitle className="flex items-center justify-between text-sm text-zinc-200">
               <span className="flex items-center gap-2">
                 <List className="h-4 w-4 text-zinc-400" />
-                Recent Activity
+                {t('dashboard.recentActivity')}
               </span>
               <Button
                 onClick={() => setCurrentView('entries')}
                 className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
                 style={{ color: brandColor }}
               >
-                View All <ArrowUpRight className="h-3 w-3" />
+                {t('dashboard.viewAll')} <ArrowUpRight className="h-3 w-3" />
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
-              <p className="text-zinc-600 text-sm text-center py-8">No entries yet.</p>
+              <p className="text-zinc-600 text-sm text-center py-8">{t('entries.noneYet')}</p>
             ) : (
               <div className="space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (
@@ -257,7 +267,7 @@ export function DashboardView({ factionId }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
                         <span className="text-zinc-300 font-medium">{displayName(e)}</span>
-                        <span className="text-zinc-600"> logged </span>
+                        <span className="text-zinc-600"> {t('dashboard.logged')} </span>
                         <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                       </p>
                       <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
@@ -280,14 +290,14 @@ export function DashboardView({ factionId }: Props) {
       {totalsByType.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-sm text-zinc-200">Treasury by Item Type</CardTitle>
+            <CardTitle className="text-sm text-zinc-200">{t('dashboard.treasuryByItemType')}</CardTitle>
             {(treasuryBalances?.length ?? 0) > 0 && (
               <Button
                 onClick={() => setCurrentView('treasury')}
                 className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
                 style={{ color: brandColor }}
               >
-                Full View <ArrowUpRight className="h-3 w-3" />
+                {t('dashboard.fullView')} <ArrowUpRight className="h-3 w-3" />
               </Button>
             )}
           </CardHeader>
@@ -303,7 +313,7 @@ export function DashboardView({ factionId }: Props) {
                       <ItemIcon src={b.imageUrl} className="size-8" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-zinc-300 truncate">{b.itemTypeName}</p>
-                        <p className="text-xs text-zinc-600">in {formatAmount(b.inflow, b.unit, b.isCurrency)} &middot; out {formatAmount(b.outflow, b.unit, b.isCurrency)}</p>
+                        <p className="text-xs text-zinc-600">{t('dashboard.inOut', { inflow: formatAmount(b.inflow, b.unit, b.isCurrency), outflow: formatAmount(b.outflow, b.unit, b.isCurrency) })}</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -313,21 +323,21 @@ export function DashboardView({ factionId }: Props) {
                     </div>
                   </div>
                 ))
-                : totalsByType.map((t) => (
+                : totalsByType.map((row) => (
                   <div
-                    key={t.itemTypeId}
+                    key={row.itemTypeId}
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={t.imageUrl} className="size-8" />
+                      <ItemIcon src={row.imageUrl} className="size-8" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-300 truncate">{t.itemTypeName}</p>
-                        <p className="text-xs text-zinc-600">{t.unit}</p>
+                        <p className="text-sm font-medium text-zinc-300 truncate">{row.itemTypeName}</p>
+                        <p className="text-xs text-zinc-600">{row.unit}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-medium tabular-nums text-zinc-100">
-                        {formatAmount(t.total, t.unit, t.isCurrency)}
+                        {formatAmount(row.total, row.unit, row.isCurrency)}
                       </p>
                     </div>
                   </div>
@@ -345,10 +355,10 @@ export function DashboardView({ factionId }: Props) {
             <CardTitle className="flex items-center justify-between text-sm text-zinc-200">
               <span className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-amber-400" />
-                Inactive Members
+                {t('dashboard.inactiveMembers')}
               </span>
               <Badge variant="outline" className="text-[11px] border-amber-500/20 text-amber-400 bg-amber-500/5">
-                {inactiveMembers.length} &middot; {inactivityThresholdDays ?? 7}d threshold
+                {t('dashboard.inactiveThreshold', { count: inactiveMembers.length, days: inactivityThresholdDays ?? 7 })}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -361,11 +371,11 @@ export function DashboardView({ factionId }: Props) {
                     <AvatarFallback className="text-[9px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <span className="text-sm text-zinc-300 flex-1 truncate">{displayName(m)}</span>
-                  <span className="text-xs text-amber-400 tabular-nums">{m.daysInactive === null ? 'Never' : `${m.daysInactive}d`}</span>
+                  <span className="text-xs text-amber-400 tabular-nums">{m.daysInactive === null ? t('dashboard.never') : t('dashboard.daysShort', { days: m.daysInactive })}</span>
                 </div>
               ))}
               {inactiveMembers.length > 5 && (
-                <p className="text-[11px] text-zinc-600 text-center pt-1">+{inactiveMembers.length - 5} more</p>
+                <p className="text-[11px] text-zinc-600 text-center pt-1">{t('common.andMore', { count: inactiveMembers.length - 5 })}</p>
               )}
             </div>
           </CardContent>
@@ -377,21 +387,21 @@ export function DashboardView({ factionId }: Props) {
         <CardContent className="py-4">
           <div className="flex items-center gap-3">
             <Download className="h-4 w-4 text-zinc-500" />
-            <span className="text-sm text-zinc-400">Export</span>
+            <span className="text-sm text-zinc-400">{t('common.export')}</span>
             <div className="flex gap-2 ml-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => window.open(exportApi.entriesUrl(factionId), '_blank', 'noopener,noreferrer')}
               >
-                Entries CSV
+                {t('dashboard.exportEntries')}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => window.open(exportApi.quotaReportUrl(factionId), '_blank', 'noopener,noreferrer')}
               >
-                Quota Report
+                {t('dashboard.exportQuotaReport')}
               </Button>
             </div>
           </div>
@@ -403,7 +413,7 @@ export function DashboardView({ factionId }: Props) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
             <BarChart3 className="h-4 w-4 text-zinc-400" />
-            Analytics
+            {t('dashboard.analytics')}
           </CardTitle>
         </CardHeader>
         <CardContent>

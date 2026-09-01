@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/providers/i18n-provider';
 
 /**
  * A <Select> that can be typed into.
@@ -55,9 +56,9 @@ export function SearchableSelect({
   value,
   onValueChange,
   options,
-  placeholder = 'Select...',
-  searchPlaceholder = 'Search...',
-  emptyMessage = 'No matches.',
+  placeholder,
+  searchPlaceholder,
+  emptyMessage,
   disabled,
   searchThreshold = 8,
   className,
@@ -65,6 +66,14 @@ export function SearchableSelect({
   contentClassName,
   'aria-label': ariaLabel,
 }: SearchableSelectProps) {
+  // Generic fallbacks live here rather than in the prop defaults so they follow
+  // the interface language; every call site that has something more specific to
+  // say still passes its own text.
+  const { t } = useTranslation();
+  const placeholderText = placeholder ?? t('select.placeholder');
+  const searchPlaceholderText = searchPlaceholder ?? t('select.search');
+  const emptyMessageText = emptyMessage ?? t('select.noMatches');
+
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
   const [highlight, setHighlight] = React.useState(0);
@@ -200,7 +209,7 @@ export function SearchableSelect({
               {selected.badge}
             </span>
           ) : (
-            <span className="truncate text-zinc-600">{placeholder}</span>
+            <span className="truncate text-zinc-600">{placeholderText}</span>
           )}
         </span>
         <ChevronDown className="size-4 shrink-0 opacity-40" />
@@ -225,7 +234,7 @@ export function SearchableSelect({
               <Input
                 autoFocus
                 value={search}
-                placeholder={searchPlaceholder}
+                placeholder={searchPlaceholderText}
                 onChange={(e) => { setSearch(e.target.value); setHighlight(0); }}
                 onKeyDown={handleKeyDown}
                 className="h-8 pl-8 text-xs"
@@ -240,7 +249,7 @@ export function SearchableSelect({
             className={cn('max-h-56 overflow-y-auto outline-none', showSearch && 'mt-1')}
           >
             {filtered.length === 0 ? (
-              <p className="px-2 py-3 text-center text-xs text-zinc-500">{emptyMessage}</p>
+              <p className="px-2 py-3 text-center text-xs text-zinc-500">{emptyMessageText}</p>
             ) : (
               filtered.map((o, i) => (
                 <button

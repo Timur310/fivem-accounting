@@ -29,23 +29,32 @@ import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
 import {
   FACTION_PERMISSIONS,
-  PERMISSION_LABELS,
+  PERMISSION_LABEL_KEYS,
   type FactionPermission,
 } from '@/lib/api-types';
 import { useEffect, useMemo, useRef } from 'react';
 import { formatAmount, displayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
 
-const SCOPE_OPTIONS: SearchableSelectOption[] = [
-  { value: 'faction', label: 'Faction-wide' },
-  { value: 'member', label: 'Per-member' },
-];
+const SCOPE_KEYS: Record<string, TranslationKey> = {
+  faction: 'quota.scope.faction',
+  member: 'quota.scope.member',
+};
 
-const PERIOD_TYPE_OPTIONS: SearchableSelectOption[] = [
-  { value: 'weekly', label: 'Weekly (Monday–Sunday)' },
-  { value: 'monthly', label: 'Monthly (Calendar month)' },
-];
+const PERIOD_TYPE_KEYS: Record<string, TranslationKey> = {
+  weekly: 'quota.periodType.weekly',
+  monthly: 'quota.periodType.monthly',
+};
+
+/** Strike severities, in the order they escalate. */
+const SEVERITY_KEYS: Record<string, TranslationKey> = {
+  warning: 'strikes.severity.warning',
+  minor: 'strikes.severity.minor',
+  major: 'strikes.severity.major',
+};
 
 interface Props {
   factionId: string;
@@ -60,6 +69,7 @@ interface Props {
 type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings';
 
 export function SettingsView({ factionId, isFactionAdmin }: Props) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('item-types');
 
   return (
@@ -71,28 +81,28 @@ export function SettingsView({ factionId, isFactionAdmin }: Props) {
           onClick={() => setActiveTab('item-types')}
         >
           <Package className="mr-2 h-4 w-4" />
-          Item Types
+          {t('settings.itemTypes')}
         </Button>
         <Button
           variant={activeTab === 'quotas' ? 'default' : 'outline'}
           onClick={() => setActiveTab('quotas')}
         >
           <Target className="mr-2 h-4 w-4" />
-          Quotas
+          {t('settings.quotas')}
         </Button>
         <Button
           variant={activeTab === 'customization' ? 'default' : 'outline'}
           onClick={() => setActiveTab('customization')}
         >
           <Palette className="mr-2 h-4 w-4" />
-          Customization
+          {t('settings.customization')}
         </Button>
         <Button
           variant={activeTab === 'faction-settings' ? 'default' : 'outline'}
           onClick={() => setActiveTab('faction-settings')}
         >
           <Shield className="mr-2 h-4 w-4" />
-          Faction Settings
+          {t('settings.factionSettings')}
         </Button>
       </div>
 
@@ -111,6 +121,7 @@ export function SettingsView({ factionId, isFactionAdmin }: Props) {
 // ══════════════════════════════════════════════════════
 
 function ItemTypesSection({ factionId }: { factionId: string }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -151,11 +162,11 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       setNewName('');
       setNewIsCurrency(false);
       setNewImageUrl('');
-      toast({ title: 'Item type created' });
+      toast({ title: t('itemTypes.created') });
     },
     onError: (err: unknown) => {
       toast({
-        title: 'Failed to create item type',
+        title: t('itemTypes.createFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
@@ -176,11 +187,11 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
       setEditOpen(false);
       setEditTarget(null);
-      toast({ title: 'Item type updated' });
+      toast({ title: t('itemTypes.updated') });
     },
     onError: (err: unknown) => {
       toast({
-        title: 'Update failed',
+        title: t('common.updateFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
@@ -192,23 +203,23 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
       setDeleteTarget(null);
-      toast({ title: 'Item type disabled' });
+      toast({ title: t('itemTypes.disabled') });
     },
     onError: (err: unknown) => {
       toast({
-        title: 'Failed to disable',
+        title: t('itemTypes.disableFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
     },
   });
 
-  const openEdit = (t: ItemType) => {
-    setEditTarget(t);
-    setEditName(t.name);
-    setEditIsCurrency(t.isCurrency);
-    setEditImageUrl(t.imageUrl ?? '');
-    setEditActive(t.isActive);
+  const openEdit = (item: ItemType) => {
+    setEditTarget(item);
+    setEditName(item.name);
+    setEditIsCurrency(item.isCurrency);
+    setEditImageUrl(item.imageUrl ?? '');
+    setEditActive(item.isActive);
     setEditOpen(true);
   };
 
@@ -216,14 +227,12 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
     <>
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Item Types</h3>
-          <p className="text-sm text-zinc-500">
-            Manage the types of contributions members can log.
-          </p>
+          <h3 className="text-lg font-semibold">{t('settings.itemTypes')}</h3>
+          <p className="text-sm text-zinc-500">{t('itemTypes.intro')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Type
+          {t('itemTypes.addType')}
         </Button>
       </div>
 
@@ -238,55 +247,55 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
           ) : itemTypes.length === 0 ? (
             <div className="p-12 text-center text-zinc-500">
               <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No item types configured.</p>
+              <p>{t('itemTypes.noneConfigured')}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[52px]"></TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Entries</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
+                  <TableHead>{t('common.name')}</TableHead>
+                  <TableHead>{t('entries.type')}</TableHead>
+                  <TableHead>{t('nav.entries')}</TableHead>
+                  <TableHead>{t('common.status')}</TableHead>
+                  <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {itemTypes.map((t: ItemType) => (
-                  <TableRow key={t.id} className={!t.isActive ? 'opacity-50' : ''}>
+                {itemTypes.map((item: ItemType) => (
+                  <TableRow key={item.id} className={!item.isActive ? 'opacity-50' : ''}>
                     <TableCell>
-                      <ItemIcon src={t.imageUrl} className="size-8" />
+                      <ItemIcon src={item.imageUrl} className="size-8" />
                     </TableCell>
-                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={t.isCurrency
+                        className={item.isCurrency
                           ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
                           : 'border-blue-500/30 text-blue-400 bg-blue-500/10'
                         }
                       >
-                        {t.isCurrency ? 'Currency ($)' : 'Goods (pcs)'}
+                        {item.isCurrency ? t('itemTypes.currency') : t('itemTypes.goods')}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{t.entryCount ?? 0}</TableCell>
+                    <TableCell className="text-sm">{item.entryCount ?? 0}</TableCell>
                     <TableCell>
-                      <Badge variant={t.isActive ? 'default' : 'secondary'}>
-                        {t.isActive ? 'Active' : 'Disabled'}
+                      <Badge variant={item.isActive ? 'default' : 'secondary'}>
+                        {item.isActive ? t('common.active') : t('common.disabled')}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() => setDeleteTarget(t)}
-                          disabled={!t.isActive}
+                          onClick={() => setDeleteTarget(item)}
+                          disabled={!item.isActive}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -304,30 +313,23 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Item Type</DialogTitle>
-            <DialogDescription>
-              Add a new category for faction contributions.
-            </DialogDescription>
+            <DialogTitle>{t('itemTypes.create')}</DialogTitle>
+            <DialogDescription>{t('itemTypes.createHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input placeholder="e.g. Weapons" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              <Label>{t('common.name')}</Label>
+              <Input placeholder={t('itemTypes.namePlaceholder')} value={newName} onChange={(e) => setNewName(e.target.value)} />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <p className="text-sm font-medium">Currency</p>
-                <p className="text-xs text-zinc-500">
-                  Currency types are shown as {'“'}$1,000.00{'”'} and use the
-                  {' '}<code className="text-zinc-400">$</code> unit. Goods use
-                  {' '}<code className="text-zinc-400">pcs</code> and are
-                  formatted as {'“'}30 pcs{'”'}.
-                </p>
+                <p className="text-sm font-medium">{t('itemTypes.currencyLabel')}</p>
+                <p className="text-xs text-zinc-500">{t('itemTypes.currencyHint')}</p>
               </div>
               <Switch checked={newIsCurrency} onCheckedChange={setNewIsCurrency} />
             </div>
             <div className="space-y-2">
-              <Label>Image URL</Label>
+              <Label>{t('itemTypes.imageUrl')}</Label>
               <div className="flex items-center gap-3">
                 <ItemIcon src={newImageUrl.trim() || null} className="size-10" />
                 <Input
@@ -336,19 +338,16 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                   onChange={(e) => setNewImageUrl(e.target.value)}
                 />
               </div>
-              <p className="text-xs text-zinc-500">
-                Optional. Link to an image hosted elsewhere; it appears wherever this item is
-                listed.
-              </p>
+              <p className="text-xs text-zinc-500">{t('itemTypes.imageUrlHint')}</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
             <Button
               onClick={() => createMutation.mutate()}
               disabled={!newName.trim() || createMutation.isPending}
             >
-              {createMutation.isPending ? 'Creating...' : 'Create'}
+              {createMutation.isPending ? t('common.creating') : t('common.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -358,27 +357,23 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Item Type</DialogTitle>
-            <DialogDescription>Update item type settings.</DialogDescription>
+            <DialogTitle>{t('itemTypes.edit')}</DialogTitle>
+            <DialogDescription>{t('itemTypes.editHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label>{t('common.name')}</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <p className="text-sm font-medium">Currency</p>
-                <p className="text-xs text-zinc-500">
-                  Currency types use <code className="text-zinc-400">$</code>;
-                  goods use <code className="text-zinc-400">pcs</code>. The
-                  unit changes automatically.
-                </p>
+                <p className="text-sm font-medium">{t('itemTypes.currencyLabel')}</p>
+                <p className="text-xs text-zinc-500">{t('itemTypes.currencyEditHint')}</p>
               </div>
               <Switch checked={editIsCurrency} onCheckedChange={setEditIsCurrency} />
             </div>
             <div className="space-y-2">
-              <Label>Image URL</Label>
+              <Label>{t('itemTypes.imageUrl')}</Label>
               <div className="flex items-center gap-3">
                 <ItemIcon src={editImageUrl.trim() || null} className="size-10" />
                 <Input
@@ -387,23 +382,23 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
                   onChange={(e) => setEditImageUrl(e.target.value)}
                 />
               </div>
-              <p className="text-xs text-zinc-500">Clear the field to remove the image.</p>
+              <p className="text-xs text-zinc-500">{t('itemTypes.clearImageHint')}</p>
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <p className="text-sm font-medium">Active</p>
-                <p className="text-xs text-zinc-500">Disabled types cannot be used for new entries.</p>
+                <p className="text-sm font-medium">{t('common.active')}</p>
+                <p className="text-xs text-zinc-500">{t('itemTypes.disabledHint')}</p>
               </div>
               <Switch checked={editActive} onCheckedChange={setEditActive} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
             <Button
               onClick={() => updateMutation.mutate()}
               disabled={!editName.trim() || updateMutation.isPending}
             >
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -413,20 +408,17 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Disable &ldquo;{deleteTarget?.name}&rdquo;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will disable the item type. Existing entries will be preserved, but no new
-              entries can be logged with this type.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('itemTypes.disableConfirmTitle', { name: deleteTarget?.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('itemTypes.disableConfirmBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
               className="bg-red-500 text-white hover:bg-red-600"
             >
-              {deleteMutation.isPending ? 'Disabling...' : 'Disable'}
+              {deleteMutation.isPending ? t('itemTypes.disabling') : t('itemTypes.disable')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -440,6 +432,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
 // ══════════════════════════════════════════════════════
 
 function QuotasSection({ factionId }: { factionId: string }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -492,12 +485,22 @@ function QuotasSection({ factionId }: { factionId: string }) {
 
   const activeItemTypes = useMemo(() => itemTypes.filter((t: ItemType) => t.isActive), [itemTypes]);
 
-  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((t: ItemType) => ({
-    value: t.id,
-    label: t.name,
-    hint: t.unit ? `(${t.unit})` : undefined,
-    icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((item: ItemType) => ({
+    value: item.id,
+    label: item.name,
+    hint: item.unit ? `(${item.unit})` : undefined,
+    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
   })), [activeItemTypes]);
+
+  const scopeOptions = useMemo<SearchableSelectOption[]>(
+    () => Object.entries(SCOPE_KEYS).map(([value, key]) => ({ value, label: t(key) })),
+    [t],
+  );
+
+  const periodTypeOptions = useMemo<SearchableSelectOption[]>(
+    () => Object.entries(PERIOD_TYPE_KEYS).map(([value, key]) => ({ value, label: t(key) })),
+    [t],
+  );
 
   // Same shape as everywhere else members are listed: in-game name first, the
   // Discord name in parentheses, both of them searchable.
@@ -526,11 +529,11 @@ function QuotasSection({ factionId }: { factionId: string }) {
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       setCreateOpen(false);
       resetCreateForm();
-      toast({ title: 'Quota created' });
+      toast({ title: t('quota.created') });
     },
     onError: (err: unknown) => {
       toast({
-        title: 'Failed to create quota',
+        title: t('quota.createFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
@@ -549,11 +552,11 @@ function QuotasSection({ factionId }: { factionId: string }) {
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       setEditOpen(false);
       setEditTarget(null);
-      toast({ title: 'Quota updated' });
+      toast({ title: t('quota.updated') });
     },
     onError: (err: unknown) => {
       toast({
-        title: 'Update failed',
+        title: t('common.updateFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
@@ -565,11 +568,11 @@ function QuotasSection({ factionId }: { factionId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       setDeleteTarget(null);
-      toast({ title: 'Quota deleted' });
+      toast({ title: t('quota.deleted') });
     },
     onError: (err: unknown) => {
       toast({
-        title: 'Delete failed',
+        title: t('common.deleteFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
@@ -600,24 +603,22 @@ function QuotasSection({ factionId }: { factionId: string }) {
   };
 
   const scopeLabel = (q: Quota): string => {
-    if (!q.targetUserId) return 'Faction-wide';
+    if (!q.targetUserId) return t('quota.scope.faction');
     if (q.targetUsername) return q.targetUsername;
     const m = members.find((mm) => mm.userId === q.targetUserId);
-    return m?.username ?? 'Per-member';
+    return m?.username ?? t('quota.scope.member');
   };
 
   return (
     <>
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Quotas</h3>
-          <p className="text-sm text-zinc-500">
-            Set weekly or monthly contribution targets per item type.
-          </p>
+          <h3 className="text-lg font-semibold">{t('settings.quotas')}</h3>
+          <p className="text-sm text-zinc-500">{t('quota.intro')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Quota
+          {t('quota.add')}
         </Button>
       </div>
 
@@ -632,20 +633,20 @@ function QuotasSection({ factionId }: { factionId: string }) {
           ) : quotasList.length === 0 ? (
             <div className="p-12 text-center text-zinc-500">
               <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No quotas configured.</p>
-              <p className="text-xs mt-1">Create a quota to track contribution targets.</p>
+              <p>{t('quota.noneConfigured')}</p>
+              <p className="text-xs mt-1">{t('quota.noneConfiguredHint')}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Item Type</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
+                  <TableHead>{t('entries.itemType')}</TableHead>
+                  <TableHead>{t('quota.scope')}</TableHead>
+                  <TableHead>{t('quota.period')}</TableHead>
+                  <TableHead>{t('quota.target')}</TableHead>
+                  <TableHead>{t('quota.progress')}</TableHead>
+                  <TableHead>{t('common.status')}</TableHead>
+                  <TableHead className="w-[100px]">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -671,12 +672,12 @@ function QuotasSection({ factionId }: { factionId: string }) {
                             {scopeLabel(q)}
                           </Badge>
                         ) : (
-                          <span className="text-xs text-zinc-500">Faction-wide</span>
+                          <span className="text-xs text-zinc-500">{t('quota.scope.faction')}</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {q.periodType}
+                        <Badge variant="outline">
+                          {PERIOD_TYPE_KEYS[q.periodType] ? t(PERIOD_TYPE_KEYS[q.periodType]) : q.periodType}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-sm">
@@ -699,14 +700,14 @@ function QuotasSection({ factionId }: { factionId: string }) {
                             </div>
                           </div>
                         ) : q.isActive && !q.periodActive ? (
-                          <span className="text-xs text-zinc-500">Starts {q.periodStart}</span>
+                          <span className="text-xs text-zinc-500">{t('quota.startsOn', { date: q.periodStart })}</span>
                         ) : (
                           <span className="text-xs text-zinc-500">—</span>
                         )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={q.isActive ? 'default' : 'secondary'}>
-                          {q.isActive ? (met ? 'Met' : 'Active') : 'Disabled'}
+                          {q.isActive ? (met ? t('quota.met') : t('common.active')) : t('common.disabled')}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -737,55 +738,51 @@ function QuotasSection({ factionId }: { factionId: string }) {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Quota</DialogTitle>
-            <DialogDescription>
-              Set a contribution target for a specific item type.
-            </DialogDescription>
+            <DialogTitle>{t('quota.create')}</DialogTitle>
+            <DialogDescription>{t('quota.createHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Item Type</Label>
+              <Label>{t('entries.itemType')}</Label>
               <SearchableSelect
                 value={newItemTypeId}
                 onValueChange={setNewItemTypeId}
                 options={itemTypeOptions}
-                placeholder="Select item type"
-                searchPlaceholder="Search item types..."
-                emptyMessage="No item types match."
+                placeholder={t('itemTypes.select')}
+                searchPlaceholder={t('itemTypes.search')}
+                emptyMessage={t('itemTypes.noneMatch')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Scope</Label>
+              <Label>{t('quota.scope')}</Label>
               <SearchableSelect
-                aria-label="Quota scope"
+                aria-label={t('quota.scope')}
                 value={newScope}
                 onValueChange={(v) => {
                   setNewScope(v as 'faction' | 'member');
                   if (v === 'faction') setNewTargetUserId('');
                 }}
-                options={SCOPE_OPTIONS}
+                options={scopeOptions}
               />
               <p className="text-xs text-zinc-500">
-                {newScope === 'faction'
-                  ? 'Counts every member\u2019s contributions toward the target.'
-                  : 'Only the selected member\u2019s contributions count toward this quota.'}
+                {newScope === 'faction' ? t('quota.scopeFactionHint') : t('quota.scopeMemberHint')}
               </p>
             </div>
             {newScope === 'member' && (
               <div className="space-y-2">
-                <Label>Member</Label>
+                <Label>{t('role.member')}</Label>
                 <SearchableSelect
                   value={newTargetUserId}
                   onValueChange={setNewTargetUserId}
                   options={memberOptions}
-                  placeholder="Select member"
-                  searchPlaceholder="Search members..."
-                  emptyMessage="No members match."
+                  placeholder={t('members.select')}
+                  searchPlaceholder={t('members.search')}
+                  emptyMessage={t('members.noneMatch')}
                 />
               </div>
             )}
             <div className="space-y-2">
-              <Label>Target Amount</Label>
+              <Label>{t('quota.targetAmount')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -796,28 +793,26 @@ function QuotasSection({ factionId }: { factionId: string }) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Period Type</Label>
+              <Label>{t('quota.periodType')}</Label>
               <SearchableSelect
-                aria-label="Quota period type"
+                aria-label={t('quota.periodType')}
                 value={newPeriodType}
                 onValueChange={(v) => setNewPeriodType(v as 'weekly' | 'monthly')}
-                options={PERIOD_TYPE_OPTIONS}
+                options={periodTypeOptions}
               />
             </div>
             <div className="space-y-2">
-              <Label>Start Date</Label>
+              <Label>{t('quota.startDate')}</Label>
               <Input
                 type="date"
                 value={newPeriodStart}
                 onChange={(e) => setNewPeriodStart(e.target.value)}
               />
-              <p className="text-xs text-zinc-500">
-                The quota will be inactive until this date. For weekly quotas, pick a Monday.
-              </p>
+              <p className="text-xs text-zinc-500">{t('quota.startDateHint')}</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
             <Button
               onClick={() => createMutation.mutate()}
               disabled={
@@ -828,7 +823,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
                 || createMutation.isPending
               }
             >
-              {createMutation.isPending ? 'Creating...' : 'Create Quota'}
+              {createMutation.isPending ? t('common.creating') : t('quota.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -838,12 +833,12 @@ function QuotasSection({ factionId }: { factionId: string }) {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Quota</DialogTitle>
-            <DialogDescription>Update quota settings for {editTarget?.itemTypeName}.</DialogDescription>
+            <DialogTitle>{t('quota.edit')}</DialogTitle>
+            <DialogDescription>{t('quota.editHint', { itemType: editTarget?.itemTypeName ?? '' })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Target Amount</Label>
+              <Label>{t('quota.targetAmount')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -853,16 +848,16 @@ function QuotasSection({ factionId }: { factionId: string }) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Period Type</Label>
+              <Label>{t('quota.periodType')}</Label>
               <SearchableSelect
-                aria-label="Quota period type"
+                aria-label={t('quota.periodType')}
                 value={editPeriodType}
                 onValueChange={(v) => setEditPeriodType(v as 'weekly' | 'monthly')}
-                options={PERIOD_TYPE_OPTIONS}
+                options={periodTypeOptions}
               />
             </div>
             <div className="space-y-2">
-              <Label>Start Date</Label>
+              <Label>{t('quota.startDate')}</Label>
               <Input
                 type="date"
                 value={editPeriodStart}
@@ -871,19 +866,19 @@ function QuotasSection({ factionId }: { factionId: string }) {
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <p className="text-sm font-medium">Active</p>
-                <p className="text-xs text-zinc-500">Disabled quotas are hidden from the dashboard.</p>
+                <p className="text-sm font-medium">{t('common.active')}</p>
+                <p className="text-xs text-zinc-500">{t('quota.disabledHint')}</p>
               </div>
               <Switch checked={editActive} onCheckedChange={setEditActive} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
             <Button
               onClick={() => updateMutation.mutate()}
               disabled={!editTargetAmount || Number(editTargetAmount) <= 0 || updateMutation.isPending}
             >
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -893,19 +888,17 @@ function QuotasSection({ factionId }: { factionId: string }) {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete quota for &ldquo;{deleteTarget?.itemTypeName}&rdquo;?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this quota. The deletion will be recorded in the audit log.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('quota.deleteConfirmTitle', { itemType: deleteTarget?.itemTypeName ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('quota.deleteConfirmBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
               className="bg-red-500 text-white hover:bg-red-600"
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -919,6 +912,7 @@ function QuotasSection({ factionId }: { factionId: string }) {
 // ══════════════════════════════════════════════════════
 
 function CustomizationSection({ factionId }: { factionId: string }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const updateGlobalBrandColor = useAppStore((s) => s.setBrandColor);
@@ -957,10 +951,10 @@ function CustomizationSection({ factionId }: { factionId: string }) {
       queryClient.invalidateQueries({ queryKey: ['faction-brand', factionId] });
       queryClient.invalidateQueries({ queryKey: ['faction-detail', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
-      toast({ title: 'Customization saved' });
+      toast({ title: t('settings.customizationSaved') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Save failed', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('common.saveFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -968,7 +962,7 @@ function CustomizationSection({ factionId }: { factionId: string }) {
     const name = newFieldName.trim();
     if (!name) return;
     if (customFields.some((f) => f.name.toLowerCase() === name.toLowerCase())) {
-      toast({ title: 'Field name already exists', variant: 'destructive' });
+      toast({ title: t('settings.fieldNameExists'), variant: 'destructive' });
       return;
     }
     setCustomFields([...customFields, { name, required: false }]);
@@ -996,12 +990,10 @@ function CustomizationSection({ factionId }: { factionId: string }) {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-200">Brand Color</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.brandColor')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-zinc-500">
-            Set an accent color for this faction. Used for visual differentiation.
-          </p>
+          <p className="text-sm text-zinc-500">{t('settings.brandColorHint')}</p>
           <div className="flex items-center gap-3">
             <input
               type="color"
@@ -1024,15 +1016,13 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-200">Custom Entry Fields</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.customFields')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-zinc-500">
-            Define extra fields members fill when logging entries.
-          </p>
+          <p className="text-sm text-zinc-500">{t('settings.customFieldsHint')}</p>
           <div className="flex gap-2">
             <Input
-              placeholder="Field name (e.g. Location)"
+              placeholder={t('settings.fieldNamePlaceholder')}
               value={newFieldName}
               onChange={(e) => setNewFieldName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addField()}
@@ -1055,7 +1045,7 @@ function CustomizationSection({ factionId }: { factionId: string }) {
                       onChange={() => toggleRequired(idx)}
                       className="h-3.5 w-3.5 rounded"
                     />
-                    Required
+                    {t('common.required')}
                   </label>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeField(idx)}>
                     <X className="h-3.5 w-3.5" />
@@ -1065,31 +1055,29 @@ function CustomizationSection({ factionId }: { factionId: string }) {
             </div>
           )}
           {customFields.length === 0 && (
-            <p className="text-sm text-zinc-500 text-center py-4">No custom fields defined.</p>
+            <p className="text-sm text-zinc-500 text-center py-4">{t('settings.noCustomFields')}</p>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-200">Withdrawal Approval</CardTitle>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.withdrawalApproval')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-zinc-500">
-            When enabled, withdrawals created by one admin must be approved by a different admin before completion. Single-admin factions auto-complete regardless.
-          </p>
+          <p className="text-sm text-zinc-500">{t('settings.withdrawalApprovalHint')}</p>
           <label className="flex items-center gap-3 cursor-pointer">
             <Switch
               checked={payoutApprovalRequired}
               onCheckedChange={setPayoutApprovalRequired}
             />
-            <span className="text-sm text-zinc-300">Require approval for withdrawals</span>
+            <span className="text-sm text-zinc-300">{t('settings.requireApproval')}</span>
           </label>
         </CardContent>
       </Card>
 
       <Button onClick={handleSave} disabled={saving || saveMutation.isPending}>
-        {saving ? 'Saving...' : 'Save Changes'}
+        {saving ? t('common.saving') : t('common.saveChanges')}
       </Button>
     </div>
   );
@@ -1106,6 +1094,7 @@ function FactionSettingsSection({
   factionId: string;
   isFactionAdmin: boolean;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -1173,10 +1162,10 @@ function FactionSettingsSection({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
       setHasChanges(false);
-      toast({ title: 'Faction settings saved' });
+      toast({ title: t('settings.factionSettingsSaved') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Failed', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
     onSettled: () => setSaving(false),
   });
@@ -1191,17 +1180,17 @@ function FactionSettingsSection({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm text-zinc-200">Rank Hierarchy</CardTitle>
-            <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Rank</Button>
+            <CardTitle className="text-sm text-zinc-200">{t('settings.rankHierarchy')}</CardTitle>
+            <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> {t('settings.addRank')}</Button>
           </div>
           <p className="text-xs text-zinc-500 mt-1">
-            Display-only ranks shown on the roster. Permissions gate what each rank can do.
-            {!isFactionAdmin && ' Only a faction admin can change which permissions a rank grants.'}
+            {t('settings.rankHierarchyHint')}
+            {!isFactionAdmin && ` ${t('settings.rankPermissionsAdminOnly')}`}
           </p>
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
-            <p className="text-zinc-600 text-sm text-center py-6">No ranks defined yet. Members will show no rank.</p>
+            <p className="text-zinc-600 text-sm text-center py-6">{t('settings.noRanksYet')}</p>
           ) : (
             <div className="space-y-3">
               {[...ranks].sort((a, b) => a.level - b.level).map((r, sortedIdx) => {
@@ -1211,12 +1200,12 @@ function FactionSettingsSection({
                 return (
                   <div key={idx} className="rounded-lg border border-white/[0.06] p-3 space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">L{r.level}</span>
+                      <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">{t('settings.levelShort', { level: r.level })}</span>
                       <Input
                         className="flex-1 h-8 text-sm"
                         value={r.name}
                         onChange={(e) => updateRank(idx, 'name', e.target.value)}
-                        placeholder="Rank name"
+                        placeholder={t('settings.rankNamePlaceholder')}
                       />
                       <Input
                         className="w-16 h-8 text-sm tabular-nums"
@@ -1255,9 +1244,9 @@ function FactionSettingsSection({
                                   : 'bg-white/[0.02] border-white/[0.06] text-zinc-500'
                               }`}
                               style={chipStyle}
-                              title={`${PERMISSION_LABELS[perm]} — only a faction admin can change this`}
+                              title={`${t(PERMISSION_LABEL_KEYS[perm])} — ${t('settings.rankPermissionsAdminOnly')}`}
                             >
-                              {PERMISSION_LABELS[perm]}
+                              {t(PERMISSION_LABEL_KEYS[perm])}
                             </span>
                           );
                         }
@@ -1269,14 +1258,14 @@ function FactionSettingsSection({
                             onClick={() => togglePermission(idx, perm)}
                             className={chipClass}
                             style={chipStyle}
-                            title={PERMISSION_LABELS[perm]}
+                            title={t(PERMISSION_LABEL_KEYS[perm])}
                           >
-                            {PERMISSION_LABELS[perm]}
+                            {t(PERMISSION_LABEL_KEYS[perm])}
                           </button>
                         );
                       })}
                       {!isFactionAdmin && r.permissions.length === 0 && (
-                        <span className="text-[10px] text-zinc-600">No permissions</span>
+                        <span className="text-[10px] text-zinc-600">{t('settings.noPermissions')}</span>
                       )}
                     </div>
                   </div>
@@ -1290,8 +1279,8 @@ function FactionSettingsSection({
       {/* ── Inactivity ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-zinc-200">Inactivity Threshold</CardTitle>
-          <p className="text-xs text-zinc-500 mt-1">Days without a logged entry before a member is flagged as inactive on the dashboard.</p>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.inactivityThreshold')}</CardTitle>
+          <p className="text-xs text-zinc-500 mt-1">{t('settings.inactivityThresholdHint')}</p>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3 max-w-xs">
@@ -1303,7 +1292,7 @@ function FactionSettingsSection({
               onChange={(e) => { setInactivityThreshold(Number(e.target.value)); markChanged(); }}
               className="tabular-nums"
             />
-            <span className="text-sm text-zinc-500">days</span>
+            <span className="text-sm text-zinc-500">{t('common.days')}</span>
           </div>
         </CardContent>
       </Card>
@@ -1311,18 +1300,18 @@ function FactionSettingsSection({
       {/* ── Strike Expiry ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-zinc-200">Strike Expiry (days)</CardTitle>
-          <p className="text-xs text-zinc-500 mt-1">How long each severity level remains active. Null = never expires.</p>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.strikeExpiry')}</CardTitle>
+          <p className="text-xs text-zinc-500 mt-1">{t('settings.strikeExpiryHint')}</p>
         </CardHeader>
         <CardContent>
           <div className="space-y-3 max-w-sm">
             {(['warning', 'minor', 'major'] as const).map((sev) => (
               <div key={sev} className="flex items-center gap-3">
-                <span className="text-sm text-zinc-300 capitalize w-14">{sev}</span>
+                <span className="text-sm text-zinc-300 w-14">{t(SEVERITY_KEYS[sev])}</span>
                 <Input
                   type="number"
                   min={1}
-                  placeholder="Never"
+                  placeholder={t('settings.never')}
                   value={strikeExpiry[sev] ?? ''}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -1331,7 +1320,7 @@ function FactionSettingsSection({
                   }}
                   className="tabular-nums"
                 />
-                <span className="text-xs text-zinc-600">days</span>
+                <span className="text-xs text-zinc-600">{t('common.days')}</span>
               </div>
             ))}
           </div>
@@ -1342,7 +1331,7 @@ function FactionSettingsSection({
       {hasChanges && (
         <div className="flex justify-end">
           <Button onClick={() => { setSaving(true); saveMutation.mutate(); }} disabled={saving || saveMutation.isPending}>
-            {saving || saveMutation.isPending ? 'Saving...' : 'Save Faction Settings'}
+            {saving || saveMutation.isPending ? t('common.saving') : t('settings.saveFactionSettings')}
           </Button>
         </div>
       )}

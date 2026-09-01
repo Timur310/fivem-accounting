@@ -31,8 +31,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
-import { formatAmount, displayName } from '@/lib/format';
+import { formatAmount, displayName, formatDate, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
 
 interface Props {
   factionId: string;
@@ -47,13 +49,41 @@ interface Props {
 
 type ProfileTab = 'overview' | 'notes' | 'history';
 
-const NOTE_CATEGORIES: { value: NoteCategory; label: string }[] = [
-  { value: 'general', label: 'General' },
-  { value: 'performance', label: 'Performance' },
-  { value: 'discipline', label: 'Discipline' },
-  { value: 'positive', label: 'Positive' },
-  { value: 'promotion', label: 'Promotion' },
-];
+const NOTE_CATEGORY_KEYS: Record<NoteCategory, TranslationKey> = {
+  general: 'notes.category.general',
+  performance: 'notes.category.performance',
+  discipline: 'notes.category.discipline',
+  positive: 'notes.category.positive',
+  promotion: 'notes.category.promotion',
+};
+
+const SEVERITY_KEYS: Record<string, TranslationKey> = {
+  warning: 'strikes.severity.warning',
+  minor: 'strikes.severity.minor',
+  major: 'strikes.severity.major',
+};
+
+const STRIKE_STATUS_KEYS: Record<string, TranslationKey> = {
+  active: 'strikes.status.active',
+  appealed: 'strikes.status.appealed',
+  revoked: 'strikes.status.revoked',
+  expired: 'strikes.status.expired',
+};
+
+/** The five components the API scores a member on. */
+const PERFORMANCE_KEYS: Record<string, TranslationKey> = {
+  quotaHitRate: 'profile.performance.quotaHitRate',
+  consistency: 'profile.performance.consistency',
+  totalVolume: 'profile.performance.totalVolume',
+  streakBonus: 'profile.performance.streakBonus',
+  seniorityBonus: 'profile.performance.seniorityBonus',
+};
+
+const TAB_KEYS: Record<ProfileTab, TranslationKey> = {
+  overview: 'profile.tab.overview',
+  notes: 'profile.tab.notes',
+  history: 'profile.tab.history',
+};
 
 const SEVERITY_COLORS: Record<string, string> = {
   warning: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
@@ -69,6 +99,7 @@ const EFFECTIVE_STATUS_COLORS: Record<StrikeEffectiveStatus, string> = {
 };
 
 export function MemberProfileView({ factionId, userId, canManageStrikes }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -147,10 +178,10 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['member-notes', factionId, userId] });
       closeNoteDialog();
-      toast({ title: editingNoteId ? 'Note updated' : 'Note added' });
+      toast({ title: editingNoteId ? t('notes.updated') : t('notes.added') });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.failed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -159,7 +190,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['member-notes', factionId, userId] });
       setDeleteNoteId(null);
-      toast({ title: 'Note deleted' });
+      toast({ title: t('notes.deleted') });
     },
   });
 
@@ -171,10 +202,10 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       queryClient.invalidateQueries({ queryKey: ['members', factionId] });
       setStrikeOpen(false);
       setStrikeReason('');
-      toast({ title: 'Strike issued' });
+      toast({ title: t('strikes.issuedToast') });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.failed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -184,10 +215,10 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['member-strikes', factionId, userId] });
       queryClient.invalidateQueries({ queryKey: ['member-profile', factionId, userId] });
-      toast({ title: 'Strike updated' });
+      toast({ title: t('strikes.updated') });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.failed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -199,8 +230,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     setEditingNoteId(null);
   }
 
-  const fmt = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const fmtItems = (n: number) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} pcs`;
+  const fmt = (n: number) => `$${formatNumber(n)}`;
+  const fmtItems = (n: number) => `${formatCount(n)} ${t('common.pieces')}`;
 
   if (isLoading || !profile) {
     return (
@@ -235,28 +266,30 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 {member.daysInRank !== null && (
                   <span
                     className="text-[10px] text-zinc-500"
-                    title={member.rankSince ? `Since ${new Date(member.rankSince).toLocaleDateString()}` : undefined}
+                    title={member.rankSince ? t('profile.rankSince', { date: formatDate(member.rankSince) }) : undefined}
                   >
-                    {member.daysInRank === 0 ? 'since today' : `${member.daysInRank}d in rank`}
+                    {member.daysInRank === 0
+                      ? t('profile.rankSinceToday')
+                      : t('profile.daysInRank', { days: member.daysInRank ?? 0 })}
                   </span>
                 )}
               </span>
             )}
             {member.role === 'admin' && (
-              <Badge className="text-[11px]" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}>Admin</Badge>
+              <Badge className="text-[11px]" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}>{t('role.admin')}</Badge>
             )}
           </div>
           <p className="text-xs text-zinc-500">
-            Joined {new Date(member.joinedAt).toLocaleDateString()}
+            {t('profile.joinedOn', { date: formatDate(member.joinedAt) })}
             {member.daysInactive !== null && member.daysInactive > 0 && (
-              <span className="text-amber-400 ml-2">{member.daysInactive}d inactive</span>
+              <span className="text-amber-400 ml-2">{t('profile.daysInactive', { days: member.daysInactive })}</span>
             )}
           </p>
         </div>
         {canManageStrikes && (
           <Button variant="outline" size="sm" onClick={() => setStrikeOpen(true)} className="text-amber-400 border-amber-500/20 hover:bg-amber-500/10">
             <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
-            Issue Strike
+            {t('strikes.issue')}
           </Button>
         )}
       </div>
@@ -265,14 +298,16 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           `manage_members` — the API decides, these flags report it. */}
       {visibleTabs.length > 1 && (
         <div className="flex gap-1 border-b border-white/[0.06] pb-px">
-          {visibleTabs.map((t) => (
+          {visibleTabs.map((tabKey) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-sm font-medium capitalize transition-colors ${activeTab === t ? 'border-b-2 border-[var(--brand-color)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-              style={activeTab === t ? { borderColor: brandColor, color: brandColor } : undefined}
+              key={tabKey}
+              onClick={() => setTab(tabKey)}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${activeTab === tabKey ? 'border-b-2 border-[var(--brand-color)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              style={activeTab === tabKey ? { borderColor: brandColor, color: brandColor } : undefined}
             >
-              {t === 'notes' ? `Notes${notes.length > 0 ? ` (${notes.length})` : ''}` : t}
+              {tabKey === 'notes' && notes.length > 0
+                ? `${t(TAB_KEYS.notes)} (${notes.length})`
+                : t(TAB_KEYS[tabKey])}
             </button>
           ))}
         </div>
@@ -286,12 +321,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card className="faction-glow border-highlight">
               <CardHeader className="pb-1">
                 <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Trophy className="h-3 w-3" /> Performance Score
+                  <Trophy className="h-3 w-3" /> {t('profile.performanceScore')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-medium tabular-nums" style={{ color: brandColor }}>{performance.score}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">out of 100</p>
+                <p className="text-[11px] text-zinc-600 mt-1">{t('profile.outOf100')}</p>
               </CardContent>
             </Card>
 
@@ -299,7 +334,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card>
               <CardHeader className="pb-1">
                 <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Flame className="h-3 w-3" /> Streak
+                  <Flame className="h-3 w-3" /> {t('profile.streak')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -307,7 +342,11 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   {streak.current}<span className="text-sm text-zinc-500">/{streak.best}</span>
                 </div>
                 <p className="text-[11px] text-zinc-600 mt-1">
-                  {streak.activeToday ? 'active today' : streak.lastEntryDate ? `last: ${streak.lastEntryDate}` : 'no entries yet'}
+                  {streak.activeToday
+                    ? t('members.activeToday')
+                    : streak.lastEntryDate
+                      ? t('profile.lastEntry', { date: streak.lastEntryDate })
+                      : t('profile.noEntriesYet')}
                 </p>
               </CardContent>
             </Card>
@@ -316,17 +355,17 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card>
               <CardHeader className="pb-1">
                 <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Activity className="h-3 w-3" /> Total Contributed
+                  <Activity className="h-3 w-3" /> {t('profile.totalContributed')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.currencyContributed)}</div>
                 <p className="text-[11px] text-zinc-600 mt-1">
-                  {contribution.currencyEntryCount} entries &middot; avg {fmt(contribution.avgPerCurrencyEntry)}
+                  {t('entries.count', { count: contribution.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(contribution.avgPerCurrencyEntry) })}
                 </p>
                 {contribution.itemEntryCount > 0 && (
                   <p className="text-[11px] text-zinc-600 mt-0.5">
-                    + {fmtItems(contribution.itemContributed)} ({contribution.itemEntryCount} entries)
+                    + {fmtItems(contribution.itemContributed)} ({t('entries.count', { count: contribution.itemEntryCount })})
                   </p>
                 )}
               </CardContent>
@@ -336,12 +375,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card>
               <CardHeader className="pb-1">
                 <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Zap className="h-3 w-3" /> Withdrawals Received
+                  <Zap className="h-3 w-3" /> {t('profile.withdrawalsReceived')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">{payoutStats.payoutCount} withdrawal{payoutStats.payoutCount !== 1 ? 's' : ''}</p>
+                <p className="text-[11px] text-zinc-600 mt-1">{t('payouts.count', { count: payoutStats.payoutCount })}</p>
                 {payoutStats.itemReceived > 0 && (
                   <p className="text-[11px] text-zinc-600 mt-0.5">+ {fmtItems(payoutStats.itemReceived)}</p>
                 )}
@@ -352,13 +391,13 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           {/* ── Performance Breakdown ── */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-zinc-200">Performance Breakdown</CardTitle>
+              <CardTitle className="text-sm text-zinc-200">{t('profile.performanceBreakdown')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-5">
                 {Object.entries(performance.breakdown).map(([key, val]) => (
                   <div key={key} className="text-center">
-                    <div className="text-xs text-zinc-500 capitalize mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                    <div className="text-xs text-zinc-500 mb-1">{PERFORMANCE_KEYS[key] ? t(PERFORMANCE_KEYS[key]) : key}</div>
                     <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.round(val * 100)}%`, backgroundColor: brandColor }} />
                     </div>
@@ -375,12 +414,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5">
-                  <Target className="h-3.5 w-3.5 text-zinc-400" /> Quota Progress
+                  <Target className="h-3.5 w-3.5 text-zinc-400" /> {t('dashboard.quotaProgress')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {quotaProgress.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-6">No active quotas.</p>
+                  <p className="text-zinc-600 text-sm text-center py-6">{t('quota.noneActive')}</p>
                 ) : (
                   <div className="space-y-3">
                     {quotaProgress.map((q) => {
@@ -399,7 +438,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                           </div>
                           <div className="flex justify-between text-[10px] text-zinc-600 mt-0.5">
                             <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>
-                            <span>of {formatAmount(q.targetAmount, q.unit, q.isCurrency)}</span>
+                            <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.unit, q.isCurrency) })}</span>
                           </div>
                         </div>
                       );
@@ -414,31 +453,31 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5">
                   <AlertTriangle className={`h-3.5 w-3.5 ${profile.activeStrikeCount > 0 ? 'text-amber-400' : 'text-zinc-500'}`} />
-                  Strikes
+                  {t('nav.strikes')}
                   {profile.activeStrikeCount > 0 && (
-                    <Badge className="ml-auto bg-amber-500/15 text-amber-400 border-amber-500/20 text-[11px]" variant="outline">{profile.activeStrikeCount} active</Badge>
+                    <Badge className="ml-auto bg-amber-500/15 text-amber-400 border-amber-500/20 text-[11px]" variant="outline">{t('strikes.activeCount', { count: profile.activeStrikeCount })}</Badge>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {strikes.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-6">No strikes.</p>
+                  <p className="text-zinc-600 text-sm text-center py-6">{t('strikes.none')}</p>
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
                     {strikes.slice(0, 5).map((s) => (
                       <div key={s.id} className="rounded-lg border border-white/[0.06] p-3 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{s.severity}</Badge>
-                            <span className={`text-xs font-medium ${EFFECTIVE_STATUS_COLORS[s.effectiveStatus]}`}>{s.effectiveStatus}</span>
+                            <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
+                            <span className={`text-xs font-medium ${EFFECTIVE_STATUS_COLORS[s.effectiveStatus]}`}>{STRIKE_STATUS_KEYS[s.effectiveStatus] ? t(STRIKE_STATUS_KEYS[s.effectiveStatus]) : s.effectiveStatus}</span>
                           </div>
-                          <span className="text-[10px] text-zinc-600">{new Date(s.createdAt).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-zinc-600">{formatDate(s.createdAt)}</span>
                         </div>
                         <p className="text-xs text-zinc-400 line-clamp-2">{s.reason}</p>
                         {canManageStrikes && s.effectiveStatus === 'active' && (
                           <div className="flex gap-1 pt-1">
-                            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-blue-400 hover:text-blue-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'appealed' })}>Appeal</Button>
-                            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-zinc-500 hover:text-zinc-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'revoked' })}>Revoke</Button>
+                            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-blue-400 hover:text-blue-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'appealed' })}>{t('strikes.appeal')}</Button>
+                            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-zinc-500 hover:text-zinc-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'revoked' })}>{t('strikes.revoke')}</Button>
                           </div>
                         )}
                       </div>
@@ -453,24 +492,24 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           {contribution.byItemType.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-zinc-200">Contribution by Type</CardTitle>
+                <CardTitle className="text-sm text-zinc-200">{t('profile.contributionByType')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {contribution.byItemType.map((t) => {
-                    const isTop = contribution.mostActiveItemType?.itemTypeName === t.itemTypeName;
+                  {contribution.byItemType.map((row) => {
+                    const isTop = contribution.mostActiveItemType?.itemTypeName === row.itemTypeName;
                     return (
-                      <div key={t.itemTypeId} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3" style={isTop ? { borderColor: `${brandColor}25`, backgroundColor: `${brandColor}08` } : undefined}>
+                      <div key={row.itemTypeId} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3" style={isTop ? { borderColor: `${brandColor}25`, backgroundColor: `${brandColor}08` } : undefined}>
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <ItemIcon src={t.imageUrl} className="size-8" />
+                          <ItemIcon src={row.imageUrl} className="size-8" />
                           <div className="min-w-0">
-                            <p className="text-sm text-zinc-300 truncate">{t.itemTypeName}</p>
-                            <p className="text-[11px] text-zinc-600">{t.count} entries</p>
+                            <p className="text-sm text-zinc-300 truncate">{row.itemTypeName}</p>
+                            <p className="text-[11px] text-zinc-600">{t('entries.count', { count: row.count })}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(t.total, t.unit, t.isCurrency)}</p>
-                          {isTop && <p className="text-[10px]" style={{ color: brandColor }}>most active</p>}
+                          <p className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(row.total, row.unit, row.isCurrency)}</p>
+                          {isTop && <p className="text-[10px]" style={{ color: brandColor }}>{t('profile.mostActive')}</p>}
                         </div>
                       </div>
                     );
@@ -486,7 +525,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5 text-zinc-400" /> Activity Heatmap
+                    <Calendar className="h-3.5 w-3.5 text-zinc-400" /> {t('profile.activityHeatmap')}
                   </CardTitle>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-zinc-500" onClick={() => setHeatmapYear(heatmapYear - 1)}>&lt;</Button>
@@ -505,17 +544,17 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                         key={d.date}
                         className="w-[11px] h-[11px] rounded-[2px] transition-colors duration-100"
                         style={{ backgroundColor: `${brandColor}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` }}
-                        title={`${d.date}: ${d.count} ${d.count === 1 ? 'entry' : 'entries'}${d.currencyTotal > 0 ? ` · ${fmt(d.currencyTotal)}` : ''}${d.itemTotal > 0 ? ` · ${fmtItems(d.itemTotal)}` : ''}`}
+                        title={`${d.date}: ${t('entries.count', { count: d.count })}${d.currencyTotal > 0 ? ` · ${fmt(d.currencyTotal)}` : ''}${d.itemTotal > 0 ? ` · ${fmtItems(d.itemTotal)}` : ''}`}
                       />
                     );
                   })}
                 </div>
                 <div className="flex items-center justify-end gap-1.5 mt-3">
-                  <span className="text-[10px] text-zinc-600">Less</span>
+                  <span className="text-[10px] text-zinc-600">{t('profile.less')}</span>
                   {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
                     <div key={i} className="w-[11px] h-[11px] rounded-[2px]" style={{ backgroundColor: `${brandColor}${v === 0 ? '10' : Math.round((0.2 + v * 0.8) * 255).toString(16).padStart(2, '0')}` }} />
                   ))}
-                  <span className="text-[10px] text-zinc-600">More</span>
+                  <span className="text-[10px] text-zinc-600">{t('profile.more')}</span>
                 </div>
               </CardContent>
             </Card>
@@ -526,7 +565,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-zinc-400" /> Recent Entries
+                  <FileText className="h-3.5 w-3.5 text-zinc-400" /> {t('profile.recentEntries')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -555,11 +594,11 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       {activeTab === 'notes' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-500">{notes.length} note{notes.length !== 1 ? 's' : ''}</p>
-            <Button size="sm" onClick={() => { setEditingNoteId(null); setNoteOpen(true); }}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Note</Button>
+            <p className="text-sm text-zinc-500">{t('notes.count', { count: notes.length })}</p>
+            <Button size="sm" onClick={() => { setEditingNoteId(null); setNoteOpen(true); }}><Plus className="mr-1.5 h-3.5 w-3.5" /> {t('notes.add')}</Button>
           </div>
           {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notes.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-zinc-600 text-sm">No notes yet.</CardContent></Card>
+            <Card><CardContent className="py-8 text-center text-zinc-600 text-sm">{t('notes.none')}</CardContent></Card>
           ) : (
             <div className="space-y-2">
               {notes.map((n) => (
@@ -568,9 +607,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-[10px] capitalize">{n.category}</Badge>
+                          <Badge variant="outline" className="text-[10px]">{t(NOTE_CATEGORY_KEYS[n.category])}</Badge>
                           {n.isFlagged && <Flag className="h-3 w-3 text-amber-400" />}
-                          <span className="text-[10px] text-zinc-600">by {n.authorInGameName?.trim() || n.authorUsername} &middot; {new Date(n.createdAt).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-zinc-600">{t('notes.byAuthor', { name: n.authorInGameName?.trim() || n.authorUsername })} &middot; {formatDate(n.createdAt)}</span>
                         </div>
                         <p className="text-sm text-zinc-300 whitespace-pre-wrap">{n.content}</p>
                       </div>
@@ -591,21 +630,21 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       {activeTab === 'history' && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-zinc-400" /> Member History</CardTitle>
+            <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-zinc-400" /> {t('profile.memberHistory')}</CardTitle>
           </CardHeader>
           <CardContent>
             {!historyData?.data?.length ? (
-              <p className="text-zinc-600 text-sm text-center py-6">No history recorded.</p>
+              <p className="text-zinc-600 text-sm text-center py-6">{t('profile.noHistory')}</p>
             ) : (
               <div className="space-y-2">
                 {historyData.data.map((h) => (
                   <div key={h.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
                     <Avatar className="h-6 w-6"><AvatarImage src={h.actorAvatarUrl ?? undefined} /><AvatarFallback className="text-[8px]">{(h.actorInGameName?.trim() || h.actorUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-zinc-300"><span className="font-medium">{h.actorInGameName?.trim() || h.actorUsername}</span> <span className="text-zinc-500 capitalize">{h.action}</span> <span className="text-zinc-500">member</span></p>
+                      <p className="text-sm text-zinc-300"><span className="font-medium">{h.actorInGameName?.trim() || h.actorUsername}</span> <span className="text-zinc-500">{t('profile.historyAction', { action: h.action })}</span></p>
                       {h.details && <p className="text-[11px] text-zinc-600 truncate">{JSON.stringify(h.details)}</p>}
                     </div>
-                    <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{new Date(h.createdAt).toLocaleDateString()}</span>
+                    <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{formatDate(h.createdAt)}</span>
                   </div>
                 ))}
               </div>
@@ -618,32 +657,32 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingNoteId ? 'Edit Note' : 'Add Note'}</DialogTitle>
-            <DialogDescription>Admin-only note about {displayName(member)}.</DialogDescription>
+            <DialogTitle>{editingNoteId ? t('notes.edit') : t('notes.add')}</DialogTitle>
+            <DialogDescription>{t('notes.dialogHint', { name: displayName(member) })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Category</Label>
+              <Label>{t('notes.category')}</Label>
               <SearchableSelect
                 value={noteCategory}
                 onValueChange={(v) => setNoteCategory(v as NoteCategory)}
-                options={NOTE_CATEGORIES}
-                aria-label="Note category"
+                options={Object.entries(NOTE_CATEGORY_KEYS).map(([value, key]) => ({ value, label: t(key) }))}
+                aria-label={t('notes.category')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Content</Label>
-              <Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} rows={4} placeholder="Write your note..." />
+              <Label>{t('notes.content')}</Label>
+              <Textarea value={noteContent} onChange={(e) => setNoteContent(e.target.value)} rows={4} placeholder={t('notes.contentPlaceholder')} />
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="flag" checked={noteFlagged} onChange={(e) => setNoteFlagged(e.target.checked)} className="rounded border-zinc-700" />
-              <Label htmlFor="flag" className="text-sm text-zinc-400 flex items-center gap-1.5"><Flag className="h-3 w-3" /> Flag for attention</Label>
+              <Label htmlFor="flag" className="text-sm text-zinc-400 flex items-center gap-1.5"><Flag className="h-3 w-3" /> {t('notes.flagForAttention')}</Label>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeNoteDialog}>Cancel</Button>
+            <Button variant="outline" onClick={closeNoteDialog}>{t('common.cancel')}</Button>
             <Button onClick={() => noteMutation.mutate()} disabled={!noteContent.trim() || noteMutation.isPending}>
-              {noteMutation.isPending ? 'Saving...' : editingNoteId ? 'Update' : 'Add Note'}
+              {noteMutation.isPending ? t('common.saving') : editingNoteId ? t('common.update') : t('notes.add')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -653,12 +692,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       <AlertDialog open={!!deleteNoteId} onOpenChange={(open) => !open && setDeleteNoteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Note?</AlertDialogTitle>
-            <AlertDialogDescription>This note will be permanently deleted. The audit log will record the deletion.</AlertDialogDescription>
+            <AlertDialogTitle>{t('notes.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('notes.deleteConfirm')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteNoteMutation.mutate()} disabled={deleteNoteMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">Delete</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteNoteMutation.mutate()} disabled={deleteNoteMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -667,29 +706,29 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       <Dialog open={strikeOpen} onOpenChange={setStrikeOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Issue Strike</DialogTitle>
-            <DialogDescription>Issue a formal strike against {displayName(member)}. They will be able to see it.</DialogDescription>
+            <DialogTitle>{t('strikes.issue')}</DialogTitle>
+            <DialogDescription>{t('strikes.issueHint', { name: displayName(member) })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Severity</Label>
+              <Label>{t('strikes.severityColumn')}</Label>
               <div className="flex gap-2">
                 {(['warning', 'minor', 'major'] as const).map((s) => (
-                  <Button key={s} variant={strikeSeverity === s ? 'default' : 'outline'} size="sm" className={`flex-1 capitalize ${strikeSeverity === s ? SEVERITY_COLORS[s] : ''}`} onClick={() => setStrikeSeverity(s)}>
-                    {s}
+                  <Button key={s} variant={strikeSeverity === s ? 'default' : 'outline'} size="sm" className={`flex-1 ${strikeSeverity === s ? SEVERITY_COLORS[s] : ''}`} onClick={() => setStrikeSeverity(s)}>
+                    {t(SEVERITY_KEYS[s])}
                   </Button>
                 ))}
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Reason</Label>
-              <Textarea value={strikeReason} onChange={(e) => setStrikeReason(e.target.value)} rows={3} placeholder="Describe the reason for this strike..." />
+              <Label>{t('strikes.reason')}</Label>
+              <Textarea value={strikeReason} onChange={(e) => setStrikeReason(e.target.value)} rows={3} placeholder={t('strikes.reasonPlaceholder')} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setStrikeOpen(false); setStrikeReason(''); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setStrikeOpen(false); setStrikeReason(''); }}>{t('common.cancel')}</Button>
             <Button onClick={() => strikeMutation.mutate()} disabled={!strikeReason.trim() || strikeMutation.isPending} className="bg-amber-500 text-white hover:bg-amber-600">
-              {strikeMutation.isPending ? 'Issuing...' : 'Issue Strike'}
+              {strikeMutation.isPending ? t('strikes.issuing') : t('strikes.issue')}
             </Button>
           </DialogFooter>
         </DialogContent>

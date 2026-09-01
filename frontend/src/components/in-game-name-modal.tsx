@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { authApi, apiErrorMessage } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from '@/providers/i18n-provider';
 
 /**
  * One-time prompt asking the player to set their in-game name.
@@ -19,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
  * dialog until next session (or until the user opens it again from settings).
  */
 export function InGameNameModal() {
+  const { t } = useTranslation();
   const user = useAppStore((s) => s.user);
   const setUser = useAppStore((s) => s.setUser);
   const dismissed = useAppStore((s) => s.inGameNamePromptDismissed);
@@ -55,10 +57,10 @@ export function InGameNameModal() {
       setUser(updated);
       setDismissed(true);
       setOpen(false);
-      toast({ title: 'In-game name saved' });
+      toast({ title: t('inGameName.saved') });
     } catch (err) {
       toast({
-        title: 'Could not save in-game name',
+        title: t('inGameName.saveFailed'),
         description: apiErrorMessage(err),
         variant: 'destructive',
       });
@@ -76,19 +78,15 @@ export function InGameNameModal() {
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setDismissed(true); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Set your in-game name</DialogTitle>
-          <DialogDescription>
-            This is what other members will see across the faction roster,
-            entries, withdrawals and leaderboards. You can change it any time from
-            your profile.
-          </DialogDescription>
+          <DialogTitle>{t('inGameName.title')}</DialogTitle>
+          <DialogDescription>{t('inGameName.description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          <Label htmlFor="in-game-name">In-game name</Label>
+          <Label htmlFor="in-game-name">{t('inGameName.label')}</Label>
           <Input
             id="in-game-name"
             autoFocus
-            placeholder="2–50 characters"
+            placeholder={t('inGameName.placeholder')}
             value={value}
             maxLength={50}
             onChange={(e) => setValue(e.target.value)}
@@ -96,16 +94,14 @@ export function InGameNameModal() {
               if (e.key === 'Enter' && valid && !saving) handleSave();
             }}
           />
-          <p className="text-xs text-zinc-500">
-            Falls back to your Discord username when empty.
-          </p>
+          <p className="text-xs text-zinc-500">{t('inGameName.fallbackHint')}</p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={handleSkip} disabled={saving}>
-            Skip for now
+            {t('inGameName.skip')}
           </Button>
           <Button onClick={handleSave} disabled={!valid || saving}>
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

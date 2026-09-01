@@ -15,12 +15,15 @@ import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
 import { ItemIcon } from '@/components/item-icon';
+import { formatNumber } from '@/lib/format';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
 
-const PERIOD_OPTIONS: SearchableSelectOption[] = [
-  { value: 'week', label: 'This Week' },
-  { value: 'month', label: 'This Month' },
-  { value: 'all', label: 'All Time' },
-];
+const PERIOD_KEYS: Record<string, TranslationKey> = {
+  week: 'period.thisWeek',
+  month: 'period.thisMonth',
+  all: 'period.allTime',
+};
 
 interface Props {
   factionId: string;
@@ -28,10 +31,16 @@ interface Props {
 }
 
 export function LeaderboardView({ factionId, isSuperadmin }: Props) {
+  const { t } = useTranslation();
   const brandColor = useAppStore((s) => s.brandColor);
   const [period, setPeriod] = useState<string>('month');
   const [itemTypeId, setItemTypeId] = useState<string>('');
   const [showGlobal, setShowGlobal] = useState(false);
+
+  const periodOptions = useMemo<SearchableSelectOption[]>(
+    () => Object.entries(PERIOD_KEYS).map(([value, key]) => ({ value, label: t(key) })),
+    [t],
+  );
 
   // Fetch item types for filter
   const { data: itemTypes = [] } = useQuery({
@@ -42,14 +51,14 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
 
   // The empty value is the unfiltered case, so it doubles as a way to clear.
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(() => [
-    { value: '', label: 'All Types' },
-    ...itemTypes.map((t: ItemType) => ({
-      value: t.id,
-      label: t.name,
-      hint: t.unit ? `(${t.unit})` : undefined,
-      icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+    { value: '', label: t('entries.allTypes') },
+    ...itemTypes.map((item: ItemType) => ({
+      value: item.id,
+      label: item.name,
+      hint: item.unit ? `(${item.unit})` : undefined,
+      icon: <ItemIcon src={item.imageUrl} className="size-5" />,
     })),
-  ], [itemTypes]);
+  ], [itemTypes, t]);
 
   // Faction leaderboard
   const { data: lbData, isLoading: lbLoading } = useQuery({
@@ -73,9 +82,12 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   const loading = showGlobal ? globalLoading : lbLoading;
   const rankings = showGlobal ? (globalData?.rankings ?? []) : (lbData?.rankings ?? []);
   const myRank = showGlobal ? null : (lbData?.myRank ?? null);
-  const periodLabel = showGlobal ? (globalData?.period?.label ?? '') : (lbData?.period?.label ?? '');
+  // The API also sends a label for the period, but always in English. The
+  // period is chosen right here, so translating it locally keeps the subtitle
+  // in the language the rest of the screen is in.
+  const periodLabel = PERIOD_KEYS[period] ? t(PERIOD_KEYS[period]) : '';
 
-  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = formatNumber;
 
   const rankIcon = (rank: number) => {
     if (rank === 1) return <Crown className="h-4 w-4 text-amber-400" />;
@@ -89,7 +101,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
       {/* Header + Filters */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h3 className="text-lg font-medium text-zinc-200">Leaderboard</h3>
+          <h3 className="text-lg font-medium text-zinc-200">{t('nav.leaderboard')}</h3>
           <p className="text-sm text-zinc-500">{periodLabel}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -100,28 +112,28 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
               onClick={() => setShowGlobal(!showGlobal)}
               className="text-xs"
             >
-              {showGlobal ? 'Global' : 'Faction'}
+              {showGlobal ? t('leaderboard.global') : t('leaderboard.faction')}
             </Button>
           )}
           <SearchableSelect
             className="w-[120px]"
             triggerClassName="h-8 text-xs"
-            aria-label="Leaderboard period"
+            aria-label={t('leaderboard.period')}
             value={period}
             onValueChange={setPeriod}
-            options={PERIOD_OPTIONS}
+            options={periodOptions}
           />
           {!showGlobal && (
             <SearchableSelect
               className="w-[140px]"
               triggerClassName="h-8 text-xs"
-              aria-label="Filter by item type"
+              aria-label={t('itemTypes.filterBy')}
               value={itemTypeId}
               onValueChange={setItemTypeId}
               options={itemTypeFilterOptions}
-              placeholder="All Types"
-              searchPlaceholder="Search item types..."
-              emptyMessage="No item types match."
+              placeholder={t('entries.allTypes')}
+              searchPlaceholder={t('itemTypes.search')}
+              emptyMessage={t('itemTypes.noneMatch')}
             />
           )}
         </div>
@@ -133,7 +145,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           <CardContent className="py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Trophy className="h-4 w-4" style={{ color: brandColor }} />
-              <span className="text-sm text-zinc-300">Your Rank</span>
+              <span className="text-sm text-zinc-300">{t('leaderboard.yourRank')}</span>
             </div>
             <span className="text-xl font-medium tabular-nums" style={{ color: brandColor }}>#{myRank}</span>
           </CardContent>
@@ -148,7 +160,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           ) : rankings.length === 0 ? (
             <div className="p-12 text-center text-zinc-600">
               <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No entries yet for this period.</p>
+              <p className="text-sm">{t('leaderboard.noEntriesForPeriod')}</p>
             </div>
           ) : (
             <div className="divide-y divide-white/[0.04]">
@@ -171,7 +183,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>
                         {r.username}
-                        {isMe && <span className="text-[10px] text-zinc-500 ml-1">(you)</span>}
+                        {isMe && <span className="text-[10px] text-zinc-500 ml-1">{t('leaderboard.you')}</span>}
                       </p>
                       {'factionName' in r && (
                         <p className="text-[11px] text-zinc-600">{r.factionName}</p>
@@ -192,7 +204,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     {/* Stats */}
                     <div className="text-right shrink-0">
                       <p className="text-sm font-medium tabular-nums text-zinc-100">{fmt(r.total)}</p>
-                      <p className="text-[10px] text-zinc-600">{r.entryCount} entries</p>
+                      <p className="text-[10px] text-zinc-600">{t('entries.count', { count: r.entryCount })}</p>
                     </div>
                   </div>
                 );
