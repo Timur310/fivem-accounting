@@ -295,6 +295,16 @@ export const hu: Translations = {
   'inGameName.saved': 'A karakternév mentve',
   'inGameName.saveFailed': 'A karakternevet nem sikerült menteni',
 
+  // ── Waiting to be let into a faction ──
+  'pending.title': 'Várakozás a frakcióba való felvételre',
+  'pending.body': 'A fiókod kész. Egy frakcióadminnak fel kell vennie téged, addig itt nincs mit mutatni — küldd el neki az alábbi azonosítót. Amint megtörtént, ez az oldal magától továbblép.',
+  'pending.signedInAs': 'Bejelentkezve mint',
+  'pending.copyId': 'Discord ID másolása',
+  'pending.idCopied': 'Discord ID kimásolva',
+  'pending.copyFailed': 'A másolás nem sikerült — jelöld ki és másold kézzel',
+  'pending.checkNow': 'Ellenőrzés újra',
+  'pending.checking': 'Ellenőrzés...',
+
   // ── Withdrawals (payouts) ──
   'payouts.intro': 'Itt kezeled, mi kerül ki a frakció kasszájából',
   'payouts.count': { one: '{count} kifizetés', other: '{count} kifizetés' },

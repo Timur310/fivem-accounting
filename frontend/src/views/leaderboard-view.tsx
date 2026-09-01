@@ -147,7 +147,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
               <Trophy className="h-4 w-4" style={{ color: brandColor }} />
               <span className="text-sm text-zinc-300">{t('leaderboard.yourRank')}</span>
             </div>
-            <span className="text-xl font-medium tabular-nums" style={{ color: brandColor }}>#{myRank}</span>
+            <span className="text-xl font-medium tabular-nums text-zinc-100">#{myRank}</span>
           </CardContent>
         </Card>
       )}
