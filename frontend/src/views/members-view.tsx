@@ -51,8 +51,8 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [discordId, setDiscordId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatarUrl: string | null; discordId: string }[]>([]);
-  const [selectedUser, setSelectedUser] = useState<{ id: string; username: string; avatarUrl: string | null; discordId: string } | null>(null);
+  const [searchResults, setSearchResults] = useState<{ id: string; username: string; inGameName: string | null; avatarUrl: string | null; discordId: string }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<{ id: string; username: string; inGameName: string | null; avatarUrl: string | null; discordId: string } | null>(null);
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleTarget, setRoleTarget] = useState<{ userId: string; currentRole: string; username: string } | null>(null);
   const [newRole, setNewRole] = useState<'admin' | 'member'>('member');
@@ -361,10 +361,10 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Avatar className="h-7 w-7">
                       <AvatarImage src={selectedUser.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{selectedUser.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-[10px]">{displayName(selectedUser).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="text-sm text-zinc-200 truncate">{selectedUser.username}</p>
+                      <p className="text-sm text-zinc-200 truncate">{displayName(selectedUser)}</p>
                       <p className="text-[11px] text-zinc-600 font-mono tabular-nums truncate">{selectedUser.discordId}</p>
                     </div>
                   </div>
@@ -389,10 +389,10 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                       >
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={u.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{u.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-[10px]">{displayName(u).slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <p className="text-sm text-zinc-200 truncate">{u.username}</p>
+                          <p className="text-sm text-zinc-200 truncate">{displayName(u)}</p>
                           <p className="text-[11px] text-zinc-600 font-mono tabular-nums truncate">{u.discordId}</p>
                         </div>
                       </button>
