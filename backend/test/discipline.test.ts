@@ -336,3 +336,57 @@ describe('strikes', () => {
     expect(res.status).toBe(403);
   });
 });
+
+/**
+ * The faction-wide list defaults to what still counts against a member, which
+ * is deliberate — but it means "no filter" and "show me everything" are two
+ * different requests. The screen has an All Statuses option, and it has to send
+ * `status=all` to mean it; sending nothing gets the active-only default and the
+ * option silently lies.
+ */
+describe('GET /strikes — the difference between no filter and all', () => {
+  const f = () => `/api/v1/factions/${w.faction.id}`;
+
+  async function revokedStrike() {
+    const issued = await api().post(`${f()}/members/${w.member.id}/strikes`)
+      .set('Cookie', w.admin.cookie)
+      .send({ reason: 'Left the vault open', severity: 'minor' });
+    expect(issued.status).toBe(201);
+
+    const revoked = await api()
+      .patch(`${f()}/members/${w.member.id}/strikes/${issued.body.data.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ status: 'revoked' });
+    expect(revoked.status).toBe(200);
+    return issued.body.data.id as string;
+  }
+
+  it('leaves a revoked strike out when no status is given', async () => {
+    const id = await revokedStrike();
+
+    const res = await api().get(`${f()}/strikes`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.strikes.map((s: { id: string }) => s.id)).not.toContain(id);
+  });
+
+  it('includes it for status=all', async () => {
+    const id = await revokedStrike();
+
+    const res = await api().get(`${f()}/strikes?status=all`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    const row = res.body.data.strikes.find((s: { id: string }) => s.id === id);
+    expect(row).toBeDefined();
+    expect(row.effectiveStatus).toBe('revoked');
+  });
+
+  // The member's own profile reads the whole history, which is where the two
+  // screens looked inconsistent from.
+  it('shows the member their own revoked strike', async () => {
+    const id = await revokedStrike();
+
+    const res = await api().get(`${f()}/members/${w.member.id}/strikes`)
+      .set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((s: { id: string }) => s.id)).toContain(id);
+  });
+});
