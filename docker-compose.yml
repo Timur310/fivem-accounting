@@ -50,6 +50,8 @@ services:
     restart: unless-stopped
 
   frontend:
+    environment:
+    - NODE_TLS_REJECT_UNAUTHORIZED=0
     build:
       context: ./frontend
       dockerfile: Dockerfile
