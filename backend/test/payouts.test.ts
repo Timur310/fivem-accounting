@@ -80,10 +80,37 @@ describe('POST /payouts', () => {
     expect(res.status).toBe(400);
   });
 
-  it('forbids a plain member', async () => {
+  // Asking for a withdrawal is not a management action; granting one is. A
+  // member may put their own name on a request and nobody else's.
+  it('lets a plain member request one for themselves', async () => {
     const res = await api().post(base()).set('Cookie', w.member.cookie)
       .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '5' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.recipientUserId).toBe(w.member.id);
+  });
+
+  it('forbids a plain member putting someone else on it', async () => {
+    const res = await api().post(base()).set('Cookie', w.member.cookie)
+      .send({ recipientUserId: w.admin.id, itemTypeId: w.itemTypeId, amount: '5' });
     expect(res.status).toBe(403);
+  });
+
+  // The whole point of asking is that somebody else answers. Auto-completing a
+  // member's own request would let them pay themselves out of the treasury.
+  it('leaves a member request pending even when approval is switched off', async () => {
+    const settings = await api().get(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie);
+    expect(settings.body.data.payoutApprovalRequired).toBe(false);
+
+    const res = await api().post(base()).set('Cookie', w.member.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '5' });
+    expect(res.body.data.status).toBe('pending');
+  });
+
+  it('still settles a payout an admin creates immediately when approval is off', async () => {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '5' });
+    expect(res.body.data.status).toBe('completed');
   });
 });
 
@@ -106,9 +133,33 @@ describe('GET /payouts', () => {
     expect(some.body.data).toHaveLength(1);
   });
 
-  it('forbids a plain member — payouts are admin material', async () => {
-    const res = await api().get(base()).set('Cookie', w.member.cookie);
-    expect(res.status).toBe(403);
+  // The full list names every recipient and amount in the faction. Without the
+  // permission you see the requests you made and nothing else — but you do see
+  // those, or asking would send them somewhere you cannot look.
+  it('shows a plain member only the requests they made', async () => {
+    await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.admin.id, itemTypeId: w.itemTypeId, amount: '900' });
+    await api().post(base()).set('Cookie', w.member.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '5' });
+
+    const mine = await api().get(base()).set('Cookie', w.member.cookie);
+    expect(mine.status).toBe(200);
+    expect(mine.body.data).toHaveLength(1);
+    expect(mine.body.data[0].recipientUserId).toBe(w.member.id);
+
+    // The admin still sees both.
+    const all = await api().get(base()).set('Cookie', w.admin.cookie);
+    expect(all.body.data).toHaveLength(2);
+  });
+
+  it('does not let a member widen the list by asking for someone else', async () => {
+    await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.admin.id, itemTypeId: w.itemTypeId, amount: '900' });
+
+    const res = await api().get(`${base()}?recipient_user_id=${w.admin.id}`)
+      .set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
   });
 });
 

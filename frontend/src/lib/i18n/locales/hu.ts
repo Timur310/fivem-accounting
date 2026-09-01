@@ -309,6 +309,11 @@ export const hu: Translations = {
   // ── Withdrawals (payouts) ──
   'payouts.intro': 'Itt kezeled, mi kerül ki a frakció kasszájából',
   'payouts.count': { one: '{count} kifizetés', other: '{count} kifizetés' },
+  'payouts.request': 'Kifizetés kérvényezése',
+  'payouts.requestHint': 'Kérvényezz valamit a frakció kasszájából. Egy adminnak jóvá kell hagynia.',
+  'payouts.introMember': 'Kérvényezz valamit a frakció kasszájából, és kövesd, mi lett vele',
+  'payouts.forYou': 'A kérvény a te nevedre szól.',
+  'payouts.noneOfYours': 'Még nem kérvényeztél semmit.',
   'payouts.new': 'Új kifizetés',
   'payouts.newHint': 'Rögzíts egy tételt, ami a kasszából egy taghoz kerül.',
   'payouts.create': 'Kifizetés létrehozása',
