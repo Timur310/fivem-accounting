@@ -4,6 +4,7 @@ import {
   resetDatabase,
   seedBasicWorld,
   createPayout,
+  createEntry,
   addMember,
   type BasicWorld,
 } from './helpers.js';
@@ -58,14 +59,22 @@ describe('a superadmin and payouts', () => {
   });
 
   it('takes a deleted payout back out of the treasury', async () => {
+    // An entry on the same item type, so it stays on the treasury page for a
+    // reason of its own. What is under test here is that the outflow is undone
+    // — not whether a type left with no movement at all is still listed, which
+    // treasury.test.ts covers.
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '1000');
     const id = await makePayout('completed');
+
     const before = await api().get(`${f()}/treasury`).set('Cookie', w.admin.cookie);
     expect(before.body.data.balances[0].outflow).toBe(100);
+    expect(before.body.data.balances[0].balance).toBe(900);
 
     await api().delete(`${f()}/payouts/${id}`).set('Cookie', w.superadmin.cookie);
 
     const after = await api().get(`${f()}/treasury`).set('Cookie', w.admin.cookie);
     expect(after.body.data.balances[0].outflow).toBe(0);
+    expect(after.body.data.balances[0].balance).toBe(1000);
   });
 
   it('does not hand the same power to a plain member', async () => {

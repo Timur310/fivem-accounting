@@ -29,10 +29,18 @@ export interface TreasuryBalance {
  * Only 'completed' payouts count: pending and approved ones are not out of the
  * vault yet, and rejected ones never will be.
  *
- * Item types with no activity on either side are included with zeroes, so the
- * caller always sees the faction's full set of active item types.
+ * Item types with no activity on either side are included with zeroes by
+ * default, so the caller sees the faction's full set of item types. That is
+ * what the laundering screen needs — you wash *into* a currency the vault has
+ * never held, and a type missing from the list is a type you cannot pick.
+ *
+ * `onlyWithActivity` drops them instead, for callers reporting on what the
+ * vault has actually done rather than what it could hold.
  */
-export async function computeTreasuryBalances(factionId: string): Promise<TreasuryBalance[]> {
+export async function computeTreasuryBalances(
+  factionId: string,
+  options: { onlyWithActivity?: boolean } = {},
+): Promise<TreasuryBalance[]> {
   const [inflows, outflows, types] = await Promise.all([
     db
       .select({
@@ -65,7 +73,15 @@ export async function computeTreasuryBalances(factionId: string): Promise<Treasu
   const inflowMap = new Map(inflows.map((r) => [r.itemTypeId, Number(r.total)]));
   const outflowMap = new Map(outflows.map((r) => [r.itemTypeId, Number(r.total)]));
 
-  return types.map((t) => {
+  // Presence in a map, not a non-zero sum: the question is whether any record
+  // exists, and reading that off the GROUP BY answers it exactly. Amounts are
+  // validated above zero today, so the two happen to agree — but a balance that
+  // nets to zero is still activity, and should still be listed.
+  const listed = options.onlyWithActivity
+    ? types.filter((t) => inflowMap.has(t.id) || outflowMap.has(t.id))
+    : types;
+
+  return listed.map((t) => {
     const inflow = inflowMap.get(t.id) ?? 0;
     const outflow = outflowMap.get(t.id) ?? 0;
     return {
