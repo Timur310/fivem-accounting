@@ -31,6 +31,7 @@ import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { formatAmount, displayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
+import { useTranslation } from '@/providers/i18n-provider';
 
 interface Props {
   /** Whether the caller may credit an entry to the faction instead of themselves. */
@@ -46,6 +47,7 @@ interface Props {
 }
 
 export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntries }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -125,7 +127,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
   });
 
   const memberOptions = useMemo<SearchableSelectOption[]>(() => [
-    { value: '', label: 'Me' },
+    { value: '', label: t('entries.me') },
     ...members.map((m) => ({
       value: m.userId,
       label: displayName(m),
@@ -137,18 +139,18 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
         </Avatar>
       ),
     })),
-  ], [members]);
+  ], [members, t]);
 
-  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((t: ItemType) => ({
-    value: t.id,
-    label: t.name,
-    hint: t.unit ? `(${t.unit})` : undefined,
-    icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((item: ItemType) => ({
+    value: item.id,
+    label: item.name,
+    hint: item.unit ? `(${item.unit})` : undefined,
+    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
   })), [activeItemTypes]);
 
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
-    () => [{ value: 'all', label: 'All Types' }, ...itemTypeOptions],
-    [itemTypeOptions],
+    () => [{ value: 'all', label: t('entries.allTypes') }, ...itemTypeOptions],
+    [itemTypeOptions, t],
   );
 
   const createMutation = useMutation({
@@ -169,10 +171,10 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
       queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
       setCreateOpen(false);
       resetCreateForm();
-      toast({ title: 'Entry logged successfully' });
+      toast({ title: t('entries.logged') });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to log entry', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('entries.logFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -190,10 +192,10 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
       setEditOpen(false);
-      toast({ title: 'Entry updated' });
+      toast({ title: t('entries.updated') });
     },
     onError: (err: any) => {
-      toast({ title: 'Update failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.updateFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -205,10 +207,10 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
       setDeleteOpen(false);
-      toast({ title: 'Entry deleted' });
+      toast({ title: t('entries.deleted') });
     },
     onError: (err: any) => {
-      toast({ title: 'Delete failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.deleteFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -242,31 +244,31 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
             <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-              <Label className="text-xs text-zinc-500">Search</Label>
+              <Label className="text-xs text-zinc-500">{t('common.search')}</Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
-                <Input placeholder="Search descriptions..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-9" />
+                <Input placeholder={t('entries.searchPlaceholder')} value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-9" />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-500">Item Type</Label>
+              <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
               <SearchableSelect
                 className="w-[160px]"
-                aria-label="Filter by item type"
+                aria-label={t('itemTypes.filterBy')}
                 value={itemTypeIdFilter}
                 onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}
                 options={itemTypeFilterOptions}
-                placeholder="All Types"
-                searchPlaceholder="Search item types..."
-                emptyMessage="No item types match."
+                placeholder={t('entries.allTypes')}
+                searchPlaceholder={t('itemTypes.search')}
+                emptyMessage={t('itemTypes.noneMatch')}
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-500">From</Label>
+              <Label className="text-xs text-zinc-500">{t('entries.from')}</Label>
               <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="w-[150px]" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-500">To</Label>
+              <Label className="text-xs text-zinc-500">{t('entries.to')}</Label>
               <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="w-[150px]" />
             </div>
             <div className="flex-1" />
@@ -274,12 +276,12 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
               const url = exportApi.entriesUrl(factionId, { date_from: dateFrom || undefined, date_to: dateTo || undefined, item_type_id: itemTypeIdFilter === 'all' ? undefined : itemTypeIdFilter });
               window.open(url, '_blank');
             }}>
-              <Download className="mr-1.5 h-3.5 w-3.5" />CSV
+              <Download className="mr-1.5 h-3.5 w-3.5" />{t('entries.csv')}
             </Button>
             {canLogEntries && (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Log Entry
+                {t('entries.logEntry')}
               </Button>
             )}
           </div>
@@ -294,7 +296,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
           ) : entries.length === 0 ? (
             <div className="p-12 text-center text-zinc-600">
               <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No entries found.</p>
+              <p className="text-sm">{t('entries.noneFound')}</p>
             </div>
           ) : (
             <>
@@ -302,12 +304,12 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Description</TableHead>
-                      {customFields.length > 0 && <TableHead>Custom</TableHead>}
-                      <TableHead>Date</TableHead>
+                      <TableHead>{t('role.member')}</TableHead>
+                      <TableHead>{t('entries.type')}</TableHead>
+                      <TableHead className="text-right">{t('common.amount')}</TableHead>
+                      <TableHead>{t('common.description')}</TableHead>
+                      {customFields.length > 0 && <TableHead>{t('entries.custom')}</TableHead>}
+                      <TableHead>{t('common.date')}</TableHead>
                       {isAdmin && <TableHead className="w-[80px]"></TableHead>}
                     </TableRow>
                   </TableHeader>
@@ -370,7 +372,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
               {meta && totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
                   <p className="text-xs text-zinc-500 tabular-nums">
-                    Page {meta.page} of {totalPages} ({meta.total_count} total)
+                    {t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}
                   </p>
                   <div className="flex items-center gap-1.5">
                     <Button variant="ghost" size="sm" className="h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}>
@@ -391,72 +393,66 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Log New Entry</DialogTitle>
-            <DialogDescription>Record a contribution to the faction.</DialogDescription>
+            <DialogTitle>{t('entries.logNew')}</DialogTitle>
+            <DialogDescription>{t('entries.logNewHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Item Type</Label>
+              <Label>{t('entries.itemType')}</Label>
               <SearchableSelect
                 value={newItemTypeId}
                 onValueChange={setNewItemTypeId}
                 options={itemTypeOptions}
-                placeholder="Select item type"
-                searchPlaceholder="Search item types..."
-                emptyMessage="No item types match."
+                placeholder={t('itemTypes.select')}
+                searchPlaceholder={t('itemTypes.search')}
+                emptyMessage={t('itemTypes.noneMatch')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Amount</Label>
+              <Label>{t('common.amount')}</Label>
               <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="tabular-nums" />
             </div>
             <div className="space-y-2">
-              <Label>Date</Label>
+              <Label>{t('common.date')}</Label>
               <Input type="date" value={newDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setNewDate(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Description (optional)</Label>
-              <Textarea placeholder="Optional note..." value={newDescription} onChange={(e) => setNewDescription(e.target.value)} rows={2} />
+              <Label>{t('entries.descriptionOptional')}</Label>
+              <Textarea placeholder={t('entries.notePlaceholder')} value={newDescription} onChange={(e) => setNewDescription(e.target.value)} rows={2} />
             </div>
             {customFields.length > 0 && (
               <div className="space-y-3">
-                <Label className="text-sm">Custom Fields</Label>
+                <Label className="text-sm">{t('settings.customFields')}</Label>
                 {customFields.map((field) => (
                   <div key={field.name} className="space-y-1">
                     <Label className="text-xs text-zinc-500">
                       {field.name}{field.required && <span className="text-red-400 ml-1">*</span>}
                     </Label>
-                    <Input placeholder={field.required ? 'Required' : 'Optional'} value={newCustomValues[field.name] ?? ''} onChange={(e) => setNewCustomValues((prev) => ({ ...prev, [field.name]: e.target.value }))} maxLength={500} />
+                    <Input placeholder={field.required ? t('common.required') : t('common.optional')} value={newCustomValues[field.name] ?? ''} onChange={(e) => setNewCustomValues((prev) => ({ ...prev, [field.name]: e.target.value }))} maxLength={500} />
                   </div>
                 ))}
               </div>
             )}
             {canManageEntries && (
               <div className="space-y-2">
-                <Label>Credit to</Label>
+                <Label>{t('entries.creditTo')}</Label>
                 <SearchableSelect
                   value={newOwnerId}
                   onValueChange={setNewOwnerId}
                   options={memberOptions}
                   disabled={newAnonymous}
-                  placeholder="Me"
-                  searchPlaceholder="Search members..."
-                  emptyMessage="No members match."
+                  placeholder={t('entries.me')}
+                  searchPlaceholder={t('members.search')}
+                  emptyMessage={t('members.noneMatch')}
                 />
-                <p className="text-xs text-zinc-500">
-                  Book what someone else handed in — including a member who was registered by
-                  Discord ID and has never logged in.
-                </p>
+                <p className="text-xs text-zinc-500">{t('entries.creditToHint')}</p>
               </div>
             )}
             {canManageEntries && (
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="pr-3">
-                  <p className="text-sm font-medium">Anonymous</p>
-                  <p className="text-xs text-zinc-500">
-                    Credits the faction instead of you. Counts towards the treasury, but stays
-                    out of the leaderboard and every other ranking.
-                  </p>
+                  <p className="text-sm font-medium">{t('entries.anonymous')}</p>
+                  <p className="text-xs text-zinc-500">{t('entries.anonymousHint')}</p>
                 </div>
                 <Switch
                   checked={newAnonymous}
@@ -466,9 +462,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={() => createMutation.mutate()} disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending || customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())}>
-              {createMutation.isPending ? 'Logging...' : newAnonymous ? 'Log Anonymously' : 'Log Entry'}
+              {createMutation.isPending ? t('entries.logging') : newAnonymous ? t('entries.logAnonymously') : t('entries.logEntry')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -478,25 +474,25 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Entry</DialogTitle>
-            <DialogDescription>Modify entry details.</DialogDescription>
+            <DialogTitle>{t('entries.editEntry')}</DialogTitle>
+            <DialogDescription>{t('entries.editHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Amount</Label>
+              <Label>{t('common.amount')}</Label>
               <Input type="number" step="0.01" min="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="tabular-nums" />
             </div>
             <div className="space-y-2">
-              <Label>Date</Label>
+              <Label>{t('common.date')}</Label>
               <Input type="date" value={editDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setEditDate(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>{t('common.description')}</Label>
               <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} />
             </div>
             {customFields.length > 0 && (
               <div className="space-y-3">
-                <Label className="text-sm">Custom Fields</Label>
+                <Label className="text-sm">{t('settings.customFields')}</Label>
                 {customFields.map((field) => (
                   <div key={field.name} className="space-y-1">
                     <Label className="text-xs text-zinc-500">{field.name}{field.required && <span className="text-red-400 ml-1">*</span>}</Label>
@@ -507,9 +503,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={() => updateMutation.mutate()} disabled={!editAmount || Number(editAmount) <= 0 || updateMutation.isPending}>
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -519,13 +515,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Entry</AlertDialogTitle>
-            <AlertDialogDescription>This action will soft-delete this entry. It can be restored from the database if needed.</AlertDialogDescription>
+            <AlertDialogTitle>{t('entries.deleteEntry')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('entries.deleteConfirm')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

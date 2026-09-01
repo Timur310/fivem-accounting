@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/providers/i18n-provider';
 
 /**
  * Route-level error boundary. Catches render errors anywhere below the
@@ -16,6 +17,8 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     // Noop for now — surface in dev only via the visible panel.
     if (process.env.NODE_ENV !== 'production') {
@@ -26,11 +29,8 @@ export default function Error({
 
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 p-6 text-center">
-      <h2 className="text-lg font-medium text-zinc-200">Something went wrong</h2>
-      <p className="text-sm text-zinc-500 max-w-md">
-        An unexpected error occurred while rendering this page. Try again — if
-        the problem persists, refresh the page or sign out and back in.
-      </p>
+      <h2 className="text-lg font-medium text-zinc-200">{t('error.title')}</h2>
+      <p className="text-sm text-zinc-500 max-w-md">{t('error.body')}</p>
       {process.env.NODE_ENV !== 'production' && (
         <pre className="text-[11px] text-zinc-600 max-w-2xl overflow-x-auto whitespace-pre-wrap break-words">
           {error.message}
@@ -38,7 +38,7 @@ export default function Error({
         </pre>
       )}
       <Button onClick={reset} size="sm">
-        Try again
+        {t('error.tryAgain')}
       </Button>
     </div>
   );

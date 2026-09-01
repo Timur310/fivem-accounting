@@ -27,7 +27,8 @@ import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, Chevron
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { FactionSettings } from '@/lib/api-types';
-import { displayName } from '@/lib/format';
+import { displayName, formatDate } from '@/lib/format';
+import { useTranslation } from '@/providers/i18n-provider';
 
 interface Props {
   factionId: string;
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export function MembersView({ factionId, isFactionAdmin }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
@@ -77,9 +79,9 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
 
   // The empty value clears the rank, matching what the dialog submits.
   const rankOptions = useMemo<SearchableSelectOption[]>(() => [
-    { value: '', label: 'No rank (clear)' },
-    ...sortedRanks.map((r) => ({ value: r.name, label: r.name, hint: `(Level ${r.level})` })),
-  ], [sortedRanks]);
+    { value: '', label: t('members.noRankClear') },
+    ...sortedRanks.map((r) => ({ value: r.name, label: r.name, hint: t('members.rankLevel', { level: r.level }) })),
+  ], [sortedRanks, t]);
 
   const addMutation = useMutation({
     mutationFn: () => membersApi.add(factionId, selectedUser ? selectedUser.id : discordId),
@@ -91,10 +93,10 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       setSelectedUser(null);
       setSearchQuery('');
       setSearchResults([]);
-      toast({ title: 'Member added' });
+      toast({ title: t('members.added') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Failed to add member', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('members.addFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -120,10 +122,10 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       queryClient.invalidateQueries({ queryKey: ['members', factionId] });
       setRoleDialogOpen(false);
       setRoleTarget(null);
-      toast({ title: 'Role updated' });
+      toast({ title: t('members.roleUpdated') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Failed to update role', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('members.roleUpdateFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -133,10 +135,10 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       queryClient.invalidateQueries({ queryKey: ['members', factionId] });
       setRankDialogOpen(false);
       setRankTarget(null);
-      toast({ title: 'Rank updated' });
+      toast({ title: t('members.rankUpdated') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Failed to update rank', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('members.rankUpdateFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -146,10 +148,10 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       queryClient.invalidateQueries({ queryKey: ['members', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       setRemoveTarget(null);
-      toast({ title: 'Member removed' });
+      toast({ title: t('members.removed') });
     },
     onError: (err: unknown) => {
-      toast({ title: 'Failed to remove member', description: apiErrorMessage(err), variant: 'destructive' });
+      toast({ title: t('members.removeFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -165,12 +167,12 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium text-zinc-200">Faction Members</h3>
-          <p className="text-sm text-zinc-500">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+          <h3 className="text-lg font-medium text-zinc-200">{t('members.title')}</h3>
+          <p className="text-sm text-zinc-500">{t('members.count', { count: members.length })}</p>
         </div>
         <Button onClick={() => setAddOpen(true)}>
           <UserPlus className="mr-1.5 h-4 w-4" />
-          Add Member
+          {t('members.addMember')}
         </Button>
       </div>
 
@@ -182,19 +184,19 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
           ) : members.length === 0 ? (
             <div className="p-12 text-center text-zinc-600">
               <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No members yet. Add someone by their Discord ID.</p>
+              <p className="text-sm">{t('members.noneYet')}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead className="hidden sm:table-cell">Discord ID</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="hidden md:table-cell">Rank</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">Entries</TableHead>
-                  <TableHead className="hidden lg:table-cell">Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Joined</TableHead>
+                  <TableHead>{t('role.member')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('members.discordId')}</TableHead>
+                  <TableHead>{t('members.role')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('members.rank')}</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">{t('nav.entries')}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t('common.status')}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t('members.joinedAt')}</TableHead>
                   <TableHead className="w-[120px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -235,11 +237,11 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                               color: brandColor,
                             }}
                           >
-                            Admin
+                            {t('role.admin')}
                           </span>
                         ) : (
                           <span className="text-[11px] px-2 py-0.5 rounded-md font-medium border border-white/[0.06] bg-white/[0.03] text-zinc-500">
-                            Member
+                            {t('role.member')}
                           </span>
                         )}
                       </TableCell>
@@ -255,13 +257,13 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                         <div className="flex items-center gap-1.5">
                           {m.isProvisional && (
                             <Badge variant="outline" className="text-[10px] border-white/[0.08] text-zinc-500">
-                              Provisional
+                              {t('members.provisional')}
                             </Badge>
                           )}
                           {isInactive && (
                             <Badge variant="outline" className="text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
                               <Clock className="h-2.5 w-2.5 mr-0.5" />
-                              {m.daysInactive}d
+                              {t('dashboard.daysShort', { days: m.daysInactive ?? 0 })}
                             </Badge>
                           )}
                           {(m.activeStrikeCount ?? 0) > 0 && (
@@ -271,16 +273,16 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                             </Badge>
                           )}
                           {!isInactive && (m.activeStrikeCount ?? 0) === 0 && m.daysInactive !== null && m.daysInactive === 0 && (
-                            <span className="text-[10px] text-emerald-500">active today</span>
+                            <span className="text-[10px] text-emerald-500">{t('members.activeToday')}</span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell className="text-xs text-zinc-600 tabular-nums hidden lg:table-cell">
-                        {new Date(m.joinedAt).toLocaleDateString()}
+                        {formatDate(m.joinedAt)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title="View Profile">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title={t('members.viewProfile')}>
                             <Eye className="h-3 w-3" />
                           </Button>
                           {isFactionAdmin && (
@@ -290,7 +292,7 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                               // button always says what is true right now.
                               setNewRole(m.role === 'admin' ? 'admin' : 'member');
                               setRoleDialogOpen(true);
-                            }} title="Change Role">
+                            }} title={t('members.changeRole')}>
                               <Pencil className="h-3 w-3" />
                             </Button>
                           )}
@@ -299,7 +301,7 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                             size="icon"
                             className="h-7 w-7 text-zinc-500 hover:text-zinc-200 disabled:opacity-30"
                             disabled={sortedRanks.length === 0}
-                            title={sortedRanks.length === 0 ? 'No ranks defined — add them in Settings' : 'Change Rank'}
+                            title={sortedRanks.length === 0 ? t('members.noRanksDefined') : t('members.changeRank')}
                             onClick={() => {
                               setRankTarget({ userId: m.userId, username: m.username, currentRank: m.rank ?? null });
                               setNewRank(m.rank ?? '');
@@ -308,7 +310,7 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                           >
                             <ChevronsUp className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title="Remove">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title={t('common.remove')}>
                             <UserMinus className="h-3 w-3" />
                           </Button>
                         </div>
@@ -326,17 +328,17 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) { setSearchQuery(''); setSearchResults([]); setSelectedUser(null); setDiscordId(''); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Member</DialogTitle>
-            <DialogDescription>Search for a user by Discord username or ID, or paste a Discord ID manually below.</DialogDescription>
+            <DialogTitle>{t('members.addMember')}</DialogTitle>
+            <DialogDescription>{t('members.addHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {/* Search input + dropdown */}
             <div className="space-y-2">
-              <Label>Search users</Label>
+              <Label>{t('members.searchUsers')}</Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
                 <Input
-                  placeholder="Type at least 2 characters..."
+                  placeholder={t('members.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-9"
@@ -347,7 +349,7 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                     type="button"
                     onClick={() => { setSearchQuery(''); setSearchResults([]); }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-                    aria-label="Clear search"
+                    aria-label={t('common.clearSearch')}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -370,7 +372,7 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                     type="button"
                     onClick={() => { setSelectedUser(null); setSearchQuery(''); setSearchResults([]); }}
                     className="text-zinc-500 hover:text-zinc-300 shrink-0"
-                    aria-label="Clear selection"
+                    aria-label={t('common.clearSelection')}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -402,15 +404,15 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
 
             {/* Manual fallback */}
             <div className="space-y-2">
-              <Label>Or enter Discord User ID manually</Label>
-              <Input placeholder="e.g. 123456789012345678" value={discordId} onChange={(e) => setDiscordId(e.target.value)} className="font-mono tabular-nums" disabled={!!selectedUser} />
-              <p className="text-xs text-zinc-600">Used when the user has logged in but search doesn’t find them.</p>
+              <Label>{t('members.manualDiscordId')}</Label>
+              <Input placeholder={t('members.discordIdPlaceholder')} value={discordId} onChange={(e) => setDiscordId(e.target.value)} className="font-mono tabular-nums" disabled={!!selectedUser} />
+              <p className="text-xs text-zinc-600">{t('members.manualDiscordIdHint')}</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={() => addMutation.mutate()} disabled={(!selectedUser && !discordId.trim()) || addMutation.isPending}>
-              {addMutation.isPending ? 'Adding...' : 'Add Member'}
+              {addMutation.isPending ? t('members.adding') : t('members.addMember')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -420,20 +422,20 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change Role</DialogTitle>
-            <DialogDescription>Update {roleTarget ? displayName(roleTarget) : ''}&apos;s role in this faction.</DialogDescription>
+            <DialogTitle>{t('members.changeRole')}</DialogTitle>
+            <DialogDescription>{t('members.changeRoleHint', { name: roleTarget ? displayName(roleTarget) : '' })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-3">
-              <Button variant={newRole === 'member' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('member')}>Member</Button>
+              <Button variant={newRole === 'member' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('member')}>{t('role.member')}</Button>
               <Button variant={newRole === 'admin' ? 'default' : 'outline'} className="flex-1" onClick={() => setNewRole('admin')}>
-                <Shield className="mr-1.5 h-4 w-4" /> Admin
+                <Shield className="mr-1.5 h-4 w-4" /> {t('role.admin')}
               </Button>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => roleMutation.mutate()} disabled={roleMutation.isPending}>{roleMutation.isPending ? 'Saving...' : 'Update Role'}</Button>
+            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={() => roleMutation.mutate()} disabled={roleMutation.isPending}>{roleMutation.isPending ? t('common.saving') : t('members.updateRole')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -442,26 +444,26 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       <Dialog open={rankDialogOpen} onOpenChange={setRankDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Set Rank</DialogTitle>
-            <DialogDescription>Update {rankTarget ? displayName(rankTarget) : ''}&apos;s display rank. This is separate from their admin role.</DialogDescription>
+            <DialogTitle>{t('members.setRank')}</DialogTitle>
+            <DialogDescription>{t('members.setRankHint', { name: rankTarget ? displayName(rankTarget) : '' })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Rank</Label>
+              <Label>{t('members.rank')}</Label>
               <SearchableSelect
                 value={newRank}
                 onValueChange={setNewRank}
                 options={rankOptions}
-                placeholder="No rank"
-                searchPlaceholder="Search ranks..."
-                emptyMessage="No ranks match."
+                placeholder={t('members.noRank')}
+                searchPlaceholder={t('members.searchRanks')}
+                emptyMessage={t('members.noRanksMatch')}
               />
-              <p className="text-xs text-zinc-600">Ranks are display-only. Configure them in Settings &rarr; Faction Settings.</p>
+              <p className="text-xs text-zinc-600">{t('members.ranksDisplayOnly')}</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRankDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => rankMutation.mutate()} disabled={rankMutation.isPending}>{rankMutation.isPending ? 'Saving...' : 'Update Rank'}</Button>
+            <Button variant="outline" onClick={() => setRankDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={() => rankMutation.mutate()} disabled={rankMutation.isPending}>{rankMutation.isPending ? t('common.saving') : t('members.updateRank')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -470,13 +472,13 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {removeTarget ? displayName(removeTarget) : ''}?</AlertDialogTitle>
-            <AlertDialogDescription>This will remove the member from the faction. Their entries will be preserved.</AlertDialogDescription>
+            <AlertDialogTitle>{t('members.removeConfirmTitle', { name: removeTarget ? displayName(removeTarget) : '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('members.removeConfirmBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => removeMutation.mutate()} disabled={removeMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">
-              {removeMutation.isPending ? 'Removing...' : 'Remove'}
+              {removeMutation.isPending ? t('common.removing') : t('common.remove')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

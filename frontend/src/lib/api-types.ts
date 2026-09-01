@@ -1,3 +1,5 @@
+import type { TranslationKey } from './i18n';
+
 // ── API Response wrappers (matches backend lib/types.ts) ──
 
 export interface ApiSuccessResponse<T> {
@@ -752,13 +754,17 @@ export const FACTION_PERMISSIONS = [
   'view_audit_logs', 'view_reports', 'manage_laundering',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
-export const PERMISSION_LABELS: Record<FactionPermission, string> = {
-  manage_members: 'Manage Members', manage_payouts: 'Manage Withdrawals',
-  manage_entries: 'Edit/Delete Entries', manage_strikes: 'Manage Strikes',
-  manage_quotas: 'Manage Quotas', manage_item_types: 'Manage Item Types',
-  manage_settings: 'Manage Settings', manage_customization: 'Manage Customization',
-  view_audit_logs: 'View Audit Logs', view_reports: 'View Reports',
-  manage_laundering: 'Launder Money',
+/**
+ * What each permission is called on screen. Keys rather than text, because the
+ * chips these name are rendered in whatever language the interface is in.
+ */
+export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = {
+  manage_members: 'permission.manageMembers', manage_payouts: 'permission.managePayouts',
+  manage_entries: 'permission.manageEntries', manage_strikes: 'permission.manageStrikes',
+  manage_quotas: 'permission.manageQuotas', manage_item_types: 'permission.manageItemTypes',
+  manage_settings: 'permission.manageSettings', manage_customization: 'permission.manageCustomization',
+  view_audit_logs: 'permission.viewAuditLogs', view_reports: 'permission.viewReports',
+  manage_laundering: 'permission.manageLaundering',
 };
 
 // ── Provisional users (superadmin) ─────────────────────

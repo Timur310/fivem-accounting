@@ -33,15 +33,17 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { Payout, PayoutStatus } from '@/lib/api-types';
-import { formatAmount, displayName, fullDisplayName } from '@/lib/format';
+import { formatAmount, displayName, fullDisplayName, formatNumber } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
+import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
 
 // ── Status config ──
-const STATUS_CONFIG: Record<PayoutStatus, { label: string; color: string; bg: string }> = {
-  pending:  { label: 'Pending',  color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
-  approved: { label: 'Approved', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
-  rejected: { label: 'Rejected', color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20' },
-  completed: { label: 'Completed', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+const STATUS_CONFIG: Record<PayoutStatus, { label: TranslationKey; color: string; bg: string }> = {
+  pending:  { label: 'payouts.status.pending',  color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
+  approved: { label: 'payouts.status.approved', color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  rejected: { label: 'payouts.status.rejected', color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20' },
+  completed: { label: 'payouts.status.completed', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
 };
 
 // Allowed status transitions (mirrors backend)
@@ -54,14 +56,9 @@ const ALLOWED_TRANSITIONS: Record<PayoutStatus, PayoutStatus[]> = {
 
 const TERMINAL_STATUSES: PayoutStatus[] = ['completed', 'rejected'];
 
-// The empty value is the unfiltered case, so it doubles as a way to clear.
-const STATUS_FILTER_OPTIONS: SearchableSelectOption[] = [
-  { value: '', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'rejected', label: 'Rejected' },
-];
+/** Filter order deliberately differs from STATUS_CONFIG: it follows the
+ *  lifecycle a withdrawal moves through rather than the colour table. */
+const FILTERABLE_STATUSES: PayoutStatus[] = ['pending', 'approved', 'completed', 'rejected'];
 
 interface Props {
   factionId: string;
@@ -70,6 +67,7 @@ interface Props {
 }
 
 export function PayoutsView({ factionId, isSuperadmin }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const user = useAppStore((s) => s.user);
@@ -148,23 +146,29 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
     ),
   })), [members]);
 
-  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => itemTypes.map((t) => ({
-    value: t.id,
-    label: t.name,
-    hint: t.unit ? `(${t.unit})` : undefined,
-    icon: <ItemIcon src={t.imageUrl} className="size-5" />,
+  const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => itemTypes.map((item) => ({
+    value: item.id,
+    label: item.name,
+    hint: item.unit ? `(${item.unit})` : undefined,
+    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
   })), [itemTypes]);
 
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
-    () => [{ value: '', label: 'All Types' }, ...itemTypeOptions],
-    [itemTypeOptions],
+    () => [{ value: '', label: t('entries.allTypes') }, ...itemTypeOptions],
+    [itemTypeOptions, t],
   );
+
+  // The empty value is the unfiltered case, so it doubles as a way to clear.
+  const statusFilterOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: t('payouts.allStatuses') },
+    ...FILTERABLE_STATUSES.map((status) => ({ value: status, label: t(STATUS_CONFIG[status].label) })),
+  ], [t]);
 
   const payouts = payoutsData?.data ?? [];
   const meta = payoutsData?.meta;
   const totalPages = meta ? Math.ceil(meta.total_count / meta.page_size) : 1;
 
-  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = formatNumber;
 
   const resetCreateForm = () => {
     setFormRecipient('');
@@ -184,7 +188,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       payoutDate: formDate || undefined,
     }),
     onSuccess: () => {
-      toast({ title: 'Withdrawal created' });
+      toast({ title: t('payouts.created') });
       setCreateOpen(false);
       resetCreateForm();
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
@@ -192,7 +196,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
     },
     onError: (err: any) => {
-      toast({ title: 'Create failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.createFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -200,28 +204,28 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
     mutationFn: ({ payoutId, input }: { payoutId: string; input: Record<string, unknown> }) =>
       payoutsApi.update(factionId, payoutId, input as any),
     onSuccess: () => {
-      toast({ title: 'Withdrawal updated' });
+      toast({ title: t('payouts.updated') });
       setEditPayout(null);
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
     },
     onError: (err: any) => {
-      toast({ title: 'Update failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.updateFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (payoutId: string) => payoutsApi.remove(factionId, payoutId),
     onSuccess: () => {
-      toast({ title: 'Withdrawal deleted' });
+      toast({ title: t('payouts.deleted') });
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
     },
     onError: (err: any) => {
-      toast({ title: 'Delete failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('common.deleteFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -233,7 +237,10 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       payoutDate: splitDate || undefined,
     }),
     onSuccess: (result) => {
-      toast({ title: `Even split created: ${result.created} withdrawals`, description: `${result.perMember.toFixed(2)} per member, ${result.remainder.toFixed(2)} remainder stays in vault` });
+      toast({
+        title: t('payouts.splitCreated', { count: result.created }),
+        description: t('payouts.splitBreakdown', { perMember: result.perMember.toFixed(2), remainder: result.remainder.toFixed(2) }),
+      });
       setEvenSplitOpen(false);
       setSplitItemType('');
       setSplitTotal('');
@@ -244,7 +251,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
     },
     onError: (err: any) => {
-      toast({ title: 'Even split failed', description: err.response?.data?.error?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: t('payouts.splitFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -288,17 +295,17 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-medium tracking-tight text-zinc-100">Withdrawals</h2>
-          <p className="text-zinc-500 text-sm mt-0.5">Manage what leaves the faction treasury</p>
+          <h2 className="text-xl font-medium tracking-tight text-zinc-100">{t('nav.withdrawals')}</h2>
+          <p className="text-zinc-500 text-sm mt-0.5">{t('payouts.intro')}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setEvenSplitOpen(true)}>
             <Split className="h-4 w-4 mr-1.5" />
-            Even Split
+            {t('payouts.evenSplit')}
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)} style={{ backgroundColor: brandColor }}>
             <Plus className="h-4 w-4 mr-1.5" />
-            New Withdrawal
+            {t('payouts.new')}
           </Button>
         </div>
       </div>
@@ -311,30 +318,30 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             <SearchableSelect
               className="w-[140px]"
               triggerClassName="h-8 text-xs"
-              aria-label="Filter by status"
+              aria-label={t('payouts.filterByStatus')}
               value={filterStatus}
               onValueChange={(v) => { setFilterStatus(v); setPage(1); }}
-              options={STATUS_FILTER_OPTIONS}
-              placeholder="All Statuses"
-              searchPlaceholder="Search statuses..."
-              emptyMessage="No statuses match."
+              options={statusFilterOptions}
+              placeholder={t('payouts.allStatuses')}
+              searchPlaceholder={t('payouts.searchStatuses')}
+              emptyMessage={t('payouts.noStatusesMatch')}
             />
             <SearchableSelect
               className="w-[150px]"
               triggerClassName="h-8 text-xs"
-              aria-label="Filter by item type"
+              aria-label={t('itemTypes.filterBy')}
               value={filterItemTypeId}
               onValueChange={(v) => { setFilterItemTypeId(v); setPage(1); }}
               options={itemTypeFilterOptions}
-              placeholder="All Types"
-              searchPlaceholder="Search item types..."
-              emptyMessage="No item types match."
+              placeholder={t('entries.allTypes')}
+              searchPlaceholder={t('itemTypes.search')}
+              emptyMessage={t('itemTypes.noneMatch')}
             />
             <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
             <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
             {(filterStatus || filterItemTypeId || filterDateFrom || filterDateTo) && (
               <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}>
-                Clear
+                {t('common.clear')}
               </Button>
             )}
           </div>
@@ -347,17 +354,17 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="border-white/[0.06] hover:bg-transparent">
-                <TableHead className="text-zinc-500">Recipient</TableHead>
-                <TableHead className="text-zinc-500">Type</TableHead>
-                <TableHead className="text-zinc-500 text-right">Amount</TableHead>
-                <TableHead className="text-zinc-500">Date</TableHead>
-                <TableHead className="text-zinc-500">Status</TableHead>
-                <TableHead className="text-zinc-500 text-right">Actions</TableHead>
+                <TableHead className="text-zinc-500">{t('payouts.recipient')}</TableHead>
+                <TableHead className="text-zinc-500">{t('entries.type')}</TableHead>
+                <TableHead className="text-zinc-500 text-right">{t('common.amount')}</TableHead>
+                <TableHead className="text-zinc-500">{t('common.date')}</TableHead>
+                <TableHead className="text-zinc-500">{t('common.status')}</TableHead>
+                <TableHead className="text-zinc-500 text-right">{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payouts.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">No withdrawals found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">{t('payouts.none')}</TableCell></TableRow>
               ) : payouts.map((p) => {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
@@ -391,7 +398,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                     <TableCell className="text-sm text-zinc-500">{p.payoutDate}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-[11px]`}>
-                        {sc.label}
+                        {t(sc.label)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -404,7 +411,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                                title="Approve"
+                                title={t('payouts.approve')}
                                 onClick={() => handleStatusChange(p, 'approved')}
                               >
                                 <Check className="h-3.5 w-3.5" />
@@ -415,7 +422,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                                title="Complete"
+                                title={t('payouts.complete')}
                                 onClick={() => handleStatusChange(p, 'completed')}
                               >
                                 <ArrowDownToLine className="h-3.5 w-3.5" />
@@ -426,7 +433,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                title="Reject"
+                                title={t('payouts.reject')}
                                 onClick={() => handleStatusChange(p, 'rejected')}
                               >
                                 <X className="h-3.5 w-3.5" />
@@ -449,7 +456,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-destructive hover:text-red-300"
-                            title={isTerminal ? 'Delete (superadmin)' : 'Delete'}
+                            title={isTerminal ? t('payouts.deleteSuperadmin') : t('common.delete')}
                             onClick={() => setDeleteId(p.id)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -468,9 +475,9 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</Button>
-          <span className="text-xs text-zinc-500">Page {page} of {totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</Button>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t('common.previous')}</Button>
+          <span className="text-xs text-zinc-500">{t('common.pageOf', { page, pages: totalPages })}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>{t('common.next')}</Button>
         </div>
       )}
 
@@ -478,34 +485,34 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetCreateForm(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Withdrawal</DialogTitle>
-            <DialogDescription>Record something leaving the faction treasury for a member.</DialogDescription>
+            <DialogTitle>{t('payouts.new')}</DialogTitle>
+            <DialogDescription>{t('payouts.newHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Recipient *</Label>
+              <Label>{t('payouts.recipientRequired')}</Label>
               <SearchableSelect
                 value={formRecipient}
                 onValueChange={setFormRecipient}
                 options={memberOptions}
-                placeholder="Select member"
-                searchPlaceholder="Search members..."
-                emptyMessage="No members match."
+                placeholder={t('members.select')}
+                searchPlaceholder={t('members.search')}
+                emptyMessage={t('members.noneMatch')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Item Type *</Label>
+              <Label>{t('payouts.itemTypeRequired')}</Label>
               <SearchableSelect
                 value={formItemType}
                 onValueChange={setFormItemType}
                 options={itemTypeOptions}
-                placeholder="Select type"
-                searchPlaceholder="Search item types..."
-                emptyMessage="No item types match."
+                placeholder={t('itemTypes.select')}
+                searchPlaceholder={t('itemTypes.search')}
+                emptyMessage={t('itemTypes.noneMatch')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Amount *</Label>
+              <Label>{t('payouts.amountRequired')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -516,16 +523,16 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>{t('common.description')}</Label>
               <Input
-                placeholder="Weekly cut, equipment, etc."
+                placeholder={t('payouts.descriptionPlaceholder')}
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 maxLength={500}
               />
             </div>
             <div className="space-y-2">
-              <Label>Date</Label>
+              <Label>{t('common.date')}</Label>
               <Input
                 type="date"
                 value={formDate}
@@ -535,13 +542,13 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{t('common.cancel')}</Button>
             <Button
               disabled={!formRecipient || !formItemType || !formAmount || Number(formAmount) <= 0 || createMutation.isPending}
               onClick={() => createMutation.mutate()}
               style={{ backgroundColor: brandColor }}
             >
-              {createMutation.isPending ? 'Creating...' : 'Create Withdrawal'}
+              {createMutation.isPending ? t('common.creating') : t('payouts.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -551,14 +558,17 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <Dialog open={!!editPayout} onOpenChange={(open) => { if (!open) setEditPayout(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Withdrawal</DialogTitle>
+            <DialogTitle>{t('payouts.edit')}</DialogTitle>
             <DialogDescription>
-              Editing withdrawal for {editPayout ? fullDisplayName({ username: editPayout.recipientUsername, inGameName: editPayout.recipientInGameName }) : ''} · {editPayout?.itemTypeName}
+              {t('payouts.editHint', {
+                name: editPayout ? fullDisplayName({ username: editPayout.recipientUsername, inGameName: editPayout.recipientInGameName }) : '',
+                itemType: editPayout?.itemTypeName ?? '',
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Amount</Label>
+              <Label>{t('common.amount')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -568,7 +578,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>{t('common.description')}</Label>
               <Input
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
@@ -576,7 +586,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label>Date</Label>
+              <Label>{t('common.date')}</Label>
               <Input
                 type="date"
                 value={editDate}
@@ -586,13 +596,13 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditPayout(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditPayout(null)}>{t('common.cancel')}</Button>
             <Button
               disabled={updateMutation.isPending || Number(editAmount) <= 0}
               onClick={handleEditSave}
               style={{ backgroundColor: brandColor }}
             >
-              {updateMutation.isPending ? 'Saving...' : 'Save'}
+              {updateMutation.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -602,28 +612,26 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <Dialog open={evenSplitOpen} onOpenChange={setEvenSplitOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Even Split Distribution</DialogTitle>
-            <DialogDescription>
-              Distribute an amount equally across all faction members. Remainder stays in the vault.
-            </DialogDescription>
+            <DialogTitle>{t('payouts.evenSplitTitle')}</DialogTitle>
+            <DialogDescription>{t('payouts.evenSplitHint')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
-              This will create individual withdrawal records for each of the {members.length} member{members.length !== 1 ? 's' : ''} in this faction.
+              {t('payouts.evenSplitWarning', { count: members.length })}
             </div>
             <div className="space-y-2">
-              <Label>Item Type *</Label>
+              <Label>{t('payouts.itemTypeRequired')}</Label>
               <SearchableSelect
                 value={splitItemType}
                 onValueChange={setSplitItemType}
                 options={itemTypeOptions}
-                placeholder="Select type"
-                searchPlaceholder="Search item types..."
-                emptyMessage="No item types match."
+                placeholder={t('itemTypes.select')}
+                searchPlaceholder={t('itemTypes.search')}
+                emptyMessage={t('itemTypes.noneMatch')}
               />
             </div>
             <div className="space-y-2">
-              <Label>Total Amount *</Label>
+              <Label>{t('payouts.totalAmountRequired')}</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -634,25 +642,29 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
               />
               {splitTotal && Number(splitTotal) > 0 && members.length > 0 && (
                 <p className="text-xs text-zinc-500">
-                  {members.length} members × {fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100)} each = {fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100 * members.length)} distributed
+                  {t('payouts.splitPreview', {
+                    count: members.length,
+                    each: fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100),
+                    distributed: fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100 * members.length),
+                  })}
                   {(() => {
                     const rem = (Number(splitTotal) * 100 - Math.floor(Number(splitTotal) * 100 / members.length) * members.length) / 100;
-                    return rem > 0 ? <>, {fmt(rem)} remainder</> : null;
+                    return rem > 0 ? <>{t('payouts.splitRemainder', { remainder: fmt(rem) })}</> : null;
                   })()}
                 </p>
               )}
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>{t('common.description')}</Label>
               <Input
-                placeholder="Even split distribution"
+                placeholder={t('payouts.evenSplitTitle')}
                 value={splitDescription}
                 onChange={(e) => setSplitDescription(e.target.value)}
                 maxLength={500}
               />
             </div>
             <div className="space-y-2">
-              <Label>Date</Label>
+              <Label>{t('common.date')}</Label>
               <Input
                 type="date"
                 value={splitDate}
@@ -662,13 +674,15 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEvenSplitOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEvenSplitOpen(false)}>{t('common.cancel')}</Button>
             <Button
               disabled={!splitItemType || !splitTotal || Number(splitTotal) <= 0 || evenSplitMutation.isPending}
               onClick={() => evenSplitMutation.mutate()}
               style={{ backgroundColor: brandColor }}
             >
-              {evenSplitMutation.isPending ? 'Distributing...' : `Split ${splitTotal || '0'} to ${members.length} Members`}
+              {evenSplitMutation.isPending
+                ? t('payouts.distributing')
+                : t('payouts.splitAction', { amount: splitTotal || '0', count: members.length })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -678,19 +692,17 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Withdrawal</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will soft-delete this withdrawal. If it was completed, the treasury balance will be adjusted accordingly.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('payouts.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('payouts.deleteConfirm')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteMutation.isPending}
               onClick={() => { if (deleteId) deleteMutation.mutate(deleteId); }}
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
