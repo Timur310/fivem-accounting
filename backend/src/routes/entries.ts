@@ -77,10 +77,7 @@ const listEntriesQuerySchema = z.object({
 
 // ── POST / — log new entry ───────────────────────────
 router.post('/', async (req: Request, res: Response) => {
-  // If user has no faction membership role (e.g. superadmin browsing
-  // a faction they don't belong to), they cannot log entries.
-  // Superadmins who are also faction members/admins CAN log entries.
-  if (!req.factionRole || req.factionRole === 'superadmin') {
+  if (!req.factionRole) {
     error(res, 'FORBIDDEN', 'You must be a member of this faction to log entries', 403);
     return;
   }
@@ -98,6 +95,23 @@ router.post('/', async (req: Request, res: Response) => {
   const onBehalfOf = parsed.data.userId && parsed.data.userId !== req.user!.id
     ? parsed.data.userId
     : undefined;
+
+  // A superadmin browsing a faction they do not belong to may still book an
+  // entry, but never onto themselves. `ownerId` below falls back to the caller,
+  // and they are not on this roster — the credit would land on a contributor
+  // the leaderboard, the member totals and the quota progress have no row for.
+  // So they have to say whose it is: a member's, or, anonymously, the faction's
+  // own. A superadmin who actually joined the faction takes their membership
+  // role instead and logs for themselves like anyone else.
+  if (req.factionRole === 'superadmin' && !anonymous && !onBehalfOf) {
+    error(
+      res,
+      'FORBIDDEN',
+      'You are not a member of this faction — log the entry for a member, or anonymously',
+      403,
+    );
+    return;
+  }
 
   // Anonymising an entry, or hanging it on someone else, decides who gets
   // credit for faction income — the same authority as editing entries after

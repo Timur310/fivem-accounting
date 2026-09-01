@@ -200,6 +200,7 @@ export const hu: Translations = {
   'entries.notePlaceholder': 'Megjegyzés...',
   'entries.creditTo': 'Kinek írjuk jóvá',
   'entries.creditToHint': 'Rögzítsd, amit más adott le — akár olyan tagnak is, akit Discord ID alapján vettek fel, és még sosem lépett be.',
+  'entries.creditToRequired': 'Nem vagy tagja ennek a frakciónak, így a bejegyzés nem írható jóvá neked — válassz egy tagot, vagy tedd névtelenné, és a frakció kapja.',
   'entries.anonymous': 'Névtelen',
   'entries.anonymousHint': 'A frakciónak írja jóvá, nem neked. A kasszába beleszámít, de a ranglistán és minden más rangsorban kimarad.',
 

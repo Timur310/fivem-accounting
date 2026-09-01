@@ -151,7 +151,11 @@ export function AppShell() {
       ? currentFactionMembership.permissions.includes(permission)
       : user?.role === 'superadmin';
   const isSuperadmin = user?.role === 'superadmin';
-  const canLogEntries = !!currentFactionMembership;
+  // A superadmin can book an entry into any faction, but only onto a member or
+  // onto the faction itself — they are not on this roster, so there is nobody
+  // for a self-credited entry to belong to. The API enforces the same rule.
+  const canCreditSelf = !!currentFactionMembership;
+  const canLogEntries = canCreditSelf || isSuperadmin;
 
   // Superadmins with no memberships can still browse any faction. Surface
   // those alongside active memberships so the selector is never empty.
@@ -322,7 +326,7 @@ export function AppShell() {
       case 'dashboard':
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} /> : null;
       case 'entries':
-        return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canManageEntries={hasPermission('manage_entries')} /> : null;
+        return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canCreditSelf={canCreditSelf} canManageEntries={hasPermission('manage_entries')} /> : null;
       case 'payouts':
         return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'laundering':
