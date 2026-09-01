@@ -37,7 +37,6 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-1313}@pgbouncer:5432/faction_accountant
       PORT: "8000"
-    # PORTS REMOVED: Now protected behind Nginx
     depends_on:
       pgbouncer:
         condition: service_started
@@ -50,18 +49,14 @@ services:
     restart: unless-stopped
 
   frontend:
-    environment:
-    - NODE_TLS_REJECT_UNAUTHORIZED=0
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # UPDATED: Now points to the secure HTTPS Nginx endpoint
         NEXT_PUBLIC_API_URL: https://152.53.185.62
     env_file:
       - path: ./frontend/.env
         required: false
-    # PORTS REMOVED: Now protected behind Nginx
     depends_on:
       backend:
         condition: service_healthy
@@ -69,12 +64,14 @@ services:
 
   nginx:
     image: nginx:alpine
+    container_name: nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./certs:/etc/ssl/certs:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
     depends_on:
       - frontend
       - backend
