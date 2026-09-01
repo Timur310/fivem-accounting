@@ -6,6 +6,7 @@ import { authApi } from '@/lib/api-client';
 import { AppShell } from '@/components/app-shell';
 import { LoginPage } from '@/components/login-page';
 import { InGameNameModal } from '@/components/in-game-name-modal';
+import { PendingApprovalScreen } from '@/components/pending-approval-screen';
 
 export default function Home() {
   const user = useAppStore((s) => s.user);
@@ -47,6 +48,22 @@ export default function Home() {
   }, [checkAuth]);
 
   if (!user) return <LoginPage onLogin={checkAuth} />;
+
+  // Nothing in the app exists outside a faction, so an account that belongs to
+  // none of them waits instead of being let into a shell it cannot fill. A
+  // superadmin is the exception and always gets in: with no memberships they
+  // are exactly the person who has to go create the faction and add people to
+  // it. The name prompt still renders over the wait, so a first-time player
+  // sets their character name before anything else.
+  const hasActiveFaction = user.factions.some((f) => f.factionActive);
+  if (!hasActiveFaction && user.role !== 'superadmin') {
+    return (
+      <>
+        <PendingApprovalScreen onRecheck={checkAuth} />
+        <InGameNameModal />
+      </>
+    );
+  }
 
   return (
     <>

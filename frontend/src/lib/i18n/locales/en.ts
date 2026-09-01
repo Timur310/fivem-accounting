@@ -303,6 +303,16 @@ export const en = {
   'inGameName.saved': 'In-game name saved',
   'inGameName.saveFailed': 'Could not save in-game name',
 
+  // ── Waiting to be let into a faction ──
+  'pending.title': 'Waiting to be added to a faction',
+  'pending.body': 'Your account is ready. A faction admin has to add you before there is anything here to see — send them the ID below. This page moves on by itself the moment they do.',
+  'pending.signedInAs': 'Signed in as',
+  'pending.copyId': 'Copy Discord ID',
+  'pending.idCopied': 'Discord ID copied',
+  'pending.copyFailed': 'Could not copy — select the ID and copy it by hand',
+  'pending.checkNow': 'Check again',
+  'pending.checking': 'Checking...',
+
   // ── Withdrawals (payouts) ──
   'payouts.intro': 'Manage what leaves the faction treasury',
   'payouts.count': { one: '{count} withdrawal', other: '{count} withdrawals' } as PluralForms,
