@@ -1,14 +1,24 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { treasuryApi } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle } from 'lucide-react';
+import {
+  SearchableSelect, type SearchableSelectOption,
+} from '@/components/ui/searchable-select';
+import {
+  Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle, Search,
+  ArrowDownWideNarrow, ArrowUpNarrowWide,
+} from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName, formatNumber } from '@/lib/format';
+import { getIntlLocale } from '@/lib/i18n';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
 
@@ -16,9 +26,16 @@ interface Props {
   factionId: string;
 }
 
+type SortField = 'name' | 'balance';
+type SortDirection = 'asc' | 'desc';
+
 export function TreasuryView({ factionId }: Props) {
   const { t } = useTranslation();
   const brandColor = useAppStore((s) => s.brandColor);
+
+  const [nameFilter, setNameFilter] = useState('');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['treasury', factionId],
@@ -52,6 +69,27 @@ export function TreasuryView({ factionId }: Props) {
   const fmt = (n: number) => `$${formatNumber(n)}`;
 
   const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
+
+  // Filtering and ordering are a reading aid over a list the API already sent
+  // whole, so both happen here rather than as query parameters: no refetch, and
+  // the totals above go on covering every type regardless of what is hidden.
+  // `.filter` hands back a fresh array, so sorting it leaves `balances` alone.
+  const query = nameFilter.trim().toLowerCase();
+  const visibleBalances = balances
+    .filter((b) => !query || b.itemTypeName.toLowerCase().includes(query))
+    .sort((a, b) => {
+      // Collated in the reading language: without it Hungarian sorts "Ő" after
+      // "Z" instead of next to "O".
+      const order = sortField === 'name'
+        ? a.itemTypeName.localeCompare(b.itemTypeName, getIntlLocale())
+        : a.balance - b.balance;
+      return sortDirection === 'asc' ? order : -order;
+    });
+
+  const sortOptions: SearchableSelectOption[] = [
+    { value: 'name', label: t('common.name') },
+    { value: 'balance', label: t('common.amount') },
+  ];
 
   // The three headline totals cover currency types only — goods have no shared
   // unit to add up. Say so whenever the faction actually tracks any.
@@ -154,18 +192,55 @@ export function TreasuryView({ factionId }: Props) {
 
       {/* ══ Balance Cards per Item Type ══ */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
             <Wallet className="h-4 w-4 text-zinc-400" />
             {t('treasury.balancesByItemType')}
           </CardTitle>
+          {/* Nothing to search or reorder until there is a list. */}
+          {balances.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+                <Input
+                  className="h-8 w-[170px] pl-8 text-xs"
+                  placeholder={t('itemTypes.search')}
+                  aria-label={t('itemTypes.search')}
+                  value={nameFilter}
+                  onChange={(e) => setNameFilter(e.target.value)}
+                />
+              </div>
+              <SearchableSelect
+                className="w-[120px]"
+                triggerClassName="h-8 text-xs"
+                aria-label={t('treasury.sortBy')}
+                value={sortField}
+                onValueChange={(v) => setSortField(v as SortField)}
+                options={sortOptions}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                title={t('treasury.toggleSortDirection')}
+                aria-label={t('treasury.toggleSortDirection')}
+              >
+                {sortDirection === 'asc'
+                  ? <ArrowUpNarrowWide className="h-3.5 w-3.5" />
+                  : <ArrowDownWideNarrow className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {balances.length === 0 ? (
             <p className="text-zinc-600 text-sm text-center py-8">{t('treasury.noBalances')}</p>
+          ) : visibleBalances.length === 0 ? (
+            <p className="text-zinc-600 text-sm text-center py-8">{t('itemTypes.noneMatch')}</p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {balances.map((b) => (
+              {visibleBalances.map((b) => (
                 <div
                   key={b.itemTypeId}
                   className={`rounded-lg border p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1] ${

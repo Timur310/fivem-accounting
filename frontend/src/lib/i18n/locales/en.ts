@@ -378,6 +378,8 @@ export const en = {
   'treasury.pendingWithdrawals': { one: '{count} Pending Withdrawal', other: '{count} Pending Withdrawals' } as PluralForms,
   'treasury.pendingWaiting': '{amount} waiting for approval or completion',
   'treasury.balancesByItemType': 'Balances by Item Type',
+  'treasury.sortBy': 'Sort by',
+  'treasury.toggleSortDirection': 'Reverse the order',
   'treasury.noBalances': 'No balance data yet.',
   'treasury.positive': 'Positive',
   'treasury.negative': 'Negative',

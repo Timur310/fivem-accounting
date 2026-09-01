@@ -370,6 +370,8 @@ export const hu: Translations = {
   'treasury.pendingWithdrawals': { one: '{count} függő kifizetés', other: '{count} függő kifizetés' },
   'treasury.pendingWaiting': '{amount} vár jóváhagyásra vagy teljesítésre',
   'treasury.balancesByItemType': 'Egyenlegek tételtípusonként',
+  'treasury.sortBy': 'Rendezés',
+  'treasury.toggleSortDirection': 'Sorrend megfordítása',
   'treasury.noBalances': 'Még nincs egyenlegadat.',
   'treasury.positive': 'Pozitív',
   'treasury.negative': 'Negatív',
