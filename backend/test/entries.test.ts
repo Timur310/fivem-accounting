@@ -81,13 +81,52 @@ describe('POST /entries', () => {
     expect(res.body.error.message).toMatch(/disabled/i);
   });
 
-  it('forbids a superadmin who is not a member of the faction', async () => {
+  // A superadmin is not on the roster of a faction they merely browse, so an
+  // entry with nobody named on it would credit someone the leaderboard and the
+  // member totals have no row for. They can still book one — they just have to
+  // say whose it is.
+  it('forbids a superadmin who is not a member from logging onto themselves', async () => {
     const res = await api()
       .post(base())
       .set('Cookie', w.superadmin.cookie)
       .send({ itemTypeId: w.itemTypeId, amount: '10' });
     expect(res.status).toBe(403);
     expect(res.body.error.message).toMatch(/member of this faction/i);
+  });
+
+  it('forbids it just the same when they name themselves explicitly', async () => {
+    const res = await api()
+      .post(base())
+      .set('Cookie', w.superadmin.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '10', userId: w.superadmin.id });
+    expect(res.status).toBe(403);
+  });
+
+  it('lets a superadmin who is not a member log for a member', async () => {
+    const res = await api()
+      .post(base())
+      .set('Cookie', w.superadmin.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '250', userId: w.member.id });
+    expect(res.status).toBe(201);
+    expect(res.body.data.userId).toBe(w.member.id);
+  });
+
+  it('lets a superadmin who is not a member log anonymously', async () => {
+    const res = await api()
+      .post(base())
+      .set('Cookie', w.superadmin.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '250', anonymous: true });
+    expect(res.status).toBe(201);
+    expect(res.body.data.userId).not.toBe(w.superadmin.id);
+  });
+
+  it('still refuses to credit someone outside the faction', async () => {
+    const outsider = await createUser('outsider_user');
+    const res = await api()
+      .post(base())
+      .set('Cookie', w.superadmin.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '250', userId: outsider.id });
+    expect(res.status).toBe(404);
   });
 });
 

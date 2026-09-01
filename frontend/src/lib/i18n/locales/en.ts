@@ -208,6 +208,7 @@ export const en = {
   'entries.notePlaceholder': 'Optional note...',
   'entries.creditTo': 'Credit to',
   'entries.creditToHint': 'Book what someone else handed in — including a member who was registered by Discord ID and has never logged in.',
+  'entries.creditToRequired': 'You are not a member of this faction, so an entry cannot be credited to you — name a member, or mark it anonymous to credit the faction.',
   'entries.anonymous': 'Anonymous',
   'entries.anonymousHint': 'Credits the faction instead of you. Counts towards the treasury, but stays out of the leaderboard and every other ranking.',
 

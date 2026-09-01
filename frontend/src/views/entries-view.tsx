@@ -44,9 +44,15 @@ interface Props {
   factionId: string;
   isAdmin: boolean;
   canLogEntries: boolean;
+  /**
+   * Whether the caller is on this faction's roster. A superadmin browsing a
+   * faction they never joined is not, so "Me" is not somewhere an entry can
+   * land — they have to name a member or mark it anonymous.
+   */
+  canCreditSelf?: boolean;
 }
 
-export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntries }: Props) {
+export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf = true, canManageEntries }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -127,7 +133,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
   });
 
   const memberOptions = useMemo<SearchableSelectOption[]>(() => [
-    { value: '', label: t('entries.me') },
+    ...(canCreditSelf ? [{ value: '', label: t('entries.me') }] : []),
     ...members.map((m) => ({
       value: m.userId,
       label: displayName(m),
@@ -139,7 +145,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
         </Avatar>
       ),
     })),
-  ], [members, t]);
+  ], [members, canCreditSelf, t]);
 
   const itemTypeOptions = useMemo<SearchableSelectOption[]>(() => activeItemTypes.map((item: ItemType) => ({
     value: item.id,
@@ -441,11 +447,16 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
                   onValueChange={setNewOwnerId}
                   options={memberOptions}
                   disabled={newAnonymous}
-                  placeholder={t('entries.me')}
+                  placeholder={canCreditSelf ? t('entries.me') : t('members.select')}
                   searchPlaceholder={t('members.search')}
                   emptyMessage={t('members.noneMatch')}
                 />
-                <p className="text-xs text-zinc-500">{t('entries.creditToHint')}</p>
+                {/* Without a membership the Save button stays shut until the
+                    entry has an owner, so say why rather than leaving a dead
+                    control. */}
+                <p className="text-xs text-zinc-500">
+                  {canCreditSelf ? t('entries.creditToHint') : t('entries.creditToRequired')}
+                </p>
               </div>
             )}
             {canManageEntries && (
@@ -463,7 +474,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canManageEntrie
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending || customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())}>
+            <Button onClick={() => createMutation.mutate()} disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending || (!canCreditSelf && !newAnonymous && !newOwnerId) || customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())}>
               {createMutation.isPending ? t('entries.logging') : newAnonymous ? t('entries.logAnonymously') : t('entries.logEntry')}
             </Button>
           </DialogFooter>
