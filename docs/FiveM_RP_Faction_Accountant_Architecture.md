@@ -5,6 +5,11 @@
 > **Auth:** Discord OAuth 2.0 | **Deployment:** Self-Hosted VPS  
 > **Purpose:** AI-readable architecture document and master prompt for autonomous development
 
+> **Status:** Sections 5 to 10 describe the system as built, and are kept in step
+> with the code. Sections 11 to 13 are the original plan and master prompt, left
+> as written — they record what was intended, not what exists. Where the two
+> disagree, the code and sections 5 to 10 are correct.
+
 ---
 
 ## Table of Contents
@@ -111,7 +116,7 @@ Faction admins configure which item types can be logged (dirty money, clean mone
 | `caddy` | caddy:2-alpine | 80, 443 (host) | Reverse proxy + auto TLS |
 
 - All services on a shared Docker bridge network
-- Only Caddy exposes ports to the host
+- Only the reverse proxy (nginx) exposes ports to the host
 - Named volumes: `pgdata`, `caddy_data`, `caddy_config`
 - Multi-stage Dockerfiles for minimal image sizes
 - Health checks on all services, `restart: unless-stopped`
@@ -137,7 +142,7 @@ Browser (User)
     |
     | HTTPS
     v
-Caddy (Reverse Proxy, TLS)
+nginx (Reverse Proxy, TLS)
     |
     |-- /           --> Frontend (Next.js, port 3000)
     |-- /api/*      --> Backend (Express/Fastify, port 8000)
@@ -190,304 +195,81 @@ FactionMember 1---* Strike
 FactionMember 1---* MemberNote
 ```
 
-### 5.2 Table Schemas
+### 5.2 Tables As Built
 
-#### users
+Ten tables. Every id is a `uuid` with `defaultRandom()` unless noted.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Unique user identifier |
-| discord_id | VARCHAR(20) | UNIQUE, NOT NULL | Discord user ID (permanent) |
-| username | VARCHAR(32) | NOT NULL | Discord username |
-| in_game_name | VARCHAR(50) | NULLABLE | Player's in-game character name, set by the player after login |
-| avatar_url | TEXT | NULLABLE | Discord avatar URL |
-| role | VARCHAR(20) | NOT NULL, DEFAULT 'member' | superadmin / faction_admin / member |
-| is_system | BOOLEAN | NOT NULL, DEFAULT false | Not a person — the placeholder anonymous entries and laundering hang off. Excluded from every ranking |
-| is_provisional | BOOLEAN | NOT NULL, DEFAULT false | Registered by a superadmin before this person ever signed in. Counts as a member everywhere, but has no inactivity clock. Cleared on their first login |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Account creation |
-| last_login | TIMESTAMPTZ | NULLABLE | Last login timestamp |
+**`users`** — one row per Discord account, and per person registered before they
+ever signed in.
 
-#### factions
+| Column | Notes |
+|---|---|
+| `discord_id` | unique; the key the OAuth callback lands on |
+| `username` | Discord's name, refreshed on each login |
+| `in_game_name` | character name; null until set. Editable by the player, and by `manage_members` inside a faction |
+| `avatar_url`, `role`, `created_at`, `last_login` | `role` is `superadmin` / `faction_admin` / `member` |
+| `is_system` | the anonymous placeholder that owns anonymous entries. Not a person; excluded from rosters and rankings |
+| `is_provisional` | registered by Discord ID, never signed in. Cleared by the first login, so their history carries over |
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Unique faction identifier |
-| name | VARCHAR(100) | UNIQUE, NOT NULL | Faction display name |
-| description | TEXT | NULLABLE | Optional description |
-| created_by | UUID | FK -> users.id, NOT NULL | Superadmin who created it |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
-| is_active | BOOLEAN | NOT NULL, DEFAULT TRUE | Soft-delete flag |
+**`factions`** — `name` (unique), `description`, `brand_color`, `custom_fields`
+(jsonb), `ranks` (jsonb), `inactivity_threshold_days`, `strike_expiry_days`
+(jsonb, per severity), `created_by`, `created_at`, `is_active`.
 
-#### faction_members
+`ranks` is where faction-level authorisation lives: each entry is
+`{ name, level, permissions[] }`, and `permissions` holds names from
+`FACTION_PERMISSIONS` (§7.2).
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Membership record ID |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Reference to faction |
-| user_id | UUID | FK -> users.id, NOT NULL | Reference to user |
-| role | VARCHAR(20) | NOT NULL, DEFAULT 'member' | admin / member within faction |
-| joined_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Join timestamp |
-| | | **UNIQUE(faction_id, user_id)** | One membership per user per faction |
+**`faction_members`** — `faction_id`, `user_id` (unique together), `role`
+(`admin` / `member`), `rank` (matches a name in the faction's `ranks`),
+`joined_at`.
 
-#### item_types
+**`item_types`** — `faction_id`, `name`, `unit`, `is_currency`, `image_url`,
+`is_active`. `unit` is derived from `is_currency` rather than typed: `$` for
+money, `pcs` for goods.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Item type identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Owning faction |
-| name | VARCHAR(100) | NOT NULL | Display name (Dirty Money, Lock Pick, etc.) |
-| unit | VARCHAR(20) | NOT NULL, DEFAULT '$' | Unit: $, kg, pcs, etc. |
-| image_url | TEXT | NULLABLE | Link to an icon for the item, hosted elsewhere |
-| is_active | BOOLEAN | NOT NULL, DEFAULT TRUE | Whether members can log this type |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+**`entries`** — contributions in. `faction_id`, `user_id`, `item_type_id`,
+`amount` (decimal, kept as a string end to end), `description`, `entry_date`,
+`custom_values` (jsonb), `is_deleted`.
 
-#### entries
+**`payouts`** — value out. `faction_id`, `recipient_user_id`, `created_by`,
+`item_type_id`, `amount`, `description`, `payout_date`, `status`
+(`pending` / `approved` / `rejected` / `completed`), `approved_by`,
+`approved_at`, `is_deleted`.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Entry identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this entry belongs to |
-| user_id | UUID | FK -> users.id, NOT NULL | Member who logged this |
-| item_type_id | UUID | FK -> item_types.id, NOT NULL | Type of contribution |
-| amount | DECIMAL(15,2) | NOT NULL | Amount contributed (never FLOAT) |
-| description | TEXT | NULLABLE | Optional note |
-| entry_date | DATE | NOT NULL, DEFAULT TODAY | Date of in-game contribution |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Record creation time |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last edit time (NULL = never edited) |
+**`strikes`** — `faction_id`, `target_user_id`, `issued_by`, `reason`,
+`severity` (`warning` / `minor` / `major`), `status`
+(`active` / `appealed` / `revoked` / `expired`), `expires_at`. The status on the
+row and the *effective* status differ: an `active` strike past `expires_at`
+reads as expired without anything having written to it.
 
-#### quotas
+**`member_notes`** — admin-only notes on a member. Never shown to their subject.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Quota identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this applies to |
-| item_type_id | UUID | FK -> item_types.id, NOT NULL | Targeted item type |
-| target_amount | DECIMAL(15,2) | NOT NULL | Target total for the period |
-| period_type | VARCHAR(10) | NOT NULL | 'weekly' or 'monthly' |
-| period_start | DATE | NOT NULL | Start date of quota period |
-| is_active | BOOLEAN | NOT NULL, DEFAULT TRUE | Currently active? |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Creation timestamp |
+**`quotas`** — `faction_id`, `item_type_id`, `target_amount`, `period_type`
+(`weekly` / `monthly`), `period_start`, `target_user_id` (null = faction-wide),
+`is_active`.
 
-#### audit_logs
+**`audit_logs`** — `user_id`, `faction_id`, `action`, `entity_type`,
+`entity_id`, `details` (jsonb, before/after), `ip_address`, `created_at`.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | BIGSERIAL | PK | Auto-incrementing log ID |
-| user_id | UUID | FK -> users.id, NOT NULL | Who performed the action |
-| faction_id | UUID | FK -> factions.id, NULLABLE | Affected faction |
-| action | VARCHAR(50) | NOT NULL | create, update, delete, login, etc. |
-| entity_type | VARCHAR(50) | NOT NULL | faction, member, entry, item_type, quota |
-| entity_id | UUID | NULLABLE | ID of affected entity |
-| details | JSONB | NULLABLE | Before/after diff or action context |
-| ip_address | INET | NULLABLE | Requester IP |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When action occurred |
+**Removed:** `factions.payout_approval_required` (migration `0007`). It decided
+where a payout started rather than who could settle it, and once the four-eyes
+rule went it no longer bought a second pair of eyes. `manage_payouts` decides
+now — see §8.3.
 
-#### payouts
+### 5.3 Balances Are Derived, Never Stored
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Payout identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this payout belongs to |
-| recipient_user_id | UUID | FK -> users.id, NOT NULL | Member receiving the payout |
-| created_by | UUID | FK -> users.id, NOT NULL | Admin who created the payout |
-| item_type_id | UUID | FK -> item_types.id, NOT NULL | Type of resource being distributed |
-| amount | DECIMAL(15,2) | NOT NULL | Amount distributed |
-| description | TEXT | NULLABLE | Reason or note (e.g. "Weekly cut", "Job bonus") |
-| payout_date | DATE | NOT NULL, DEFAULT TODAY | Date the payout was issued |
-| status | VARCHAR(20) | NOT NULL, DEFAULT 'pending' | pending / approved / rejected / completed |
-| approved_by | UUID | FK -> users.id, NULLABLE | Admin who approved (if multi-admin) |
-| approved_at | TIMESTAMPTZ | NULLABLE | When it was approved |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Record creation time |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last edit time |
-| is_deleted | BOOLEAN | NOT NULL, DEFAULT FALSE | Soft-delete flag |
+There is no balance column anywhere. `computeTreasuryBalances()` derives it:
 
-#### announcements
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Announcement identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this belongs to |
-| author_id | UUID | FK -> users.id, NOT NULL | Admin who posted |
-| title | VARCHAR(200) | NOT NULL | Announcement headline |
-| body | TEXT | NOT NULL | Full announcement content (markdown) |
-| priority | VARCHAR(20) | NOT NULL, DEFAULT 'normal' | low / normal / high / urgent |
-| is_pinned | BOOLEAN | NOT NULL, DEFAULT FALSE | Show at top of feed |
-| expires_at | TIMESTAMPTZ | NULLABLE | Auto-hide after this time |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When posted |
-| updated_at | TIMESTAMPTZ | NULLABLE | Last edit time |
-| is_deleted | BOOLEAN | NOT NULL, DEFAULT FALSE | Soft-delete flag |
-
-#### member_notes
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Note identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this note belongs to |
-| target_user_id | UUID | FK -> users.id, NOT NULL | Member this note is about |
-| author_id | UUID | FK -> users.id, NOT NULL | Admin who wrote the note |
-| category | VARCHAR(50) | NOT NULL, DEFAULT 'general' | general / performance / discipline / positive / promotion |
-| content | TEXT | NOT NULL | Note body |
-| is_flagged | BOOLEAN | NOT NULL, DEFAULT FALSE | Flagged for follow-up |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When written |
-
-#### strikes
-
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Strike identifier |
-| faction_id | UUID | FK -> factions.id, NOT NULL | Faction this strike belongs to |
-| target_user_id | UUID | FK -> users.id, NOT NULL | Member receiving the strike |
-| issued_by | UUID | FK -> users.id, NOT NULL | Admin who issued |
-| reason | TEXT | NOT NULL | Why the strike was given |
-| severity | VARCHAR(20) | NOT NULL | warning / minor / major |
-| status | VARCHAR(20) | NOT NULL, DEFAULT 'active' | active / appealed / expired / revoked |
-| expires_at | TIMESTAMPTZ | NULLABLE | When the strike auto-expires |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | When issued |
-
-### 5.3 Drizzle Schema (src/db/schema.ts)
-
-```typescript
-import {
-  pgTable,
-  uuid,
-  varchar,
-  text,
-  boolean,
-  timestamp,
-  bigSerial,
-  decimal,
-  date,
-  jsonb,
-  inet,
-  uniqueIndex,
-  index,
-} from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
-
-// ── users ──────────────────────────────────────────────
-export const users = pgTable('users', {
-  id:         uuid('id').defaultRandom().primaryKey(),
-  discordId:  varchar('discord_id', { length: 20 }).notNull().unique(),
-  username:   varchar('username', { length: 32 }).notNull(),
-  inGameName: varchar('in_game_name', { length: 50 }),
-  avatarUrl:  text('avatar_url'),
-  role:       varchar('role', { length: 20 }).notNull().default('member'),
-  createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  lastLogin:  timestamp('last_login', { withTimezone: true }),
-});
-
-export const usersRelations = relations(users, ({ many }) => ({
-  factionMembers: many(factionMembers),
-  entries:        many(entries),
-  auditLogs:      many(auditLogs),
-}));
-
-// ── factions ───────────────────────────────────────────
-export const factions = pgTable('factions', {
-  id:          uuid('id').defaultRandom().primaryKey(),
-  name:        varchar('name', { length: 100 }).notNull().unique(),
-  description: text('description'),
-  createdBy:   uuid('created_by').notNull().references(() => users.id),
-  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  isActive:    boolean('is_active').notNull().default(true),
-});
-
-export const factionsRelations = relations(factions, ({ one, many }) => ({
-  creator:        one(users, { fields: [factions.createdBy], references: [users.id] }),
-  factionMembers: many(factionMembers),
-  itemTypes:      many(itemTypes),
-  entries:        many(entries),
-  quotas:         many(quotas),
-  auditLogs:      many(auditLogs),
-}));
-
-// ── faction_members ────────────────────────────────────
-export const factionMembers = pgTable('faction_members', {
-  id:        uuid('id').defaultRandom().primaryKey(),
-  factionId: uuid('faction_id').notNull().references(() => factions.id),
-  userId:    uuid('user_id').notNull().references(() => users.id),
-  role:      varchar('role', { length: 20 }).notNull().default('member'),
-  joinedAt:  timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  uniqueFactionUser: uniqueIndex('faction_member_unique').on(table.factionId, table.userId),
-}));
-
-export const factionMembersRelations = relations(factionMembers, ({ one }) => ({
-  faction: one(factions, { fields: [factionMembers.factionId], references: [factions.id] }),
-  user:    one(users,    { fields: [factionMembers.userId],    references: [users.id] }),
-}));
-
-// ── item_types ─────────────────────────────────────────
-export const itemTypes = pgTable('item_types', {
-  id:        uuid('id').defaultRandom().primaryKey(),
-  factionId: uuid('faction_id').notNull().references(() => factions.id),
-  name:      varchar('name', { length: 100 }).notNull(),
-  unit:      varchar('unit', { length: 20 }).notNull().default('$'),
-  imageUrl:  text('image_url'),
-  isActive:  boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const itemTypesRelations = relations(itemTypes, ({ one, many }) => ({
-  faction: one(factions, { fields: [itemTypes.factionId], references: [factions.id] }),
-  entries: many(entries),
-  quotas:  many(quotas),
-}));
-
-// ── entries ────────────────────────────────────────────
-export const entries = pgTable('entries', {
-  id:         uuid('id').defaultRandom().primaryKey(),
-  factionId:  uuid('faction_id').notNull().references(() => factions.id),
-  userId:     uuid('user_id').notNull().references(() => users.id),
-  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id),
-  amount:     decimal('amount', { precision: 15, scale: 2 }).notNull(),
-  description: text('description'),
-  entryDate:  date('entry_date').notNull().defaultNow(),
-  createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt:  timestamp('updated_at', { withTimezone: true }),
-});
-
-export const entriesRelations = relations(entries, ({ one }) => ({
-  faction:  one(factions,  { fields: [entries.factionId],  references: [factions.id] }),
-  user:     one(users,     { fields: [entries.userId],     references: [users.id] }),
-  itemType: one(itemTypes, { fields: [entries.itemTypeId], references: [itemTypes.id] }),
-}));
-
-// ── quotas ─────────────────────────────────────────────
-export const quotas = pgTable('quotas', {
-  id:           uuid('id').defaultRandom().primaryKey(),
-  factionId:    uuid('faction_id').notNull().references(() => factions.id),
-  itemTypeId:   uuid('item_type_id').notNull().references(() => itemTypes.id),
-  targetAmount: decimal('target_amount', { precision: 15, scale: 2 }).notNull(),
-  periodType:   varchar('period_type', { length: 10 }).notNull(),
-  periodStart:  date('period_start').notNull(),
-  isActive:     boolean('is_active').notNull().default(true),
-  createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const quotasRelations = relations(quotas, ({ one }) => ({
-  faction:  one(factions,  { fields: [quotas.factionId],  references: [factions.id] }),
-  itemType: one(itemTypes, { fields: [quotas.itemTypeId], references: [itemTypes.id] }),
-}));
-
-// ── audit_logs ─────────────────────────────────────────
-export const auditLogs = pgTable('audit_logs', {
-  id:         bigSerial('id').primaryKey(),
-  userId:     uuid('user_id').notNull().references(() => users.id),
-  factionId:  uuid('faction_id').references(() => factions.id),
-  action:     varchar('action', { length: 50 }).notNull(),
-  entityType: varchar('entity_type', { length: 50 }).notNull(),
-  entityId:   uuid('entity_id'),
-  details:    jsonb('details'),
-  ipAddress:  inet('ip_address'),
-  createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
-  user:    one(users,    { fields: [auditLogs.userId],    references: [users.id] }),
-  faction: one(factions, { fields: [auditLogs.factionId], references: [factions.id] }),
-}));
 ```
+balance = SUM(entries WHERE NOT deleted)
+        - SUM(payouts WHERE NOT deleted AND status = 'completed')
+```
+
+Only completed payouts count: pending and approved ones have not left the vault,
+and rejected ones never will. The helper takes `onlyWithActivity`, which drops
+item types nothing has ever passed through — the treasury and dashboard pass it
+so they do not show rows of zeroes; laundering does not, because you wash *into*
+a currency the vault has never held.
 
 ### 5.4 Database Client Setup (src/db/index.ts)
 
@@ -610,302 +392,273 @@ const [items, countResult] = await Promise.all([
 
 ## 6. API Design
 
-All endpoints under `/api/v1`. All require auth except OAuth callback.
+All routes are under `/api/v1`. Faction-scoped routes sit behind
+`requireFactionMember`, which resolves the caller's `factionRole` and the
+permission set their rank grants (§7.2); individual routes then add
+`requirePermission(...)`.
 
 ### 6.1 Authentication
 
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| GET | `/api/v1/auth/discord` | Public | Redirects to Discord OAuth consent screen |
-| GET | `/api/v1/auth/callback` | Public | Handles OAuth callback, issues JWT cookie |
-| POST | `/api/v1/auth/logout` | Authenticated | Clears JWT cookie |
-| GET | `/api/v1/auth/me` | Authenticated | Returns current user profile + role + factions |
-| PATCH | `/api/v1/auth/me` | Authenticated | Updates own profile (in-game name) |
+| Method | Path | Who |
+|---|---|---|
+| GET | `/auth/discord` | anyone — starts OAuth |
+| GET | `/auth/callback` | Discord |
+| GET | `/auth/me` | signed in |
+| PATCH | `/auth/me` | signed in — sets own `inGameName` (2–50 chars) |
+| POST | `/auth/logout` | signed in |
 
-### 6.2 Faction Management (Superadmin)
+### 6.2 Superadmin
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/factions` | Create faction (name, description, initial admin Discord ID) |
-| GET | `/api/v1/factions` | List all factions with summary stats (paginated, searchable) |
-| GET | `/api/v1/factions/{id}` | Full faction details + members + item types + recent audit logs |
-| PATCH | `/api/v1/factions/{id}` | Update name, description, or active status |
-| DELETE | `/api/v1/factions/{id}` | Soft-delete (sets is_active=false, data preserved) |
+| Method | Path | Notes |
+|---|---|---|
+| GET/POST/PATCH/DELETE | `/factions` | create, list, edit, deactivate |
+| GET | `/admin/analytics` | cross-faction totals |
+| GET | `/admin/users` | every real user; provisional first, then by last login. Excludes the system placeholder |
+| GET/POST/PATCH/DELETE | `/admin/provisional-users` | register someone by Discord ID; rename and remove while nobody has signed into the row |
+| GET | `/leaderboard` | cross-faction ranking |
 
-### 6.3 Member Management (Faction Admin)
+### 6.3 Faction-Scoped
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/factions/{id}/members` | Add member by Discord ID/username, default role=member |
-| GET | `/api/v1/factions/{id}/members` | List members with roles, join dates, contribution counts |
-| PATCH | `/api/v1/factions/{id}/members/{user_id}` | Update member role (promote/demote) |
-| DELETE | `/api/v1/factions/{id}/members/{user_id}` | Remove member (entries preserved) |
+Prefix: `/factions/:id`.
 
-### 6.4 Entries (Contributions)
+| Path | Notes |
+|---|---|
+| `/members` | roster. PATCH sets `role`, `rank` and `inGameName` — see §8.5 |
+| `/members/search` | find a user to add; returns `inGameName` too |
+| `/members/:userId/notes` | admin-only notes |
+| `/members/:userId/strikes` | issue and settle a member's strikes; reading your own record returns its full history |
+| `/strikes` | faction-wide. No `status` means "still counts against the member"; `status=all` is the whole history |
+| `/entries` | contributions. POST accepts `userId` (credit another member) and `anonymous` |
+| `/payouts` | see §8.3 |
+| `/treasury` | derived balances, pending totals, outflow trend |
+| `/laundering` | convert one currency into another |
+| `/item-types`, `/quotas`, `/settings` | faction configuration |
+| `/dashboard`, `/charts`, `/reports`, `/leaderboard`, `/audit-logs`, `/export`, `/bulk` | reading and reporting |
 
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| POST | `/api/v1/factions/{id}/entries` | Member | Log new contribution (item_type, amount, date, description) |
-| GET | `/api/v1/factions/{id}/entries` | Member | List entries with filters (date range, item type, member, pagination) |
-| PATCH | `/api/v1/factions/{id}/entries/{entry_id}` | Admin | Edit entry (amount, description, date). Original values in audit log |
-| DELETE | `/api/v1/factions/{id}/entries/{entry_id}` | Admin | Soft-delete entry (is_deleted flag, preserved for history) |
+### 6.4 Response Format
 
-### 6.5 Item Types (Faction Admin)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/factions/{id}/item-types` | Create trackable item type (name, unit, optional image URL) |
-| GET | `/api/v1/factions/{id}/item-types` | List item types with active/inactive status |
-| PATCH | `/api/v1/factions/{id}/item-types/{type_id}` | Update name, unit, image URL, or active status |
-| DELETE | `/api/v1/factions/{id}/item-types/{type_id}` | Soft-delete (existing entries preserved) |
-
-### 6.6 Quotas (Faction Admin)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/factions/{id}/quotas` | Create quota (item_type, target, period_type, period_start) |
-| GET | `/api/v1/factions/{id}/quotas` | List quotas with current progress (actual vs target) |
-| PATCH | `/api/v1/factions/{id}/quotas/{quota_id}` | Update target, period, or active status |
-| DELETE | `/api/v1/factions/{id}/quotas/{quota_id}` | Delete quota (history preserved in audit log) |
-
-### 6.7 Dashboard & Reports
-
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| GET | `/api/v1/factions/{id}/dashboard` | Member | Aggregated data: totals by type, quota progress, top contributors, activity feed |
-| GET | `/api/v1/factions/{id}/reports/summary` | Admin | Summary report for date range: totals, per-member breakdown, quota % |
-| GET | `/api/v1/factions/{id}/audit-logs` | Admin | Paginated audit logs with filters (action, user, date) |
-
-### 6.8 Response Format
-
-**Success:**
-```json
-{
-  "data": { ... },
-  "meta": { "page": 1, "page_size": 20, "total_count": 150 }
-}
-```
-
-**Error:**
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Amount must be a positive number"
-  }
-}
-```
-
-HTTP status codes: 400 (validation), 401 (unauthenticated), 403 (unauthorized), 404 (not found), 422 (unprocessable), 500 (server error).
+Unchanged from the original design: `{ data, meta? }` on success,
+`{ error: { code, message } }` on failure, with `meta` carrying
+`page` / `page_size` / `total_count` on paginated lists.
 
 ---
 
 ## 7. Authentication & Authorization
 
-### 7.1 Discord OAuth 2.0 Flow (with PKCE)
+### 7.1 Discord OAuth 2.0
 
-1. Unauthenticated user visits any page → frontend redirects to `GET /api/v1/auth/discord`
-2. Backend generates `state` param (stored in short-lived Redis key), builds Discord auth URL
-3. User authorizes on Discord → Discord redirects to `GET /api/v1/auth/callback?code=...&state=...`
-4. Backend validates state (CSRF protection), exchanges code for access token via server-to-server POST
-5. Backend fetches user profile from Discord `/api/users/@me`
-6. If no local user exists → create with role=member
-7. Backend signs JWT (user_id, role) via `jsonwebtoken` → sets as HTTP-only, Secure, SameSite=Strict cookie
-8. Redirect to dashboard. Total flow: <2 seconds.
+Unchanged: Discord is the only identity provider, the callback issues a JWT in
+an httpOnly cookie, and the first account to sign in is promoted to superadmin.
+A login whose Discord ID matches a provisional row lands on that row and clears
+the flag, so anything already booked against it carries over.
 
-### 7.2 Role Definitions
+### 7.2 Two Layers of Authority
 
-**superadmin:**
-- Create, edit, soft-delete any faction
-- View all factions and all data system-wide
-- Manage all faction memberships
-- Access system-wide audit log
-- **Cannot** log entries (only actual faction members can)
-- First superadmin promoted via bootstrap script or direct DB update
+**Global role** (`users.role`): `superadmin`, `faction_admin`, `member`.
 
-**faction_admin:**
-- Scoped to specific faction (can be admin in multiple factions)
-- Add/remove members, promote/demote within own faction
-- Configure item types (create, edit, enable/disable, delete)
-- Set and modify quotas
-- View, edit, delete any entry within own faction
-- View own faction's audit log
-- **Cannot** access other factions or system settings
+A superadmin holds every faction permission in every faction, membership or
+not — `requireFactionMember` grants the full set on the global role alone. This
+is deliberate and is what the interface reflects: a superadmin sees every menu
+and every action, including in a faction they joined as a plain member on a rank
+that grants nothing.
 
-**member:**
-- View own faction's dashboard (aggregated data, quota progress, recent entries)
-- View member list
-- Log own entries (create only)
-- View own faction's item types
-- **Cannot** edit/delete anything, view other factions, or access admin features
+**Faction permissions** (`factions.ranks[].permissions`): what a rank lets an
+ordinary member do. A faction admin holds all of them implicitly.
+
+```
+manage_members       manage_payouts      manage_entries
+manage_strikes       manage_quotas       manage_item_types
+manage_settings      manage_customization
+view_audit_logs      view_reports        manage_laundering
+```
+
+The admin seat itself is not delegable: `manage_members` runs the roster, but
+changing someone's `role` stays with the faction admin and the superadmin.
 
 ### 7.3 Permission Matrix
 
-| Action | Superadmin | Faction Admin | Member |
-|--------|:----------:|:-------------:|:------:|
-| Create / delete factions | Yes | No | No |
-| View all factions | Yes (all) | Own only | Own only |
-| Add / remove faction members | Yes (all) | Own faction | No |
-| Configure item types | Yes (all) | Own faction | No |
-| Set / modify quotas | Yes (all) | Own faction | No |
-| Log new entries | No | Yes (own) | Yes (own) |
-| Edit / delete entries | No | Own faction | No |
-| View faction dashboard | Yes (all) | Own faction | Own faction |
-| View audit logs | Yes (all) | Own faction | No |
-| Promote first superadmin | Yes (bootstrap) | No | No |
+"Rank" means a member whose rank grants the named permission.
+
+| Action | Superadmin | Faction Admin | Rank | Member |
+|---|:--:|:--:|:--:|:--:|
+| Create / delete factions | Yes | No | — | No |
+| Add / remove members, set ranks | Yes | Yes | `manage_members` | No |
+| Change a member's `role` | Yes | Yes | No | No |
+| Edit a member's in-game name | Yes | Yes | `manage_members` | own only |
+| Log an entry for yourself | Yes¹ | Yes | Yes | Yes |
+| Log for another member, or anonymously | Yes | Yes | `manage_entries` | No |
+| Edit / delete entries | Yes | Yes | `manage_entries` | No |
+| Request a withdrawal for yourself | Yes | Yes | Yes | Yes |
+| Create one for someone else | Yes | Yes | `manage_payouts` | No |
+| Approve / complete / reject / edit / delete a withdrawal | Yes | Yes | `manage_payouts` | No |
+| See the faction's whole withdrawal list | Yes | Yes | `manage_payouts` | own only |
+| Issue and settle strikes | Yes | Yes | `manage_strikes` | No |
+| Launder currency | Yes | Yes | `manage_laundering` | No |
+| Item types / quotas / settings | Yes | Yes | matching permission | No |
+| View audit logs | Yes | Yes | `view_audit_logs` | No |
+| View reports | Yes | Yes | `view_reports` | No |
+| Read the treasury and dashboard | Yes | Yes | Yes | Yes |
+
+¹ A superadmin who is not on the roster cannot credit an entry to themselves —
+there is nobody for it to belong to. They name a member or mark it anonymous.
 
 ---
 
 ## 8. Feature Specifications
 
-### 8.1 Faction Management
+### 8.1 Factions, Members and Ranks
 
-- Only superadmins create factions via `POST /api/v1/factions`
-- Input: name (required), description (optional), initial admin Discord ID (required)
-- On creation: auto-creates `faction_members` record for the admin, seeds default item types (dirty money, clean money)
-- Superadmin faction list: paginated with summary stats (member count, total entries, active quotas)
-- Soft-delete: `is_active=false`, data preserved, recoverable
-- All actions audit-logged with full context
+A superadmin creates a faction and appoints its first admin. Ranks are defined
+per faction as `{ name, level, permissions[] }`; the level orders the roster and
+the permissions decide what the rank may do (§7.2).
 
-### 8.2 Member Management
+People can be registered by Discord ID before they ever sign in. Such a row is a
+full user from the start — it joins factions, holds entries, payouts and
+strikes — and the first login lands on it, so nothing has to be migrated. Until
+then nobody is behind it: it carries no inactivity, and its names stay editable
+from the superadmin roster.
 
-- Faction admins add members by Discord ID or username
-- The user row has to exist first. Normally that happens when they log in;
-  a superadmin can also register someone by Discord ID up front (see
-  **Provisional players** below), and that row is then addable like any other
-- Default role: `member`. Multiple admins per faction allowed.
-- Promote/demote between admin and member roles — faction admins and
-  superadmins only. A rank granted `manage_members` runs the roster (add,
-  remove, set ranks) but cannot hand out or take away the admin seat: an admin
-  implicitly holds every permission, so a delegate able to grant it would be
-  holding all of them already.
-- Removing a member preserves their contribution entries
-- All member management actions audit-logged
+### 8.2 Entries
 
-#### Provisional players
+A member logs their own contributions. `manage_entries` additionally allows
+crediting another member, or the faction itself via `anonymous`, which books the
+value to a system placeholder so the treasury counts it while every ranking
+leaves it out.
 
-Someone can play in a faction for weeks before they ever open this app. A
-superadmin registers them by Discord ID (`POST /api/v1/admin/provisional-users`
-with `discordId`, `username`, optional `inGameName`), which creates a normal
-`users` row with `is_provisional = true`.
+A superadmin may book an entry into any faction, but never onto themselves when
+they are not on that roster — a self-credited entry would put a contributor in
+the ledger that the leaderboard and member totals have no row for. They name a
+member, or mark it anonymous.
 
-- **They are a member in every other respect.** They join factions, hold ranks,
-  receive payouts, take strikes, and appear in rosters and rankings. Nothing
-  about them is special-cased except the two points below.
-- **No inactivity.** The dashboard's inactive list skips them and the roster
-  reports `daysInactive: null`: there is nobody behind the row yet, so there is
-  nobody to have gone quiet. The clock starts at their first login.
-- **Logging in converts them.** The OAuth callback upserts on `discord_id`, so
-  they land on the same row: `is_provisional` clears, Discord's username and
-  avatar take over, the in-game name the superadmin typed survives, and every
-  entry, payout, rank and strike they had is already theirs. The id never
-  changes, so nothing is migrated.
-- Superadmin-only, and only while unclaimed: `PATCH` fixes the two names,
-  `DELETE` takes the registration back, and refuses once it carries entries,
-  payouts or strikes. `GET` lists the ones still waiting.
-- The Discord ID is checked for shape (17–20 digits) and uniqueness. A wrong
-  ID is the one real failure mode: the person's real login would create a
-  second row, leaving this one's history orphaned.
+Entries are soft-deleted. Amounts are decimals carried as strings end to end.
 
-Because a provisional player cannot log anything themselves, `POST
-/factions/{id}/entries` accepts a `userId` — credit the entry to another member
-instead of the caller. It needs `manage_entries` (the same permission that
-allows anonymous entries, for the same reason: both decide who gets credit for
-faction income), the target has to be a member of that faction, and it cannot
-be combined with `anonymous`. The audit log records the real author alongside
-`onBehalfOf`.
+### 8.3 Withdrawals
 
-### 8.3 Entry (Contribution) Tracking
+`manage_payouts` governs reach, not access:
 
-- Members log via form: item type (from enabled types), amount, optional description, date (default today)
-- Backend validates: item type active for faction, amount positive, date not in future
-- Only faction admins can edit or delete entries
-- Edit: original values saved in audit log `details` JSON (before/after diff), `updated_at` set
-- Delete: soft-delete (`is_deleted` flag), excluded from quotas by default, visible in history
-- Entry listing: server-side pagination, filter by date range / item type / member
-- Default view: most recent 50 entries
+- **Anyone** may request a withdrawal with their own name on it, and read the
+  requests they made.
+- **`manage_payouts`** may name someone else, see the faction's whole queue, and
+  approve, complete, reject, edit or delete anything in it.
 
-### 8.4 Quota System
+Where a withdrawal starts is decided by the same permission, and nothing else: a
+holder's withdrawal is settled on creation; a request from anyone else starts
+`pending` and waits for someone who can grant it. Auto-completing a member's own
+request would let anyone pay themselves out of the treasury and call it done.
 
-- Defined by: item type, target amount, period type (weekly/monthly), start date
-- Progress = SUM(entries.amount WHERE item_type_id=X AND entry_date WITHIN current period)
-- Weekly: finds most recent period start (Monday-based) on or before today, 7-day window
-- Monthly: calendar month containing today
-- Future start dates: quota inactive until that date
-- Inactive quotas: hidden from dashboard but data preserved
+There is no second-person requirement. Whoever holds the permission may settle a
+withdrawal they raised themselves — including a member who asked for one and was
+given the permission afterwards. Deleting works at any status; editing does not,
+because a completed or rejected withdrawal is part of the ledger.
 
-### 8.5 Custom Item Types
+**Even split** distributes an amount across the roster, rounding down per member
+and leaving the remainder in the vault.
 
-- Per-faction, fully customizable
-- Fields: name (e.g. "Dirty Money", "AK-47"), unit ("$", "pcs", "kg"), is_active flag
-- When inactive: hidden from entry form, existing entries preserved, still counts toward quotas
-- Examples by faction type:
-  - Legal government: salary contributions, uniform costs, vehicle maintenance
-  - Illegal syndicate: dirty money, clean money, lock picks, weapons, drugs
-  - Medical: medical supplies, patient fees, ambulance fuel
+### 8.4 Treasury and Laundering
 
-### 8.6 Audit Logging
+The treasury reports what the vault has done: derived balances per item type,
+completed outflow trend, and pending withdrawals counted separately. Only item
+types with at least one live entry or completed payout are listed — on both the
+treasury page and the dashboard card. The list can be filtered by name and
+ordered by name or current amount, in either direction; name ordering collates
+in the reading language.
 
-- **Append-only** — entries never modified or deleted
-- Logged actions: auth events, faction CRUD, member management, entry CRUD, item type/quota changes, superadmin actions
-- Each entry: acting user_id, affected faction_id (nullable), action type, entity_type, entity_id, JSONB details (before/after), IP address, timestamp
-- Purposes: dispute resolution, faction health monitoring, debugging, operational history
+Cross-type totals cover currency only. Money, kilograms and piece counts do not
+add up to a number with a unit, so goods are reported per type.
+
+Laundering converts one faction currency into another. The rate is not
+configured: whoever runs the wash enters what went in and what came back,
+because the cut depends on who did it. Both sides book against the anonymous
+placeholder, so no member is charged or credited.
+
+### 8.5 Discipline and Member Files
+
+Strikes carry a severity and an expiry per severity, set per faction. The stored
+status and the *effective* status differ: an active strike past its expiry reads
+as expired without a write. The faction-wide list defaults to what still counts
+against a member; `status=all` returns the history. A member's own record always
+returns in full, which is why their profile shows revoked and expired strikes
+that the faction list hides by default.
+
+Member notes are admin-only and never shown to their subject.
+
+In-game names: a player sets their own, and `manage_members` may correct anyone
+on the roster. The name lives on the user, not the membership, so an edit reaches
+every faction that player belongs to — the dialog says so, and the audit log
+records before and after.
+
+### 8.6 Quotas, Reports and Audit
+
+Quotas target an item type over a weekly or monthly period, faction-wide or for
+one member. Reports summarise a period or compare two. Every write that matters
+lands in the audit log with a before/after payload.
+
+### 8.7 Interface Language
+
+The interface ships in English and Hungarian. English is the source of truth:
+`TranslationKey` and `Translations` are derived from the English dictionary, so a
+dictionary missing a key, carrying a stray one, or using a plain string where a
+plural belongs fails the build.
+
+The reader chooses. A switcher sits in the app header and on the sign-in screen,
+and the choice is remembered per browser; a first-time visitor gets their
+browser's language if the app speaks it. `NEXT_PUBLIC_DEFAULT_LOCALE` and
+`NEXT_PUBLIC_LOCALES` set where that starts and narrow what is offered, but they
+are the fallback rather than the authority.
+
+Dates follow the interface language. **Amounts do not** — money and quantities
+are formatted the American way in every locale, behind a `NUMBER_LOCALE`
+constant. The figures mirror what the game shows and players repeat them to each
+other as they appear there; a comma that separates thousands in one language and
+decimals in another is a real way to mis-pay someone.
 
 ---
 
 ## 9. Frontend Architecture
 
-### 9.1 Page Structure (Next.js App Router)
+### 9.1 Shape
 
-| Route | Page | Access |
-|-------|------|--------|
-| `/` | Login / redirect to dashboard | Public |
-| `/auth/callback` | OAuth callback handler | Public |
-| `/dashboard` | Default faction dashboard | Authenticated |
-| `/factions` | Faction list (all/own) | Authenticated |
-| `/factions/[id]` | Faction dashboard (entries, quotas, members) | Faction Member |
-| `/factions/[id]/entries` | Full entry list with filters | Faction Member |
-| `/factions/[id]/members` | Member management | Faction Admin |
-| `/factions/[id]/settings` | Item types, quotas, faction settings | Faction Admin |
-| `/factions/[id]/logs` | Audit log viewer | Faction Admin |
-| `/admin` | Superadmin panel (all factions, system stats) | Superadmin |
+Next.js App Router, but a single client-rendered screen: `app/page.tsx` resolves
+the session and renders one of three things — the sign-in page, a waiting screen,
+or the app shell. Navigation is a zustand view switch inside the shell, not
+routing. This is why the i18n layer is hand-rolled rather than `next-intl`: the
+routing and server-component machinery a full package brings would sit unused.
 
-### 9.2 Component Organization
+**Before the shell:** an account that belongs to no active faction gets a waiting
+screen rather than a sidebar of screens that all refuse to load. It shows which
+Discord it is waiting as, puts the Discord ID on screen with a copy button —
+that ID is what an admin needs to fix it — and re-reads the session every 15
+seconds and on tab focus, so it leaves by itself once a membership appears. The
+in-game name prompt renders over it, so a first-time player sets their character
+name and then waits. A superadmin is exempt: with no memberships they are exactly
+the person who has to create the faction.
 
-- **Layout:** Sidebar (collapsible on mobile), Header (avatar, username, faction selector dropdown)
-- **Data display:** DataTable, StatCard, ProgressBar, ActivityFeed
-- **Forms:** EntryForm, ItemTypeForm, QuotaForm, MemberSearchInput
-- **Modals:** ConfirmDialog, EntryDetailModal, MemberDetailModal
-- **UI primitives:** shadcn/ui (Button, Input, Dialog, DropdownMenu, Table, etc.)
-- Components are self-contained with TypeScript types, thin and composable
+### 9.2 Views
 
-**Dropdowns (as built).** Every dropdown in the app goes through one component,
-`components/ui/searchable-select.tsx`, which takes the same `value` /
-`onValueChange` shape a Radix `Select` trigger took. It shows a filter box once
-the list reaches eight options, so member and item-type lists can be typed into
-while a three-item enum stays a plain dropdown. The shadcn `Select` primitive
-was removed with the last caller; a second way to build a dropdown is the thing
-this component exists to prevent.
+`views/` holds one component per screen: dashboard, entries, payouts, treasury,
+laundering, members, member-profile, strikes, leaderboard, reports, settings,
+audit-logs, admin-factions, admin-faction-detail, users-panel.
 
-Options carry an optional `hint` (matched by the filter alongside the label),
-an `icon`, and a `badge` for a styled tag. Members are listed the same way
-everywhere they appear — in-game name as the label, Discord name in parentheses
-as the hint — so either name finds the person, and a member who never set an
-in-game name still reads as their Discord name alone.
+`users-panel` is the superadmin roster: everyone who has signed in plus the
+registrations still waiting, in one list with the registrations pinned to the top
+and labelled. Rename and remove appear only on those, because that is all the API
+allows.
 
-### 9.3 State Management
+### 9.3 Shared Rules
 
-- **Server state** → TanStack Query (React Query)
-  - Per-endpoint hooks: `useFactions`, `useFactionEntries`, `useFactionDashboard`, `useQuotas`, `useAuditLogs`
-  - Cache stale times: 5 min (dashboard), 30 sec (entry lists)
-  - Optimistic updates for mutations, auto-rollback on failure
-  - Auto background refetch on window focus
-- **Client UI state** → Zustand
-  - Selected faction ID (persisted to localStorage)
-  - Sidebar collapsed/expanded
-  - Notification queue
-- **API client** → Axios instance
-  - Base URL, 401 interceptor (redirect to login), dev-mode logging
+- **Names** go through `displayName()` — character name when there is one, Discord
+  name when there is not — everywhere a person is labelled. `fullDisplayName()`
+  renders both where a row has to be traced to an account.
+- **Permissions** are read from the membership the API returned, never inferred.
+  `hasPermission()` returns true for a superadmin unconditionally, matching the
+  server; a screen stricter than the API silently removes rights.
+- **Colour on a figure means one thing or nothing.** A faction picks its own
+  accent and nothing stops it picking green or red, so balances, scores, ranks and
+  quota bars are neutral unless the value is actually negative (red) or a quota is
+  actually met (green). The accent is for chrome: navigation, buttons, badges,
+  card glows and charts.
+- **State**: zustand for session, selected faction and view; TanStack Query for
+  everything fetched.
 
 ---
 
@@ -972,8 +725,21 @@ volumes:
 | `CORS_ORIGINS` | No | http://localhost:3000 | Allowed frontend origins |
 | `JWT_EXPIRATION_DAYS` | No | 7 | Session token expiration |
 | `LOG_LEVEL` | No | info | Node.js log level (debug/info/warn/error) |
-| `DOMAIN` | No | localhost | Domain for Caddy TLS |
+| `DOMAIN` | No | localhost | Domain for the reverse proxy's TLS |
+| `NEXT_PUBLIC_API_URL` | No | *(empty)* | Cross-origin API base. Empty means same-origin, proxied |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | No | en | Interface language for a visitor with no saved choice (`en`, `hu`) |
+| `NEXT_PUBLIC_LOCALES` | No | *(all)* | Comma-separated list of languages the switcher offers |
 | `NODE_ENV` | No | production | Node.js environment (production/development) |
+
+### 10.2.1 Content-Security-Policy
+
+Set by `frontend/next.config.ts`, not by the reverse proxy — it is the only place
+it lives. `img-src` allows `http:` and `https:` from any host, because an item's
+image is a link an admin pastes and there is no set of hosts to enumerate up
+front. `http:` buys less than it looks like: on an HTTPS deployment the browser
+blocks a plain-http image as mixed content whatever this header permits, so it is
+there for deployments still served over http, and should be dropped once every
+deployment is on TLS.
 
 ### 10.3 Backend Dockerfile (Multi-stage)
 
@@ -1075,7 +841,7 @@ cp .env.example .env
 
 # 5. Deploy
 docker compose up -d
-# Caddy auto-provisions TLS within minutes
+# nginx serves TLS from the configured certificate
 
 # 6. Backups (cron job)
 crontab -e
@@ -1121,7 +887,7 @@ crontab -e
 | 4 | Advanced reporting | Periodic summaries, comparison reports, performance rankings | Low |
 | 5 | Rate limiting | Per-user and per-IP sliding window | Low |
 
-### Phase 4: Treasury & Payouts (Weeks 10-12) — BACKEND COMPLETE, FRONTEND PENDING
+### Phase 4: Treasury & Payouts (Weeks 10-12) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1132,7 +898,7 @@ crontab -e
 | 5 | Payout history & filtering | Full CRUD, filterable list with audit trail | Medium |
 | 6 | Quick-payout from dashboard | One-click "distribute even split" to all active members | Medium |
 
-### Phase 5: Member Tools & Discipline (Weeks 13-15) — BACKEND COMPLETE, FRONTEND PENDING
+### Phase 5: Member Tools & Discipline (Weeks 13-15) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1153,7 +919,7 @@ crontab -e
 | 4 | Markdown rendering | Announcements support full markdown with preview | Low |
 | 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline | Medium |
 
-### Phase 7: Advanced Analytics & Gamification (Weeks 19-21) — BACKEND COMPLETE, FRONTEND PENDING
+### Phase 7: Advanced Analytics & Gamification (Weeks 19-21) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1234,6 +1000,12 @@ Dashboard endpoint returns balances alongside existing totals. The treasury card
 | PATCH | `/api/v1/factions/{id}/payouts/{pid}` | Admin | Update status (approve/reject/complete), edit amount/description |
 | DELETE | `/api/v1/factions/{id}/payouts/{pid}` | Admin | Soft-delete |
 | GET | `/api/v1/factions/{id}/treasury` | Member | Balance per item type, net total, inflow/outflow summary |
+
+> **Superseded.** The rest of §12.1 describes a `payoutApprovalRequired` setting
+> and a four-eyes approval rule. Both are gone: the column was dropped in
+> migration `0007`, and `manage_payouts` alone now decides where a withdrawal
+> starts and who may settle it — including a withdrawal the settler raised. Read
+> §8.3 for what the system does; what follows records what was planned.
 
 #### 12.1.4 Payout Workflow
 
