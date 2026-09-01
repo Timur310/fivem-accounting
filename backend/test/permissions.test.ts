@@ -26,21 +26,27 @@ beforeEach(async () => {
 
 /**
  * A payout list names every recipient and every amount in the faction, so
- * reading it is as much a management action as creating one. It has to sit
- * behind the same permission as the mutations, not behind bare membership.
+ * seeing all of it is a management action. Seeing your own requests is not:
+ * the permission decides reach, not access.
  */
 describe('payout list is permission-gated', () => {
-  it('forbids a member with no rank', async () => {
+  it('shows a member with no rank only their own', async () => {
+    await api().post(`${f()}/payouts`).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.admin.id, itemTypeId: w.itemTypeId, amount: '900' });
+
     const res = await api().get(`${f()}/payouts`).set('Cookie', w.member.cookie);
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe('FORBIDDEN');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
   });
 
-  it('forbids a member whose rank grants something else', async () => {
+  it('shows a member whose rank grants something else only their own', async () => {
     await giveMemberRank(['manage_entries']);
+    await api().post(`${f()}/payouts`).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.admin.id, itemTypeId: w.itemTypeId, amount: '900' });
 
     const res = await api().get(`${f()}/payouts`).set('Cookie', w.member.cookie);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
   });
 
   it('allows a member whose rank grants manage_payouts', async () => {
@@ -278,5 +284,45 @@ describe('member roles are admin-only', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.role).toBe('admin');
+  });
+});
+
+/**
+ * A superadmin holds every faction permission everywhere — the middleware hands
+ * them the full set whether or not they belong to the faction. The sidebar
+ * relies on exactly that when it shows them every menu, so it is pinned here:
+ * a hidden menu would be a lie in one direction, a visible one that 403s in the
+ * other.
+ */
+describe('a superadmin reaches every permission-gated screen', () => {
+  const gated = () => [
+    ['audit logs', `${f()}/audit-logs`],
+    ['laundering', `${f()}/laundering`],
+    ['settings', `${f()}/settings`],
+    ['reports', `${f()}/reports/summary?period=this_month`],
+  ] as const;
+
+  it('while only browsing a faction they never joined', async () => {
+    for (const [what, url] of gated()) {
+      const res = await api().get(url).set('Cookie', w.superadmin.cookie);
+      expect(res.status, `${what} as a non-member superadmin`).toBe(200);
+    }
+  });
+
+  // The trap: joining as a plain member gives them a membership row, and a rank
+  // that grants nothing. Their global role still has to win.
+  it('after joining as a plain member on a rank that grants nothing', async () => {
+    await addMember(w.faction.id, w.superadmin.id, 'member');
+    await giveMemberRank([], 'Soldier');
+    const assigned = await api()
+      .patch(`${f()}/members/${w.superadmin.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: 'Soldier' });
+    expect(assigned.status).toBe(200);
+
+    for (const [what, url] of gated()) {
+      const res = await api().get(url).set('Cookie', w.superadmin.cookie);
+      expect(res.status, `${what} as a rank-less member superadmin`).toBe(200);
+    }
   });
 });

@@ -141,16 +141,22 @@ export function AppShell() {
   const isAdmin =
     user?.role === 'superadmin' || currentFactionMembership?.role === 'admin';
 
+  const isSuperadmin = user?.role === 'superadmin';
+
   /**
    * What the caller may do in the selected faction. Members carry the list
-   * their rank grants; a superadmin browsing a faction they do not belong to
-   * has no membership, and the API treats them as holding everything there.
+   * their rank grants.
+   *
+   * A superadmin holds everything, everywhere, membership or not — which is
+   * what the API does too: `requireFactionMember` hands them the full
+   * permission set on their global role alone. Reading it off the membership
+   * instead used to make this screen stricter than the server, and in exactly
+   * the case that bites: a superadmin who joins a faction as a plain member
+   * gains a membership row with a rank that grants nothing, and lost menus the
+   * API would have opened for them.
    */
   const hasPermission = (permission: FactionPermission) =>
-    currentFactionMembership
-      ? currentFactionMembership.permissions.includes(permission)
-      : user?.role === 'superadmin';
-  const isSuperadmin = user?.role === 'superadmin';
+    isSuperadmin || (currentFactionMembership?.permissions.includes(permission) ?? false);
   // A superadmin can book an entry into any faction, but only onto a member or
   // onto the faction itself — they are not on this roster, so there is nobody
   // for a self-credited entry to belong to. The API enforces the same rule.
@@ -240,7 +246,12 @@ export function AppShell() {
   ];
 
   const isNavItemVisible = (item: NavItem) => {
-    if (item.superadminOnly) return isSuperadmin;
+    // Every screen, in every faction. `membersOnly` guards a faction's own
+    // history from people passing through, and a superadmin is not passing
+    // through — the audit log route lets them read it either way, so hiding
+    // the menu only made them wonder where it went.
+    if (isSuperadmin) return true;
+    if (item.superadminOnly) return false;
     if (item.membersOnly && !currentFactionMembership) return false;
     if (item.anyPermission) return item.anyPermission.some(hasPermission);
     return true;
@@ -328,7 +339,7 @@ export function AppShell() {
       case 'entries':
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canCreditSelf={canCreditSelf} canManageEntries={hasPermission('manage_entries')} /> : null;
       case 'payouts':
-        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
+        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} canManagePayouts={hasPermission('manage_payouts')} /> : null;
       case 'laundering':
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
       case 'treasury':

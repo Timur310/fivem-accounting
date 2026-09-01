@@ -317,6 +317,11 @@ export const en = {
   // ── Withdrawals (payouts) ──
   'payouts.intro': 'Manage what leaves the faction treasury',
   'payouts.count': { one: '{count} withdrawal', other: '{count} withdrawals' } as PluralForms,
+  'payouts.request': 'Request Withdrawal',
+  'payouts.requestHint': 'Ask for something out of the faction treasury. It waits for an admin to approve it.',
+  'payouts.introMember': 'Ask for something out of the faction treasury, and follow what you asked for',
+  'payouts.forYou': 'The request will be made in your name.',
+  'payouts.noneOfYours': 'You have not requested anything yet.',
   'payouts.new': 'New Withdrawal',
   'payouts.newHint': 'Record something leaving the faction treasury for a member.',
   'payouts.create': 'Create Withdrawal',

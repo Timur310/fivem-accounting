@@ -14,10 +14,16 @@ import { PAYOUT_STATUSES } from '../db/schema.js';
 
 const router = Router({ mergeParams: true });
 
-// Payouts are admin material at the row level (POST/PATCH/DELETE need the
-// manage_payouts permission). The list is still admin-only — members see the
-// aggregate treasury view (GET /factions/:id/treasury) instead.
+// Settling a payout is admin material: PATCH and DELETE, and creating one for
+// somebody else, all need `manage_payouts`. Asking for one is not — any member
+// may request a withdrawal for themselves, and read the ones they asked for.
+// What the permission buys is reach: over other people's names, and over the
+// status of anything already in the queue.
 router.use(requireAuth, requireFactionMember);
+
+/** Whether the caller may act on other people's payouts, not just their own. */
+const canManagePayouts = (req: Request) =>
+  (req.factionPermissions ?? []).includes('manage_payouts');
 
 // ── Validation schemas ────────────────────────────────
 
@@ -127,8 +133,9 @@ async function resolveInitialStatus(factionId: string): Promise<'pending' | 'com
 }
 
 // ── POST / — create a payout ─────────────────────────
-router.post('/', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
+  const canManage = canManagePayouts(req);
 
   const parsed = createPayoutSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -137,6 +144,18 @@ router.post('/', requirePermission('manage_payouts'), async (req: Request, res: 
   }
 
   const { recipientUserId, itemTypeId, amount, description, payoutDate } = parsed.data;
+
+  // Without the permission this is a request, not a payout: you may put your
+  // own name on it and nobody else's.
+  if (!canManage && recipientUserId !== req.user!.id) {
+    error(
+      res,
+      'FORBIDDEN',
+      'You need the "manage_payouts" permission to request a withdrawal for someone else',
+      403,
+    );
+    return;
+  }
 
   const itemType = await findFactionItemType(factionId, itemTypeId);
   if (!itemType) {
@@ -157,7 +176,12 @@ router.post('/', requirePermission('manage_payouts'), async (req: Request, res: 
 
   // When approval is off (or there is nobody to approve), the payout is
   // immediately final; otherwise it waits in the queue for a second admin.
-  const status = await resolveInitialStatus(factionId);
+  //
+  // A request from someone without the permission never takes that shortcut.
+  // Auto-completing it would let any member pay themselves out of the treasury
+  // and call it done — the asking is the whole point, so it waits for someone
+  // who can actually grant it.
+  const status = canManage ? await resolveInitialStatus(factionId) : 'pending';
 
   let payout;
   try {
@@ -203,10 +227,12 @@ router.post('/', requirePermission('manage_payouts'), async (req: Request, res: 
 });
 
 // ── GET / — list payouts with filters ────────────────
-// Guarded like the mutations: a payout list names every recipient and amount
-// in the faction, so reading it is as much a management action as creating one.
-router.get('/', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
+// The full list names every recipient and every amount in the faction, so it
+// stays behind the permission. Without it you still see the requests you made
+// yourself — otherwise asking for one would send it somewhere you cannot look.
+router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
+  const canManage = canManagePayouts(req);
 
   const query = listPayoutsQuerySchema.safeParse(req.query);
   if (!query.success) {
@@ -228,6 +254,7 @@ router.get('/', requirePermission('manage_payouts'), async (req: Request, res: R
   const where = buildWhere([
     eq(payouts.factionId, factionId),
     eq(payouts.isDeleted, false),
+    canManage ? undefined : eq(payouts.recipientUserId, req.user!.id),
     item_type_id ? eq(payouts.itemTypeId, item_type_id) : undefined,
     recipient_user_id ? eq(payouts.recipientUserId, recipient_user_id) : undefined,
     status ? eq(payouts.status, status) : undefined,

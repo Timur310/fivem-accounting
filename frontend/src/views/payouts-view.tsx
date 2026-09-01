@@ -64,9 +64,15 @@ interface Props {
   factionId: string;
   /** Superadmins may also remove a payout that has already been settled. */
   isSuperadmin?: boolean;
+  /**
+   * Whether the caller may act on other people's withdrawals. Without it this
+   * screen is a request form and a list of what they asked for; the API scopes
+   * it the same way, so nothing here hides something it would have allowed.
+   */
+  canManagePayouts?: boolean;
 }
 
-export function PayoutsView({ factionId, isSuperadmin }: Props) {
+export function PayoutsView({ factionId, isSuperadmin, canManagePayouts = true }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -181,7 +187,10 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
   // ── Mutations ──
   const createMutation = useMutation({
     mutationFn: () => payoutsApi.create(factionId, {
-      recipientUserId: formRecipient,
+      // Without reach over other names the recipient is never chosen, so it is
+      // never in the form. The API applies the same rule and refuses anything
+      // else, which is what makes this safe to fill in here.
+      recipientUserId: canManagePayouts ? formRecipient : (user?.id ?? ''),
       itemTypeId: formItemType,
       amount: formAmount,
       description: formDescription || undefined,
@@ -296,16 +305,22 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-medium tracking-tight text-zinc-100">{t('nav.withdrawals')}</h2>
-          <p className="text-zinc-500 text-sm mt-0.5">{t('payouts.intro')}</p>
+          <p className="text-zinc-500 text-sm mt-0.5">
+            {canManagePayouts ? t('payouts.intro') : t('payouts.introMember')}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEvenSplitOpen(true)}>
-            <Split className="h-4 w-4 mr-1.5" />
-            {t('payouts.evenSplit')}
-          </Button>
+          {/* Splitting a pot across the roster is reach over other people's
+              names — the same thing the permission governs everywhere else. */}
+          {canManagePayouts && (
+            <Button variant="outline" size="sm" onClick={() => setEvenSplitOpen(true)}>
+              <Split className="h-4 w-4 mr-1.5" />
+              {t('payouts.evenSplit')}
+            </Button>
+          )}
           <Button size="sm" onClick={() => setCreateOpen(true)} style={{ backgroundColor: brandColor }}>
             <Plus className="h-4 w-4 mr-1.5" />
-            {t('payouts.new')}
+            {canManagePayouts ? t('payouts.new') : t('payouts.request')}
           </Button>
         </div>
       </div>
@@ -364,7 +379,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
             </TableHeader>
             <TableBody>
               {payouts.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">{t('payouts.none')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">{canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')}</TableCell></TableRow>
               ) : payouts.map((p) => {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
@@ -402,9 +417,12 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
+                      {/* Approving, completing, rejecting, editing and deleting are
+                          all reach over a row someone else has to answer for. A
+                          requester watches; they do not settle their own ask. */}
                       <div className="flex items-center justify-end gap-1">
                         {/* Status transitions */
-                        !isTerminal && (
+                        canManagePayouts && !isTerminal && (
                           <>
                             {canApprove(p) && (
                               <Button
@@ -442,7 +460,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                           </>
                         )}
                         {/* Edit (non-terminal) */}
-                        {!isTerminal && (
+                        {canManagePayouts && !isTerminal && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-200" onClick={() => openEdit(p)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -451,7 +469,7 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
                             the amount has already moved through the treasury — but a
                             superadmin needs a way to take out one that should never
                             have been recorded. */}
-                        {(!isTerminal || isSuperadmin) && (
+                        {canManagePayouts && (!isTerminal || isSuperadmin) && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -485,21 +503,29 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
       <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetCreateForm(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('payouts.new')}</DialogTitle>
-            <DialogDescription>{t('payouts.newHint')}</DialogDescription>
+            <DialogTitle>{canManagePayouts ? t('payouts.new') : t('payouts.request')}</DialogTitle>
+            <DialogDescription>
+              {canManagePayouts ? t('payouts.newHint') : t('payouts.requestHint')}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>{t('payouts.recipientRequired')}</Label>
-              <SearchableSelect
-                value={formRecipient}
-                onValueChange={setFormRecipient}
-                options={memberOptions}
-                placeholder={t('members.select')}
-                searchPlaceholder={t('members.search')}
-                emptyMessage={t('members.noneMatch')}
-              />
-            </div>
+            {/* With no reach over other names there is nothing to choose here,
+                so the field goes and the request simply carries yours. */}
+            {canManagePayouts ? (
+              <div className="space-y-2">
+                <Label>{t('payouts.recipientRequired')}</Label>
+                <SearchableSelect
+                  value={formRecipient}
+                  onValueChange={setFormRecipient}
+                  options={memberOptions}
+                  placeholder={t('members.select')}
+                  searchPlaceholder={t('members.search')}
+                  emptyMessage={t('members.noneMatch')}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-500">{t('payouts.forYou')}</p>
+            )}
             <div className="space-y-2">
               <Label>{t('payouts.itemTypeRequired')}</Label>
               <SearchableSelect
@@ -544,11 +570,11 @@ export function PayoutsView({ factionId, isSuperadmin }: Props) {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{t('common.cancel')}</Button>
             <Button
-              disabled={!formRecipient || !formItemType || !formAmount || Number(formAmount) <= 0 || createMutation.isPending}
+              disabled={(canManagePayouts && !formRecipient) || !formItemType || !formAmount || Number(formAmount) <= 0 || createMutation.isPending}
               onClick={() => createMutation.mutate()}
               style={{ backgroundColor: brandColor }}
             >
-              {createMutation.isPending ? t('common.creating') : t('payouts.create')}
+              {createMutation.isPending ? t('common.creating') : (canManagePayouts ? t('payouts.create') : t('payouts.request'))}
             </Button>
           </DialogFooter>
         </DialogContent>
