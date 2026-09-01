@@ -52,7 +52,18 @@ const nextConfig: NextConfig = {
           { key: 'Content-Security-Policy', value:
             "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
             "style-src 'self' 'unsafe-inline'; " +
-            `img-src 'self' https://cdn.discordapp.com data: blob:; ` +
+            // Item images are links an admin pastes, pointing at whatever host
+            // they happen to use — the feature has no allowlist to be had, so
+            // any scheme-wide source is the honest expression of it. `https:`
+            // already covers the Discord CDN the avatars come from.
+            //
+            // `http:` sits alongside it on purpose, and buys less than it looks
+            // like: on an HTTPS deployment the browser blocks a plain-http
+            // image as mixed content no matter what this header allows. It is
+            // here so those images still work while the app itself is served
+            // over http — localhost, or a box on the LAN. Drop it once every
+            // deployment is on TLS.
+            `img-src 'self' http: https: data: blob:; ` +
             "font-src 'self' data:; " +
             `connect-src ${connectSrc}; ` +
             "frame-ancestors 'none'; base-uri 'self'; form-action 'self'" },
