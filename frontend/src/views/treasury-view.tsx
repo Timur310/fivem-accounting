@@ -79,7 +79,9 @@ export function TreasuryView({ factionId }: Props) {
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('treasury.netBalance')}</CardTitle>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: netBalance < 0 ? '#ef4444' : brandColor }}>
+            {/* Neutral unless the figure is actually negative — see the note
+                on the per-item balances below. */}
+            <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: netBalance < 0 ? '#ef4444' : '#e4e4e7' }}>
               {netBalance < 0 ? '-' : ''}{fmt(Math.abs(netBalance))}
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">
@@ -186,7 +188,12 @@ export function TreasuryView({ factionId }: Props) {
                       {b.balance < 0 ? t('treasury.negative') : t('treasury.positive')}
                     </Badge>
                   </div>
-                  <div className="text-2xl font-medium tabular-nums tracking-tight" style={{ color: b.balance < 0 ? '#ef4444' : brandColor }}>
+                  {/* Red is the only colour a balance is allowed to carry,
+                      and it means one thing: this vault is in the red. Painting
+                      a healthy balance in the faction accent said the same
+                      thing in reverse whenever that accent was green — and the
+                      opposite whenever it was red. */}
+                  <div className="text-2xl font-medium tabular-nums tracking-tight" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
                     {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
                   </div>
                   <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">

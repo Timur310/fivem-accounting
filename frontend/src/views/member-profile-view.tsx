@@ -325,7 +325,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums" style={{ color: brandColor }}>{performance.score}</div>
+                {/* Neutral like the three stat cards beside it: a score is
+                    not a verdict the faction accent gets to colour. */}
+                <div className="text-2xl font-medium tabular-nums text-zinc-100">{performance.score}</div>
                 <p className="text-[11px] text-zinc-600 mt-1">{t('profile.outOf100')}</p>
               </CardContent>
             </Card>
@@ -434,7 +436,10 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-zinc-400'}`}>{q.percentage.toFixed(1)}%</span>
                           </div>
                           <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-500 ${met ? 'bg-emerald-500' : ''}`} style={{ width: `${Math.min(q.percentage, 100)}%`, ...(!met ? { backgroundColor: brandColor } : {}) }} />
+                            {/* Neutral until met, like the same bar on the
+                                dashboard — the faction accent must not stand in
+                                for "done". */}
+                            <div className={`h-full rounded-full transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
                           </div>
                           <div className="flex justify-between text-[10px] text-zinc-600 mt-0.5">
                             <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>

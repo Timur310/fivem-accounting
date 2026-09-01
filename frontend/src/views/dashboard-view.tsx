@@ -103,7 +103,10 @@ export function DashboardView({ factionId }: Props) {
               const totalOut = hasTreasury ? currencyBalances.reduce((s, b) => s + b.outflow, 0) : 0;
               return (
                 <>
-                  <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : brandColor }}>
+                  {/* Neutral unless the figure is actually negative: a faction
+                      whose accent is green or red would otherwise colour an
+                      ordinary balance as if it meant something. */}
+                  <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : '#e4e4e7' }}>
                     {fmt(bal)}
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">
@@ -179,15 +182,24 @@ export function DashboardView({ factionId }: Props) {
                           <p className="text-[11px] text-zinc-500">{QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</p>
                         </div>
                       </div>
-                      <Badge variant={met ? 'outline' : 'default'} className={met ? 'border-emerald-500/30 text-emerald-400' : ''}>
+                      {/* Only "met" earns a colour. The percentage used to wear
+                          the faction accent, which read as a verdict on the
+                          number whenever that accent was green or red. */}
+                      <Badge variant="outline" className={met ? 'border-emerald-500/30 text-emerald-400' : 'text-zinc-300'}>
                         {met ? t('quota.met') : `${pct.toFixed(1)}%`}
                       </Badge>
                     </div>
                     {/* Energy bar */}
                     <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
+                      {/* Met is green, everything short of it is neutral. The
+                          unmet bar used to wear the faction accent, which made
+                          the two states indistinguishable for a faction whose
+                          colour happens to be green — and read as a failure for
+                          one whose colour is red. Matches the quota bar in
+                          Settings, which was already neutral. */}
                       <div
-                        className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : ''}`}
-                        style={{ width: `${Math.min(pct, 100)}%`, ...(!met ? { backgroundColor: brandColor } : {}) }}
+                        className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
                     <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
