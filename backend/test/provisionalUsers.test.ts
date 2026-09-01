@@ -126,6 +126,21 @@ describe('provisional users', () => {
     expect(res.body.data[0].entryCount).toBe(0);
   });
 
+  // The counts are the whole reason the list is worth reading: they say whether
+  // a registration is still empty or already carries history someone would
+  // lose. Zero for a row that holds records is worse than no column at all.
+  it('reports what a registration is already carrying', async () => {
+    const ghost = await register();
+    await api().post(`${f()}/members`).set('Cookie', w.admin.cookie)
+      .send({ discordId: ghost.discordId });
+    await api().post(`${f()}/entries`).set('Cookie', w.admin.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '250', userId: ghost.id });
+
+    const res = await api().get(provisional()).set('Cookie', w.superadmin.cookie);
+    expect(res.body.data[0].factionCount).toBe(1);
+    expect(res.body.data[0].entryCount).toBe(1);
+  });
+
   it('deletes an unused registration but not one carrying records', async () => {
     const ghost = await register();
     await api().post(`${f()}/members`).set('Cookie', w.admin.cookie)

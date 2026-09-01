@@ -23,7 +23,7 @@ import { Plus, Pencil, Trash2, Eye, Search, Shield, ChevronLeft, ChevronRight, B
 import { useAppStore } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import type { Faction } from '@/lib/api-types';
-import { ProvisionalUsersPanel } from '@/views/provisional-users-panel';
+import { UsersPanel } from '@/views/users-panel';
 import { formatDate, formatCount, formatNumber } from '@/lib/format';
 import { useTranslation } from '@/providers/i18n-provider';
 
@@ -149,7 +149,7 @@ export function AdminFactionsView() {
         </CardContent>
       </Card>
 
-      <ProvisionalUsersPanel />
+      <UsersPanel />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
