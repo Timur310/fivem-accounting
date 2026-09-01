@@ -110,7 +110,11 @@ router.get('/', async (req: Request, res: Response) => {
     .where(and(eq(entries.factionId, factionId), eq(entries.isDeleted, false)));
 
   // Treasury balances (inflow minus completed payouts) per item type
-  const treasuryBalances = await computeTreasuryBalances(factionId);
+  // Same rule as the treasury page: a type nothing has ever passed through has
+  // no balance to report, and a card of zeroes is noise on the one screen
+  // people read at a glance. `totalsByType` below is a GROUP BY over entries,
+  // so the fallback list it feeds is already scoped this way.
+  const treasuryBalances = await computeTreasuryBalances(factionId, { onlyWithActivity: true });
   // Currency types only — see the note in routes/treasury.ts. Goods stay
   // visible per item type in treasuryBalances.
   const currencyBalances = treasuryBalances.filter((b) => b.isCurrency);
