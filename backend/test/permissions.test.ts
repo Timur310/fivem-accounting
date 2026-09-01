@@ -326,3 +326,104 @@ describe('a superadmin reaches every permission-gated screen', () => {
     }
   });
 });
+
+/**
+ * `manage_payouts` granted by a rank is the same permission an admin holds.
+ * The payout screen used to offer deleting a settled row to a superadmin only,
+ * which was stricter than this — so what the API actually allows is pinned here.
+ */
+describe('a rank granting manage_payouts can edit and delete payouts', () => {
+  async function payout(status: 'pending' | 'completed' = 'completed') {
+    const res = await api().post(`${f()}/payouts`).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
+    expect(res.body.data.status).toBe(status);
+    return res.body.data.id as string;
+  }
+
+  it('deletes a settled payout without being a superadmin', async () => {
+    const id = await payout();
+    await giveMemberRank(['manage_payouts']);
+
+    const res = await api().delete(`${f()}/payouts/${id}`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+  });
+
+  it('edits an open payout', async () => {
+    // Asked for before the rank was granted, so it is still waiting: once they
+    // hold the permission their own payouts settle on creation, and a settled
+    // one is closed to edits for everyone.
+    const asked = await api().post(`${f()}/payouts`).set('Cookie', w.member.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '10' });
+    expect(asked.body.data.status).toBe('pending');
+    const openId = asked.body.data.id as string;
+
+    const id = await payout();
+    await giveMemberRank(['manage_payouts']);
+
+    // A settled payout is closed to edits for everyone — that is a status rule,
+    // not a permission one, so it answers 400 rather than 403.
+    const settled = await api().patch(`${f()}/payouts/${id}`).set('Cookie', w.member.cookie)
+      .send({ amount: '999' });
+    expect(settled.status).toBe(400);
+
+    const res = await api().patch(`${f()}/payouts/${openId}`)
+      .set('Cookie', w.member.cookie)
+      .send({ amount: '20' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.amount).toBe('20.00');
+  });
+
+  it('still refuses a rank that does not grant it', async () => {
+    const id = await payout();
+    await giveMemberRank(['manage_entries']);
+
+    const res = await api().delete(`${f()}/payouts/${id}`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(403);
+  });
+});
+
+/**
+ * A superadmin holds every faction permission everywhere, and that has to keep
+ * being true of the payout mutations specifically — the screen no longer
+ * special-cases them there, so nothing but this guarantee is holding it up.
+ *
+ * Both shapes are covered, because they take different paths through
+ * `requireFactionMember`: browsing a faction they never joined gives them
+ * `factionRole: 'superadmin'`, while joining as a plain member gives them a
+ * membership row whose rank may grant nothing at all.
+ */
+describe('a superadmin can settle and delete payouts either way', () => {
+  async function settledPayout() {
+    const res = await api().post(`${f()}/payouts`).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
+    expect(res.status).toBe(201);
+    return res.body.data.id as string;
+  }
+
+  it('while only browsing a faction they never joined', async () => {
+    const id = await settledPayout();
+
+    const res = await api().delete(`${f()}/payouts/${id}`).set('Cookie', w.superadmin.cookie);
+    expect(res.status).toBe(200);
+  });
+
+  it('after joining as a plain member on a rank that grants nothing', async () => {
+    const id = await settledPayout();
+    await addMember(w.faction.id, w.superadmin.id, 'member');
+    await giveMemberRank([], 'Soldier');
+    const assigned = await api().patch(`${f()}/members/${w.superadmin.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: 'Soldier' });
+    expect(assigned.status).toBe(200);
+
+    const res = await api().delete(`${f()}/payouts/${id}`).set('Cookie', w.superadmin.cookie);
+    expect(res.status).toBe(200);
+  });
+
+  it('can create one for anybody in a faction they never joined', async () => {
+    const res = await api().post(`${f()}/payouts`).set('Cookie', w.superadmin.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '250' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.recipientUserId).toBe(w.member.id);
+  });
+});

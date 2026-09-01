@@ -63,7 +63,6 @@ const FILTERABLE_STATUSES: PayoutStatus[] = ['pending', 'approved', 'completed',
 interface Props {
   factionId: string;
   /** Superadmins may also remove a payout that has already been settled. */
-  isSuperadmin?: boolean;
   /**
    * Whether the caller may act on other people's withdrawals. Without it this
    * screen is a request form and a list of what they asked for; the API scopes
@@ -72,7 +71,7 @@ interface Props {
   canManagePayouts?: boolean;
 }
 
-export function PayoutsView({ factionId, isSuperadmin, canManagePayouts = true }: Props) {
+export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -469,12 +468,18 @@ export function PayoutsView({ factionId, isSuperadmin, canManagePayouts = true }
                             the amount has already moved through the treasury — but a
                             superadmin needs a way to take out one that should never
                             have been recorded. */}
-                        {canManagePayouts && (!isTerminal || isSuperadmin) && (
+                        {/* Deleting runs on `manage_payouts` and nothing else,
+                            settled or not — the amount coming back out of the
+                            treasury is handled by the delete itself. This used
+                            to offer a settled row to a superadmin only, which
+                            was stricter than the API and left a rank that holds
+                            the permission unable to undo its own mistake. */}
+                        {canManagePayouts && (
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-destructive hover:text-red-300"
-                            title={isTerminal ? t('payouts.deleteSuperadmin') : t('common.delete')}
+                            title={t('common.delete')}
                             onClick={() => setDeleteId(p.id)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
