@@ -54,8 +54,12 @@ const listSelect = {
   inGameName: users.inGameName,
   avatarUrl: users.avatarUrl,
   createdAt: users.createdAt,
-  factionCount: sql<number>`(SELECT COUNT(*) FROM faction_members WHERE user_id = ${users.id})::int`,
-  entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = ${users.id} AND is_deleted = false)::int`,
+  // `users.id` written out rather than interpolated as a column: inside a raw
+  // subquery the interpolated form does not correlate to the outer row, so both
+  // counts came back 0 for every registration — including ones that were
+  // already carrying a membership and a ledger's worth of entries.
+  factionCount: sql<number>`(SELECT COUNT(*) FROM faction_members WHERE user_id = users.id)::int`,
+  entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE user_id = users.id AND is_deleted = false)::int`,
 };
 
 // ── GET / — every registration still waiting for its person ──

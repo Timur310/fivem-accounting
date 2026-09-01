@@ -20,6 +20,7 @@ import chartRoutes from './routes/charts.js';
 import exportRoutes from './routes/export.js';
 import adminAnalyticsRoutes from './routes/adminAnalytics.js';
 import provisionalUserRoutes from './routes/provisionalUsers.js';
+import adminUserRoutes from './routes/adminUsers.js';
 import bulkRoutes from './routes/bulk.js';
 import reportRoutes from './routes/reports.js';
 import payoutRoutes from './routes/payouts.js';
@@ -130,6 +131,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/factions', factionRoutes);
 app.use('/api/v1/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/v1/admin/provisional-users', provisionalUserRoutes);
+app.use('/api/v1/admin/users', adminUserRoutes);
 // Cross-faction ranking (superadmin) — not scoped to a faction.
 app.use('/api/v1/leaderboard', globalLeaderboardRoutes);
 

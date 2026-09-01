@@ -665,16 +665,21 @@ export const en = {
   'admin.manageMembers': 'Manage Members',
   'admin.editItemTypes': 'Edit Item Types',
 
+  // ── The superadmin's roster of everyone ──
+  'users.title': 'Players',
+  'users.description': 'Everyone who has signed in, and the registrations still waiting for their person — those stay at the top, and are the only rows whose names can still be edited from here.',
+  'users.search': 'Search by name or Discord ID...',
+  'users.awaitingFirstLogin': 'Not signed in yet',
+  'users.lastLogin': 'Last login',
+  'users.none': 'Nobody here yet.',
+
   // ── Registered players (superadmin) ──
-  'provisional.title': 'Registered Players',
-  'provisional.description': 'People added by Discord ID who have never signed in. They can join factions and have entries booked for them; the first time they log in, this becomes their own account with everything it already holds.',
   'provisional.registerPlayer': 'Register Player',
   'provisional.registerHint': 'Add someone by their Discord ID so they can be managed before they ever log in.',
   'provisional.register': 'Register',
   'provisional.registering': 'Registering...',
   'provisional.registered': 'Player registered',
   'provisional.registerFailed': 'Failed to register',
-  'provisional.none': 'Nobody registered yet.',
   'provisional.player': 'Player',
   'provisional.discordIdRequired': 'Discord ID *',
   'provisional.discordIdHint': 'Has to be the real one — it is what links this record to their account when they sign in. Discord: Settings → Advanced → Developer Mode, then right-click the user → Copy User ID.',
