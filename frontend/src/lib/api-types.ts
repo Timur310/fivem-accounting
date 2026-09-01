@@ -770,6 +770,26 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
 // ── Provisional users (superadmin) ─────────────────────
 
 /** Someone registered by Discord ID who has never logged in. */
+/**
+ * A row in the superadmin's roster: everyone the system knows about, whether
+ * they have ever signed in or were registered by Discord ID and are still
+ * waiting. `isProvisional` is what separates the two, and `lastLogin` is null
+ * for exactly those.
+ */
+export interface AdminUser {
+  id: string;
+  discordId: string;
+  username: string;
+  inGameName: string | null;
+  avatarUrl: string | null;
+  role: 'superadmin' | 'faction_admin' | 'member';
+  isProvisional: boolean;
+  createdAt: string;
+  lastLogin: string | null;
+  factionCount: number;
+  entryCount: number;
+}
+
 export interface ProvisionalUser {
   id: string;
   discordId: string;

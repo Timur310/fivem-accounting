@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { provisionalUsersApi, apiErrorMessage } from '@/lib/api-client';
+import { adminUsersApi, provisionalUsersApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,21 +18,33 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { UserPlus, Pencil, Trash2, UserCog } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, UserCog, Search } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { ProvisionalUser } from '@/lib/api-types';
+import type { AdminUser } from '@/lib/api-types';
+import { displayName, formatDate } from '@/lib/format';
 import { useTranslation } from '@/providers/i18n-provider';
+import type { TranslationKey } from '@/lib/i18n';
+
+const ROLE_KEYS: Record<string, TranslationKey> = {
+  superadmin: 'role.superadmin',
+  faction_admin: 'role.factionAdmin',
+  member: 'role.member',
+};
 
 /**
- * Players a superadmin registered by Discord ID before they ever signed in.
+ * Every player the system knows about, in one list.
  *
- * The row is a full user from the start, so it can join factions, hold entries
- * and take strikes; when the person finally logs in with that Discord ID they
- * land on this row and keep all of it. Until then there is nobody behind it,
- * which is why they carry no inactivity and why the names here are still ours
- * to fix.
+ * A registration and the account it becomes are the same row: registering
+ * someone by Discord ID creates a full user, and the first time they sign in
+ * with that ID the OAuth callback lands on it and everything they had carries
+ * over. Showing registrations in a table of their own made that look like two
+ * populations, so they sit here with everyone else — pinned to the top, where
+ * they are the rows still needing something done about them, and the only ones
+ * whose names are still ours to fix.
  */
-export function ProvisionalUsersPanel() {
+export function UsersPanel() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -42,19 +54,35 @@ export function ProvisionalUsersPanel() {
   const [username, setUsername] = useState('');
   const [inGameName, setInGameName] = useState('');
 
-  const [editTarget, setEditTarget] = useState<ProvisionalUser | null>(null);
+  const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const [editUsername, setEditUsername] = useState('');
   const [editInGameName, setEditInGameName] = useState('');
 
-  const [deleteTarget, setDeleteTarget] = useState<ProvisionalUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
 
-  const { data: pending = [], isLoading } = useQuery({
-    queryKey: ['provisional-users'],
-    queryFn: () => provisionalUsersApi.list(),
+  const [search, setSearch] = useState('');
+
+  const { data: allUsers = [], isLoading } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => adminUsersApi.list(),
     staleTime: 30 * 1000,
   });
 
+  // The roster is every account on the server, so it outgrows a screen quickly.
+  // Matching the Discord ID as well as the names matters: an admin is usually
+  // holding an ID handed to them in Discord, not a name they can spell.
+  const users = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allUsers;
+    return allUsers.filter((u) =>
+      u.username.toLowerCase().includes(q)
+      || (u.inGameName ?? '').toLowerCase().includes(q)
+      || u.discordId.includes(q),
+    );
+  }, [allUsers, search]);
+
   const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     queryClient.invalidateQueries({ queryKey: ['provisional-users'] });
     queryClient.invalidateQueries({ queryKey: ['admin-analytics'] });
   };
@@ -105,7 +133,7 @@ export function ProvisionalUsersPanel() {
     },
   });
 
-  const openEdit = (u: ProvisionalUser) => {
+  const openEdit = (u: AdminUser) => {
     setEditTarget(u);
     setEditUsername(u.username);
     setEditInGameName(u.inGameName ?? '');
@@ -114,57 +142,102 @@ export function ProvisionalUsersPanel() {
   return (
     <>
       <Card className="py-0 gap-0">
-        <CardHeader className="flex-row items-center justify-between py-4">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 py-4">
           <div>
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
               <UserCog className="h-4 w-4 text-zinc-400" />
-              {t('provisional.title')}
+              {t('users.title')}
             </CardTitle>
-            <p className="text-[11px] text-zinc-500 mt-1">{t('provisional.description')}</p>
+            <p className="text-[11px] text-zinc-500 mt-1">{t('users.description')}</p>
           </div>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <UserPlus className="mr-1.5 h-4 w-4" />{t('provisional.registerPlayer')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {allUsers.length > 0 && (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+                <Input
+                  className="h-8 w-[200px] pl-8 text-xs"
+                  placeholder={t('users.search')}
+                  aria-label={t('users.search')}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            )}
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <UserPlus className="mr-1.5 h-4 w-4" />{t('provisional.registerPlayer')}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : pending.length === 0 ? (
+          ) : allUsers.length === 0 ? (
             <p className="px-6 py-10 text-center text-sm text-zinc-600">
-              {t('provisional.none')}
+              {t('users.none')}
+            </p>
+          ) : users.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-zinc-600">
+              {t('members.noneMatch')}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('provisional.player')}</TableHead>
-                  <TableHead>{t('members.discordId')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('members.discordId')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('members.role')}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t('users.lastLogin')}</TableHead>
                   <TableHead className="text-right">{t('admin.factions')}</TableHead>
                   <TableHead className="text-right">{t('nav.entries')}</TableHead>
                   <TableHead className="w-[90px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pending.map((u) => (
+                {users.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell>
-                      <span className="text-sm text-zinc-200">{u.inGameName?.trim() || u.username}</span>
-                      {u.inGameName?.trim() && (
-                        <span className="ml-1.5 text-xs text-zinc-500">({u.username})</span>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        <Avatar className="h-7 w-7">
+                          <AvatarImage src={u.avatarUrl ?? undefined} />
+                          <AvatarFallback className="text-[10px]">{displayName(u).slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <span className="text-sm text-zinc-200">{displayName(u)}</span>
+                          {u.inGameName?.trim() && (
+                            <span className="ml-1.5 text-xs text-zinc-500">({u.username})</span>
+                          )}
+                          {/* The one thing that separates these rows from the
+                              rest: nobody is behind them yet. */}
+                          {u.isProvisional && (
+                            <Badge variant="outline" className="ml-2 text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
+                              {t('users.awaitingFirstLogin')}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-xs text-zinc-500 tabular-nums">{u.discordId}</TableCell>
+                    <TableCell className="hidden sm:table-cell text-xs text-zinc-500 tabular-nums">{u.discordId}</TableCell>
+                    <TableCell className="hidden md:table-cell text-xs text-zinc-400">{ROLE_KEYS[u.role] ? t(ROLE_KEYS[u.role]) : u.role}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-xs text-zinc-500 tabular-nums">
+                      {u.lastLogin ? formatDate(u.lastLogin) : <span className="text-zinc-700">{t('dashboard.never')}</span>}
+                    </TableCell>
                     <TableCell className="text-sm text-zinc-400 tabular-nums text-right">{u.factionCount}</TableCell>
                     <TableCell className="text-sm text-zinc-400 tabular-nums text-right">{u.entryCount}</TableCell>
                     <TableCell>
-                      <div className="flex justify-end gap-0.5">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(u)}>
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.remove')} onClick={() => setDeleteTarget(u)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      {/* Renaming and removing only ever applied to a row nobody
+                          has signed into — after that the Discord name is
+                          Discord's and the character name is theirs. The API
+                          refuses both for anyone else, so the buttons go. */}
+                      {u.isProvisional && (
+                        <div className="flex justify-end gap-0.5">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(u)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.remove')} onClick={() => setDeleteTarget(u)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

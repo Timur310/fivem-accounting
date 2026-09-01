@@ -661,16 +661,21 @@ export const hu: Translations = {
   'admin.manageMembers': 'Tagok kezelése',
   'admin.editItemTypes': 'Tételtípusok szerkesztése',
 
+  // ── The superadmin's roster of everyone ──
+  'users.title': 'Játékosok',
+  'users.description': 'Mindenki, aki már belépett, plusz a még senkire nem váró regisztrációk — azok felül maradnak, és csak az ő nevük szerkeszthető innen.',
+  'users.search': 'Keresés név vagy Discord ID alapján...',
+  'users.awaitingFirstLogin': 'Még nem lépett be',
+  'users.lastLogin': 'Utolsó belépés',
+  'users.none': 'Még nincs itt senki.',
+
   // ── Registered players (superadmin) ──
-  'provisional.title': 'Előregisztrált játékosok',
-  'provisional.description': 'Discord ID alapján felvett emberek, akik még sosem léptek be. Frakcióba tehetők, és rögzíthetők nekik bejegyzések; az első belépéskor ez lesz a saját fiókjuk, mindennel, ami már rajta van.',
   'provisional.registerPlayer': 'Játékos regisztrálása',
   'provisional.registerHint': 'Vegyél fel valakit a Discord ID-jával, hogy kezelhető legyen még az első belépése előtt.',
   'provisional.register': 'Regisztrálás',
   'provisional.registering': 'Regisztrálás...',
   'provisional.registered': 'A játékos regisztrálva',
   'provisional.registerFailed': 'A regisztrálás nem sikerült',
-  'provisional.none': 'Még senki nincs regisztrálva.',
   'provisional.player': 'Játékos',
   'provisional.discordIdRequired': 'Discord ID *',
   'provisional.discordIdHint': 'Az igazi ID kell — ez köti majd a rekordot a fiókjához, amikor belép. Discord: Beállítások → Speciális → Fejlesztői mód, majd jobbklikk a felhasználón → Felhasználói azonosító másolása.',

@@ -47,6 +47,7 @@ import type {
   LeaderboardData,
   GlobalLeaderboardData,
   GrowthData,
+  AdminUser,
   ProvisionalUser,
   CreateProvisionalUserInput,
   UpdateProvisionalUserInput,
@@ -443,6 +444,14 @@ export const treasuryApi = {
 };
 
 // ── Provisional users (superadmin) ──
+
+/** The whole population, for the superadmin roster. Superadmin only. */
+export const adminUsersApi = {
+  list: () =>
+    api
+      .get<ApiSuccessResponse<AdminUser[]>>('/admin/users')
+      .then(unwrap),
+};
 
 export const provisionalUsersApi = {
   list: () =>
