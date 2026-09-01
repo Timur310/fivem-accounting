@@ -345,7 +345,7 @@ export function AppShell() {
       case 'treasury':
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
       case 'members':
-        return selectedFactionId ? <MembersView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} /> : null;
+        return selectedFactionId ? <MembersView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} canManageMembers={hasPermission('manage_members')} /> : null;
       case 'member-profile':
         return (selectedFactionId && selectedMemberUserId) ? <MemberProfileView
             factionId={selectedFactionId}
