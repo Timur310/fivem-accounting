@@ -69,7 +69,11 @@ router.get('/', async (req: Request, res: Response) => {
     : Promise.resolve([]);
 
   const [balances, recentOutflow, pendingStats, recentPayouts] = await Promise.all([
-    computeTreasuryBalances(factionId),
+    // Only item types the vault has actually moved. A faction that defined a
+    // dozen types and used two should see two cards, not ten rows of zeroes —
+    // and the totals note below counts the same set, so it cannot claim to
+    // cover types that are not on screen.
+    computeTreasuryBalances(factionId, { onlyWithActivity: true }),
     // Completed outflow per day AND per item type over the trend window.
     // One query serves both the overall trend and the per-card sparklines.
     db
