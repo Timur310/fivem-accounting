@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { membersApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
+import type { Member } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -88,6 +89,17 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
     for (const r of sortedRanks) map.set(r.name, r.level);
     return map;
   }, [sortedRanks]);
+  // Escalation: the faction sets active-strike thresholds per severity; a
+  // member who reaches one shows up flagged for kick consideration.
+  const escalation = settings?.strikeEscalation;
+  const isEscalated = (m: Member): boolean => {
+    if (!escalation || !m.activeStrikesBySeverity) return false;
+    return (['warning', 'minor', 'major'] as const).some((sev) => {
+      const threshold = escalation[sev];
+      return threshold !== null && threshold !== undefined && m.activeStrikesBySeverity![sev] >= threshold;
+    });
+  };
+
   const sortedMembers = useMemo(() => {
     return [...members].sort((a, b) => {
       const adminDiff = Number(b.role === 'admin') - Number(a.role === 'admin');
@@ -308,6 +320,12 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                             <Badge variant="outline" className="text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
                               <Clock className="h-2.5 w-2.5 mr-0.5" />
                               {t('dashboard.daysShort', { days: m.daysInactive ?? 0 })}
+                            </Badge>
+                          )}
+                          {isEscalated(m) && (
+                            <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-300 bg-red-500/10 font-medium">
+                              <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                              {t('members.kickSuggestion')}
                             </Badge>
                           )}
                           {(m.activeStrikeCount ?? 0) > 0 && (

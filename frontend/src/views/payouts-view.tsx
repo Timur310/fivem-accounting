@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { Payout, PayoutStatus } from '@/lib/api-types';
+import type { Payout, PayoutStatus, Member } from '@/lib/api-types';
 import { formatAmount, displayName, fullDisplayName, formatNumber } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -108,6 +108,9 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   const [splitTotal, setSplitTotal] = useState('');
   const [splitDescription, setSplitDescription] = useState('');
   const [splitDate, setSplitDate] = useState(new Date().toISOString().slice(0, 10));
+  // Who shares the pot: the whole roster, or a picked subset of it.
+  const [splitMode, setSplitMode] = useState<'all' | 'pick'>('all');
+  const [splitSelected, setSplitSelected] = useState<string[]>([]);
 
   // ── Data ──
   const { data: payoutsData, isLoading } = useQuery({
@@ -237,12 +240,18 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
     },
   });
 
+  // Whom the split currently covers — the preview and the warning count read this.
+  const splitRecipients = splitMode === 'pick' && splitSelected.length > 0
+    ? splitSelected
+    : members.map((m: Member) => m.userId);
+
   const evenSplitMutation = useMutation({
     mutationFn: () => payoutsApi.evenSplit(factionId, {
       itemTypeId: splitItemType,
       totalAmount: splitTotal,
       description: splitDescription || undefined,
       payoutDate: splitDate || undefined,
+      ...(splitMode === 'pick' && splitSelected.length > 0 ? { memberUserIds: splitSelected } : {}),
     }),
     onSuccess: (result) => {
       toast({
@@ -649,7 +658,50 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
-              {t('payouts.evenSplitWarning', { count: members.length })}
+              {t('payouts.evenSplitWarning', { count: splitMode === 'pick' && splitSelected.length > 0 ? splitSelected.length : members.length })}
+            </div>
+            {/* Recipient scope: whole roster or a picked crew. Provisional
+                registrations are unchecked by default — nobody has signed in
+                behind those rows yet. */}
+            <div className="space-y-2">
+              <Label>{t('payouts.splitWho')}</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={splitMode === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => { setSplitMode('all'); setSplitSelected([]); }}
+                >
+                  {t('payouts.splitAll')}
+                </Button>
+                <Button
+                  variant={splitMode === 'pick' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setSplitMode('pick');
+                    setSplitSelected(members.filter((m: Member) => !m.isProvisional).map((m: Member) => m.userId));
+                  }}
+                >
+                  {t('payouts.splitPick')}
+                </Button>
+              </div>
+              {splitMode === 'pick' && (
+                <div className="max-h-[180px] overflow-y-auto rounded-lg border border-white/[0.06] p-2 space-y-1">
+                  {members.map((m: Member) => (
+                    <label key={m.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-white/[0.03] cursor-pointer text-sm text-zinc-300">
+                      <input
+                        type="checkbox"
+                        className="accent-zinc-400"
+                        checked={splitSelected.includes(m.userId)}
+                        onChange={(e) => {
+                          setSplitSelected((prev) => e.target.checked ? [...prev, m.userId] : prev.filter((id) => id !== m.userId));
+                        }}
+                      />
+                      <span className="truncate">{displayName({ username: m.username, inGameName: m.inGameName })}</span>
+                      {m.isProvisional && <span className="text-[10px] text-zinc-600">{t('members.provisional')}</span>}
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>{t('payouts.itemTypeRequired')}</Label>
@@ -675,12 +727,12 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
               {splitTotal && Number(splitTotal) > 0 && members.length > 0 && (
                 <p className="text-xs text-zinc-500">
                   {t('payouts.splitPreview', {
-                    count: members.length,
-                    each: fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100),
-                    distributed: fmt(Math.floor(Number(splitTotal) * 100 / members.length) / 100 * members.length),
+                    count: splitRecipients.length,
+                    each: fmt(Math.floor(Number(splitTotal) * 100 / splitRecipients.length) / 100),
+                    distributed: fmt(Math.floor(Number(splitTotal) * 100 / splitRecipients.length) / 100 * splitRecipients.length),
                   })}
                   {(() => {
-                    const rem = (Number(splitTotal) * 100 - Math.floor(Number(splitTotal) * 100 / members.length) * members.length) / 100;
+                    const rem = (Number(splitTotal) * 100 - Math.floor(Number(splitTotal) * 100 / splitRecipients.length) * splitRecipients.length) / 100;
                     return rem > 0 ? <>{t('payouts.splitRemainder', { remainder: fmt(rem) })}</> : null;
                   })()}
                 </p>
@@ -708,7 +760,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEvenSplitOpen(false)}>{t('common.cancel')}</Button>
             <Button
-              disabled={!splitItemType || !splitTotal || Number(splitTotal) <= 0 || evenSplitMutation.isPending}
+              disabled={!splitItemType || !splitTotal || Number(splitTotal) <= 0 || (splitMode === 'pick' && splitSelected.length === 0) || evenSplitMutation.isPending}
               onClick={() => evenSplitMutation.mutate()}
               style={{ backgroundColor: brandColor }}
             >

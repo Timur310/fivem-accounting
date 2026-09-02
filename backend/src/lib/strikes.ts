@@ -69,3 +69,27 @@ export async function countActiveStrikes(factionId: string): Promise<Map<string,
 
   return new Map(rows.map((r) => [r.userId, r.count]));
 }
+
+/** Active-strike counts per member, broken down by severity — the fuel for
+ *  the roster's escalation flag ("3 active minors = kick suggestion"). */
+export async function countActiveStrikesBySeverity(
+  factionId: string,
+): Promise<Map<string, Record<string, number>>> {
+  const rows = await db
+    .select({
+      userId: strikes.targetUserId,
+      severity: strikes.severity,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(strikes)
+    .where(and(eq(strikes.factionId, factionId), isActiveStrike()))
+    .groupBy(strikes.targetUserId, strikes.severity);
+
+  const map = new Map<string, Record<string, number>>();
+  for (const r of rows) {
+    const entry = map.get(r.userId) ?? { warning: 0, minor: 0, major: 0 };
+    entry[r.severity] = r.count;
+    map.set(r.userId, entry);
+  }
+  return map;
+}

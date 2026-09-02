@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import { factionMembers, users, entries, factions, itemTypes, payouts, quotas, auditLogs } from '../db/schema.js';
-import { eq, and, sql, desc, gte, lte, ilike, notInArray } from 'drizzle-orm';
+import { eq, and, or, isNull, sql, desc, gte, lte, ilike, notInArray } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -10,7 +10,7 @@ import { requireFactionMember, requirePermission } from '../middleware/factionAc
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
 import { daysSince, toDateString } from '../lib/date.js';
-import { countActiveStrikes } from '../lib/strikes.js';
+import { countActiveStrikes, countActiveStrikesBySeverity } from '../lib/strikes.js';
 import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/analytics.js';
 
 const router = Router({ mergeParams: true });
@@ -215,7 +215,9 @@ router.get('/', async (req: Request, res: Response) => {
 
   // Strike counts are admin-visible only; members see the roster without them.
   const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
-  const strikeCounts = isAdmin ? await countActiveStrikes(factionId) : null;
+  const [strikeCounts, strikeSeverityCounts] = isAdmin
+    ? await Promise.all([countActiveStrikes(factionId), countActiveStrikesBySeverity(factionId)])
+    : [null, null];
 
   success(
     res,
@@ -225,6 +227,7 @@ router.get('/', async (req: Request, res: Response) => {
       // one to have gone quiet.
       daysInactive: m.isProvisional ? null : daysSince(m.lastEntryDate),
       ...(strikeCounts ? { activeStrikeCount: strikeCounts.get(m.userId) ?? 0 } : {}),
+      ...(strikeSeverityCounts ? { activeStrikesBySeverity: strikeSeverityCounts.get(m.userId) ?? { warning: 0, minor: 0, major: 0 } } : {}),
     })),
   );
 });
@@ -755,7 +758,9 @@ router.get('/:userId', async (req: Request, res: Response) => {
         })
         .from(quotas)
         .innerJoin(itemTypes, eq(quotas.itemTypeId, itemTypes.id))
-        .where(and(eq(quotas.factionId, factionId), eq(quotas.isActive, true))),
+        // A member-scope quota aimed at someone else says nothing about this
+        // member; faction-wide and per-everyone quotas do.
+        .where(and(eq(quotas.factionId, factionId), eq(quotas.isActive, true), or(isNull(quotas.targetUserId), eq(quotas.targetUserId, targetUserId)))),
     ]);
 
   // This member's share of each active quota in its current period.

@@ -36,3 +36,16 @@ export function getPeriodRange(periodType: string, referenceDate: Date): PeriodR
     end: toDateString(new Date(year, month + 1, 0)),
   };
 }
+
+/**
+ * The period immediately before the one containing `referenceDate`. Quota
+ * progress resets when a period rolls over, so without this the outcome of
+ * the period that just closed is lost the moment a new one begins.
+ */
+export function getPreviousPeriodRange(periodType: string, referenceDate: Date): PeriodRange {
+  const d = new Date(referenceDate);
+  if (periodType === 'weekly') {
+    return getPeriodRange(periodType, new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7));
+  }
+  return getPeriodRange(periodType, new Date(d.getFullYear(), d.getMonth() - 1, 1));
+}

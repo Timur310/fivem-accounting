@@ -19,6 +19,7 @@ import type {
   AuditLog,
   Quota,
   CreateQuotaInput,
+  QuotaHistoryData,
   UpdateQuotaInput,
   ChartData,
   AdminAnalytics,
@@ -380,6 +381,13 @@ export const quotasApi = {
   list: (factionId: string) =>
     api
       .get<ApiSuccessResponse<Quota[]>>(`/factions/${factionId}/quotas`)
+      .then(unwrap),
+
+  history: (factionId: string, quotaId: string, userId?: string) =>
+    api
+      .get<ApiSuccessResponse<QuotaHistoryData>>(`/factions/${factionId}/quotas/${quotaId}/history`, {
+        params: userId ? { user_id: userId } : undefined,
+      })
       .then(unwrap),
 
   create: (factionId: string, input: CreateQuotaInput) =>

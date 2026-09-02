@@ -1,7 +1,15 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, quotasApi, exportApi } from '@/lib/api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from 'react';
+import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, apiErrorMessage } from '@/lib/api-client';
+import { Input } from '@/components/ui/input';
+import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { LogIn } from 'lucide-react';
+import { todayLocalDateString } from '@/lib/format';
+import type { ItemType } from '@/lib/api-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -24,9 +32,10 @@ const QUOTA_PERIOD_KEYS: Record<string, TranslationKey> = {
 
 interface Props {
   factionId: string;
+  canLogEntries?: boolean;
 }
 
-export function DashboardView({ factionId }: Props) {
+export function DashboardView({ factionId, canLogEntries = false }: Props) {
   const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
@@ -43,6 +52,60 @@ export function DashboardView({ factionId }: Props) {
     queryFn: () => quotasApi.list(factionId),
     staleTime: 0,
   });
+
+  const { data: itemTypes = [] } = useQuery({
+    queryKey: ['itemTypes', factionId],
+    queryFn: () => itemTypesApi.list(factionId),
+    enabled: canLogEntries,
+  });
+
+  // ── Quick log ──
+  // One card, pre-filled with the member's own last entry: logging the same
+  // haul again should not cost a navigation and a blank form.
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const user = useAppStore((s) => s.user);
+  const [quickTypeId, setQuickTypeId] = useState('');
+  const [quickAmount, setQuickAmount] = useState('');
+
+  const quickDefaults = useMemo(() => {
+    const recent = (data?.recentEntries ?? []) as { userId?: string; itemTypeName: string; amount: string }[];
+    const mine = recent.find((e) => e.userId === user?.id);
+    if (!mine) return null;
+    const type = (itemTypes as ItemType[]).find((it) => it.isActive && it.name === mine.itemTypeName);
+    return type ? { typeId: type.id, amount: mine.amount } : null;
+  }, [data, itemTypes, user?.id]);
+
+  useEffect(() => {
+    if (!quickDefaults) return;
+    setQuickTypeId((prev) => prev || quickDefaults.typeId);
+    setQuickAmount((prev) => prev || quickDefaults.amount);
+  }, [quickDefaults]);
+
+  const quickType = (itemTypes as ItemType[]).find((it) => it.id === quickTypeId);
+  const quickStep = quickType?.isCurrency ? 1000 : 1;
+  const quickBump = (dir: number) => {
+    const current = Number(quickAmount);
+    setQuickAmount(String(isNaN(current) || quickAmount === '' ? Math.max(quickStep, 0) : Math.max(current + dir * quickStep, 0)));
+  };
+
+  const quickLogMutation = useMutation({
+    mutationFn: () => entriesApi.create(factionId, { itemTypeId: quickTypeId, amount: quickAmount }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
+      toast({ title: t('entries.logged') });
+    },
+    onError: (err: unknown) => {
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const quickTypeOptions: SearchableSelectOption[] = (itemTypes as ItemType[])
+    .filter((it) => it.isActive)
+    .map((it) => ({ value: it.id, label: it.name }));
 
   if (isLoading) {
     return (
@@ -88,6 +151,56 @@ export function DashboardView({ factionId }: Props) {
           <p className="text-zinc-500 mt-1 text-sm">{faction.description}</p>
         )}
       </div>
+
+      {/* ══ Quick Log ══ */}
+      {canLogEntries && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+              <LogIn className="h-4 w-4 text-zinc-400" />
+              {t('dashboard.quickLog')}
+              {quickDefaults && <span className="text-[11px] text-zinc-600 font-normal">· {t('dashboard.quickLogPrefilled')}</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5 min-w-[180px] flex-1">
+                <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
+                <SearchableSelect
+                  value={quickTypeId}
+                  onValueChange={setQuickTypeId}
+                  options={quickTypeOptions}
+                  placeholder={t('itemTypes.select')}
+                  aria-label={t('entries.itemType')}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-500">{t('common.amount')}{quickType ? ` (${quickType.unit})` : ''}</Label>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.decrease')} onClick={() => quickBump(-1)}>−</Button>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0.00"
+                    value={quickAmount}
+                    onChange={(e) => setQuickAmount(e.target.value)}
+                    className="tabular-nums w-32"
+                  />
+                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
+                </div>
+              </div>
+              <Button
+                disabled={!quickTypeId || !quickAmount || Number(quickAmount) <= 0 || quickLogMutation.isPending}
+                onClick={() => quickLogMutation.mutate()}
+                style={{ backgroundColor: brandColor }}
+              >
+                {quickLogMutation.isPending ? t('common.saving') : t('dashboard.quickLogSubmit')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ══ Bento Grid: Hero + 3 Stats ══ */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -74,6 +74,14 @@ export const factions = pgTable('factions', {
     minor: number | null;
     major: number | null;
   }>(),
+  // Discipline escalation: when a member's ACTIVE strikes of a severity reach
+  // the threshold, the roster flags them for kick consideration. null disables
+  // the check for that severity.
+  strikeEscalation: jsonb('strike_escalation').$type<{
+    warning: number | null;
+    minor: number | null;
+    major: number | null;
+  }>(),
   createdBy:    uuid('created_by').notNull().references(() => users.id),
   createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   isActive:     boolean('is_active').notNull().default(true),
@@ -340,8 +348,13 @@ export const quotas = pgTable('quotas', {
   id:           uuid('id').defaultRandom().primaryKey(),
   factionId:    uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
   itemTypeId:   uuid('item_type_id').notNull().references(() => itemTypes.id),
-  // null means the quota applies faction-wide; a user id scopes it to that
-  // member only — used for per-member targets on top of the faction target.
+  // Scope of the target:
+  //   'faction'  — null targetUserId, everyone's entries summed into one target
+  //   'everyone' — null targetUserId, the SAME target applies to each member
+  //                individually (progress reads only the viewer's entries)
+  //   'member'   — targetUserId set, one member's personal target
+  scope:        varchar('scope', { length: 10 }).notNull().default('faction'),
+  // Set only when scope = 'member'.
   targetUserId: uuid('target_user_id').references(() => users.id, { onDelete: 'cascade' }),
   targetAmount: decimal('target_amount', { precision: 15, scale: 2 }).notNull(),
   periodType:   varchar('period_type', { length: 10 }).notNull(),
@@ -349,6 +362,11 @@ export const quotas = pgTable('quotas', {
   isActive:     boolean('is_active').notNull().default(true),
   createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Quota scopes. 'everyone' is the per-person target handed to every member. */
+export const QUOTA_SCOPES = ['faction', 'everyone', 'member'] as const;
+export type QuotaScope = (typeof QUOTA_SCOPES)[number];
+
 
 export const quotasRelations = relations(quotas, ({ one }) => ({
   faction:    one(factions,  { fields: [quotas.factionId],    references: [factions.id] }),

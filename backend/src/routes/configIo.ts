@@ -118,6 +118,7 @@ router.get('/quotas', async (req: Request, res: Response) => {
       targetAmount: quotas.targetAmount,
       periodType: quotas.periodType,
       periodStart: quotas.periodStart,
+      scope: quotas.scope,
       targetUsername: users.username,
       isActive: quotas.isActive,
     })
@@ -289,6 +290,7 @@ router.post('/quotas', requirePermission('manage_quotas'), async (req: Request, 
   const targetIdx = columnIndex(header, 'target amount', 'target_amount', 'target');
   const periodIdx = columnIndex(header, 'period type', 'period_type');
   const startIdx = columnIndex(header, 'period start', 'period_start');
+  const scopeIdx = columnIndex(header, 'scope');
   const memberIdx = columnIndex(header, 'target member', 'target_member', 'member');
   const activeIdx = columnIndex(header, 'active');
   if (itemIdx === -1 || targetIdx === -1) {
@@ -314,8 +316,8 @@ router.post('/quotas', requirePermission('manage_quotas'), async (req: Request, 
 
   const result = { imported: 0, skipped: 0, errors: [] as string[] };
   const importedActiveKeys: string[] = [];
-  const quotaKey = (itemTypeId: string, periodType: string, targetUserId: string | null) =>
-    `${itemTypeId}:${periodType}:${targetUserId ?? 'faction'}`;
+  const quotaKey = (itemTypeId: string, periodType: string, scope: string, targetUserId: string | null) =>
+    `${itemTypeId}:${periodType}:${scope}:${targetUserId ?? 'none'}`;
 
   for (let i = 0; i < rows.length; i++) {
     const cols = rows[i] ?? [];
@@ -358,18 +360,40 @@ router.post('/quotas', requirePermission('manage_quotas'), async (req: Request, 
       continue;
     }
 
-    // Blank target = faction-wide. A name must match a current member by
-    // Discord name or in-game name, or the row is skipped — the same rule
-    // entry imports follow.
+    const scopeRaw = scopeIdx >= 0 ? (cols[scopeIdx] ?? '').trim().toLowerCase() : '';
+    let scope: 'faction' | 'everyone' | 'member' = 'faction';
+    if (scopeRaw) {
+      if (scopeRaw === 'faction' || scopeRaw === 'everyone' || scopeRaw === 'member') {
+        scope = scopeRaw;
+      } else {
+        result.errors.push(`Row ${rowNo}: scope must be faction, everyone or member`);
+        result.skipped++;
+        continue;
+      }
+    }
+
+    // A named target belongs to the 'member' scope; 'faction' and 'everyone'
+    // are both targetless. A name must match a current member by Discord name
+    // or in-game name, or the row is skipped — the same rule entry imports
+    // follow.
     const memberName = memberIdx >= 0 ? (cols[memberIdx] ?? '').trim() : '';
     let targetUserId: string | null = null;
-    if (memberName) {
+    if (scope === 'member' && !memberName) {
+      result.errors.push(`Row ${rowNo}: scope "member" requires a target member`);
+      result.skipped++;
+      continue;
+    }
+    if (scope === 'member' || (memberName && scopeRaw === '')) {
       targetUserId = memberByName.get(memberName.toLowerCase()) ?? null;
       if (!targetUserId) {
         result.errors.push(`Row ${rowNo}: "${memberName}" is not a faction member`);
         result.skipped++;
         continue;
       }
+    } else if (memberName) {
+      result.errors.push(`Row ${rowNo}: a target member is only valid with scope "member"`);
+      result.skipped++;
+      continue;
     }
 
     // One active quota per (item type + period + scope) — mirror of the
@@ -381,9 +405,10 @@ router.post('/quotas', requirePermission('manage_quotas'), async (req: Request, 
           q.isActive &&
           q.itemTypeId === itemType.id &&
           q.periodType === periodType &&
+          (q.scope ?? 'faction') === scope &&
           (q.targetUserId ?? null) === targetUserId,
       ) ||
-      importedActiveKeys.includes(quotaKey(itemType.id, periodType, targetUserId));
+      importedActiveKeys.includes(quotaKey(itemType.id, periodType, scope, targetUserId));
     if (duplicate && isActive) {
       result.errors.push(`Row ${rowNo}: an active quota already exists for this item type and period`);
       result.skipped++;
@@ -396,13 +421,14 @@ router.post('/quotas', requirePermission('manage_quotas'), async (req: Request, 
       targetAmount: amountRaw,
       periodType,
       periodStart,
+      scope,
       targetUserId,
       isActive,
     });
     if (isActive) {
       // Track what this import itself created so two rows in one file cannot
       // both pass the duplicate guard.
-      importedActiveKeys.push(quotaKey(itemType.id, periodType, targetUserId));
+      importedActiveKeys.push(quotaKey(itemType.id, periodType, scope, targetUserId));
     }
     result.imported++;
   }

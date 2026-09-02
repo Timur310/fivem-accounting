@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { entriesApi, itemTypesApi, exportApi, factionsApi, membersApi } from '@/lib/api-client';
+import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -237,6 +238,23 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   };
 
   const entries = entriesData?.data ?? [];
+
+  const user = useAppStore((s) => s.user);
+  // Mid-roleplay friction is the enemy: the dialog opens pre-filled with the
+  // member's own last entry, so logging the same haul again is two clicks.
+  const myLastEntry = useMemo(
+    () => entries.find((e) => e.userId === user?.id),
+    [entries, user?.id],
+  );
+  const openCreate = () => {
+    // The list does not carry item ids, so the type resolves by name.
+    const lastType = myLastEntry
+      ? activeItemTypes.find((it: ItemType) => it.name === myLastEntry.itemTypeName)
+      : undefined;
+    if (newItemTypeId === '' && lastType) setNewItemTypeId(lastType.id);
+    if (newAmount === '' && myLastEntry) setNewAmount(myLastEntry.amount);
+    setCreateOpen(true);
+  };
   const meta = entriesData?.meta;
   const totalPages = meta ? Math.ceil(meta.total_count / meta.page_size) : 1;
 
@@ -282,7 +300,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               <Download className="mr-1.5 h-3.5 w-3.5" />{t('entries.csv')}
             </Button>
             {canLogEntries && (
-              <Button onClick={() => setCreateOpen(true)}>
+              <Button onClick={openCreate}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 {t('entries.logEntry')}
               </Button>
@@ -413,7 +431,25 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             </div>
             <div className="space-y-2">
               <Label>{t('common.amount')}</Label>
-              <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="tabular-nums" />
+              {(() => {
+                const selectedType = activeItemTypes.find((it: ItemType) => it.id === newItemTypeId);
+                const step = selectedType?.isCurrency ? 1000 : 1;
+                const bump = (dir: number) => {
+                  const current = Number(newAmount);
+                  setNewAmount(String(isNaN(current) || newAmount === '' ? Math.max(step, 0) : Math.max(current + dir * step, 0)));
+                };
+                return (
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.decrease')} onClick={() => bump(-1)}>
+                      −
+                    </Button>
+                    <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="tabular-nums" />
+                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.increase')} onClick={() => bump(1)}>
+                      +
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
