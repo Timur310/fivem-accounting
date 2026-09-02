@@ -2,13 +2,15 @@
 // The docs folder sits outside the Docker build context for the frontend, so
 // there the committed public copy (or a placeholder) is used — a missing
 // source must never fail the image build.
-import { copyFileSync, existsSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = join(root, 'docs', 'UserGuide.md');
 const dest = join(root, 'frontend', 'public', 'user-guide.md');
+
+mkdirSync(dirname(dest), { recursive: true });
 
 if (existsSync(src)) {
   copyFileSync(src, dest);
