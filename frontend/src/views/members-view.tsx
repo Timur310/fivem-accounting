@@ -82,6 +82,27 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
 
   const sortedRanks = (settings?.ranks ?? []).sort((a, b) => a.level - b.level);
 
+  // Roster order: admins always on top, then by rank level (a lower level is
+  // higher in the hierarchy), rankless members last, join date breaking ties.
+  const rankLevel = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of sortedRanks) map.set(r.name, r.level);
+    return map;
+  }, [sortedRanks]);
+  const sortedMembers = useMemo(() => {
+    return [...members].sort((a, b) => {
+      const adminDiff = Number(b.role === 'admin') - Number(a.role === 'admin');
+      if (adminDiff !== 0) return adminDiff;
+      const aLevel = a.rank ? rankLevel.get(a.rank) : undefined;
+      const bLevel = b.rank ? rankLevel.get(b.rank) : undefined;
+      // An unknown or cleared rank sorts below every defined one.
+      if (aLevel !== undefined || bLevel !== undefined) {
+        return (aLevel ?? Number.POSITIVE_INFINITY) - (bLevel ?? Number.POSITIVE_INFINITY);
+      }
+      return a.joinedAt.localeCompare(b.joinedAt);
+    });
+  }, [members, rankLevel]);
+
   // The empty value clears the rank, matching what the dialog submits.
   const rankOptions = useMemo<SearchableSelectOption[]>(() => [
     { value: '', label: t('members.noRankClear') },
@@ -225,7 +246,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members.map((m) => {
+                {sortedMembers.map((m) => {
                   const isInactive = m.daysInactive !== null && m.daysInactive >= inactivityThreshold;
                   return (
                     <TableRow key={m.id}>
