@@ -413,7 +413,12 @@ router.patch('/:entryId', requirePermission('manage_entries'), async (req: Reque
 });
 
 // ── DELETE /:entryId — soft-delete entry (admin) ────
-router.delete('/:entryId', requirePermission('manage_entries'), async (req: Request, res: Response) => {
+// A member may undo their OWN entry for a few minutes after logging it —
+// a typo'd amount should not require an admin. Past the window, `manage_entries`
+// is the only key.
+const UNDO_WINDOW_MS = 5 * 60 * 1000;
+
+router.delete('/:entryId', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const entryId = req.params.entryId as string;
 
@@ -424,6 +429,16 @@ router.delete('/:entryId', requirePermission('manage_entries'), async (req: Requ
     .limit(1);
   if (!existing) {
     error(res, 'NOT_FOUND', 'Entry not found', 404);
+    return;
+  }
+
+  const canManage = (req.factionPermissions ?? []).includes('manage_entries');
+  const isMine = existing.userId === req.user!.id;
+  const withinUndo = isMine && Date.now() - new Date(existing.createdAt).getTime() <= UNDO_WINDOW_MS;
+  if (!canManage && !withinUndo) {
+    error(res, 'FORBIDDEN', isMine
+      ? 'Entries can only be undone within 5 minutes of logging them'
+      : 'You can only remove your own entries', 403);
     return;
   }
 
@@ -440,7 +455,7 @@ router.delete('/:entryId', requirePermission('manage_entries'), async (req: Requ
         action: 'delete',
         entityType: 'entry',
         entityId: entryId,
-        details: { amount: existing.amount, itemTypeId: existing.itemTypeId, entryDate: existing.entryDate },
+        details: { amount: existing.amount, itemTypeId: existing.itemTypeId, entryDate: existing.entryDate, ...(withinUndo && !canManage ? { selfUndone: true } : {}) },
         req,
         tx,
       });

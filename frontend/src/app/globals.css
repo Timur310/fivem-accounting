@@ -259,3 +259,17 @@
     animation: shimmer 1.5s ease-in-out infinite;
   }
 }
+
+/* Print: the reports view prints as a clean sheet — chrome and controls
+   stay on screen only. */
+@media print {
+  aside,
+  header,
+  .print\:hidden {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+}

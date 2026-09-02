@@ -554,6 +554,12 @@ member, or mark it anonymous.
 
 Entries are soft-deleted. Amounts are decimals carried as strings end to end.
 
+**Five-minute undo:** a member may delete their **own** entry for five minutes
+after logging it (`created_at` decides — no scheduler), which keeps a typo'd
+amount from waiting on an admin. Past the window, or on someone else's row,
+`manage_entries` is the only key. The delete is still soft, still audited, and
+the audit row notes when it was a self-undo.
+
 ### 8.3 Withdrawals
 
 `manage_payouts` governs reach, not access:
@@ -740,7 +746,21 @@ the person who has to create the faction.
 **Quick log:** logging happens mid-roleplay on phones, so the dashboard opens
 with a pre-filled card — the member's own last entry supplies the item type and
 amount, and ± steppers adjust by 1000 for currency and 1 for goods. The entries
-dialog pre-fills the same way, so logging the same haul again is two clicks.
+dialog pre-fills the same way, offers the last three item types as one-tap
+chips, and the entries filter has Today / This week / This month presets plus a
+"My entries" CSV export (the export endpoint takes `user_id`).
+
+**My stats strip:** the dashboard assembles, from endpoints that already
+existed, the member's own week: total and entry count (week leaderboard),
+leaderboard rank (`myRank`), logging streak (profile), and progress on the
+first active `everyone` quota. Quota bars read "Még $2,400" — amount to go —
+instead of a bare percentage, and the leaderboard shows ▲/▼ movement against
+the previous period (competition-ranked, so a real rank change) and a flame on
+streaks of three days or more.
+
+**Print:** the reports view carries a print button; a `@media print` block
+strips the sidebar, header and controls so a leader can print a clean monthly
+sheet for RP meetings.
 
 ### 9.2 Views
 

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp } from 'lucide-react';
+import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp, Printer } from 'lucide-react';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -71,6 +71,11 @@ export function ReportsView({ factionId }: Props) {
           {t('reports.periodComparison')}
         </Button>
       </div>
+
+      <Button variant="outline" size="sm" className="print:hidden self-start" onClick={() => window.print()}>
+        <Printer className="mr-1.5 h-4 w-4" />
+        {t('reports.print')}
+      </Button>
 
       {tab === 'summary' && (
         <>

@@ -1,13 +1,13 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useMemo } from 'react';
-import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, apiErrorMessage } from '@/lib/api-client';
+import React, { useState, useEffect, useMemo } from 'react';
+import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, leaderboardApi, membersApi, apiErrorMessage } from '@/lib/api-client';
 import { Input } from '@/components/ui/input';
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { LogIn } from 'lucide-react';
+import { LogIn, Flame, Trophy, Target as TargetIcon, Coins } from 'lucide-react';
 import type { ItemType } from '@/lib/api-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -58,12 +58,27 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
     enabled: canLogEntries,
   });
 
+  // ── My stats strip ──
+  // Assembled from endpoints that already exist: the week leaderboard carries
+  // the member's rank, the profile carries the streak.
+  const user = useAppStore((s) => s.user);
+  const { data: lbWeek } = useQuery({
+    queryKey: ['leaderboard', 'week', factionId],
+    queryFn: () => leaderboardApi.get(factionId, { period: 'week', limit: 100 }),
+    enabled: canLogEntries && !!user,
+  });
+  const { data: myProfile } = useQuery({
+    queryKey: ['member-profile', factionId, user?.id],
+    queryFn: () => membersApi.getProfile(factionId, user!.id),
+    enabled: canLogEntries && !!user,
+    retry: false,
+  });
+
   // ── Quick log ──
   // One card, pre-filled with the member's own last entry: logging the same
   // haul again should not cost a navigation and a blank form.
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const user = useAppStore((s) => s.user);
   const [quickTypeId, setQuickTypeId] = useState('');
   const [quickAmount, setQuickAmount] = useState('');
 
@@ -279,6 +294,57 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
         </Card>
       </div>
 
+      {/* ══ My Stats Strip ══ */}
+      {canLogEntries && user && (lbWeek || myProfile) && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {(() => {
+            const mine = lbWeek?.rankings.find((r) => r.isMe);
+            const myQuota = (quotasList as import('@/lib/api-types').Quota[]).find(
+              (q) => q.isActive && q.periodActive && q.scope === 'everyone',
+            );
+            const streak = myProfile?.streak;
+            const cells = [
+              mine && {
+                icon: <Coins className="h-4 w-4 text-zinc-400" />,
+                label: t('dashboard.myWeek'),
+                value: fmt(mine.total),
+                hint: t('entries.count', { count: mine.entryCount }),
+              },
+              lbWeek?.myRank != null && {
+                icon: <Trophy className="h-4 w-4 text-zinc-400" />,
+                label: t('dashboard.myRank'),
+                value: `#${lbWeek.myRank}`,
+                hint: t('leaderboard.thisWeek'),
+              },
+              streak && streak.current > 0 && {
+                icon: <Flame className={`h-4 w-4 ${streak.activeToday ? 'text-amber-400' : 'text-zinc-400'}`} />,
+                label: t('dashboard.myStreak'),
+                value: t('dashboard.daysShort2', { count: streak.current }),
+                hint: streak.activeToday ? t('dashboard.activeToday') : t('dashboard.logToday'),
+              },
+              myQuota && {
+                icon: <TargetIcon className="h-4 w-4 text-zinc-400" />,
+                label: t('dashboard.myQuota'),
+                value: `${formatAmount(myQuota.currentAmount ?? 0, myQuota.itemUnit, myQuota.itemIsCurrency)} / ${formatAmount(myQuota.targetAmount, myQuota.itemUnit, myQuota.itemIsCurrency)}`,
+                hint: `${(myQuota.percentage ?? 0).toFixed(0)}%`,
+              },
+            ].filter(Boolean) as { icon: React.ReactNode; label: string; value: string; hint?: string }[];
+            return cells.map((c) => (
+              <Card key={c.label} className="border-highlight">
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    {c.icon}
+                    {c.label}
+                  </div>
+                  <p className="text-lg font-medium tabular-nums text-zinc-200 mt-1 truncate">{c.value}</p>
+                  {c.hint && <p className="text-[11px] text-zinc-600">{c.hint}</p>}
+                </CardContent>
+              </Card>
+            ));
+          })()}
+        </div>
+      )}
+
       {/* ══ Quota Progress — Energy Bars ══ */}
       {activeQuotas.length > 0 && (
         <Card>
@@ -325,7 +391,9 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     </div>
                     <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
                       <span>{formatAmount(q.currentAmount ?? 0, q.itemUnit, q.itemIsCurrency)}</span>
-                      <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency) })}</span>
+                      {met
+                        ? <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency) })}</span>
+                        : <span className="text-zinc-400">{t('quota.remaining', { amount: formatAmount(Number(q.targetAmount) - (q.currentAmount ?? 0), q.itemUnit, q.itemIsCurrency) })}</span>}
                     </div>
                   </div>
                 );
