@@ -400,6 +400,8 @@ export const hu: Translations = {
   'treasury.checkCreated': 'Számolás rögzítve',
   'treasury.checkRecorded': 'könyvelt: {amount}',
   'treasury.checkMatch': 'egyezik',
+  'treasury.showBalances': 'Egyenlegek mutatása ({count})',
+  'treasury.hideBalances': 'Egyenlegek elrejtése',
   'treasury.checkVariance': 'eltérés: {variance}',
   'settings.expenseBudgets': 'Kiadási keret',
   'settings.expenseBudgetsHint': 'Havi költési keret kategóriánként. A kassza nézet figyelmeztet, ha a költés a kerethez közelít; üresen nincs keret.',

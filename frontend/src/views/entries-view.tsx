@@ -303,7 +303,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
       {/* Filters + CTA */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+          <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 items-start lg:items-end">
             <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
               <Label className="text-xs text-zinc-500">{t('common.search')}</Label>
               <div className="relative">
@@ -311,10 +311,10 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 <Input placeholder={t('entries.searchPlaceholder')} value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-9" />
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
               <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
               <SearchableSelect
-                className="w-[160px]"
+                className="w-full lg:w-[160px]"
                 aria-label={t('itemTypes.filterBy')}
                 value={itemTypeIdFilter}
                 onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}
@@ -325,9 +325,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               />
             </div>
             {/* Phone-first presets: "did I log yesterday?" is two taps. */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
               <Label className="text-xs text-zinc-500">{t('entries.quickRange')}</Label>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {([
                   ['today', 'entries.today'],
                   ['week', 'entries.thisWeek'],
@@ -345,15 +345,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 ))}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-500">{t('entries.from')}</Label>
-              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }} className="w-[150px]" />
+            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
+              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }} className="w-full sm:w-[140px]" />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-zinc-500">{t('entries.to')}</Label>
-              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-[150px]" />
+            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
+              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-full sm:w-[140px]" />
             </div>
-            <div className="flex-1" />
+            <div className="flex gap-2 flex-wrap lg:ml-auto">
             {user && (
               <Button
                 variant="outline"
@@ -376,6 +374,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 {t('entries.logEntry')}
               </Button>
             )}
+            </div>
           </div>
         </CardContent>
       </Card>

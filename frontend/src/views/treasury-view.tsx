@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/searchable-select';
 import {
   Wallet, TrendingDown, Clock, ArrowDownToLine, Search,
-  ArrowDownWideNarrow, ArrowUpNarrowWide, Receipt, Plus, Trash2, Pencil, ClipboardCheck,
+  ArrowDownWideNarrow, ArrowUpNarrowWide, Receipt, Plus, Trash2, Pencil, ClipboardCheck, ChevronDown,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName, formatNumber, todayLocalDateString } from '@/lib/format';
@@ -52,6 +52,8 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
   const brandColor = useAppStore((s) => s.brandColor);
 
   const [nameFilter, setNameFilter] = useState('');
+  // Reference detail, not the daily glance: the balance grid stays folded.
+  const [balancesOpen, setBalancesOpen] = useState(false);
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -208,6 +210,9 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         </Card>
       )}
 
+      {/* ══ Running Expenses ══ */}
+      <ExpensesSection factionId={factionId} canManage={canManageExpenses} />
+
       {/* ══ Balance Cards per Item Type ══ */}
       <Card>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
@@ -216,7 +221,16 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
             {t('treasury.balancesByItemType')}
           </CardTitle>
           {/* Nothing to search or reorder until there is a list. */}
-          {balances.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-zinc-400"
+            onClick={() => setBalancesOpen((v) => !v)}
+          >
+            {balancesOpen ? t('treasury.hideBalances') : t('treasury.showBalances', { count: balances.length })}
+            <ChevronDown className={`h-3.5 w-3.5 ml-1.5 transition-transform duration-200 ${balancesOpen ? 'rotate-180' : ''}`} />
+          </Button>
+          {balancesOpen && balances.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
@@ -251,6 +265,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
             </div>
           )}
         </CardHeader>
+        {balancesOpen && (
         <CardContent>
           {balances.length === 0 ? (
             <p className="text-zinc-600 text-sm text-center py-8">{t('treasury.noBalances')}</p>
@@ -317,6 +332,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
       {/* ══ Outflow Trend ══ */}
@@ -349,9 +365,6 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
           </CardContent>
         </Card>
       )}
-
-      {/* ══ Running Expenses ══ */}
-      <ExpensesSection factionId={factionId} canManage={canManageExpenses} />
 
       {/* ══ Vault verification (counted vs. recorded) ══ */}
       <ChecksSection factionId={factionId} canManage={canManageChecks} />

@@ -408,6 +408,8 @@ export const en = {
   'treasury.checkCreated': 'Count recorded',
   'treasury.checkRecorded': 'recorded: {amount}',
   'treasury.checkMatch': 'matches',
+  'treasury.showBalances': 'Show balances ({count})',
+  'treasury.hideBalances': 'Hide balances',
   'treasury.checkVariance': 'off by {variance}',
   'settings.expenseBudgets': 'Expense budgets',
   'settings.expenseBudgetsHint': 'Monthly spending cap per category. The treasury warns as spending nears the cap; leave empty for no budget.',
