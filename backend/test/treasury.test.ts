@@ -89,6 +89,47 @@ describe('GET /treasury — which item types are listed', () => {
 });
 
 /**
+ * The dashboard shows the same balances in its own card, and reads at a glance
+ * — so it follows the same rule. Its fallback list comes from a GROUP BY over
+ * entries, which is already scoped this way.
+ */
+describe('GET /dashboard — which item types are listed', () => {
+  const dashboard = () => `/api/v1/factions/${w.faction.id}/dashboard`;
+
+  async function treasuryRows() {
+    const res = await api().get(dashboard()).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    return res.body.data.treasuryBalances as { itemTypeId: string }[];
+  }
+
+  it('omits an item type with no entries and no payouts', async () => {
+    const unused = await createItemType(w.faction.id, 'Never Used');
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100');
+
+    expect((await treasuryRows()).map((b) => b.itemTypeId)).not.toContain(unused);
+  });
+
+  it('lists one as soon as it has an entry', async () => {
+    const used = await createItemType(w.faction.id, 'Used');
+    await createEntry(w.faction.id, w.member.id, used, '250');
+
+    expect((await treasuryRows()).map((b) => b.itemTypeId)).toContain(used);
+  });
+
+  // The headline figure sums the same rows, so dropping empty ones must not
+  // move it — they were contributing nothing in the first place.
+  it('leaves the net balance untouched', async () => {
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '1000');
+    const before = await api().get(dashboard()).set('Cookie', w.admin.cookie);
+
+    await createItemType(w.faction.id, 'Never Used');
+    const after = await api().get(dashboard()).set('Cookie', w.admin.cookie);
+
+    expect(after.body.data.netBalance).toBe(before.body.data.netBalance);
+  });
+});
+
+/**
  * The laundering screen reads the same balances, and needs the opposite: you
  * wash *into* a currency the vault has never held, so a type with no history
  * still has to be offered.
