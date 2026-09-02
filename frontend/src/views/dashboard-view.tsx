@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Coins, Users, List, TrendingUp, DollarSign, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
+import { List, TrendingUp, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';

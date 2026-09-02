@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -18,15 +17,12 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
   ArrowLeft, Flame, Trophy, Target, Calendar, FileText, AlertTriangle,
-  Flag, Plus, Pencil, Trash2, Send, Activity, Zap, Clock, User,
+  Flag, Plus, Pencil, Trash2, Activity, Zap, Clock,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
@@ -244,7 +240,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     );
   }
 
-  const { member, contribution, payouts: payoutStats, quotaProgress, streak, performance, recentEntries, recentPayouts } = profile;
+  const { member, contribution, payouts: payoutStats, quotaProgress, streak, performance, recentEntries } = profile;
 
   return (
     <div className="space-y-6">

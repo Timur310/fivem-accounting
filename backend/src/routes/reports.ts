@@ -1,10 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { entries, itemTypes, users, factionMembers, factions } from '../db/schema.js';
-import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
+import { entries, itemTypes, users } from '../db/schema.js';
+import { eq, and, sql, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
-import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { toDateString, todayDateString } from '../lib/date.js';
@@ -87,7 +86,7 @@ function getPeriodBounds(period: string): { from: string; to: string } {
 }
 
 // ── GET /summary — periodic summary ─────────────────
-router.get('/summary', async (req: Request, res: Response) => {
+router.get('/summary', requirePermission('view_reports'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const query = summaryQuerySchema.safeParse(req.query);
   if (!query.success) {
@@ -213,7 +212,7 @@ router.get('/summary', async (req: Request, res: Response) => {
 });
 
 // ── GET /comparison — compare two periods ───────────
-router.get('/comparison', async (req: Request, res: Response) => {
+router.get('/comparison', requirePermission('view_reports'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const query = comparisonQuerySchema.safeParse(req.query);
   if (!query.success) {

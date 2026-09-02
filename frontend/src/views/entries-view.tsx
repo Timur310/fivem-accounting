@@ -23,11 +23,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { formatAmount, displayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
@@ -56,7 +54,6 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const brandColor = useAppStore((s) => s.brandColor);
 
   const [page, setPage] = useState(1);
   const [itemTypeIdFilter, setItemTypeIdFilter] = useState<string>('all');

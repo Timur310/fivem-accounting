@@ -1,4 +1,3 @@
-import { Request } from 'express';
 import type { User } from '../db/schema.js';
 
 declare global {

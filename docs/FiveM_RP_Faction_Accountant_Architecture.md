@@ -790,6 +790,7 @@ volumes:
 | `POSTGRES_PASSWORD` | No | password | PostgreSQL superuser password |
 | `CORS_ORIGINS` | No | http://localhost:3000 | Allowed frontend origins |
 | `JWT_EXPIRATION_DAYS` | No | 7 | Session token expiration |
+| `COOKIE_SECURE` | No | false | Set the `Secure` flag on the session cookie — enable on every HTTPS deployment |
 | `LOG_LEVEL` | No | info | Node.js log level (debug/info/warn/error) |
 | `DOMAIN` | No | localhost | Domain for the reverse proxy's TLS |
 | `NEXT_PUBLIC_API_URL` | No | *(empty)* | Cross-origin API base. Empty means same-origin, proxied |

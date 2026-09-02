@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { users, entries, payouts, strikes, factionMembers } from '../db/schema.js';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { users, factionMembers } from '../db/schema.js';
+import { eq, sql, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionStrikesApi, memberStrikesApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,9 +14,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { AlertTriangle, Shield, Ban, RotateCcw, MessageSquare } from 'lucide-react';
+import { AlertTriangle, Ban, RotateCcw, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAppStore } from '@/lib/store';
 import type { StrikeEffectiveStatus } from '@/lib/api-types';
 import { formatDate } from '@/lib/format';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -69,7 +68,6 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const brandColor = useAppStore((s) => s.brandColor);
 
   // The backend scopes the list to the caller's own strikes without
   // `manage_strikes`, so the status buttons (Revoke, Reinstate) would only

@@ -17,7 +17,7 @@ import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
 import {
-  Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle, Search,
+  Wallet, TrendingDown, Clock, ArrowDownToLine, Search,
   ArrowDownWideNarrow, ArrowUpNarrowWide, Receipt, Plus, Trash2, Pencil,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';

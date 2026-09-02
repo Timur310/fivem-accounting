@@ -7,7 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
-import { toDateString, todayDateString } from '../lib/date.js';
+import { todayDateString } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });

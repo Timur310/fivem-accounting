@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db/index.js';
 import { entries, itemTypes, users } from '../db/schema.js';
-import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
-import { success, error } from '../lib/response.js';
+import { eq, and, sql, gte, lte } from 'drizzle-orm';
+import { success } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { toDateString, todayDateString } from '../lib/date.js';

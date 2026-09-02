@@ -146,7 +146,7 @@ export function signJwt(payload: JwtPayload): string {
 export function verifyJwt(token: string): JwtPayload | null {
   try {
     const secret: jwt.Secret = env.JWT_SECRET;
-    return jwt.verify(token, secret) as JwtPayload;
+    return jwt.verify(token, secret, { algorithms: ['HS256'] }) as JwtPayload;
   } catch {
     return null;
   }
@@ -156,9 +156,8 @@ export const COOKIE_NAME = 'faction_session';
 
 export const COOKIE_OPTIONS = {
   httpOnly: true,
-  // Force secure to false if you don't have HTTPS set up yet, 
-  // or use a custom env variable like env.USE_HTTPS === 'true'
-  secure: false, 
+  // HTTPS deployments must set COOKIE_SECURE=true; see lib/env.ts.
+  secure: env.COOKIE_SECURE, 
   // Keep this as 'lax' for now to ensure smooth cross-port routing on your VPS
   sameSite: 'lax' as const, 
   maxAge: env.JWT_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,

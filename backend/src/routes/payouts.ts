@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
-import { payouts, itemTypes, users, factions, factionMembers } from '../db/schema.js';
+import { payouts, itemTypes, users, factionMembers } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';

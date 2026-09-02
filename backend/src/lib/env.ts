@@ -1,4 +1,4 @@
-import { str, num, url, cleanEnv } from 'envalid';
+import { str, num, url, bool, cleanEnv } from 'envalid';
 
 export const env = cleanEnv(process.env, {
   DISCORD_CLIENT_ID:     str({ desc: 'Discord OAuth2 Client ID' }),
@@ -6,6 +6,10 @@ export const env = cleanEnv(process.env, {
   DISCORD_REDIRECT_URI:  url({ desc: 'Discord OAuth redirect URI' }),
   JWT_SECRET:            str({ desc: 'JWT signing secret' }),
   JWT_EXPIRATION_DAYS:   num({ default: 7, desc: 'JWT expiration in days' }),
+  // Session cookie Secure flag. Default false so plain-http dev setups keep
+  // working; every TLS deployment should set this to true — the browser then
+  // refuses to send the session over an unencrypted hop.
+  COOKIE_SECURE:         bool({ default: false, desc: 'Set Secure on the session cookie (enable on HTTPS deployments)' }),
   // No default: forcing every deployment to set this explicitly avoids the
   // "works on my laptop, drops the prod database" footgun.
   DATABASE_URL:          str({ desc: 'PostgreSQL connection string' }),

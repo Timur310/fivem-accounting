@@ -5,7 +5,7 @@ import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
-import { toDateString, todayDateString, formatDateValue } from '../lib/date.js';
+import { todayDateString, formatDateValue } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });

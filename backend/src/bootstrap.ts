@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { db } from './db/index.js';
 import { users } from './db/schema.js';
 import { eq } from 'drizzle-orm';
-import { env } from './lib/env.js';
 
 /**
  * Bootstrap script: promote a user to superadmin by Discord ID.

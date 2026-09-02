@@ -3,14 +3,14 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
-import { Trophy, Medal, TrendingUp, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trophy, Medal, Crown } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';

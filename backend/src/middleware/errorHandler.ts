@@ -3,7 +3,7 @@ import { ZodError } from 'zod';
 import { error } from '../lib/response.js';
 import { env } from '../lib/env.js';
 
-export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
+export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   // Zod validation errors
   if (err instanceof ZodError) {
     const firstIssue = err.issues[0];
