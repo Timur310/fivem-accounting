@@ -49,12 +49,10 @@ describe('brand colour', () => {
       .send({
         brandColor: '#445566',
         customFields: [{ name: 'Plate', required: false }],
-        payoutApprovalRequired: true,
       });
 
     expect(res.status).toBe(200);
     expect(res.body.data.brandColor).toBe('#445566');
-    expect(res.body.data.payoutApprovalRequired).toBe(true);
   });
 
   it('is null before anyone sets one, so the client can fall back', async () => {

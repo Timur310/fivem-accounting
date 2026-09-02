@@ -928,7 +928,6 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
   const [brandColor, setBrandColor] = useState('#3b82f6');
   const [customFields, setCustomFields] = useState<{ name: string; required: boolean }[]>([]);
-  const [payoutApprovalRequired, setPayoutApprovalRequired] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -937,14 +936,13 @@ function CustomizationSection({ factionId }: { factionId: string }) {
     if (settings && !initialized.current) {
       setBrandColor(settings.brandColor ?? '#3b82f6');
       setCustomFields(settings.customFields ?? []);
-      setPayoutApprovalRequired(settings.payoutApprovalRequired ?? false);
       initialized.current = true;
     }
   }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      factionSettingsApi.update(factionId, { brandColor, customFields, payoutApprovalRequired }),
+      factionSettingsApi.update(factionId, { brandColor, customFields }),
     onSuccess: () => {
       updateGlobalBrandColor(brandColor);
       queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
@@ -1057,22 +1055,6 @@ function CustomizationSection({ factionId }: { factionId: string }) {
           {customFields.length === 0 && (
             <p className="text-sm text-zinc-500 text-center py-4">{t('settings.noCustomFields')}</p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-zinc-200">{t('settings.withdrawalApproval')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-zinc-500">{t('settings.withdrawalApprovalHint')}</p>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <Switch
-              checked={payoutApprovalRequired}
-              onCheckedChange={setPayoutApprovalRequired}
-            />
-            <span className="text-sm text-zinc-300">{t('settings.requireApproval')}</span>
-          </label>
         </CardContent>
       </Card>
 

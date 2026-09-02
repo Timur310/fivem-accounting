@@ -291,9 +291,10 @@ export function PayoutsView({ factionId, isSuperadmin, canManagePayouts = true }
   };
 
   // Four-eyes rule: creator cannot approve own payout
-  const canApprove = (payout: Payout) => {
-    return payout.createdBy !== user?.id && canTransition(payout, 'approved');
-  };
+  // Holding manage_payouts is the whole qualification — the API stopped
+  // refusing a payout raised by the same person who settles it, so hiding the
+  // button here would only hide something the server would have allowed.
+  const canApprove = (payout: Payout) => canTransition(payout, 'approved');
 
   if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-64 w-full" /></div>;

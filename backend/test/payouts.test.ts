@@ -15,37 +15,15 @@ beforeEach(async () => {
   w = await seedBasicWorld();
 });
 
-/** Turn on the approval requirement for the current faction. */
-async function requireApproval(): Promise<void> {
-  await db.update(factions).set({ payoutApprovalRequired: true }).where(eq(factions.id, w.faction.id));
-}
-
-/** Promote the plain member so a second admin exists. */
+/** Promote the plain member so they hold manage_payouts. */
 async function promoteMember(): Promise<void> {
   await db.update(factionMembers).set({ role: 'admin' })
     .where(and(eq(factionMembers.factionId, w.faction.id), eq(factionMembers.userId, w.member.id)));
 }
 
 describe('POST /payouts', () => {
-  it('auto-completes when approval is not required', async () => {
-    const res = await api().post(base()).set('Cookie', w.admin.cookie)
-      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
-    expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('completed');
-  });
-
-  it('goes to pending when approval is required and a second admin exists', async () => {
-    await requireApproval();
-    await promoteMember();
-    const res = await api().post(base()).set('Cookie', w.admin.cookie)
-      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
-    expect(res.status).toBe(201);
-    expect(res.body.data.status).toBe('pending');
-  });
-
-  it('auto-completes with a single admin even when approval is required', async () => {
-    // Otherwise the payout would be stuck: the creator cannot approve their own.
-    await requireApproval();
+  // The permission is the only thing that decides where a payout starts.
+  it('settles immediately for someone who can manage payouts', async () => {
     const res = await api().post(base()).set('Cookie', w.admin.cookie)
       .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
     expect(res.status).toBe(201);
@@ -97,11 +75,7 @@ describe('POST /payouts', () => {
 
   // The whole point of asking is that somebody else answers. Auto-completing a
   // member's own request would let them pay themselves out of the treasury.
-  it('leaves a member request pending even when approval is switched off', async () => {
-    const settings = await api().get(`/api/v1/factions/${w.faction.id}/settings`)
-      .set('Cookie', w.admin.cookie);
-    expect(settings.body.data.payoutApprovalRequired).toBe(false);
-
+  it('leaves a member request pending', async () => {
     const res = await api().post(base()).set('Cookie', w.member.cookie)
       .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '5' });
     expect(res.body.data.status).toBe('pending');
@@ -164,36 +138,64 @@ describe('GET /payouts', () => {
 });
 
 describe('PATCH /payouts/:payoutId — status machine', () => {
+  /**
+   * The only way a payout waits: someone without `manage_payouts` asks for one.
+   * Anything raised by a person who can settle payouts is settled on the spot.
+   */
   async function pendingPayout(): Promise<string> {
-    await requireApproval();
-    await promoteMember();
-    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+    const res = await api().post(base()).set('Cookie', w.member.cookie)
       .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
+    expect(res.body.data.status).toBe('pending');
     return res.body.data.id;
   }
 
-  it('refuses approval by the creator (four-eyes)', async () => {
+  // Holding manage_payouts is the whole qualification: there is no separate
+  // "somebody else" requirement. Someone who asked for a withdrawal and was
+  // then given the permission can settle their own request.
+  it('lets the requester settle their own once they hold the permission', async () => {
     const id = await pendingPayout();
-    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie)
-      .send({ status: 'approved' });
-    expect(res.status).toBe(403);
-    expect(res.body.error.message).toMatch(/different admin/i);
-  });
+    await promoteMember();
 
-  it('allows approval by a different admin and records who', async () => {
-    const id = await pendingPayout();
     const res = await api().patch(`${base()}/${id}`).set('Cookie', w.member.cookie)
       .send({ status: 'approved' });
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('approved');
     expect(res.body.data.approvedBy).toBe(w.member.id);
+  });
+
+  it('lets them take it all the way to completed', async () => {
+    const id = await pendingPayout();
+    await promoteMember();
+
+    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.member.cookie)
+      .send({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('completed');
+  });
+
+  // Settling is still gated on the permission, just not on who asked.
+  it('refuses approval from the requester while they still lack it', async () => {
+    const id = await pendingPayout();
+
+    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.member.cookie)
+      .send({ status: 'approved' });
+    expect(res.status).toBe(403);
+  });
+
+  it('allows approval by an admin and records who', async () => {
+    const id = await pendingPayout();
+    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie)
+      .send({ status: 'approved' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('approved');
+    expect(res.body.data.approvedBy).toBe(w.admin.id);
     expect(res.body.data.approvedAt).not.toBeNull();
   });
 
   it('walks approved -> completed', async () => {
     const id = await pendingPayout();
-    await api().patch(`${base()}/${id}`).set('Cookie', w.member.cookie).send({ status: 'approved' });
-    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.member.cookie).send({ status: 'completed' });
+    await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie).send({ status: 'approved' });
+    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie).send({ status: 'completed' });
     expect(res.body.data.status).toBe('completed');
   });
 
@@ -299,9 +301,7 @@ describe('GET /treasury', () => {
 
   it('excludes pending payouts from the balance but reports them separately', async () => {
     await createEntry(w.faction.id, w.member.id, w.itemTypeId, '10000');
-    await requireApproval();
-    await promoteMember();
-    await api().post(base()).set('Cookie', w.admin.cookie)
+    await api().post(base()).set('Cookie', w.member.cookie)
       .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
 
     const res = await api().get(treasury()).set('Cookie', w.member.cookie);

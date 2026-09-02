@@ -1,0 +1,1 @@
+ALTER TABLE "factions" DROP COLUMN "payout_approval_required";

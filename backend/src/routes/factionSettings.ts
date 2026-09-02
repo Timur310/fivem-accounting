@@ -28,7 +28,6 @@ const updateSettingsSchema = z.object({
     major: z.number().int().min(1).max(3650).nullable(),
   }).optional(),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  payoutApprovalRequired: z.boolean().optional(),
   customFields: z.array(z.object({
     name: z.string().min(1).max(100),
     required: z.boolean(),
@@ -50,7 +49,6 @@ router.get('/', async (req: Request, res: Response) => {
       inactivityThresholdDays: factions.inactivityThresholdDays,
       strikeExpiryDays: factions.strikeExpiryDays,
       brandColor: factions.brandColor,
-      payoutApprovalRequired: factions.payoutApprovalRequired,
       customFields: factions.customFields,
     })
     .from(factions)
@@ -68,7 +66,6 @@ router.get('/', async (req: Request, res: Response) => {
     // Surface the effective values so the UI never has to know the defaults.
     strikeExpiryDays: faction.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
     brandColor: faction.brandColor,
-    payoutApprovalRequired: faction.payoutApprovalRequired,
     customFields: faction.customFields ?? [],
   });
 });
@@ -102,7 +99,6 @@ router.patch(
         inactivityThresholdDays: factions.inactivityThresholdDays,
         strikeExpiryDays: factions.strikeExpiryDays,
         brandColor: factions.brandColor,
-        payoutApprovalRequired: factions.payoutApprovalRequired,
         customFields: factions.customFields,
       })
       .from(factions)
@@ -169,7 +165,6 @@ router.patch(
       updates.strikeExpiryDays = parsed.data.strikeExpiryDays;
     }
     if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
-    if (parsed.data.payoutApprovalRequired !== undefined) updates.payoutApprovalRequired = parsed.data.payoutApprovalRequired;
     if (parsed.data.customFields !== undefined) {
       const names = parsed.data.customFields.map((f) => f.name);
       if (new Set(names).size !== names.length) {
@@ -189,7 +184,6 @@ router.patch(
           inactivityThresholdDays: factions.inactivityThresholdDays,
           strikeExpiryDays: factions.strikeExpiryDays,
           brandColor: factions.brandColor,
-          payoutApprovalRequired: factions.payoutApprovalRequired,
           customFields: factions.customFields,
         });
 
@@ -223,7 +217,6 @@ router.patch(
           inactivityThresholdDays: existing.inactivityThresholdDays,
           strikeExpiryDays: existing.strikeExpiryDays,
           brandColor: existing.brandColor,
-          payoutApprovalRequired: existing.payoutApprovalRequired,
           customFields: existing.customFields,
         },
         after: updates,
@@ -237,7 +230,6 @@ router.patch(
       inactivityThresholdDays: updated?.inactivityThresholdDays,
       strikeExpiryDays: updated?.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
       brandColor: updated?.brandColor ?? null,
-      payoutApprovalRequired: updated?.payoutApprovalRequired ?? false,
       customFields: updated?.customFields ?? [],
       ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),
     });

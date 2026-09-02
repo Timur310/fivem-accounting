@@ -62,9 +62,6 @@ export const factions = pgTable('factions', {
   description:  text('description'),
   brandColor:   varchar('brand_color', { length: 7 }),
   customFields: jsonb('custom_fields').$type<{ name: string; required: boolean }[]>(),
-  // When true, a payout created by one admin must be approved by a different
-  // admin before it can be completed.
-  payoutApprovalRequired: boolean('payout_approval_required').notNull().default(false),
   // Display-only rank hierarchy (Boss, Underboss, Capo, ...). Access control
   // still runs off faction_members.role; `permissions` here is the list of
   // FACTION_PERMISSIONS granted to anyone holding the rank.

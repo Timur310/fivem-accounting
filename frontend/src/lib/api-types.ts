@@ -59,7 +59,6 @@ export interface Faction {
   description: string | null;
   brandColor: string | null;
   customFields: { name: string; required: boolean }[] | null;
-  payoutApprovalRequired: boolean;
   isActive: boolean;
   createdAt: string;
   memberCount: number;
@@ -82,7 +81,6 @@ export interface UpdateFactionInput {
   description?: string | null;
   isActive?: boolean;
   brandColor?: string;
-  payoutApprovalRequired?: boolean;
   customFields?: { name: string; required: boolean }[];
 }
 
@@ -854,7 +852,6 @@ export interface FactionSettings {
     major: number | null;
   };
   brandColor: string | null;
-  payoutApprovalRequired: boolean;
   customFields: { name: string; required: boolean }[];
 }
 
@@ -867,7 +864,6 @@ export interface UpdateFactionSettingsInput {
     major: number | null;
   };
   brandColor?: string;
-  payoutApprovalRequired?: boolean;
   customFields?: { name: string; required: boolean }[];
 }
 

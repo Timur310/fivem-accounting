@@ -105,33 +105,6 @@ function isFutureDate(dateStr: string): boolean {
   return dateStr > todayDateString();
 }
 
-/**
- * Decide which status a new payout starts in.
- *
- * Approval is only meaningful when somebody else can actually give it. With a
- * single admin the four-eyes rule in PATCH would leave the payout stuck in
- * 'pending' forever, so it auto-completes instead — the faction still has the
- * setting on, it just has nobody to ask.
- */
-async function resolveInitialStatus(factionId: string): Promise<'pending' | 'completed'> {
-  const [faction] = await db
-    .select({ payoutApprovalRequired: factions.payoutApprovalRequired })
-    .from(factions)
-    .where(eq(factions.id, factionId))
-    .limit(1);
-
-  if (!faction?.payoutApprovalRequired) return 'completed';
-
-  const [admins] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
-    .from(factionMembers)
-    .where(
-      and(eq(factionMembers.factionId, factionId), eq(factionMembers.role, 'admin')),
-    );
-
-  return (admins?.count ?? 0) >= 2 ? 'pending' : 'completed';
-}
-
 // ── POST / — create a payout ─────────────────────────
 router.post('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
@@ -174,14 +147,11 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // When approval is off (or there is nobody to approve), the payout is
-  // immediately final; otherwise it waits in the queue for a second admin.
-  //
-  // A request from someone without the permission never takes that shortcut.
-  // Auto-completing it would let any member pay themselves out of the treasury
-  // and call it done — the asking is the whole point, so it waits for someone
-  // who can actually grant it.
-  const status = canManage ? await resolveInitialStatus(factionId) : 'pending';
+  // The permission decides, and it is the only thing that does. Someone who may
+  // settle payouts is settling one; someone who may not is asking for one, and
+  // it waits for a person who can grant it. Auto-completing a request would let
+  // any member pay themselves out of the treasury and call it done.
+  const status = canManage ? 'completed' : 'pending';
 
   let payout;
   try {
@@ -348,7 +318,10 @@ router.post('/even-split', requirePermission('manage_payouts'), async (req: Requ
   const perMember = (perMemberCents / 100).toFixed(2);
   const distributedCents = perMemberCents * members.length;
 
-  const status = await resolveInitialStatus(factionId);
+  // The route already requires `manage_payouts`, so this is a settlement, not
+  // a request: the rows land completed like any other payout that permission
+  // creates.
+  const status = 'completed' as const;
 
   let created: { id: string }[] = [];
   try {
@@ -475,16 +448,9 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
       return;
     }
 
-    // Four-eyes rule: the admin who created a payout cannot approve it
-    // themselves — and "approve" here means moving it to a state that should
-    // require a second pair of eyes, which now includes 'completed'. The
-    // single-admin auto-complete path in POST / still bypasses this because it
-    // goes straight from insert → 'completed' in one step.
-    const needsSecondAdmin = parsed.data.status === 'approved' || parsed.data.status === 'completed';
-    if (needsSecondAdmin && existing.status === 'pending' && existing.createdBy === req.user!.id) {
-      error(res, 'FORBIDDEN', 'A payout must be approved by a different admin', 403);
-      return;
-    }
+    // Whoever holds `manage_payouts` may settle a payout, including one they
+    // raised themselves before they held it. There is no second-person
+    // requirement: the permission is the whole qualification.
 
     updates.status = parsed.data.status;
     if (parsed.data.status === 'approved') {
