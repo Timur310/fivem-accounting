@@ -82,6 +82,14 @@ export const factions = pgTable('factions', {
     minor: number | null;
     major: number | null;
   }>(),
+  // Monthly spending cap per expense category. null = no budget for that
+  // category; the treasury warns as spending approaches the cap.
+  expenseBudgets: jsonb('expense_budgets').$type<{
+    warehouse: number | null;
+    utilities: number | null;
+    supplies: number | null;
+    other: number | null;
+  }>(),
   createdBy:    uuid('created_by').notNull().references(() => users.id),
   createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   isActive:     boolean('is_active').notNull().default(true),
@@ -273,6 +281,30 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
 
 export type Expense = typeof expenses.$inferSelect;
 export type NewExpense = typeof expenses.$inferInsert;
+
+// ── treasury_checks ────────────────────────────────────
+// "Counted vs. recorded": an admin counts the real vault and records what the
+// count found. The recorded balance for that day is derived on read, so a
+// dispute has a number to argue about instead of a memory.
+export const treasuryChecks = pgTable('treasury_checks', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  createdBy:   uuid('created_by').notNull().references(() => users.id),
+  itemTypeId:  uuid('item_type_id').notNull().references(() => itemTypes.id),
+  countedAmount: decimal('counted_amount', { precision: 15, scale: 2 }).notNull(),
+  checkDate:   date('check_date').notNull().defaultNow(),
+  note:        text('note'),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const treasuryChecksRelations = relations(treasuryChecks, ({ one }) => ({
+  faction:  one(factions,  { fields: [treasuryChecks.factionId],  references: [factions.id] }),
+  creator:  one(users,     { fields: [treasuryChecks.createdBy],  references: [users.id] }),
+  itemType: one(itemTypes, { fields: [treasuryChecks.itemTypeId], references: [itemTypes.id] }),
+}));
+
+export type TreasuryCheck = typeof treasuryChecks.$inferSelect;
+export type NewTreasuryCheck = typeof treasuryChecks.$inferInsert;
 
 // ── member_notes ───────────────────────────────────────
 // Private admin notes about a member. Never visible to the member themselves.

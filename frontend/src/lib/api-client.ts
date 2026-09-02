@@ -39,6 +39,9 @@ import type {
   UpdateExpenseInput,
   ConfigImportResult,
   TreasuryData,
+  TreasuryChecksData,
+  TreasuryCheckRow,
+  CreateTreasuryCheckInput,
   MemberProfile,
   MemberHistoryEntry,
   MemberNote,
@@ -461,6 +464,16 @@ export const treasuryApi = {
       .get<ApiSuccessResponse<TreasuryData>>(`/factions/${factionId}/treasury`, {
         params: trendDays ? { trend_days: trendDays } : undefined,
       })
+      .then(unwrap),
+
+  listChecks: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<TreasuryChecksData>>(`/factions/${factionId}/treasury/checks`)
+      .then(unwrap),
+
+  createCheck: (factionId: string, input: CreateTreasuryCheckInput) =>
+    api
+      .post<ApiSuccessResponse<TreasuryCheckRow>>(`/factions/${factionId}/treasury/checks`, input)
       .then(unwrap),
 };
 

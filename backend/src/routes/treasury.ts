@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { payouts, expenses, itemTypes, users } from '../db/schema.js';
-import { eq, and, sql, gte, desc } from 'drizzle-orm';
+import { payouts, expenses, itemTypes, users, entries, treasuryChecks } from '../db/schema.js';
+import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { computeTreasuryBalances } from '../lib/treasury.js';
+import { requirePermission } from '../middleware/factionAccess.js';
+import { createAuditLog } from '../lib/audit.js';
 import { toDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
@@ -178,6 +180,135 @@ router.get('/', async (req: Request, res: Response) => {
     trendDays,
     recentPayouts,
   });
+});
+
+// ── Recorded balance at a date ───────────────────────
+// The same derivation the live balance uses, cut off at a date: every movement
+// on or before the day the vault was counted.
+async function recordedBalanceAt(factionId: string, itemTypeId: string, dateStr: string): Promise<number> {
+  const [entrySum, payoutSum, expenseSum] = await Promise.all([
+    db
+      .select({ total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)` })
+      .from(entries)
+      .where(and(eq(entries.factionId, factionId), eq(entries.itemTypeId, itemTypeId), eq(entries.isDeleted, false), lte(entries.entryDate, dateStr))),
+    db
+      .select({ total: sql<string>`COALESCE(SUM(CAST(${payouts.amount} AS NUMERIC)), 0)` })
+      .from(payouts)
+      .where(and(eq(payouts.factionId, factionId), eq(payouts.itemTypeId, itemTypeId), eq(payouts.isDeleted, false), eq(payouts.status, 'completed'), lte(payouts.payoutDate, dateStr))),
+    db
+      .select({ total: sql<string>`COALESCE(SUM(CAST(${expenses.amount} AS NUMERIC)), 0)` })
+      .from(expenses)
+      .where(and(eq(expenses.factionId, factionId), eq(expenses.itemTypeId, itemTypeId), eq(expenses.isDeleted, false), lte(expenses.expenseDate, dateStr))),
+  ]);
+  return Number(entrySum[0]?.total ?? 0) - Number(payoutSum[0]?.total ?? 0) - Number(expenseSum[0]?.total ?? 0);
+}
+
+// ── GET /checks — recent vault counts (admin) ────────
+router.get('/checks', async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
+  if (!isAdmin) {
+    error(res, 'FORBIDDEN', 'Admin access required', 403);
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: treasuryChecks.id,
+      countedAmount: treasuryChecks.countedAmount,
+      checkDate: treasuryChecks.checkDate,
+      note: treasuryChecks.note,
+      createdAt: treasuryChecks.createdAt,
+      createdBy: treasuryChecks.createdBy,
+      creatorUsername: users.username,
+      creatorInGameName: users.inGameName,
+      itemTypeId: treasuryChecks.itemTypeId,
+      itemTypeName: itemTypes.name,
+      itemUnit: itemTypes.unit,
+      itemIsCurrency: itemTypes.isCurrency,
+    })
+    .from(treasuryChecks)
+    .innerJoin(users, eq(treasuryChecks.createdBy, users.id))
+    .innerJoin(itemTypes, eq(treasuryChecks.itemTypeId, itemTypes.id))
+    .where(eq(treasuryChecks.factionId, factionId))
+    .orderBy(desc(treasuryChecks.checkDate), desc(treasuryChecks.createdAt))
+    .limit(20);
+
+  // The recorded balance for each check's day, derived fresh: the number a
+  // dispute argues about must come from the same source as the live balance.
+  const checks = await Promise.all(rows.map(async (r) => {
+    const recordedBalance = await recordedBalanceAt(factionId, r.itemTypeId, r.checkDate);
+    return { ...r, recordedBalance, variance: Number(r.countedAmount) - recordedBalance };
+  }));
+
+  success(res, { checks });
+});
+
+// ── POST /checks — record a vault count (manage_payouts) ──
+const createCheckSchema = z.object({
+  itemTypeId: z.string().uuid(),
+  countedAmount: z.string().refine(
+    (v) => !isNaN(Number(v)) && Number(v) >= 0,
+    'Counted amount must be zero or more',
+  ),
+  checkDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD format').optional(),
+  note: z.string().max(500).optional(),
+});
+
+router.post('/checks', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+  const parsed = createCheckSchema.safeParse(req.body);
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  const { itemTypeId, countedAmount, checkDate, note } = parsed.data;
+
+  const [itemType] = await db
+    .select()
+    .from(itemTypes)
+    .where(and(eq(itemTypes.id, itemTypeId), eq(itemTypes.factionId, factionId)))
+    .limit(1);
+  if (!itemType) {
+    error(res, 'NOT_FOUND', 'Item type not found in this faction', 404);
+    return;
+  }
+
+  const date = checkDate ?? toDateString(new Date());
+  if (date > toDateString(new Date())) {
+    error(res, 'VALIDATION_ERROR', 'Check date cannot be in the future');
+    return;
+  }
+
+  const [created] = await db
+    .insert(treasuryChecks)
+    .values({
+      factionId,
+      createdBy: req.user!.id,
+      itemTypeId,
+      countedAmount,
+      checkDate: date,
+      note: note ?? null,
+    })
+    .returning();
+
+  if (!created) {
+    error(res, 'INTERNAL_ERROR', 'Failed to record check', 500);
+    return;
+  }
+
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'create',
+    entityType: 'treasury_check',
+    entityId: created.id,
+    details: { itemTypeId, countedAmount: Number(countedAmount), checkDate: date, recordedBalance: await recordedBalanceAt(factionId, itemTypeId, date) },
+    req,
+  });
+
+  success(res, created, 201);
 });
 
 export default router;
