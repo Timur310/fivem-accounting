@@ -339,7 +339,6 @@ export const hu: Translations = {
   'payouts.reject': 'Elutasítás',
   'payouts.deleteTitle': 'Kifizetés törlése',
   'payouts.deleteConfirm': 'A kifizetés csak logikailag törlődik. Ha már teljesítve volt, a kassza egyenlege ennek megfelelően módosul.',
-  'payouts.deleteSuperadmin': 'Törlés (superadmin)',
   'payouts.allStatuses': 'Minden állapot',
   'payouts.searchStatuses': 'Állapotok keresése...',
   'payouts.noStatusesMatch': 'Nincs találat.',

@@ -339,7 +339,7 @@ export function AppShell() {
       case 'entries':
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canCreditSelf={canCreditSelf} canManageEntries={hasPermission('manage_entries')} /> : null;
       case 'payouts':
-        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} canManagePayouts={hasPermission('manage_payouts')} /> : null;
+        return selectedFactionId ? <PayoutsView factionId={selectedFactionId} canManagePayouts={hasPermission('manage_payouts')} /> : null;
       case 'laundering':
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
       case 'treasury':

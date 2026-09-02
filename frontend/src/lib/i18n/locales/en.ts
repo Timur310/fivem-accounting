@@ -347,7 +347,6 @@ export const en = {
   'payouts.reject': 'Reject',
   'payouts.deleteTitle': 'Delete Withdrawal',
   'payouts.deleteConfirm': 'This will soft-delete this withdrawal. If it was completed, the treasury balance will be adjusted accordingly.',
-  'payouts.deleteSuperadmin': 'Delete (superadmin)',
   'payouts.allStatuses': 'All Statuses',
   'payouts.searchStatuses': 'Search statuses...',
   'payouts.noStatusesMatch': 'No statuses match.',
