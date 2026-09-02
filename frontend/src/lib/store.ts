@@ -18,7 +18,8 @@ export type AppView =
   | 'audit-logs'
   | 'admin-factions'
   | 'admin-faction-detail'
-  | 'reports';
+  | 'reports'
+  | 'guide';
 
 export const DEFAULT_BRAND_COLOR = '#3b82f6';
 

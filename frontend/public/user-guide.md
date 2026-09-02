@@ -1,0 +1,671 @@
+# Faction Accountant — User Guide
+
+> A complete, plain-language guide to everything the app does, where to find
+> it, and why it's there. If you just want to log your haul and get back to
+> the streets, read sections **1–5**. Faction leaders should read the rest;
+> superadmins get section **9**.
+
+---
+
+## Table of contents
+
+1. [What this app is](#1-what-this-app-is)
+2. [Signing in](#2-signing-in)
+3. [The layout](#3-the-layout)
+4. [Roles and permissions](#4-roles-and-permissions)
+5. [For members — the daily stuff](#5-for-members--the-daily-stuff)
+6. [For leaders — running the faction](#6-for-leaders--running-the-faction)
+7. [Reports, exports and printing](#7-reports-exports-and-printing)
+8. [Settings — configuring the faction](#8-settings--configuring-the-faction)
+9. [For superadmins](#9-for-superadmins)
+10. [The audit log — who did what](#10-the-audit-log--who-did-what)
+11. [Good to know — rules the app never breaks](#11-good-to-know--rules-the-app-never-breaks)
+12. [Quick answers](#12-quick-answers)
+
+---
+
+## 1. What this app is
+
+Your faction pools money, goods and dirt in a shared vault. This app is the
+ledger for that vault:
+
+- **who put what in** — every entry, tied to a person (or anonymous),
+- **what got paid out** — every withdrawal, with its state,
+- **what the faction spent** — rent, utilities, supplies,
+- **what's expected** — weekly and monthly quotas,
+- **who stepped up and who didn't** — leaderboards, streaks, inactivity,
+- **and who touched what** — a complete, uneditable audit trail.
+
+It replaces Discord messages, spreadsheets and memory. Everything here is
+permanent on purpose: log honestly, because leaders can see the history of
+all of it — including the numbers you'd rather they didn't.
+
+---
+
+## 2. Signing in
+
+### 2.1 Discord only
+
+There is no username or password. Click **Sign in with Discord** and approve
+the app. The session lasts 7 days, then you sign in again — nothing you did
+is ever lost, only your login.
+
+### 2.2 First sign-in: your in-game name
+
+You'll be asked for your **in-game name** — your character's name. This is
+how you appear *everywhere* in the app: dashboard, leaderboards, payout rows.
+You can change it later from the top-right menu, and your admins can correct
+it too (§6.1). If you skip the prompt you can set it from the menu any time.
+
+### 2.3 "Waiting for approval"
+
+You're signed in, but not yet in a faction. The screen shows:
+
+- **which Discord account** you're waiting as,
+- your **Discord ID with a copy button** — this ID is exactly what your
+  admin needs to add you,
+- and it re-checks every few seconds, so the app **opens by itself** the
+  moment you're added. No refreshing.
+
+### 2.4 Language
+
+The interface speaks **English and Hungarian**. Switch with the globe in the
+header (it's also on the sign-in screen). Your choice is remembered per
+browser; a first-time visitor gets the browser's language. Numbers are
+formatted the same way in both languages — see §11.
+
+---
+
+## 3. The layout
+
+One sidebar on the left, content on the right. On phones the sidebar becomes
+a slide-in drawer (hamburger button in the top bar).
+
+**Top bar:** language switcher · your name (click it to change your in-game
+name) · your role badge. If you belong to more than one faction — or a
+superadmin gave you browse rights — a **faction selector** appears; everything
+below it shows the selected faction.
+
+The sidebar has two states: full labels, or a slim icon rail. The bottom-most
+button collapses it.
+
+---
+
+## 4. Roles and permissions
+
+There are two layers: your **global role**, and your **rank inside the
+faction**.
+
+| Role | Where it comes from | What it means |
+|---|---|---|
+| **Member** | default | Dashboard, entries, own withdrawals, treasury, leaderboard |
+| **Faction admin** | appointed by a superadmin | Everything in *their* faction, including all rank permissions |
+| **Superadmin** | server owner / bootstrap | Everything, everywhere, plus creating and deleting factions |
+
+Between plain member and admin sit **ranks** (Boss, Underboss, Capo, … — your
+faction defines its own). Each rank grants specific permissions, and the
+sidebar shows exactly what your rank gives you:
+
+| Permission | What it opens |
+|---|---|
+| `manage_members` | Roster: add/remove, ranks, in-game names, kick-suggestion flags, member notes |
+| `manage_entries` | Log entries for others or the faction, edit/delete any entry |
+| `manage_payouts` | Withdrawals for others, even split, settling requests, vault verification |
+| `manage_expenses` | Recording the faction's running costs |
+| `manage_laundering` | The laundering desk |
+| `manage_strikes` | Issuing and settling strikes, the faction strike list |
+| `manage_quotas` | Creating and editing quotas |
+| `manage_item_types` | The faction's item types |
+| `manage_settings` | Ranks, thresholds, expiry, escalation, budgets |
+| `manage_customization` | Accent color and custom entry fields |
+| `view_audit_logs` | The audit trail |
+| `view_reports` | Period summaries and comparisons |
+
+The **admin seat itself is not delegable**: a rank can run the roster, but
+promoting someone to admin stays with faction admins and superadmins.
+
+---
+
+## 5. For members — the daily stuff
+
+### 5.1 Dashboard — your first glance
+
+The dashboard is one page, top to bottom:
+
+1. **Faction header** — name and description.
+2. **Quick log** (§5.2) — pre-filled, one-click logging.
+3. **Net treasury balance** — what the vault holds. Money-only, because
+   dollars and kilograms don't add up; goods are listed per type further down.
+4. **My stats strip** — *your* week at a glance:
+   - **Your week** — total contributed this week and entry count,
+   - **Leaderboard** — your rank this week,
+   - **Streak** — consecutive days with at least one entry (🔥 amber when
+     you've logged today),
+   - **Your quota** — your progress on a per-person quota, if the faction
+     runs one.
+5. **Stats cards** — total entries, member count, item type count.
+6. **Quota progress** — faction targets as energy bars. Unmet bars read
+   *"Még $2,400"* — the amount still missing, not a percentage.
+7. **Quotas missed last period** — only appears when a just-ended period was
+   missed. It stays visible until the next period ends, so a silent failure
+   can't hide.
+8. **Top contributors / Recent activity** — who's carrying this period, and
+   the latest ledger movement.
+9. **Inactive members** (admins only) — members who haven't logged anything
+   within the faction's inactivity threshold. Newcomers and already-struck
+   members are excluded automatically.
+10. **Balances by item type** — the per-item view of the vault.
+11. **Charts & export** — folded away at the bottom; open when you want the
+    graphs or a CSV.
+
+### 5.2 Logging an entry
+
+*Entries → Log entry* — or the **Quick log** card on the dashboard, which is
+the same thing pre-filled.
+
+1. **Item type** — pick what you contributed. Your three most recent types
+   appear as **one-tap chips** above the list.
+2. **Amount** — type it, or use the **+ / −** buttons: they step by 1,000 for
+   money and 1 for countable goods.
+3. **Date** — today by default. You can backdate (you logged yesterday's take
+   today). **Future dates are refused** — the ledger doesn't record the
+   future.
+4. **Description** (optional) — "jewelry store", "pharmacy run". This is
+   searchable later.
+5. **Custom fields** — if your faction configured extra fields (e.g.
+   "location"), they appear here.
+
+**Who gets credit:** your own name, always. Logging for someone else or for
+the faction anonymously requires `manage_entries` (§6.2). Anonymous entries
+belong to the faction itself — they count toward the vault but never appear
+on any person's score.
+
+**Made a typo? — the 5-minute undo.** Your own row shows a trash button for
+**five minutes** after you log it. Click it and the entry is removed, no
+admin needed. After five minutes it's permanent unless a leader removes it,
+so double-check the big numbers while the countdown is yours.
+
+### 5.3 The entries list
+
+The full ledger, newest first, searchable.
+
+- **Filters:** item type, from/to dates, free-text search on descriptions.
+  The **Quick range** buttons (Today / This week / This month) fill the dates
+  for you — "did I log yesterday?" is two taps.
+- **CSV exports** (top right):
+  - **Entries CSV** — everything matching the current filters,
+  - **My entries CSV** — only your rows, for your own bookkeeping.
+
+### 5.4 Withdrawals (getting something out of the vault)
+
+*Withdrawals*. The name is generic on purpose: what leaves the vault is as
+often ammunition or drugs as it is money.
+
+**Anyone can request one for themselves.** It starts **pending** and waits
+for a leader to settle it. The status flow:
+
+```
+pending → approved → completed
+   └──────→ rejected
+```
+
+- **pending** — requested, nothing has moved.
+- **approved** — a leader committed to it; it still hasn't left the vault.
+- **completed** — paid out. **Only completed withdrawals reduce the
+  treasury.**
+- **rejected** — refused. It stays visible in the history but never affects
+  any balance.
+
+Completed and rejected withdrawals are final — they can't be reopened. They
+*can* be deleted by a leader (§6.5), which removes them from the ledger.
+
+### 5.5 Quotas — what's expected of you
+
+A quota targets an **item type** over a **week** (resets Monday) or a
+**month** (resets on the 1st), in local server time. Three scopes exist
+(§6.3); as a member you mostly care about the second:
+
+- **Everyone individually** — the same target measured on *you personally*.
+  Your dashboard bar and the "My stats" strip show your own progress, and the
+  bar reads how much is still missing.
+- **Faction-wide** — everyone's contributions sum into one shared target.
+  Your contribution is part of it; the bar is the faction's, not yours.
+- **Per member** — a target pinned to one specific person.
+
+A missed period doesn't vanish: when a period ends, its outcome stays visible
+on the dashboard until the next one ends too (§6.3).
+
+### 5.6 Leaderboard
+
+*Leaderboard* — ranked members for **this week**, **this month** or **all
+time**.
+
+- ▲2 / ▼1 next to a rank = places gained or lost versus the previous period.
+  No arrow = unchanged; a newcomer has no arrow either.
+- 🔥 marks a **logging streak of 3+ days** (consecutive days with at least
+  one entry) — amber when the person has logged today, grey when the streak
+  is still alive from yesterday.
+- Equal totals share a rank — two people on the same amount are both #2, and
+  the next is #4.
+- Your own row is highlighted, even if you have to scroll for it.
+- Tap any member to open their **profile** (§6.2).
+
+### 5.7 Treasury — reading the vault
+
+*Treasury* — what the vault has done, and why.
+
+- **Net balance / Total in / Total out** — the headline numbers. Money only;
+  the note under them tells you how many goods types are tracked separately.
+- **Running expenses** — the faction's costs, with budget bars showing the
+  month against the caps (§6.4). If you want to know why the vault shrank,
+  start here.
+- **Balances by item type** (collapsed by default, "Show balances") — every
+  type the vault has ever moved: inflow, outflow, current balance, and a mini
+  outflow sparkline. Negative balances are possible and shown in red — the
+  faction paid out more than it took in.
+- **Outflow trend** — everything that left the vault per day (completed
+  withdrawals *and* expenses) over the last 30 days.
+- **Recent withdrawals** (admins) — the last completed payouts.
+
+The treasury is read-only for members: transparency, not control.
+
+---
+
+## 6. For leaders — running the faction
+
+These sections appear only if your role or rank grants them. The permission
+names match what admins see in the rank editor (§8.4).
+
+### 6.1 Members (`manage_members`)
+
+The roster — who's in, sorted by rank with admins always on top.
+
+**Columns:** name (in-game, falling back to Discord name), rank, entries,
+last activity ("never" is the loudest number on the page), joined date,
+active strikes.
+
+- **Add member** — by Discord ID, or by searching a name. Someone registered
+  by Discord ID who hasn't signed in yet shows as **provisional**: their row
+  is a full member row (holds entries, payouts, strikes), it just has nobody
+  behind it yet. Their inactivity clock doesn't run, and their names can be
+  renamed. The moment they first log in, everything lands on their account.
+- **Remove member** — takes them off the roster. Their entries stay in the
+  history.
+- **Set rank** — pick from the faction's defined ranks (§8.4). An unknown
+  rank can't be set.
+- **Promote/demote admin** — admins and superadmins only; the admin seat is
+  never a rank permission.
+- **Edit in-game name** — the name lives on the *person*, not the
+  membership, so fixing it here fixes it in every faction they're in. The
+  dialog says so, and the audit log records the old and new names.
+- **Kick suggestion** — a red badge on members whose **active strikes**
+  reached a threshold the faction configured (§8.4). Nothing automatic
+  happens — the flag is the reminder, the decision is yours.
+- **Member notes** — on each member's profile, admins can write private
+  notes categorized as general / performance / discipline / positive /
+  promotion, and flag notes for follow-up. **The member can never see these
+  notes — not even their existence.** Note *contents* are also kept out of
+  the audit log, which admins share; only the category is logged.
+
+### 6.2 The member profile
+
+Tap any member's name (from the roster, leaderboard, or an entry row). One
+page with everything the faction knows about them:
+
+- **Identity card** — avatar, in-game and Discord names, rank, join date,
+  admins also see active strikes.
+- **Contribution stats** — total contributed, entry count, average per entry,
+  most-used item type.
+- **Payout stats** — total received, count.
+- **Streak** — current and best, plus whether they've logged today.
+- **Performance score** (0–100) — a blend of quota hit rate, consistency,
+  volume relative to the faction's top contributor, streak, and time in the
+  faction. It's computed on the spot and *relative to this faction* — 100
+  means "leads this faction", not "contributed a lot in absolute terms".
+- **Quota progress** — every active quota that involves this member, and
+  their contribution this period.
+- **Activity heatmap** — a GitHub-style grid of the calendar year: darker
+  days, more logged. Pick the year at the top.
+- **Recent entries / payouts received** — the last 20 of each.
+- **Strike history** — every strike ever, including revoked and expired ones
+  (leaders' view; the faction-wide list hides those by default).
+- **Notes** — the private admin notes (§6.1), if you hold `manage_members`.
+- **History** — join/leave/rank changes pulled from the audit log
+  (`manage_members`, or your own history).
+
+### 6.3 Quotas (`manage_quotas`)
+
+Settings → Quotas — create, edit, deactivate and delete targets.
+
+**Creating one:** item type · target amount · period (weekly / monthly) ·
+start date (the quota does nothing until it starts) · **scope**:
+
+- **Faction-wide** — all contributions sum into one target.
+- **Everyone individually** — the same target measured on each member
+  separately. Every member sees their own bar; nobody's progress depends on
+  anybody else.
+- **Per member** — a target pinned to one member. Only that member's entries
+  count, and only their name is on it.
+
+Only one *active* quota can exist per (item type + period + scope) —
+deactivate the old one first. Editing works per field; deactivating freezes a
+quota without deleting it.
+
+**History:** the history button on each quota shows **every completed period
+since it began** — dates, amounts, met or not — plus a summary line ("9 of 12
+periods met"). No more one-week memory.
+
+**Missed periods stay visible:** when a period ends short of its target, the
+dashboard keeps a card listing it (item, period dates, achieved vs. target)
+until the *next* period also ends. A quiet failure can't quietly disappear.
+
+### 6.4 Expenses (`manage_expenses`)
+
+Treasury → *Running Expenses*: warehouse rent, utilities, supplies — costs
+that leave the vault but belong to **no member**.
+
+- **Record an expense:** item (what was spent), amount, category, date, and
+  an optional note ("August warehouse rent"). The date can't be in the
+  future — a cost was paid when it was paid.
+- **Categories:** warehouse / utilities / supplies / other — they exist so
+  the budget bars and category totals mean something. Use *other* rather than
+  shoehorning.
+- **Effect:** immediate. There's no approval step for expenses — money spent
+  is spent. If something must be approved first, do the approving in Discord
+  and record the expense after.
+- **Budget bars:** the faction can set a monthly cap per category (§8.4). The
+  bars show this month's spending against the cap — green below 80%, amber
+  approaching, red over.
+- **Editing/deleting** is possible for `manage_expenses` holders; deletes are
+  soft (§11) and audited.
+
+**Expenses are not payouts.** If a member receives it, it's a withdrawal. If
+the landlord receives it, it's an expense.
+
+### 6.5 Withdrawals (`manage_payouts`)
+
+Everything from §5.4, plus:
+
+- **Create a withdrawal for another member** — the recipient picker is the
+  roster.
+- **Settle requests** — approve, complete, or reject anything pending. You
+  may settle a request you raised yourself; that's by design, not an
+  oversight.
+- **Even split** — pick an item type and a total; the app distributes it
+  evenly, rounded down to the cent, with the remainder staying in the vault
+  (the result tells you the per-member share, the total distributed, and the
+  remainder). Default is the whole roster; tick **Selected members** to split
+  across a picked crew — provisional registrations are unchecked to start.
+- **Edit** — amount, description, date — but **not** once a withdrawal is
+  completed or rejected: those are part of the ledger.
+- **Delete** — possible at any status, soft-deleted and audited.
+- **Vault verification** ("Kassza-ellenőrzés") — the dispute killer:
+  1. Count the real stash.
+  2. Record it: item type, counted amount, date, optional note.
+  3. The app derives what the ledger says the vault **should** have held on
+     that day (entries − completed withdrawals − expenses, up to that date)
+     and shows the **variance**: green *matches*, or red *off by X*.
+
+  Nothing is adjusted automatically — a variance is information, and if it's
+  real, you investigate and then correct the ledger with the appropriate
+  entry, expense or withdrawal. Every count is audited.
+
+### 6.6 Laundering (`manage_laundering`)
+
+Treasury flows through the laundering desk for one job: **convert one
+currency into another** — dirty in, clean back.
+
+- You type **both amounts**: what went in and what came back. There is no
+  configured rate, because the cut depends on who did the wash and what they
+  agreed. The screen shows the resulting percentage so you can sanity-check
+  before submitting.
+- Both sides book against **the faction itself** — no member is charged or
+  credited, no score moves, and the vault ends up correct.
+- The source balance is checked: you can't launder money the vault doesn't
+  hold.
+- Currencies only — converting counted goods would be inventory correction
+  wearing a laundering costume.
+
+### 6.7 Strikes (`manage_strikes`)
+
+Formal warnings. Issue from a member's profile or the Strikes view.
+
+- **Severity:** warning / minor / major — each with its own expiry length set
+  in Faction Settings (majors are typically configured to never expire).
+- **The member always sees their own strikes.** Issue nothing you wouldn't
+  say to their face.
+- **Lifecycle:** `active → appealed → back to active or revoked`. *Revoked*
+  and *expired* are final — no reinstatement, so the record can't be quietly
+  rewritten. Reason and severity also can't be edited after issuing; only the
+  outcome can.
+- **Expiry is evaluated at read time** — a strike past its expiry shows as
+  expired even though nothing wrote to it. Use *effective status* on screen.
+- **The faction list defaults to what still counts** against members; the
+  status filter (All statuses / revoked / expired / …) shows the full
+  history. A member's own profile always shows their complete history.
+- Nobody can issue a strike on themselves.
+- **Escalation:** when a member's active strikes of a severity reach the
+  faction's configured threshold, the roster shows a **Kick suggestion**
+  badge (§6.1).
+
+### 6.8 Audit logs (`view_audit_logs`)
+
+The app's memory of who did what: actor, action, entity, timestamp, and
+before/after values for changes. Filterable and paginated. It is
+append-only — no editing, no deleting, for anyone. See §10.
+
+---
+
+## 7. Reports, exports and printing
+
+*Reports* (`view_reports`).
+
+- **Period summary** — totals, entry counts, active members and per-item
+  breakdowns for a chosen period (this/last week, this/last month, last 30/90
+  days, all).
+- **Period comparison** — two periods side by side with the deltas.
+- **Growth** — period-over-period: entries, amounts, active members, averages
+  (admin).
+- **Print** — the print button strips the sidebar, header and buttons and
+  produces a clean sheet. Leaders print the monthly summary for RP meetings.
+
+**CSV exports elsewhere:** entries (filtered or personal, §5.3) and the quota
+report (dashboard) cover the data side.
+
+---
+
+## 8. Settings — configuring the faction
+
+*Settings* is tabbed. Which tabs you see depends on your permissions. faction
+admins reach everything; some tabs also open for specific rank permissions.
+
+### 8.1 Item types (`manage_item_types`)
+
+The faction's vocabulary: Dirty Money, Clean Money, Lock Picks, …
+
+- Each has a **name**, a **unit** ($ for currencies, pcs for goods), an
+  optional **image URL** (an icon shown everywhere the item appears), and an
+  **active** switch.
+- Deactivate instead of delete — old entries keep their type readable.
+- **Export/Import CSV** (§8.5).
+
+### 8.2 Quotas (`manage_quotas`)
+
+See §6.3.
+
+### 8.3 Customization (`manage_customization`)
+
+- **Accent color** — the faction's brand color, used for navigation, primary
+  buttons, glows and charts. It never colors a number: red means negative,
+  amber means warning, green means met — no matter what the accent is.
+- **Custom entry fields** — extra fields on the entry form (name + required
+  flag), stored with every entry.
+
+### 8.4 Faction settings (`manage_settings`)
+
+- **Ranks** — the hierarchy, each with a level (lower = higher) and the
+  permissions it grants. The rank editor shows every permission in the system
+  (§4). Deleting a rank clears it off members automatically. *Granting
+  permissions is admin-only, even for members who can otherwise edit ranks.*
+- **Inactivity threshold** — days without an entry before the dashboard flags
+  a member. Recent joins and already-struck members are excluded.
+- **Strike expiry** — days per severity; empty means never expires.
+- **Strike escalation** — the active-strike count per severity that flags a
+  member for kick consideration on the roster. Empty disables that severity.
+- **Expense budgets** — monthly caps per expense category; the treasury bars
+  read these. Empty = no cap.
+
+### 8.5 CSV import/export (per tab)
+
+The item types, quotas and ranks tabs each have **Export CSV / Import CSV**.
+
+- **Export** — a spreadsheet-friendly file of the current configuration.
+- **Import** — applies a file back:
+  - *Item types* upsert by name: existing names update unit/currency/active,
+    new names are created.
+  - *Quotas* validate every row exactly like the create form — item type must
+    exist, target member must be in the faction, duplicates are refused, and
+    the scope column is honored.
+  - *Ranks* **replace the whole hierarchy** — with the same rails as manual
+    editing (max 20 ranks, unique names/levels, known permissions only,
+    removed ranks cleared off members). An import with no valid rows is
+    refused rather than allowed to wipe the ranks.
+- Row-level problems don't abort the import: skipped rows are reported with
+  their line numbers and reasons.
+
+Practical use: **clone one faction's setup into another** — export, tweak
+names, import.
+
+---
+
+## 9. For superadmins
+
+### 9.1 Factions
+
+Create, edit and **deactivate** factions (deactivation hides all data but
+keeps it for history), and appoint the first admin. A deactivated faction's
+roster and ledger are invisible to everyone except superadmins.
+
+### 9.2 Users panel
+
+Everyone the system knows: signed-in users, plus **provisional registrations**
+pinned to the top and labelled. For provisional rows you can rename and
+remove — they're placeholders waiting for their first sign-in. Everything
+else about a person is faction business, not server business.
+
+### 9.3 Global leaderboard
+
+The whole server's top contributors across factions, one row per
+faction-membership. This deliberately crosses the isolation boundary every
+other page enforces — it's superadmin-only for that reason.
+
+### 9.4 Being a superadmin inside a faction
+
+You can enter any faction and act there, and you hold every permission. Two
+rules keep the ledger honest:
+
+- **You can't log an entry on yourself** in a faction you're not a member of —
+  a contributor must have a roster row, or the leaderboard has no row for
+  them. Log it for a member or anonymously instead.
+- Superadmin with no factions? You're exactly the person who creates the
+  first one — the app gives you the management screens instead of an empty
+  dashboard.
+
+---
+
+## 10. The audit log — who did what
+
+*Audit logs* (`view_audit_logs`).
+
+Every meaningful write lands here: entries created/edited/removed,
+withdrawals and their status changes, expenses, quota changes, rank and
+permission edits, strikes issued and settled, member additions and removals,
+settings changes, vault counts, CSV imports. Each row carries the actor, the
+action, the entity, when it happened, and before/after values for changes.
+
+- **Append-only.** Nobody — not even a superadmin — can edit or delete a row.
+- Note contents (§6.1) are deliberately *absent*; the log is readable by
+  every admin, so private notes only log their category.
+- This is the page that ends "that's not what happened" arguments. Check it
+  before arguing.
+
+---
+
+## 11. Good to know — rules the app never breaks
+
+- **Amounts are game amounts.** Money and quantities are formatted the same
+  way everywhere, in every language — a thousands separator never turns into
+  a decimal sign. A comma that means different things in two languages is a
+  real way to mis-pay someone.
+- **Balances are always derived, never stored.** Vault = entries in −
+  *completed* withdrawals − expenses. There is no stored balance that can
+  drift, and pending/approved withdrawals haven't left the vault yet.
+- **Nothing is truly deleted.** Removed entries, withdrawals and expenses are
+  marked deleted — they vanish from the numbers but stay in the audit trail.
+- **The ledger doesn't record the future.** Entry, payout, expense and check
+  dates can't be ahead of today.
+- **Anonymous entries belong to the faction.** They count toward the vault
+  and faction-wide quotas but never toward any person's score or ranking.
+- **Dates are your local days.** Quota weeks reset Monday, months on the 1st,
+  in the server's local time — not UTC.
+- **Data isolation is absolute.** Members of one faction can never see
+  another faction's data. The only cross-faction page is the superadmin
+  global leaderboard.
+- **Colour means one thing or nothing.** Red = negative/variance, amber =
+  warnings, green = met/positive. The faction's accent color is decoration —
+  it never colors a number.
+- **Private notes stay private.** A member can see their own strikes; they
+  can never see the notes written about them.
+
+---
+
+## 12. Quick answers
+
+**I logged an entry with the wrong amount.**
+Undo it yourself within 5 minutes — the trash button on your row in Entries.
+After that, ask a leader to remove it.
+
+**The undo button isn't on my entry.**
+Five minutes have passed, or it isn't yours. Only `manage_entries` holders
+can remove it now.
+
+**My dashboard says "waiting for approval".**
+You're not in a faction yet. Copy the Discord ID shown on that screen and
+send it to your faction admin.
+
+**I changed my character's name.**
+Top-right menu → change your in-game name. Your admin can also fix it for
+you, and the fix reaches every faction you're in.
+
+**Why can't I see Members / Strikes / Laundering?**
+Your rank doesn't grant it. Ask your leadership, or have them check the
+rank's permissions in Settings → Faction settings.
+
+**Why did my withdrawal not change the treasury?**
+Only *completed* withdrawals leave the vault. Pending and approved are
+commitments, not payments.
+
+**How do I see last week's quota result?**
+Dashboard → "Quotas missed last period", or Settings → Quotas → the history
+button on the quota.
+
+**Who spent money from the vault?**
+Treasury → Running Expenses: every expense with its category, amount, date
+and who recorded it. Budget bars show the month against the caps.
+
+**The vault has less than the ledger says.**
+Record a vault count (Treasury → Vault verification). The variance is the
+starting point of the investigation, and the count is audited.
+
+**Where do announcements go?**
+There is no announcement system (yet) — that lives in Discord. Everything
+here is numbers and history.
+
+**Can I use the app in Hungarian?**
+Yes — globe icon in the header. Everything is translated, and your choice is
+remembered.
+
+---
+
+*Faction Accountant — self-hosted ledger for FiveM RP factions. Interface in
+English and Hungarian.*

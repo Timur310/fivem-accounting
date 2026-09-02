@@ -35,11 +35,13 @@ import {
   Trophy,
   AlertTriangle,
   WashingMachine,
+  BookOpen,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
 import { PayoutsView } from '@/views/payouts-view';
 import { TreasuryView } from '@/views/treasury-view';
+import { GuideView } from '@/views/guide-view';
 import { MembersView } from '@/views/members-view';
 import { SettingsView } from '@/views/settings-view';
 import { AuditLogsView } from '@/views/audit-logs-view';
@@ -243,6 +245,8 @@ export function AppShell() {
     },
     { view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'] },
     { view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
+    // The guide is for everyone, in every faction — the last item, never hidden.
+    { view: 'guide', label: 'nav.guide', icon: BookOpen },
   ];
 
   const isNavItemVisible = (item: NavItem) => {
@@ -334,6 +338,8 @@ export function AppShell() {
     }
 
     switch (currentView) {
+      case 'guide':
+        return <GuideView />;
       case 'dashboard':
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} /> : null;
       case 'entries':

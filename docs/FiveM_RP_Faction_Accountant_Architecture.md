@@ -762,6 +762,11 @@ streaks of three days or more.
 strips the sidebar, header and controls so a leader can print a clean monthly
 sheet for RP meetings.
 
+**User guide:** `docs/UserGuide.md` is the complete, plain-language manual —
+also rendered in-app as a "User Guide" sidebar item (the markdown is copied to
+`public/` at build time and fetched by the guide view, so the repo file and
+the page never diverge).
+
 ### 9.2 Views
 
 `views/` holds one component per screen: dashboard, entries, payouts, treasury,
