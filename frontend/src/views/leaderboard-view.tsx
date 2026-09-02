@@ -15,7 +15,7 @@ import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
 import { ItemIcon } from '@/components/item-icon';
-import { formatNumber } from '@/lib/format';
+import { formatNumber, displayName } from '@/lib/format';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -182,7 +182,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>
-                        {r.username}
+                        {displayName(r)}
                         {isMe && <span className="text-[10px] text-zinc-500 ml-1">{t('leaderboard.you')}</span>}
                       </p>
                       {'factionName' in r && (

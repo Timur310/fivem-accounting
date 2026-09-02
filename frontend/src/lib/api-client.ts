@@ -153,7 +153,7 @@ export const membersApi = {
 
   search: (factionId: string, query: string) =>
     api
-      .get<ApiSuccessResponse<{ id: string; username: string; avatarUrl: string | null; discordId: string }[]>>(
+      .get<ApiSuccessResponse<{ id: string; username: string; inGameName: string | null; avatarUrl: string | null; discordId: string }[]>>(
         `/factions/${factionId}/members/search`,
         { params: { q: query } },
       )
