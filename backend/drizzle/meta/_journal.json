@@ -57,6 +57,13 @@
       "when": 1788276137634,
       "tag": "0007_square_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788372513938,
+      "tag": "0008_complex_big_bertha",
+      "breakpoints": true
     }
   ]
 }

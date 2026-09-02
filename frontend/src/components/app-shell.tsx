@@ -343,7 +343,7 @@ export function AppShell() {
       case 'laundering':
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
       case 'treasury':
-        return selectedFactionId ? <TreasuryView factionId={selectedFactionId} /> : null;
+        return selectedFactionId ? <TreasuryView factionId={selectedFactionId} canManageExpenses={hasPermission('manage_expenses')} /> : null;
       case 'members':
         return selectedFactionId ? <MembersView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} canManageMembers={hasPermission('manage_members')} /> : null;
       case 'member-profile':
@@ -357,7 +357,13 @@ export function AppShell() {
       case 'leaderboard':
         return selectedFactionId ? <LeaderboardView factionId={selectedFactionId} isSuperadmin={!!isSuperadmin} /> : null;
       case 'settings':
-        return selectedFactionId ? <SettingsView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} /> : null;
+        return selectedFactionId ? <SettingsView
+            factionId={selectedFactionId}
+            isFactionAdmin={!!isAdmin}
+            canManageItemTypes={hasPermission('manage_item_types')}
+            canManageQuotas={hasPermission('manage_quotas')}
+            canManageSettings={hasPermission('manage_settings')}
+          /> : null;
       case 'audit-logs':
         return selectedFactionId ? <AuditLogsView factionId={selectedFactionId} /> : null;
       case 'reports':

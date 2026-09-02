@@ -69,6 +69,11 @@ export function DashboardView({ factionId }: Props) {
 
   const { faction, totalsByType, grandTotal, treasuryBalances, netBalance, memberCount, adminCount, totalEntries, topContributors, recentEntries, inactiveMembers, inactivityThresholdDays } = data;
   const activeQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(q => q.isActive && q.periodActive);
+  // A quota period that ended short of its target used to vanish when the
+  // next one began — this is the only trace that it was missed.
+  const missedQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(
+    (q) => q.isActive && q.previousPeriod && !q.previousPeriod.met,
+  );
 
   // Currency summaries are prefixed with $; the goods breakdown uses
   // formatAmount() with the type-specific unit instead.
@@ -206,6 +211,43 @@ export function DashboardView({ factionId }: Props) {
                       <span>{formatAmount(q.currentAmount ?? 0, q.itemUnit, q.itemIsCurrency)}</span>
                       <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency) })}</span>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ══ Quota periods that ended unmet ══ */}
+      {missedQuotas.length > 0 && (
+        <Card className="border-amber-500/15">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              {t('dashboard.missedQuotas')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {missedQuotas.map((q) => {
+                const prev = q.previousPeriod!;
+                return (
+                  <div key={q.id} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                    <ItemIcon src={q.itemImageUrl} className="size-5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-zinc-300 truncate">
+                        {q.itemTypeName}
+                        <span className="text-zinc-600"> &middot; {QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</span>
+                      </p>
+                      <p className="text-[11px] text-zinc-600 tabular-nums">{prev.periodStart} – {prev.periodEnd}</p>
+                    </div>
+                    <span className="text-xs text-amber-400 tabular-nums">
+                      {t('quota.lastPeriodNotMet', {
+                        current: formatAmount(prev.currentAmount, q.itemUnit, q.itemIsCurrency),
+                        target: formatAmount(prev.targetAmount, q.itemUnit, q.itemIsCurrency),
+                      })}
+                    </span>
                   </div>
                 );
               })}

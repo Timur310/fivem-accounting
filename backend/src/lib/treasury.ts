@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { entries, payouts, itemTypes } from '../db/schema.js';
+import { entries, payouts, expenses, itemTypes } from '../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 
 /**
@@ -25,9 +25,11 @@ export interface TreasuryBalance {
  *
  *   balance = SUM(entries WHERE NOT deleted)
  *           - SUM(payouts WHERE NOT deleted AND status = 'completed')
+ *           - SUM(expenses WHERE NOT deleted)
  *
  * Only 'completed' payouts count: pending and approved ones are not out of the
- * vault yet, and rejected ones never will be.
+ * vault yet, and rejected ones never will be. Expenses have no lifecycle —
+ * money spent on rent is gone the moment the row exists.
  *
  * Item types with no activity on either side are included with zeroes by
  * default, so the caller sees the faction's full set of item types. That is
@@ -41,7 +43,7 @@ export async function computeTreasuryBalances(
   factionId: string,
   options: { onlyWithActivity?: boolean } = {},
 ): Promise<TreasuryBalance[]> {
-  const [inflows, outflows, types] = await Promise.all([
+  const [inflows, outflows, expenseSums, types] = await Promise.all([
     db
       .select({
         itemTypeId: entries.itemTypeId,
@@ -65,6 +67,14 @@ export async function computeTreasuryBalances(
       )
       .groupBy(payouts.itemTypeId),
     db
+      .select({
+        itemTypeId: expenses.itemTypeId,
+        total: sql<string>`COALESCE(SUM(CAST(${expenses.amount} AS NUMERIC)), 0)`,
+      })
+      .from(expenses)
+      .where(and(eq(expenses.factionId, factionId), eq(expenses.isDeleted, false)))
+      .groupBy(expenses.itemTypeId),
+    db
       .select({ id: itemTypes.id, name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency, imageUrl: itemTypes.imageUrl })
       .from(itemTypes)
       .where(eq(itemTypes.factionId, factionId)),
@@ -72,6 +82,11 @@ export async function computeTreasuryBalances(
 
   const inflowMap = new Map(inflows.map((r) => [r.itemTypeId, Number(r.total)]));
   const outflowMap = new Map(outflows.map((r) => [r.itemTypeId, Number(r.total)]));
+  for (const r of expenseSums) {
+    // Expenses land in the same column as payouts: both are value that left
+    // the vault, and the balance only cares about the net.
+    outflowMap.set(r.itemTypeId, (outflowMap.get(r.itemTypeId) ?? 0) + Number(r.total));
+  }
 
   // Presence in a map, not a non-zero sum: the question is whether any record
   // exists, and reading that off the GROUP BY answers it exactly. Amounts are

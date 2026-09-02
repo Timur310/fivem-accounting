@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { payouts, itemTypes, users } from '../db/schema.js';
+import { payouts, expenses, itemTypes, users } from '../db/schema.js';
 import { eq, and, sql, gte, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -68,7 +68,7 @@ router.get('/', async (req: Request, res: Response) => {
       .limit(10)
     : Promise.resolve([]);
 
-  const [balances, recentOutflow, pendingStats, recentPayouts] = await Promise.all([
+  const [balances, payoutOutflow, expenseOutflow, pendingStats, recentPayouts] = await Promise.all([
     // Only item types the vault has actually moved. A faction that defined a
     // dozen types and used two should see two cards, not ten rows of zeroes —
     // and the totals note below counts the same set, so it cannot claim to
@@ -93,6 +93,24 @@ router.get('/', async (req: Request, res: Response) => {
       )
       .groupBy(payouts.payoutDate, payouts.itemTypeId)
       .orderBy(payouts.payoutDate),
+    // Expenses leave the vault just as completed payouts do, so they ride the
+    // same trend — a balance that dropped because of rent should not read as
+    // an unexplained gap between the chart and the number.
+    db
+      .select({
+        date: expenses.expenseDate,
+        itemTypeId: expenses.itemTypeId,
+        total: sql<string>`COALESCE(SUM(CAST(${expenses.amount} AS NUMERIC)), 0)`,
+      })
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.factionId, factionId),
+          eq(expenses.isDeleted, false),
+          gte(expenses.expenseDate, sinceStr),
+        ),
+      )
+      .groupBy(expenses.expenseDate, expenses.itemTypeId),
     // How much is waiting in the approval queue.
     db
       .select({
@@ -123,12 +141,18 @@ router.get('/', async (req: Request, res: Response) => {
   // ...and index them per item type for the balance-card sparklines.
   const trendByItemType = new Map<string, { date: string; total: number }[]>();
 
-  for (const row of recentOutflow) {
+  for (const row of [...payoutOutflow, ...expenseOutflow]) {
     const total = Number(row.total);
     overallByDate.set(row.date, (overallByDate.get(row.date) ?? 0) + total);
     const series = trendByItemType.get(row.itemTypeId) ?? [];
     series.push({ date: row.date, total });
     trendByItemType.set(row.itemTypeId, series);
+  }
+
+  // The trend series are merged per date, but a date only exists if some
+  // payout or expense landed on it — sort so the merged series stays ordered.
+  for (const series of trendByItemType.values()) {
+    series.sort((a, b) => a.date.localeCompare(b.date));
   }
 
   success(res, {

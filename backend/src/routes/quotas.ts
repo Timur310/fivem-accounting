@@ -7,13 +7,54 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
-import { getPeriodRange } from '../lib/period.js';
+import { getPeriodRange, type PeriodRange } from '../lib/period.js';
 
 const router = Router({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 
 // ── Helpers ──────────────────────────────────────────
+
+/**
+ * The period immediately before the one containing `referenceDate`. Quota
+ * progress resets when a period rolls over, so without this the outcome of
+ * the period that just closed is lost the moment a new one begins.
+ */
+function getPreviousPeriodRange(periodType: string, referenceDate: Date): PeriodRange {
+  const d = new Date(referenceDate);
+  if (periodType === 'weekly') {
+    return getPeriodRange(periodType, new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7));
+  }
+  return getPeriodRange(periodType, new Date(d.getFullYear(), d.getMonth() - 1, 1));
+}
+
+/**
+ * Sum of this faction's (or one member's) non-deleted entries of an item type
+ * within an inclusive date range.
+ */
+async function sumEntriesInRange(
+  factionId: string,
+  itemTypeId: string,
+  targetUserId: string | null,
+  range: PeriodRange,
+): Promise<number> {
+  const [result] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
+    })
+    .from(entries)
+    .where(
+      and(
+        eq(entries.factionId, factionId),
+        eq(entries.itemTypeId, itemTypeId),
+        targetUserId ? eq(entries.userId, targetUserId) : undefined,
+        gte(entries.entryDate, range.start),
+        lte(entries.entryDate, range.end),
+        eq(entries.isDeleted, false),
+      ),
+    );
+  return Number(result?.total ?? 0);
+}
 
 /**
  * Check if a quota's current period has started (period_start <= today)
@@ -48,25 +89,32 @@ async function computeQuotaProgress(
 
   const range = getPeriodRange(quota.periodType, today);
 
-  const [result] = await db
-    .select({
-      total: sql<string>`COALESCE(SUM(CAST(amount AS NUMERIC)), 0)`,
-    })
-    .from(entries)
-    .where(
-      and(
-        eq(entries.factionId, factionId),
-        eq(entries.itemTypeId, quota.itemTypeId),
-        quota.targetUserId ? eq(entries.userId, quota.targetUserId) : undefined,
-        gte(entries.entryDate, range.start),
-        lte(entries.entryDate, range.end),
-        eq(entries.isDeleted, false),
-      ),
-    );
-
-  const currentAmount = Number(result?.total ?? 0);
+  const currentAmount = await sumEntriesInRange(factionId, quota.itemTypeId, quota.targetUserId, range);
   const targetAmount = Number(quota.targetAmount);
   const percentage = targetAmount > 0 ? Math.min((currentAmount / targetAmount) * 100, 100) : 0;
+
+  // The period that just closed keeps its outcome here: once the current one
+  // rolls over, this is the only place that still says whether it was met.
+  // Reported only when the quota already existed back then — the week before
+  // a quota was created says nothing about it.
+  const prevRange = getPreviousPeriodRange(quota.periodType, today);
+  let previousPeriod: {
+    periodStart: string;
+    periodEnd: string;
+    currentAmount: number;
+    targetAmount: number;
+    met: boolean;
+  } | null = null;
+  if (prevRange.end >= quota.periodStart) {
+    const prevAmount = await sumEntriesInRange(factionId, quota.itemTypeId, quota.targetUserId, prevRange);
+    previousPeriod = {
+      periodStart: prevRange.start,
+      periodEnd: prevRange.end,
+      currentAmount: prevAmount,
+      targetAmount,
+      met: prevAmount >= targetAmount,
+    };
+  }
 
   return {
     currentAmount,
@@ -75,6 +123,7 @@ async function computeQuotaProgress(
     periodActive: true,
     periodStart: range.start,
     periodEnd: range.end,
+    previousPeriod,
   };
 }
 
@@ -223,6 +272,7 @@ router.get('/', async (req: Request, res: Response) => {
           targetAmount: Number(q.targetAmount),
           percentage: 0,
           periodActive: false,
+          previousPeriod: null,
         };
       }
       const progress = await computeQuotaProgress(

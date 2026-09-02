@@ -178,7 +178,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     {/* Avatar + Name */}
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarImage src={r.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{r.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-[10px]">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>

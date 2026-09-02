@@ -1,6 +1,6 @@
 # FiveM RP Faction Accountant — Architecture Document & Master Prompt
 
-> **Version:** 2.0 | **Date:** August 2026  
+> **Version:** 2.1 | **Date:** September 2026  
 > **Stack:** Node.js 22 LTS (TypeScript) + Express/Fastify + Next.js + PostgreSQL + Docker Compose  
 > **Auth:** Discord OAuth 2.0 | **Deployment:** Self-Hosted VPS  
 > **Purpose:** AI-readable architecture document and master prompt for autonomous development
@@ -179,6 +179,7 @@ User 1---* FactionMember *---1 Faction
                                    |-- 1---* ItemType
                                    |-- 1---* Entry
                                    |-- 1---* Payout
+                                   |-- 1---* Expense
                                    |-- 1---* Quota
                                    |-- 1---* AuditLog
                                    |-- 1---* Announcement
@@ -197,7 +198,7 @@ FactionMember 1---* MemberNote
 
 ### 5.2 Tables As Built
 
-Ten tables. Every id is a `uuid` with `defaultRandom()` unless noted.
+Eleven tables. Every id is a `uuid` with `defaultRandom()` unless noted.
 
 **`users`** — one row per Discord account, and per person registered before they
 ever signed in.
@@ -236,6 +237,13 @@ money, `pcs` for goods.
 (`pending` / `approved` / `rejected` / `completed`), `approved_by`,
 `approved_at`, `is_deleted`.
 
+**`expenses`** — faction running costs (warehouse rent, utilities, supplies):
+value that left the vault without any member receiving it. `faction_id`,
+`created_by`, `item_type_id`, `category` (`warehouse` / `utilities` /
+`supplies` / `other`), `amount`, `description`, `expense_date`, `is_deleted`.
+No lifecycle — the cost is gone the moment the row exists. Governed by
+`manage_expenses` (migration `0008`).
+
 **`strikes`** — `faction_id`, `target_user_id`, `issued_by`, `reason`,
 `severity` (`warning` / `minor` / `major`), `status`
 (`active` / `appealed` / `revoked` / `expired`), `expires_at`. The status on the
@@ -263,13 +271,15 @@ There is no balance column anywhere. `computeTreasuryBalances()` derives it:
 ```
 balance = SUM(entries WHERE NOT deleted)
         - SUM(payouts WHERE NOT deleted AND status = 'completed')
+        - SUM(expenses WHERE NOT deleted)
 ```
 
 Only completed payouts count: pending and approved ones have not left the vault,
-and rejected ones never will. The helper takes `onlyWithActivity`, which drops
+and rejected ones never will. Expenses have no lifecycle — rent is gone the
+moment the row exists. The helper takes `onlyWithActivity`, which drops
 item types nothing has ever passed through — the treasury and dashboard pass it
 so they do not show rows of zeroes; laundering does not, because you wash *into*
-a currency the vault has never held.
+a currency the vault has never held. An expense alone counts as activity.
 
 ### 5.4 Database Client Setup (src/db/index.ts)
 
@@ -431,8 +441,10 @@ Prefix: `/factions/:id`.
 | `/entries` | contributions. POST accepts `userId` (credit another member) and `anonymous` |
 | `/payouts` | see §8.3 |
 | `/treasury` | derived balances, pending totals, outflow trend |
+| `/expenses` | faction running costs. Read for any member, `manage_expenses` writes |
 | `/laundering` | convert one currency into another |
 | `/item-types`, `/quotas`, `/settings` | faction configuration |
+| `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
 | `/dashboard`, `/charts`, `/reports`, `/leaderboard`, `/audit-logs`, `/export`, `/bulk` | reading and reporting |
 
 ### 6.4 Response Format
@@ -470,6 +482,7 @@ manage_members       manage_payouts      manage_entries
 manage_strikes       manage_quotas       manage_item_types
 manage_settings      manage_customization
 view_audit_logs      view_reports        manage_laundering
+manage_expenses
 ```
 
 The admin seat itself is not delegable: `manage_members` runs the roster, but
@@ -494,6 +507,7 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | See the faction's whole withdrawal list | Yes | Yes | `manage_payouts` | own only |
 | Issue and settle strikes | Yes | Yes | `manage_strikes` | No |
 | Launder currency | Yes | Yes | `manage_laundering` | No |
+| Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
 | View audit logs | Yes | Yes | `view_audit_logs` | No |
 | View reports | Yes | Yes | `view_reports` | No |
@@ -557,7 +571,12 @@ and leaving the remainder in the vault.
 ### 8.4 Treasury and Laundering
 
 The treasury reports what the vault has done: derived balances per item type,
-completed outflow trend, and pending withdrawals counted separately. Only item
+completed outflow trend, and pending withdrawals counted separately. Running
+expenses — warehouse rent, utilities — deduct from the
+balances and ride the same outflow trend as completed payouts, so a balance
+that dropped because of rent does not read as an unexplained gap. The treasury
+view lists recent expenses with per-category totals; writing them needs
+`manage_expenses`, reading them is open to every member. Only item
 types with at least one live entry or completed payout are listed — on both the
 treasury page and the dashboard card. The list can be filtered by name and
 ordered by name or current amount, in either direction; name ordering collates
@@ -590,8 +609,14 @@ records before and after.
 ### 8.6 Quotas, Reports and Audit
 
 Quotas target an item type over a weekly or monthly period, faction-wide or for
-one member. Reports summarise a period or compare two. Every write that matters
-lands in the audit log with a before/after payload.
+one member. Every quota response also carries `previousPeriod` — the outcome of
+the period before the current one, with its dates, amounts and a `met` flag —
+because progress resets when a period rolls over and this is the only trace a
+just-ended period leaves. It is reported only when the quota already existed
+back then. The dashboard shows unmet previous periods on an alert card, and the
+quota list in Settings shows the same per row. Reports summarise a period or
+compare two. Every write that matters lands in the audit log with a before/after
+payload.
 
 ### 8.7 Interface Language
 
@@ -611,6 +636,42 @@ are formatted the American way in every locale, behind a `NUMBER_LOCALE`
 constant. The figures mirror what the game shows and players repeat them to each
 other as they appear there; a comma that separates thousands in one language and
 decimals in another is a real way to mis-pay someone.
+
+### 8.8 Faction Configuration Import/Export
+
+Faction configuration — item types, quotas and ranks — can be exported to and
+imported from CSV, mounted under `/factions/{id}/config`:
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | `/config/item-types` | any member | `Name,Unit,Is Currency,Active` |
+| GET | `/config/quotas` | any member | `Item Type,Target Amount,Period Type,Period Start,Target Member,Active` |
+| GET | `/config/ranks` | any member | `Name,Level,Permissions` — pipe-separated permission list |
+| POST | `/config/item-types` | `manage_item_types` | Upsert by name (case-insensitive); unit derived when left out |
+| POST | `/config/quotas` | `manage_quotas` | Same validation as the create endpoint |
+| POST | `/config/ranks` | `manage_settings` | Full replace of the rank list |
+
+Imports POST `{ csv: string }` (the client reads the picked file as text) and
+answer with `{ imported, updated?, skipped, errors[] }`. The same caps as entry
+import apply: 500 KB and 1000 data rows.
+
+Rules the importers share:
+
+- **Skipped, never half-valid.** A row that fails any check is skipped and named
+  in `errors`; nothing about it is written. Item types are the exception that
+  upserts per row — an existing name updates unit, currency flag and active
+  state, a new one is created.
+- **Quota rows resolve names against the faction.** The item type must exist;
+  a `Target Member` (blank = faction-wide) must match a current member by
+  Discord name or in-game name. The one-active-quota-per-(type + period + scope)
+  rule holds, counting both stored rows and what the same file inserted earlier.
+- **A ranks import replaces the whole list** and carries the settings
+  endpoint's rails: at most 20 ranks, unique names and levels, unknown
+  permissions rejected, and removed ranks cleared off members in the same
+  transaction. An import with no valid rows is refused rather than allowed to
+  wipe the ranks.
+- **Every import writes one audit log row** carrying the outcome counts — and
+  for ranks, before/after rank lists and the removed names.
 
 ---
 
@@ -643,6 +704,11 @@ audit-logs, admin-factions, admin-faction-detail, users-panel.
 registrations still waiting, in one list with the registrations pinned to the top
 and labelled. Rename and remove appear only on those, because that is all the API
 allows.
+
+Expenses are not a view of their own: they render as a section inside the
+treasury view, because the balance cards above them already carry their effect.
+The Settings tabs for item types, quotas and ranks each carry CSV export/import
+buttons (§8.8).
 
 ### 9.3 Shared Rules
 

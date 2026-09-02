@@ -250,6 +250,14 @@ export interface Quota {
   periodActive?: boolean;
   periodStartComputed?: string;
   periodEndComputed?: string;
+  /** Outcome of the period before the current one — how a just-ended quota is remembered. */
+  previousPeriod?: {
+    periodStart: string;
+    periodEnd: string;
+    currentAmount: number;
+    targetAmount: number;
+    met: boolean;
+  } | null;
 }
 
 export interface CreateQuotaInput {
@@ -485,6 +493,58 @@ export interface EvenSplitResult {
   remainder: number;
   status: PayoutStatus;
   payoutIds: string[];
+}
+
+// ── Expenses ─────────────────────────────────────────
+
+export const EXPENSE_CATEGORIES = ['warehouse', 'utilities', 'supplies', 'other'] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export interface Expense {
+  id: string;
+  amount: string;
+  category: ExpenseCategory;
+  description: string | null;
+  expenseDate: string;
+  createdAt: string;
+  createdBy: string;
+  creatorUsername: string;
+  creatorInGameName: string | null;
+  itemTypeId: string;
+  itemTypeName: string;
+  itemUnit: string;
+  itemIsCurrency: boolean;
+  itemImageUrl: string | null;
+}
+
+export interface ExpenseListData {
+  expenses: Expense[];
+  categoryTotals: { category: ExpenseCategory; total: number }[];
+}
+
+export interface CreateExpenseInput {
+  itemTypeId: string;
+  amount: string;
+  category: ExpenseCategory;
+  description?: string;
+  expenseDate?: string;
+}
+
+export interface UpdateExpenseInput {
+  amount?: string;
+  category?: ExpenseCategory;
+  description?: string | null;
+  expenseDate?: string;
+}
+
+// ── Config CSV import/export ─────────────────────────
+
+export interface ConfigImportResult {
+  imported: number;
+  updated?: number;
+  skipped: number;
+  errors: string[];
+  removedRanks?: string[];
 }
 
 // ── Treasury ─────────────────────────────────────────
@@ -749,7 +809,7 @@ export interface FactionRank {
 export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
-  'view_audit_logs', 'view_reports', 'manage_laundering',
+  'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -763,6 +823,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_settings: 'permission.manageSettings', manage_customization: 'permission.manageCustomization',
   view_audit_logs: 'permission.viewAuditLogs', view_reports: 'permission.viewReports',
   manage_laundering: 'permission.manageLaundering',
+  manage_expenses: 'permission.manageExpenses',
 };
 
 // ── Provisional users (superadmin) ─────────────────────

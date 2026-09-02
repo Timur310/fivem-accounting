@@ -32,6 +32,8 @@ import factionStrikeRoutes from './routes/factionStrikes.js';
 import factionSettingsRoutes from './routes/factionSettings.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import globalLeaderboardRoutes from './routes/globalLeaderboard.js';
+import expenseRoutes from './routes/expenses.js';
+import configIoRoutes from './routes/configIo.js';
 
 const app = express();
 
@@ -156,6 +158,8 @@ app.use('/api/v1/factions/:id/bulk', bulkRoutes);
 app.use('/api/v1/factions/:id/payouts', payoutRoutes);
 app.use('/api/v1/factions/:id/treasury', treasuryRoutes);
 app.use('/api/v1/factions/:id/laundering', launderingRoutes);
+app.use('/api/v1/factions/:id/expenses', expenseRoutes);
+app.use('/api/v1/factions/:id/config', configIoRoutes);
 
 // ── 404 handler ───────────────────────────────────────
 

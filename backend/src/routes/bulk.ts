@@ -321,7 +321,7 @@ router.post('/entries/import', async (req: Request, res: Response) => {
 // ── CSV line parser (handles quoted fields) ──────────
 // Uses an array buffer + join so we are O(n) in the line length, not O(n²)
 // like repeated string concatenation would be on long lines.
-function parseCSVLine(line: string): string[] {
+export function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   const current: string[] = [];
   let inQuotes = false;

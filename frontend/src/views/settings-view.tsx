@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemTypesApi, quotasApi, factionSettingsApi, membersApi, apiErrorMessage } from '@/lib/api-client';
+import { itemTypesApi, quotasApi, factionSettingsApi, membersApi, configApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
@@ -64,11 +64,15 @@ interface Props {
    * the API refuses it, so the screen must not offer it.
    */
   isFactionAdmin?: boolean;
+  /** Per-resource gates for the CSV import/export buttons. */
+  canManageItemTypes?: boolean;
+  canManageQuotas?: boolean;
+  canManageSettings?: boolean;
 }
 
 type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings';
 
-export function SettingsView({ factionId, isFactionAdmin }: Props) {
+export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = false, canManageQuotas = false, canManageSettings = false }: Props) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('item-types');
 
@@ -106,11 +110,101 @@ export function SettingsView({ factionId, isFactionAdmin }: Props) {
         </Button>
       </div>
 
-      {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} />}
-      {activeTab === 'quotas' && <QuotasSection factionId={factionId} />}
+      {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} canManage={canManageItemTypes} />}
+      {activeTab === 'quotas' && <QuotasSection factionId={factionId} canManage={canManageQuotas} />}
       {activeTab === 'customization' && <CustomizationSection factionId={factionId} />}
       {activeTab === 'faction-settings' && (
-        <FactionSettingsSection factionId={factionId} isFactionAdmin={!!isFactionAdmin} />
+        <FactionSettingsSection factionId={factionId} isFactionAdmin={!!isFactionAdmin} canManage={canManageSettings} />
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// Config CSV export/import buttons
+// ══════════════════════════════════════════════════════
+
+/**
+ * Export downloads a CSV straight from the API; import reads a picked file as
+ * text and posts it, reporting the per-row outcome in a toast. `resource`
+ * selects the endpoint and the query cache to refresh afterwards.
+ */
+function ConfigIoButtons({ factionId, resource, canManage }: { factionId: string; resource: 'item-types' | 'quotas' | 'ranks'; canManage: boolean }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const url = resource === 'item-types'
+    ? configApi.itemTypesUrl(factionId)
+    : resource === 'quotas'
+      ? configApi.quotasUrl(factionId)
+      : configApi.ranksUrl(factionId);
+
+  const importFn = resource === 'item-types'
+    ? configApi.importItemTypes
+    : resource === 'quotas'
+      ? configApi.importQuotas
+      : configApi.importRanks;
+
+  const cacheKeys: string[][] = resource === 'item-types'
+    ? [['itemTypes', factionId]]
+    : resource === 'quotas'
+      ? [['quotas', factionId], ['dashboard', factionId]]
+      : [['faction-settings', factionId], ['members', factionId]];
+
+  const importMutation = useMutation({
+    mutationFn: (csv: string) => importFn(factionId, csv),
+    onSuccess: (result) => {
+      for (const key of cacheKeys) queryClient.invalidateQueries({ queryKey: key });
+      if (fileRef.current) fileRef.current.value = '';
+      const summary = [
+        t('settings.import.imported', { count: result.imported }),
+        result.updated !== undefined ? t('settings.import.updated', { count: result.updated }) : null,
+        t('settings.import.skipped', { count: result.skipped }),
+      ].filter(Boolean).join(' · ');
+      toast({
+        title: t('settings.import.done'),
+        description: result.errors.length > 0
+          ? `${summary}\n${result.errors.slice(0, 5).join('\n')}${result.errors.length > 5 ? `\n+${result.errors.length - 5}` : ''}`
+          : summary,
+        variant: result.errors.length > 0 ? 'destructive' : 'default',
+      });
+    },
+    onError: (err: unknown) => {
+      toast({ title: t('settings.import.failed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const handleFile = async (file: File) => {
+    const text = await file.text();
+    importMutation.mutate(text);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button variant="outline" size="sm" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}>
+        <Download className="mr-1.5 h-3.5 w-3.5" />
+        {t('settings.import.export')}
+      </Button>
+      {canManage && (
+        <>
+          <Button variant="outline" size="sm" disabled={importMutation.isPending} onClick={() => fileRef.current?.click()}>
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            {importMutation.isPending ? t('settings.import.importing') : t('settings.import.import')}
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFile(file);
+              e.target.value = '';
+            }}
+          />
+        </>
       )}
     </div>
   );
@@ -120,7 +214,7 @@ export function SettingsView({ factionId, isFactionAdmin }: Props) {
 // Item Types Section
 // ══════════════════════════════════════════════════════
 
-function ItemTypesSection({ factionId }: { factionId: string }) {
+function ItemTypesSection({ factionId, canManage = false }: { factionId: string; canManage?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -230,10 +324,13 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
           <h3 className="text-lg font-semibold">{t('settings.itemTypes')}</h3>
           <p className="text-sm text-zinc-500">{t('itemTypes.intro')}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('itemTypes.addType')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <ConfigIoButtons factionId={factionId} resource="item-types" canManage={canManage} />
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('itemTypes.addType')}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -431,7 +528,7 @@ function ItemTypesSection({ factionId }: { factionId: string }) {
 // Quotas Section
 // ══════════════════════════════════════════════════════
 
-function QuotasSection({ factionId }: { factionId: string }) {
+function QuotasSection({ factionId, canManage = false }: { factionId: string; canManage?: boolean }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -616,10 +713,13 @@ function QuotasSection({ factionId }: { factionId: string }) {
           <h3 className="text-lg font-semibold">{t('settings.quotas')}</h3>
           <p className="text-sm text-zinc-500">{t('quota.intro')}</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('quota.add')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <ConfigIoButtons factionId={factionId} resource="quotas" canManage={canManage} />
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('quota.add')}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -706,9 +806,19 @@ function QuotasSection({ factionId }: { factionId: string }) {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={q.isActive ? 'default' : 'secondary'}>
-                          {q.isActive ? (met ? t('quota.met') : t('common.active')) : t('common.disabled')}
-                        </Badge>
+                        <div className="space-y-1">
+                          <Badge variant={q.isActive ? 'default' : 'secondary'}>
+                            {q.isActive ? (met ? t('quota.met') : t('common.active')) : t('common.disabled')}
+                          </Badge>
+                          {q.isActive && q.previousPeriod && !q.previousPeriod.met && (
+                            <p className="text-[11px] text-amber-500 tabular-nums">
+                              {t('quota.lastPeriodNotMet', {
+                                current: formatAmount(q.previousPeriod.currentAmount, q.itemUnit, q.itemIsCurrency),
+                                target: formatAmount(q.previousPeriod.targetAmount, q.itemUnit, q.itemIsCurrency),
+                              })}
+                            </p>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -1072,9 +1182,11 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 function FactionSettingsSection({
   factionId,
   isFactionAdmin,
+  canManage = false,
 }: {
   factionId: string;
   isFactionAdmin: boolean;
+  canManage?: boolean;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -1163,7 +1275,10 @@ function FactionSettingsSection({
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm text-zinc-200">{t('settings.rankHierarchy')}</CardTitle>
-            <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> {t('settings.addRank')}</Button>
+            <div className="flex items-center gap-2">
+              <ConfigIoButtons factionId={factionId} resource="ranks" canManage={canManage} />
+              <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> {t('settings.addRank')}</Button>
+            </div>
           </div>
           <p className="text-xs text-zinc-500 mt-1">
             {t('settings.rankHierarchyHint')}
