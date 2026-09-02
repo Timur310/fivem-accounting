@@ -35,6 +35,13 @@ const updateSettingsSchema = z.object({
     minor: z.number().int().min(1).max(99).nullable(),
     major: z.number().int().min(1).max(99).nullable(),
   }).optional(),
+  // Monthly spending cap per expense category; null disables the budget.
+  expenseBudgets: z.object({
+    warehouse: z.number().min(0).nullable(),
+    utilities: z.number().min(0).nullable(),
+    supplies: z.number().min(0).nullable(),
+    other: z.number().min(0).nullable(),
+  }).optional(),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   customFields: z.array(z.object({
     name: z.string().min(1).max(100),
@@ -57,6 +64,7 @@ router.get('/', async (req: Request, res: Response) => {
       inactivityThresholdDays: factions.inactivityThresholdDays,
       strikeExpiryDays: factions.strikeExpiryDays,
       strikeEscalation: factions.strikeEscalation,
+      expenseBudgets: factions.expenseBudgets,
       brandColor: factions.brandColor,
       customFields: factions.customFields,
     })
@@ -76,6 +84,7 @@ router.get('/', async (req: Request, res: Response) => {
     strikeExpiryDays: faction.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
     // null severities mean the escalation check is off for them.
     strikeEscalation: faction.strikeEscalation ?? { warning: null, minor: null, major: null },
+    expenseBudgets: faction.expenseBudgets ?? { warehouse: null, utilities: null, supplies: null, other: null },
     brandColor: faction.brandColor,
     customFields: faction.customFields ?? [],
   });
@@ -110,6 +119,7 @@ router.patch(
         inactivityThresholdDays: factions.inactivityThresholdDays,
         strikeExpiryDays: factions.strikeExpiryDays,
         strikeEscalation: factions.strikeEscalation,
+        expenseBudgets: factions.expenseBudgets,
         brandColor: factions.brandColor,
         customFields: factions.customFields,
       })
@@ -179,6 +189,9 @@ router.patch(
     if (parsed.data.strikeEscalation !== undefined) {
       updates.strikeEscalation = parsed.data.strikeEscalation;
     }
+    if (parsed.data.expenseBudgets !== undefined) {
+      updates.expenseBudgets = parsed.data.expenseBudgets;
+    }
     if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
     if (parsed.data.customFields !== undefined) {
       const names = parsed.data.customFields.map((f) => f.name);
@@ -199,6 +212,7 @@ router.patch(
           inactivityThresholdDays: factions.inactivityThresholdDays,
           strikeExpiryDays: factions.strikeExpiryDays,
           strikeEscalation: factions.strikeEscalation,
+          expenseBudgets: factions.expenseBudgets,
           brandColor: factions.brandColor,
           customFields: factions.customFields,
         });
@@ -232,7 +246,8 @@ router.patch(
           ranks: existing.ranks,
           inactivityThresholdDays: existing.inactivityThresholdDays,
           strikeExpiryDays: existing.strikeExpiryDays,
-        strikeEscalation: existing.strikeEscalation,
+          strikeEscalation: existing.strikeEscalation,
+          expenseBudgets: existing.expenseBudgets,
           brandColor: existing.brandColor,
           customFields: existing.customFields,
         },
@@ -247,6 +262,7 @@ router.patch(
       inactivityThresholdDays: updated?.inactivityThresholdDays,
       strikeExpiryDays: updated?.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
     strikeEscalation: updated?.strikeEscalation ?? { warning: null, minor: null, major: null },
+    expenseBudgets: updated?.expenseBudgets ?? { warehouse: null, utilities: null, supplies: null, other: null },
       brandColor: updated?.brandColor ?? null,
       customFields: updated?.customFields ?? [],
       ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),

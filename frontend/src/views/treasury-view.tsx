@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { treasuryApi, expensesApi, itemTypesApi, apiErrorMessage } from '@/lib/api-client';
+import { treasuryApi, expensesApi, itemTypesApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/searchable-select';
 import {
   Wallet, TrendingDown, Clock, ArrowDownToLine, Search,
-  ArrowDownWideNarrow, ArrowUpNarrowWide, Receipt, Plus, Trash2, Pencil,
+  ArrowDownWideNarrow, ArrowUpNarrowWide, Receipt, Plus, Trash2, Pencil, ClipboardCheck,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName, formatNumber, todayLocalDateString } from '@/lib/format';
@@ -33,6 +33,7 @@ import { EXPENSE_CATEGORIES } from '@/lib/api-types';
 interface Props {
   factionId: string;
   canManageExpenses?: boolean;
+  canManageChecks?: boolean;
 }
 
 /** Category names as the API spells them, with their label keys. */
@@ -46,7 +47,7 @@ const EXPENSE_CATEGORY_KEYS: Record<ExpenseCategory, TranslationKey> = {
 type SortField = 'name' | 'balance';
 type SortDirection = 'asc' | 'desc';
 
-export function TreasuryView({ factionId, canManageExpenses = false }: Props) {
+export function TreasuryView({ factionId, canManageExpenses = false, canManageChecks = false }: Props) {
   const { t } = useTranslation();
   const brandColor = useAppStore((s) => s.brandColor);
 
@@ -352,6 +353,9 @@ export function TreasuryView({ factionId, canManageExpenses = false }: Props) {
       {/* ══ Running Expenses ══ */}
       <ExpensesSection factionId={factionId} canManage={canManageExpenses} />
 
+      {/* ══ Vault verification (counted vs. recorded) ══ */}
+      <ChecksSection factionId={factionId} canManage={canManageChecks} />
+
       {/* ══ Recent Completed Payouts ══ */}
       <Card>
         <CardHeader>
@@ -423,6 +427,33 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
     queryFn: () => itemTypesApi.list(factionId),
     enabled: canManage,
   });
+
+  // Budgets and month-to-date spending turn the category totals into
+  // "raktár: 80% of budget" — the loop leaders actually close.
+  const { data: settings } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const budgets = settings?.expenseBudgets;
+
+  const today = new Date();
+  const monthStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  const { data: monthData } = useQuery({
+    queryKey: ['expenses', factionId, 'month', monthStart],
+    queryFn: () => expensesApi.list(factionId, { date_from: monthStart, date_to: todayLocalDateString(), page_size: 1 }),
+    staleTime: 0,
+  });
+  const monthTotals = monthData?.categoryTotals ?? [];
+
+  const budgetRows = budgets
+    ? (Object.entries(budgets) as [ExpenseCategory, number | null][])
+      .filter(([, cap]) => cap !== null && cap !== undefined)
+      .map(([category, cap]) => {
+        const spent = monthTotals.find((ct) => ct.category === category)?.total ?? 0;
+        return { category, cap: cap as number, spent, pct: (cap as number) > 0 ? (spent / (cap as number)) * 100 : 0 };
+      })
+    : [];
 
   const resetForm = () => {
     setEditId(null);
@@ -527,6 +558,30 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                 : <span className="tabular-nums text-zinc-200">{formatNumber(ct.total)}</span>
               </Badge>
             ))}
+          </div>
+        )}
+        {budgetRows.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2 mb-4">
+            {budgetRows.map((b) => {
+              const over = b.pct >= 100;
+              const near = b.pct >= 80;
+              return (
+                <div key={b.category} className={`rounded-lg border p-3 space-y-2 ${over ? 'border-red-500/30 bg-red-500/[0.04]' : near ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'border-white/[0.06]'}`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-zinc-400">{EXPENSE_CATEGORY_KEYS[b.category] ? t(EXPENSE_CATEGORY_KEYS[b.category]) : b.category} · {t('treasury.budgetMonth')}</span>
+                    <span className={`tabular-nums ${over ? 'text-red-400' : near ? 'text-amber-400' : 'text-zinc-300'}`}>
+                      {formatNumber(b.spent)} / {formatNumber(b.cap)} ({b.pct.toFixed(0)}%)
+                    </span>
+                  </div>
+                  <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(b.pct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
         {isLoading ? (
@@ -639,6 +694,164 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </Card>
+  );
+}
+
+// ── Vault verification ────────────────────────────────
+// "Counted vs. recorded": someone counts the real vault, the number is
+// recorded, and the recorded balance for that day is derived from the same
+// source as the live balance. A dispute gets a variance, not a memory.
+
+function ChecksSection({ factionId, canManage }: { factionId: string; canManage: boolean }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [formItemType, setFormItemType] = useState('');
+  const [formCounted, setFormCounted] = useState('');
+  const [formDate, setFormDate] = useState(todayLocalDateString());
+  const [formNote, setFormNote] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['treasury-checks', factionId],
+    queryFn: () => treasuryApi.listChecks(factionId),
+    enabled: canManage,
+    staleTime: 0,
+  });
+
+  const { data: itemTypes = [] } = useQuery({
+    queryKey: ['item-types', factionId],
+    queryFn: () => itemTypesApi.list(factionId),
+    enabled: canManage,
+  });
+
+  const itemTypeOptions: SearchableSelectOption[] = useMemo(
+    () => (itemTypes as ItemType[]).filter((it) => it.isActive).map((it) => ({ value: it.id, label: it.name })),
+    [itemTypes],
+  );
+  const countedType = (itemTypes as ItemType[]).find((it) => it.id === formItemType);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      treasuryApi.createCheck(factionId, {
+        itemTypeId: formItemType,
+        countedAmount: formCounted,
+        checkDate: formDate,
+        note: formNote.trim() || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['treasury-checks', factionId] });
+      setFormCounted('');
+      setFormNote('');
+      toast({ title: t('treasury.checkCreated') });
+    },
+    onError: (err: unknown) => {
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const checks = data?.checks ?? [];
+
+  if (!canManage) return null;
+
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
+        <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+          <ClipboardCheck className="h-4 w-4 text-zinc-400" />
+          {t('treasury.checks')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-zinc-500 mb-3">{t('treasury.checksIntro')}</p>
+
+        {/* Record a count */}
+        <div className="flex flex-wrap items-end gap-3 mb-4">
+          <div className="space-y-1.5 min-w-[180px] flex-1">
+            <Label className="text-xs text-zinc-500">{t('expenses.itemType')}</Label>
+            <SearchableSelect
+              value={formItemType}
+              onValueChange={setFormItemType}
+              options={itemTypeOptions}
+              placeholder={t('itemTypes.select')}
+              aria-label={t('expenses.itemType')}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-500">{t('treasury.countedAmount')}{countedType ? ` (${countedType.unit})` : ''}</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={formCounted}
+              onChange={(e) => setFormCounted(e.target.value)}
+              className="tabular-nums w-36"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-zinc-500">{t('common.date')}</Label>
+            <Input
+              type="date"
+              max={todayLocalDateString()}
+              value={formDate}
+              onChange={(e) => setFormDate(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          <div className="space-y-1.5 min-w-[160px] flex-1">
+            <Label className="text-xs text-zinc-500">{t('common.description')}</Label>
+            <Input value={formNote} onChange={(e) => setFormNote(e.target.value)} maxLength={500} placeholder={t('treasury.checkNotePlaceholder')} />
+          </div>
+          <Button
+            disabled={!formItemType || formCounted === '' || Number(formCounted) < 0 || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            {createMutation.isPending ? t('common.saving') : t('treasury.recordCheck')}
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : checks.length === 0 ? (
+          <p className="text-zinc-600 text-sm text-center py-6">{t('treasury.noChecks')}</p>
+        ) : (
+          <div className="space-y-1">
+            {checks.map((c) => {
+              const matches = Math.abs(c.variance) < 0.005;
+              return (
+                <div key={c.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                  <ItemIcon src={null} className="size-0 hidden" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">
+                      <span className="text-zinc-300 font-medium">{c.itemTypeName}</span>
+                      <span className="text-zinc-600"> · {c.checkDate}</span>
+                    </p>
+                    <p className="text-[11px] text-zinc-600 truncate">
+                      {t('treasury.checkRecorded', { amount: formatAmount(c.recordedBalance, c.itemUnit, c.itemIsCurrency) })}
+                      {c.creatorUsername && ` — ${displayName({ username: c.creatorUsername, inGameName: c.creatorInGameName })}`}
+                      {c.note && ` — ${c.note}`}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium tabular-nums text-zinc-200">
+                      {formatAmount(c.countedAmount, c.itemUnit, c.itemIsCurrency)}
+                    </p>
+                    <p className={`text-[11px] tabular-nums ${matches ? 'text-emerald-500' : 'text-red-400'}`}>
+                      {matches
+                        ? t('treasury.checkMatch')
+                        : t('treasury.checkVariance', { variance: formatAmount(Math.abs(c.variance), c.itemUnit, c.itemIsCurrency) })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

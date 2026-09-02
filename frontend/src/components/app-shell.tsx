@@ -343,7 +343,7 @@ export function AppShell() {
       case 'laundering':
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
       case 'treasury':
-        return selectedFactionId ? <TreasuryView factionId={selectedFactionId} canManageExpenses={hasPermission('manage_expenses')} /> : null;
+        return selectedFactionId ? <TreasuryView factionId={selectedFactionId} canManageExpenses={hasPermission('manage_expenses')} canManageChecks={hasPermission('manage_payouts')} /> : null;
       case 'members':
         return selectedFactionId ? <MembersView factionId={selectedFactionId} isFactionAdmin={!!isAdmin} canManageMembers={hasPermission('manage_members')} /> : null;
       case 'member-profile':

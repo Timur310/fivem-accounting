@@ -198,7 +198,7 @@ FactionMember 1---* MemberNote
 
 ### 5.2 Tables As Built
 
-Eleven tables. Every id is a `uuid` with `defaultRandom()` unless noted.
+Twelve tables. Every id is a `uuid` with `defaultRandom()` unless noted.
 
 **`users`** — one row per Discord account, and per person registered before they
 ever signed in.
@@ -214,8 +214,9 @@ ever signed in.
 
 **`factions`** — `name` (unique), `description`, `brand_color`, `custom_fields`
 (jsonb), `ranks` (jsonb), `inactivity_threshold_days`, `strike_expiry_days`
-(jsonb, per severity), `strike_escalation` (jsonb, per severity), `created_by`,
-`created_at`, `is_active`.
+(jsonb, per severity), `strike_escalation` (jsonb, per severity),
+`expense_budgets` (jsonb, per expense category — a monthly spending cap, null
+disables the category's budget), `created_by`, `created_at`, `is_active`.
 
 `ranks` is where faction-level authorisation lives: each entry is
 `{ name, level, permissions[] }`, and `permissions` holds names from
@@ -244,6 +245,11 @@ value that left the vault without any member receiving it. `faction_id`,
 `supplies` / `other`), `amount`, `description`, `expense_date`, `is_deleted`.
 No lifecycle — the cost is gone the moment the row exists. Governed by
 `manage_expenses` (migration `0008`).
+
+**`treasury_checks`** — a vault count: an admin counted the real stash and
+recorded what they found (`item_type_id`, `counted_amount`, `check_date`,
+`note`). The recorded balance for that day is derived on read, so the check
+carries a `variance` instead of a stored verdict (migration `0010`).
 
 **`strikes`** — `faction_id`, `target_user_id`, `issued_by`, `reason`,
 `severity` (`warning` / `minor` / `major`), `status`
@@ -580,7 +586,18 @@ expenses — warehouse rent, utilities — deduct from the
 balances and ride the same outflow trend as completed payouts, so a balance
 that dropped because of rent does not read as an unexplained gap. The treasury
 view lists recent expenses with per-category totals; writing them needs
-`manage_expenses`, reading them is open to every member. Only item
+`manage_expenses`, reading them is open to every member.
+
+Per-category monthly budgets (`expense_budgets`, settable in faction settings)
+turn the totals into budget bars: amber from 80% of the cap, red at 100%.
+
+**Vault verification.** Disputes about the vault are the argument this app
+exists to settle, so an admin can record a physical count
+(`POST /treasury/checks`, `manage_payouts`): item type, counted amount, date,
+note. The recorded balance for that day is derived from the same source as the
+live balance, and each check answers with a `variance` — counted minus
+recorded. Counts are admin-readable (`GET /treasury/checks`); nothing is
+reconciled automatically, the number is the point. Only item
 types with at least one live entry or completed payout are listed — on both the
 treasury page and the dashboard card. The list can be filtered by name and
 ordered by name or current amount, in either direction; name ordering collates

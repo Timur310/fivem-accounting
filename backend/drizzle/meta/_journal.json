@@ -71,6 +71,13 @@
       "when": 1788375241384,
       "tag": "0009_overjoyed_dust",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788377433949,
+      "tag": "0010_early_secret_warriors",
+      "breakpoints": true
     }
   ]
 }

@@ -582,6 +582,34 @@ export interface TreasuryBalanceItem {
   outflowTrend: { date: string; total: number }[];
 }
 
+export interface TreasuryCheckRow {
+  id: string;
+  countedAmount: string;
+  checkDate: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string;
+  creatorUsername: string;
+  creatorInGameName: string | null;
+  itemTypeId: string;
+  itemTypeName: string;
+  itemUnit: string;
+  itemIsCurrency: boolean;
+  recordedBalance: number;
+  variance: number;
+}
+
+export interface TreasuryChecksData {
+  checks: TreasuryCheckRow[];
+}
+
+export interface CreateTreasuryCheckInput {
+  itemTypeId: string;
+  countedAmount: string;
+  checkDate?: string;
+  note?: string;
+}
+
 export interface TreasuryData {
   balances: TreasuryBalanceItem[];
   netBalance: number;
@@ -939,6 +967,13 @@ export interface FactionSettings {
     minor: number | null;
     major: number | null;
   };
+  /** Monthly spending cap per expense category; null disables that budget. */
+  expenseBudgets: {
+    warehouse: number | null;
+    utilities: number | null;
+    supplies: number | null;
+    other: number | null;
+  };
   brandColor: string | null;
   customFields: { name: string; required: boolean }[];
 }
@@ -950,6 +985,12 @@ export interface UpdateFactionSettingsInput {
     warning: number | null;
     minor: number | null;
     major: number | null;
+  };
+  expenseBudgets?: {
+    warehouse: number | null;
+    utilities: number | null;
+    supplies: number | null;
+    other: number | null;
   };
   strikeExpiryDays?: {
     warning: number | null;

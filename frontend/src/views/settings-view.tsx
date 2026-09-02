@@ -24,6 +24,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History } from 'lucide-react';
+
+const EXPENSE_CATEGORY_LABELS = {
+  warehouse: 'expenses.category.warehouse',
+  utilities: 'expenses.category.utilities',
+  supplies: 'expenses.category.supplies',
+  other: 'expenses.category.other',
+} as const;
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
@@ -1279,6 +1286,7 @@ function FactionSettingsSection({
   const [inactivityThreshold, setInactivityThreshold] = useState(7);
   const [strikeExpiry, setStrikeExpiry] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: 30, minor: 90, major: null });
   const [strikeEscalation, setStrikeEscalation] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: null, minor: null, major: null });
+  const [expenseBudgets, setExpenseBudgets] = useState<{ warehouse: number | null; utilities: number | null; supplies: number | null; other: number | null }>({ warehouse: null, utilities: null, supplies: null, other: null });
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1289,6 +1297,7 @@ function FactionSettingsSection({
       setInactivityThreshold(settings.inactivityThresholdDays);
       setStrikeExpiry(settings.strikeExpiryDays);
       setStrikeEscalation(settings.strikeEscalation);
+      setExpenseBudgets(settings.expenseBudgets);
     }
   }, [settings]);
 
@@ -1331,6 +1340,7 @@ function FactionSettingsSection({
         inactivityThresholdDays: inactivityThreshold,
         strikeExpiryDays: strikeExpiry,
         strikeEscalation,
+        expenseBudgets,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
@@ -1497,6 +1507,35 @@ function FactionSettingsSection({
                   className="tabular-nums"
                 />
                 <span className="text-xs text-zinc-600">{t('common.days')}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Expense Budgets ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.expenseBudgets')}</CardTitle>
+          <p className="text-xs text-zinc-500 mt-1">{t('settings.expenseBudgetsHint')}</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 max-w-sm">
+            {(['warehouse', 'utilities', 'supplies', 'other'] as const).map((cat) => (
+              <div key={cat} className="flex items-center gap-3">
+                <span className="text-sm text-zinc-300 w-14">{t(EXPENSE_CATEGORY_LABELS[cat])}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder={t('settings.never')}
+                  value={expenseBudgets[cat] ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setExpenseBudgets(prev => ({ ...prev, [cat]: val === '' ? null : Number(val) }));
+                    markChanged();
+                  }}
+                  className="tabular-nums"
+                />
               </div>
             ))}
           </div>
