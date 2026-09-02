@@ -1029,6 +1029,10 @@ export interface LeaderboardRanking {
   entryCount: number;
   itemBreakdown: Record<string, number>;
   isMe: boolean;
+  /** Rank change vs. the previous period; null = unranked then. Positive = up. */
+  movement?: number | null;
+  streakCurrent?: number;
+  streakActiveToday?: boolean;
 }
 
 export interface LeaderboardData {

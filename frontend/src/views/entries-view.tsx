@@ -27,7 +27,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { ItemType } from '@/lib/api-types';
+import type { ItemType, Entry } from '@/lib/api-types';
 import { formatAmount, displayName } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -246,6 +246,46 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     () => entries.find((e) => e.userId === user?.id),
     [entries, user?.id],
   );
+  // Date presets: today / this week / this month, in local calendar time.
+  const [activePreset, setActivePreset] = useState<'today' | 'week' | 'month' | null>(null);
+  const applyPreset = (preset: 'today' | 'week' | 'month') => {
+    const now = new Date();
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const day = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+    if (preset === 'today') {
+      setDateFrom(iso(now));
+      setDateTo(iso(now));
+    } else if (preset === 'week') {
+      setDateFrom(iso(monday));
+      setDateTo(iso(now));
+    } else {
+      setDateFrom(iso(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setDateTo(iso(now));
+    }
+    setActivePreset(preset);
+    setPage(1);
+  };
+
+  // Five-minute self-service undo, mirroring the API rule.
+  const isUndoable = (entry: Entry) =>
+    entry.userId === user?.id &&
+    Date.now() - new Date(entry.createdAt).getTime() <= 5 * 60 * 1000;
+
+  // The member's three most recent item types, for one-tap re-logging.
+  const recentTypeNames = useMemo(() => {
+    const seen: string[] = [];
+    for (const e of entries) {
+      if (e.userId === user?.id && !seen.includes(e.itemTypeName)) seen.push(e.itemTypeName);
+      if (seen.length === 3) break;
+    }
+    return seen;
+  }, [entries, user?.id]);
+  const recentTypeIds = recentTypeNames
+    .map((name) => activeItemTypes.find((it: ItemType) => it.name === name))
+    .filter((it): it is ItemType => !!it);
+
   const openCreate = () => {
     // The list does not carry item ids, so the type resolves by name.
     const lastType = myLastEntry
@@ -284,15 +324,46 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 emptyMessage={t('itemTypes.noneMatch')}
               />
             </div>
+            {/* Phone-first presets: "did I log yesterday?" is two taps. */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-zinc-500">{t('entries.quickRange')}</Label>
+              <div className="flex gap-1">
+                {([
+                  ['today', 'entries.today'],
+                  ['week', 'entries.thisWeek'],
+                  ['month', 'entries.thisMonth'],
+                ] as const).map(([preset, key]) => (
+                  <Button
+                    key={preset}
+                    variant={activePreset === preset ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => applyPreset(preset)}
+                  >
+                    {t(key)}
+                  </Button>
+                ))}
+              </div>
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-zinc-500">{t('entries.from')}</Label>
-              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="w-[150px]" />
+              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }} className="w-[150px]" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-zinc-500">{t('entries.to')}</Label>
-              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="w-[150px]" />
+              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-[150px]" />
             </div>
             <div className="flex-1" />
+            {user && (
+              <Button
+                variant="outline"
+                size="sm"
+                title={t('entries.exportMine')}
+                onClick={() => window.open(exportApi.entriesUrl(factionId, { user_id: user.id }), '_blank')}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />{t('entries.exportMine')}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => {
               const url = exportApi.entriesUrl(factionId, { date_from: dateFrom || undefined, date_to: dateTo || undefined, item_type_id: itemTypeIdFilter === 'all' ? undefined : itemTypeIdFilter });
               window.open(url, '_blank');
@@ -331,7 +402,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                       <TableHead>{t('common.description')}</TableHead>
                       {customFields.length > 0 && <TableHead>{t('entries.custom')}</TableHead>}
                       <TableHead>{t('common.date')}</TableHead>
-                      {isAdmin && <TableHead className="w-[80px]"></TableHead>}
+                      {(isAdmin || entries.some((e) => isUndoable(e))) && <TableHead className="w-[80px]"></TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -372,15 +443,25 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                           </TableCell>
                         )}
                         <TableCell className="text-sm text-zinc-500 tabular-nums">{entry.entryDate}</TableCell>
-                        {isAdmin && (
+                        {(isAdmin || isUndoable(entry)) && (
                           <TableCell>
                             <div className="flex items-center gap-0.5">
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => openEditDialog(entry)}>
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => { setDeleteEntryId(entry.id); setDeleteOpen(true); }}>
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                              {isAdmin && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => openEditDialog(entry)}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {/* Admins delete anything; a member gets a five-minute undo on their own rows. */}
+                              {(isAdmin || isUndoable(entry)) && (
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-7 w-7 text-zinc-500 hover:text-red-400"
+                                  title={isAdmin ? undefined : t('entries.undo')}
+                                  onClick={() => { setDeleteEntryId(entry.id); setDeleteOpen(true); }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         )}
@@ -420,6 +501,21 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>{t('entries.itemType')}</Label>
+              {recentTypeIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {recentTypeIds.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => setNewItemTypeId(it.id)}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'}`}
+                    >
+                      <ItemIcon src={it.imageUrl} className="size-3.5" />
+                      {it.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               <SearchableSelect
                 value={newItemTypeId}
                 onValueChange={setNewItemTypeId}

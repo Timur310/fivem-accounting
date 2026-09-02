@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
-import { Trophy, Medal, Crown } from 'lucide-react';
+import { Trophy, Medal, Crown, Flame } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import type { ItemType } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
@@ -172,8 +172,18 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     className={`flex items-center gap-4 px-4 py-3 transition-colors duration-100 ${isMe ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'}`}
                     style={isMe ? { borderLeft: `3px solid ${brandColor}` } : { borderLeft: '3px solid transparent' }}
                   >
-                    {/* Rank */}
-                    <div className="w-6 flex justify-center shrink-0">{rankIcon(r.rank)}</div>
+                    {/* Rank + movement vs. the previous period */}
+                    <div className="w-6 flex justify-center shrink-0 relative">
+                      {rankIcon(r.rank)}
+                      {'streakCurrent' in r && r.movement != null && r.movement !== 0 && (
+                        <span
+                          className={`absolute -top-1 -right-1.5 text-[9px] font-medium tabular-nums ${r.movement > 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                          title={t('leaderboard.movement', { count: Math.abs(r.movement) })}
+                        >
+                          {r.movement > 0 ? '▲' : '▼'}{Math.abs(r.movement)}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Avatar + Name */}
                     <Avatar className="h-8 w-8 shrink-0">
@@ -183,6 +193,15 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>
                         {displayName(r)}
+                        {/* A streak only earns colour when it is alive today. */}
+                        {'streakCurrent' in r && (r.streakCurrent ?? 0) >= 3 && (
+                          <span
+                            className={`inline-flex items-center ml-1.5 text-[10px] ${r.streakActiveToday ? 'text-amber-400' : 'text-zinc-500'}`}
+                            title={t('leaderboard.streak', { count: r.streakCurrent ?? 0 })}
+                          >
+                            <Flame className="h-3 w-3 mr-0.5" />{r.streakCurrent}
+                          </span>
+                        )}
                         {isMe && <span className="text-[10px] text-zinc-500 ml-1">{t('leaderboard.you')}</span>}
                       </p>
                       {'factionName' in r && (

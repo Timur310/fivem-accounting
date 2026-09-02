@@ -8,7 +8,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
-import { getPeriodRange } from '../lib/period.js';
+import { getPeriodRange, getPreviousPeriodRange } from '../lib/period.js';
+import { computeStreak } from '../lib/analytics.js';
 
 const router = Router({ mergeParams: true });
 
@@ -98,15 +99,51 @@ router.get('/', async (req: Request, res: Response) => {
     breakdownByUser.set(row.userId, bucket);
   }
 
+  // Movement vs. the previous period: one query over the earlier window,
+  // competition-ranked the same way, so ▲/▼ means a real rank change and not
+  // an artefact of the returned slice. 'all' has no previous period.
+  let prevRankByUser: Map<string, number> | null = null;
+  if (period !== 'all') {
+    const prevRange = getPreviousPeriodRange(period === 'week' ? 'weekly' : 'monthly', new Date());
+    const prevTotals = await db
+      .select({
+        userId: entries.userId,
+        total: sql<string>`COALESCE(SUM(CAST(${entries.amount} AS NUMERIC)), 0)`,
+      })
+      .from(entries)
+      .innerJoin(users, eq(entries.userId, users.id))
+      .where(and(buildWhere([
+        eq(entries.factionId, factionId),
+        eq(entries.isDeleted, false),
+        item_type_id ? eq(entries.itemTypeId, item_type_id) : undefined,
+        gte(entries.entryDate, prevRange.start),
+        lte(entries.entryDate, prevRange.end),
+      ]), eq(users.isSystem, false)))
+      .groupBy(entries.userId)
+      .orderBy(sql`SUM(CAST(${entries.amount} AS NUMERIC)) DESC`);
+    prevRankByUser = new Map();
+    let pt: number | null = null;
+    let pr = 0;
+    for (const row of prevTotals) {
+      const total = Number(row.total);
+      const rank = total === pt ? pr : pr + 1;
+      pt = total;
+      pr = rank;
+      prevRankByUser.set(row.userId, rank);
+    }
+  }
+
   // Equal totals share a rank ("standard competition" ranking), so two members
   // on the same amount are not ordered arbitrarily against each other.
   let lastTotal: number | null = null;
   let lastRank = 0;
-  const rankings = totals.map((row, index) => {
+  const rankings = await Promise.all(totals.map(async (row, index) => {
     const total = Number(row.total);
     const rank = total === lastTotal ? lastRank : index + 1;
     lastTotal = total;
     lastRank = rank;
+    const prevRank = prevRankByUser?.get(row.userId);
+    const streak = await computeStreak(factionId, row.userId);
     return {
       rank,
       userId: row.userId,
@@ -117,8 +154,13 @@ router.get('/', async (req: Request, res: Response) => {
       entryCount: row.entryCount,
       itemBreakdown: breakdownByUser.get(row.userId) ?? {},
       isMe: row.userId === req.user!.id,
+      // Positive = climbed since the previous period. null = was not ranked
+      // then (newcomer), which is a story of its own.
+      movement: prevRank !== undefined ? prevRank - rank : null,
+      streakCurrent: streak?.current ?? 0,
+      streakActiveToday: streak?.activeToday ?? false,
     };
-  });
+  }));
 
   success(res, {
     period: { from: range.from, to: range.to, label: range.label },

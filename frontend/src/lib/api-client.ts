@@ -566,12 +566,13 @@ export const chartsApi = {
 
 export const exportApi = {
   /** Returns the full URL for the browser to download directly */
-  entriesUrl: (factionId: string, params?: { date_from?: string; date_to?: string; item_type_id?: string }) => {
+  entriesUrl: (factionId: string, params?: { date_from?: string; date_to?: string; item_type_id?: string; user_id?: string }) => {
     const base = `${API_BASE}/api/v1/factions/${factionId}/export/entries`;
     const query = new URLSearchParams();
     if (params?.date_from) query.set('date_from', params.date_from);
     if (params?.date_to) query.set('date_to', params.date_to);
     if (params?.item_type_id) query.set('item_type_id', params.item_type_id);
+    if (params?.user_id) query.set('user_id', params.user_id);
     const qs = query.toString();
     return qs ? `${base}?${qs}` : base;
   },

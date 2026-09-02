@@ -35,6 +35,8 @@ router.get('/entries', async (req: Request, res: Response) => {
   const dateFrom = req.query.date_from as string | undefined;
   const dateTo = req.query.date_to as string | undefined;
   const itemTypeId = req.query.item_type_id as string | undefined;
+  // Optional personal export: a member pulls their own rows for their own bookkeeping.
+  const userId = req.query.user_id as string | undefined;
 
   // Validate date formats if provided
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,6 +53,7 @@ router.get('/entries', async (req: Request, res: Response) => {
     eq(entries.factionId, factionId),
     eq(entries.isDeleted, false),
     itemTypeId ? eq(entries.itemTypeId, itemTypeId) : undefined,
+    userId ? eq(entries.userId, userId) : undefined,
     dateFrom ? gte(entries.entryDate, dateFrom) : undefined,
     dateTo ? lte(entries.entryDate, dateTo) : undefined,
   ]);
