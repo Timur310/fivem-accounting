@@ -413,8 +413,9 @@ export function AppShell() {
     <div className="min-h-screen flex bg-background dot-grid" style={brandStyle}>
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/[0.06] bg-[#09090b] transition-all duration-300 lg:relative lg:z-auto ${sidebarOpen ? 'w-60' : 'w-0 lg:w-[52px]'}`}
-      >
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/[0.06] bg-[#09090b] transition-all duration-300 lg:sticky lg:top-0 lg:h-screen lg:z-auto ${sidebarOpen ? 'w-60' : 'w-0 lg:w-[52px]'}`}>
+        {/* Nav scrolls inside the sidebar; the rail itself stays pinned, so the
+            collapse button is reachable on pages of any length. */}
         {/* Sidebar Header */}
         <div className="flex h-14 items-center gap-2.5 border-b border-white/[0.06] px-3">
           {sidebarOpen && (
@@ -585,7 +586,9 @@ export function AppShell() {
 
         {/* Page Content */}
         <main className="flex-1 p-4 md:p-6 overflow-auto">
-          <div className="animate-fade-in">
+          {/* Capped reading width: on a wide desktop the views otherwise
+              stretch edge-to-edge and the first glance has nowhere to land. */}
+          <div className="animate-fade-in w-full max-w-7xl mx-auto">
             {renderView()}
           </div>
         </main>

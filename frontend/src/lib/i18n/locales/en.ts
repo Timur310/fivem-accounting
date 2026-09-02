@@ -575,6 +575,8 @@ export const en = {
   'dashboard.quickLog': 'Quick log',
   'dashboard.quickLogPrefilled': 'pre-filled from your last entry',
   'dashboard.quickLogSubmit': 'Log it',
+  'dashboard.showAnalytics': 'Show charts & export',
+  'dashboard.hideAnalytics': 'Hide charts & export',
   'entries.increase': 'Increase',
   'entries.decrease': 'Decrease',
   'quota.scopeMemberHint': 'Only the selected member’s contributions count toward this quota.',

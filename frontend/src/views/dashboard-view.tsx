@@ -8,14 +8,13 @@ import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/s
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn } from 'lucide-react';
-import { todayLocalDateString } from '@/lib/format';
 import type { ItemType } from '@/lib/api-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { List, TrendingUp, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock } from 'lucide-react';
+import { List, TrendingUp, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock, ChevronDown } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
@@ -106,6 +105,10 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
   const quickTypeOptions: SearchableSelectOption[] = (itemTypes as ItemType[])
     .filter((it) => it.isActive)
     .map((it) => ({ value: it.id, label: it.name }));
+
+  // Charts and export are reference material, not the daily glance — folded
+  // away by default so the page reads in one screenful.
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -549,43 +552,45 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
         </Card>
       )}
 
-      {/* ══ Export ══ */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center gap-3">
-            <Download className="h-4 w-4 text-zinc-500" />
-            <span className="text-sm text-zinc-400">{t('common.export')}</span>
-            <div className="flex gap-2 ml-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(exportApi.entriesUrl(factionId), '_blank', 'noopener,noreferrer')}
-              >
-                {t('dashboard.exportEntries')}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(exportApi.quotaReportUrl(factionId), '_blank', 'noopener,noreferrer')}
-              >
-                {t('dashboard.exportQuotaReport')}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ══ Charts ══ */}
+      {/* ══ Analytics & Export — folded away by default ══ */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
-            <BarChart3 className="h-4 w-4 text-zinc-400" />
-            {t('dashboard.analytics')}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+              <BarChart3 className="h-4 w-4 text-zinc-400" />
+              {t('dashboard.analytics')}
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-xs text-zinc-400" onClick={() => setAnalyticsOpen((v) => !v)}>
+              {analyticsOpen ? t('dashboard.hideAnalytics') : t('dashboard.showAnalytics')}
+              <ChevronDown className={`h-3.5 w-3.5 ml-1.5 transition-transform duration-200 ${analyticsOpen ? 'rotate-180' : ''}`} />
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent>
-          <DashboardCharts factionId={factionId} brandColor={brandColor} />
-        </CardContent>
+        {analyticsOpen && (
+          <CardContent className="space-y-6">
+            <DashboardCharts factionId={factionId} brandColor={brandColor} />
+            <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06]">
+              <Download className="h-4 w-4 text-zinc-500" />
+              <span className="text-sm text-zinc-400">{t('common.export')}</span>
+              <div className="flex gap-2 ml-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(exportApi.entriesUrl(factionId), '_blank', 'noopener,noreferrer')}
+                >
+                  {t('dashboard.exportEntries')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(exportApi.quotaReportUrl(factionId), '_blank', 'noopener,noreferrer')}
+                >
+                  {t('dashboard.exportQuotaReport')}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   );

@@ -569,6 +569,8 @@ export const hu: Translations = {
   'dashboard.quickLog': 'Gyors rögzítés',
   'dashboard.quickLogPrefilled': 'előtöltve az utolsó bejegyzésedből',
   'dashboard.quickLogSubmit': 'Rögzítés',
+  'dashboard.showAnalytics': 'Grafikonok és export mutatása',
+  'dashboard.hideAnalytics': 'Grafikonok és export elrejtése',
   'entries.increase': 'Növelés',
   'entries.decrease': 'Csökkentés',
   'quota.scopeMemberHint': 'Csak a kiválasztott tag hozzájárulása számít ebbe a kvótába.',
