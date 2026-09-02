@@ -214,7 +214,8 @@ ever signed in.
 
 **`factions`** — `name` (unique), `description`, `brand_color`, `custom_fields`
 (jsonb), `ranks` (jsonb), `inactivity_threshold_days`, `strike_expiry_days`
-(jsonb, per severity), `created_by`, `created_at`, `is_active`.
+(jsonb, per severity), `strike_escalation` (jsonb, per severity), `created_by`,
+`created_at`, `is_active`.
 
 `ranks` is where faction-level authorisation lives: each entry is
 `{ name, level, permissions[] }`, and `permissions` holds names from
@@ -253,8 +254,9 @@ reads as expired without anything having written to it.
 **`member_notes`** — admin-only notes on a member. Never shown to their subject.
 
 **`quotas`** — `faction_id`, `item_type_id`, `target_amount`, `period_type`
-(`weekly` / `monthly`), `period_start`, `target_user_id` (null = faction-wide),
-`is_active`.
+(`weekly` / `monthly`), `period_start`, `scope` (`faction` / `everyone` /
+`member`), `target_user_id` (set only for `member`; null means the quota is
+not pinned to one person), `is_active`.
 
 **`audit_logs`** — `user_id`, `faction_id`, `action`, `entity_type`,
 `entity_id`, `details` (jsonb, before/after), `ip_address`, `created_at`.
@@ -566,7 +568,9 @@ given the permission afterwards. Deleting works at any status; editing does not,
 because a completed or rejected withdrawal is part of the ledger.
 
 **Even split** distributes an amount across the roster, rounding down per member
-and leaving the remainder in the vault.
+and leaving the remainder in the vault. An optional `memberUserIds` list (every
+id must be a faction member) narrows the split to a picked crew instead —
+the per-member share and the remainder are computed over that subset.
 
 ### 8.4 Treasury and Laundering
 
@@ -606,17 +610,39 @@ on the roster. The name lives on the user, not the membership, so an edit reache
 every faction that player belongs to — the dialog says so, and the audit log
 records before and after.
 
+Escalation is a per-faction setting alongside strike expiry:
+`strike_escalation` holds, per severity, an active-strike count at which the
+roster flags a member for kick consideration (`null` disables a severity). The
+roster carries per-severity active counts for admins (`activeStrikesBySeverity`)
+alongside the total, and renders the flag from those two — nothing is written
+and nobody is kicked automatically; the decision stays with the leadership.
+
 ### 8.6 Quotas, Reports and Audit
 
-Quotas target an item type over a weekly or monthly period, faction-wide or for
-one member. Every quota response also carries `previousPeriod` — the outcome of
-the period before the current one, with its dates, amounts and a `met` flag —
-because progress resets when a period rolls over and this is the only trace a
+Quotas target an item type over a weekly or monthly period. The `scope` decides
+what the target measures:
+
+- **`faction`** — everyone's contributions sum into one shared target.
+- **`everyone`** — the same target applies to each member individually:
+  progress is read from the viewer's own ledger, so every member sees their
+  personal bar against the shared number.
+- **`member`** — one named member's personal target (`target_user_id`).
+
+Every quota response also carries `previousPeriod` — the outcome of the period
+before the current one, with its dates, amounts and a `met` flag — because
+progress resets when a period rolls over and this is the only trace a
 just-ended period leaves. It is reported only when the quota already existed
 back then. The dashboard shows unmet previous periods on an alert card, and the
-quota list in Settings shows the same per row. Reports summarise a period or
-compare two. Every write that matters lands in the audit log with a before/after
-payload.
+quota list in Settings shows the same per row.
+
+`GET /quotas/{id}/history` returns every completed period since the quota began
+(dates, amounts, `met`) plus a `{ met, total }` summary — "9 of 12 weeks met".
+It is computed on read from a single grouped query, so there is no rollover
+scheduler and no second source of truth. For `everyone` quotas it answers for
+the caller unless `?user_id=` names a member.
+
+Reports summarise a period or compare two. Every write that matters lands in
+the audit log with a before/after payload.
 
 ### 8.7 Interface Language
 
@@ -693,6 +719,11 @@ seconds and on tab focus, so it leaves by itself once a membership appears. The
 in-game name prompt renders over it, so a first-time player sets their character
 name and then waits. A superadmin is exempt: with no memberships they are exactly
 the person who has to create the faction.
+
+**Quick log:** logging happens mid-roleplay on phones, so the dashboard opens
+with a pre-filled card — the member's own last entry supplies the item type and
+amount, and ± steppers adjust by 1000 for currency and 1 for goods. The entries
+dialog pre-fills the same way, so logging the same haul again is two clicks.
 
 ### 9.2 Views
 

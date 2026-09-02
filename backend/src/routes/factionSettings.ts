@@ -27,6 +27,14 @@ const updateSettingsSchema = z.object({
     minor: z.number().int().min(1).max(3650).nullable(),
     major: z.number().int().min(1).max(3650).nullable(),
   }).optional(),
+  // Discipline escalation: when a member's ACTIVE strikes of a severity reach
+  // the threshold, the roster flags them for kick consideration. null (or an
+  // omitted severity) disables the check.
+  strikeEscalation: z.object({
+    warning: z.number().int().min(1).max(99).nullable(),
+    minor: z.number().int().min(1).max(99).nullable(),
+    major: z.number().int().min(1).max(99).nullable(),
+  }).optional(),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   customFields: z.array(z.object({
     name: z.string().min(1).max(100),
@@ -48,6 +56,7 @@ router.get('/', async (req: Request, res: Response) => {
       ranks: factions.ranks,
       inactivityThresholdDays: factions.inactivityThresholdDays,
       strikeExpiryDays: factions.strikeExpiryDays,
+      strikeEscalation: factions.strikeEscalation,
       brandColor: factions.brandColor,
       customFields: factions.customFields,
     })
@@ -65,6 +74,8 @@ router.get('/', async (req: Request, res: Response) => {
     inactivityThresholdDays: faction.inactivityThresholdDays,
     // Surface the effective values so the UI never has to know the defaults.
     strikeExpiryDays: faction.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
+    // null severities mean the escalation check is off for them.
+    strikeEscalation: faction.strikeEscalation ?? { warning: null, minor: null, major: null },
     brandColor: faction.brandColor,
     customFields: faction.customFields ?? [],
   });
@@ -98,6 +109,7 @@ router.patch(
         ranks: factions.ranks,
         inactivityThresholdDays: factions.inactivityThresholdDays,
         strikeExpiryDays: factions.strikeExpiryDays,
+        strikeEscalation: factions.strikeEscalation,
         brandColor: factions.brandColor,
         customFields: factions.customFields,
       })
@@ -164,6 +176,9 @@ router.patch(
     if (parsed.data.strikeExpiryDays !== undefined) {
       updates.strikeExpiryDays = parsed.data.strikeExpiryDays;
     }
+    if (parsed.data.strikeEscalation !== undefined) {
+      updates.strikeEscalation = parsed.data.strikeEscalation;
+    }
     if (parsed.data.brandColor !== undefined) updates.brandColor = parsed.data.brandColor;
     if (parsed.data.customFields !== undefined) {
       const names = parsed.data.customFields.map((f) => f.name);
@@ -183,6 +198,7 @@ router.patch(
           ranks: factions.ranks,
           inactivityThresholdDays: factions.inactivityThresholdDays,
           strikeExpiryDays: factions.strikeExpiryDays,
+          strikeEscalation: factions.strikeEscalation,
           brandColor: factions.brandColor,
           customFields: factions.customFields,
         });
@@ -216,6 +232,7 @@ router.patch(
           ranks: existing.ranks,
           inactivityThresholdDays: existing.inactivityThresholdDays,
           strikeExpiryDays: existing.strikeExpiryDays,
+        strikeEscalation: existing.strikeEscalation,
           brandColor: existing.brandColor,
           customFields: existing.customFields,
         },
@@ -229,6 +246,7 @@ router.patch(
       ranks: updated?.ranks ?? [],
       inactivityThresholdDays: updated?.inactivityThresholdDays,
       strikeExpiryDays: updated?.strikeExpiryDays ?? DEFAULT_STRIKE_EXPIRY_DAYS,
+    strikeEscalation: updated?.strikeEscalation ?? { warning: null, minor: null, major: null },
       brandColor: updated?.brandColor ?? null,
       customFields: updated?.customFields ?? [],
       ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),

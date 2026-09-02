@@ -102,6 +102,8 @@ export interface Member {
   lastEntryDate: string | null;
   daysInactive: number | null;
   activeStrikeCount?: number;
+  /** Admin only. Feeds the kick-suggestion escalation flag. */
+  activeStrikesBySeverity?: { warning: number; minor: number; major: number };
 }
 
 // ── Item Types ──
@@ -242,6 +244,8 @@ export interface Quota {
   periodStart: string;
   isActive: boolean;
   createdAt: string;
+  /** 'faction' sums everyone into one target; 'everyone' measures each member separately; 'member' targets one. */
+  scope?: 'faction' | 'everyone' | 'member';
   targetUserId: string | null;
   targetUsername: string | null;
   targetAvatarUrl: string | null;
@@ -265,7 +269,21 @@ export interface CreateQuotaInput {
   targetAmount: string;
   periodType: 'weekly' | 'monthly';
   periodStart: string;
+  scope?: 'faction' | 'everyone' | 'member';
   targetUserId?: string | null;
+}
+
+export interface QuotaHistoryPeriod {
+  periodStart: string;
+  periodEnd: string;
+  currentAmount: number;
+  targetAmount: number;
+  met: boolean;
+}
+
+export interface QuotaHistoryData {
+  periods: QuotaHistoryPeriod[];
+  summary: { met: number; total: number };
 }
 
 export interface UpdateQuotaInput {
@@ -273,6 +291,7 @@ export interface UpdateQuotaInput {
   periodType?: 'weekly' | 'monthly';
   periodStart?: string;
   isActive?: boolean;
+  scope?: 'faction' | 'everyone' | 'member';
   targetUserId?: string | null;
 }
 
@@ -484,6 +503,8 @@ export interface EvenSplitInput {
   totalAmount: string;
   description?: string;
   payoutDate?: string;
+  /** Omit to split across the whole roster; given, only these members share. */
+  memberUserIds?: string[];
 }
 
 export interface EvenSplitResult {
@@ -912,6 +933,12 @@ export interface FactionSettings {
     minor: number | null;
     major: number | null;
   };
+  /** Active-strike counts that flag a member for kick consideration; null disables a severity. */
+  strikeEscalation: {
+    warning: number | null;
+    minor: number | null;
+    major: number | null;
+  };
   brandColor: string | null;
   customFields: { name: string; required: boolean }[];
 }
@@ -919,6 +946,11 @@ export interface FactionSettings {
 export interface UpdateFactionSettingsInput {
   ranks?: FactionRank[];
   inactivityThresholdDays?: number;
+  strikeEscalation?: {
+    warning: number | null;
+    minor: number | null;
+    major: number | null;
+  };
   strikeExpiryDays?: {
     warning: number | null;
     minor: number | null;

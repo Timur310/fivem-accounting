@@ -84,6 +84,7 @@ router.get('/', async (req: Request, res: Response) => {
   const recentEntries = await db
     .select({
       id: entries.id,
+      userId: entries.userId,
       amount: entries.amount,
       description: entries.description,
       entryDate: entries.entryDate,

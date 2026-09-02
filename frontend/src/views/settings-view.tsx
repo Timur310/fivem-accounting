@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
@@ -41,6 +41,7 @@ import type { TranslationKey } from '@/lib/i18n';
 
 const SCOPE_KEYS: Record<string, TranslationKey> = {
   faction: 'quota.scope.faction',
+  everyone: 'quota.scope.everyone',
   member: 'quota.scope.member',
 };
 
@@ -536,13 +537,19 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Quota | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<Quota | null>(null);
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ['quota-history', factionId, historyTarget?.id],
+    queryFn: () => quotasApi.history(factionId, historyTarget!.id),
+    enabled: !!historyTarget,
+  });
 
   // Create form — Scope lets you target the whole faction (the default) or a
   // single member. Per-member quotas only count that member's contributions.
   const [newItemTypeId, setNewItemTypeId] = useState('');
   const [newTargetAmount, setNewTargetAmount] = useState('');
   const [newPeriodType, setNewPeriodType] = useState<'weekly' | 'monthly'>('weekly');
-  const [newScope, setNewScope] = useState<'faction' | 'member'>('faction');
+  const [newScope, setNewScope] = useState<'faction' | 'everyone' | 'member'>('faction');
   const [newTargetUserId, setNewTargetUserId] = useState<string>('');
   const [newPeriodStart, setNewPeriodStart] = useState(() => {
     const d = new Date();
@@ -620,6 +627,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
         targetAmount: newTargetAmount,
         periodType: newPeriodType,
         periodStart: newPeriodStart,
+        scope: newScope,
         targetUserId: newScope === 'member' ? newTargetUserId : null,
       }),
     onSuccess: () => {
@@ -700,6 +708,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
   };
 
   const scopeLabel = (q: Quota): string => {
+    if (q.scope === 'everyone') return t('quota.scope.everyone');
     if (!q.targetUserId) return t('quota.scope.faction');
     if (q.targetUsername) return q.targetUsername;
     const m = members.find((mm) => mm.userId === q.targetUserId);
@@ -771,6 +780,10 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                           <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
                             {scopeLabel(q)}
                           </Badge>
+                        ) : q.scope === 'everyone' ? (
+                          <Badge variant="outline" className="text-[10px] border-violet-500/30 text-violet-400 bg-violet-500/10">
+                            {t('quota.scope.everyone')}
+                          </Badge>
                         ) : (
                           <span className="text-xs text-zinc-500">{t('quota.scope.faction')}</span>
                         )}
@@ -822,6 +835,15 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={t('quota.history')}
+                            onClick={() => setHistoryTarget(q)}
+                          >
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(q)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -843,6 +865,56 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
           )}
         </CardContent>
       </Card>
+
+      {/* Quota History Dialog */}
+      <Dialog open={!!historyTarget} onOpenChange={(open) => { if (!open) setHistoryTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('quota.history')}</DialogTitle>
+            <DialogDescription>
+              {historyTarget ? `${historyTarget.itemTypeName} · ${PERIOD_TYPE_KEYS[historyTarget.periodType] ? t(PERIOD_TYPE_KEYS[historyTarget.periodType]) : historyTarget.periodType}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {historyLoading ? (
+            <div className="space-y-2"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-full" /></div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-300">
+                {t('quota.historySummary', {
+                  met: historyData?.summary.met ?? 0,
+                  total: historyData?.summary.total ?? 0,
+                })}
+              </p>
+              <div className="max-h-[300px] overflow-y-auto rounded-lg border border-white/[0.06]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('quota.period')}</TableHead>
+                      <TableHead>{t('quota.progress')}</TableHead>
+                      <TableHead className="w-[70px]">{t('common.status')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(historyData?.periods ?? []).slice().reverse().map((p) => (
+                      <TableRow key={p.periodStart}>
+                        <TableCell className="text-xs text-zinc-400 tabular-nums whitespace-nowrap">{p.periodStart} — {p.periodEnd}</TableCell>
+                        <TableCell className="text-xs tabular-nums text-zinc-300">
+                          {formatAmount(p.currentAmount, historyTarget!.itemUnit, historyTarget!.itemIsCurrency)} {t('quota.ofTarget', { amount: formatAmount(p.targetAmount, historyTarget!.itemUnit, historyTarget!.itemIsCurrency) })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={p.met ? 'border-emerald-500/30 text-emerald-400' : 'border-amber-500/30 text-amber-400'}>
+                            {p.met ? t('quota.met') : t('quota.notMet')}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Quota Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -869,13 +941,17 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                 aria-label={t('quota.scope')}
                 value={newScope}
                 onValueChange={(v) => {
-                  setNewScope(v as 'faction' | 'member');
+                  setNewScope(v as 'faction' | 'everyone' | 'member');
                   if (v === 'faction') setNewTargetUserId('');
                 }}
                 options={scopeOptions}
               />
               <p className="text-xs text-zinc-500">
-                {newScope === 'faction' ? t('quota.scopeFactionHint') : t('quota.scopeMemberHint')}
+                {newScope === 'faction'
+                  ? t('quota.scopeFactionHint')
+                  : newScope === 'everyone'
+                    ? t('quota.scopeEveryoneHint')
+                    : t('quota.scopeMemberHint')}
               </p>
             </div>
             {newScope === 'member' && (
@@ -1202,6 +1278,7 @@ function FactionSettingsSection({
   const [ranks, setRanks] = useState<FactionRank[]>([]);
   const [inactivityThreshold, setInactivityThreshold] = useState(7);
   const [strikeExpiry, setStrikeExpiry] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: 30, minor: 90, major: null });
+  const [strikeEscalation, setStrikeEscalation] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: null, minor: null, major: null });
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1211,6 +1288,7 @@ function FactionSettingsSection({
       setRanks(settings.ranks);
       setInactivityThreshold(settings.inactivityThresholdDays);
       setStrikeExpiry(settings.strikeExpiryDays);
+      setStrikeEscalation(settings.strikeEscalation);
     }
   }, [settings]);
 
@@ -1252,6 +1330,7 @@ function FactionSettingsSection({
         ranks: ranks.map(r => ({ ...r, level: Number(r.level) })),
         inactivityThresholdDays: inactivityThreshold,
         strikeExpiryDays: strikeExpiry,
+        strikeEscalation,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
@@ -1418,6 +1497,36 @@ function FactionSettingsSection({
                   className="tabular-nums"
                 />
                 <span className="text-xs text-zinc-600">{t('common.days')}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Strike Escalation ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm text-zinc-200">{t('settings.strikeEscalation')}</CardTitle>
+          <p className="text-xs text-zinc-500 mt-1">{t('settings.strikeEscalationHint')}</p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3 max-w-sm">
+            {(['warning', 'minor', 'major'] as const).map((sev) => (
+              <div key={sev} className="flex items-center gap-3">
+                <span className="text-sm text-zinc-300 w-14">{t(SEVERITY_KEYS[sev])}</span>
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder={t('settings.never')}
+                  value={strikeEscalation[sev] ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStrikeEscalation(prev => ({ ...prev, [sev]: val === '' ? null : Number(val) }));
+                    markChanged();
+                  }}
+                  className="tabular-nums"
+                />
+                <span className="text-xs text-zinc-600">{t('settings.escalationUnit')}</span>
               </div>
             ))}
           </div>

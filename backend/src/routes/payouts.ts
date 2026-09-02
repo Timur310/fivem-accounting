@@ -62,6 +62,9 @@ const evenSplitSchema = z.object({
   totalAmount: amountField,
   description: z.string().max(500).optional(),
   payoutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // When given, only these members receive a share (an even split across a
+  // picked crew rather than the whole roster). Every id must be a member.
+  memberUserIds: z.array(z.string().uuid()).min(1).max(500).optional(),
 });
 
 /**
@@ -283,7 +286,7 @@ router.post('/even-split', requirePermission('manage_payouts'), async (req: Requ
     return;
   }
 
-  const { itemTypeId, totalAmount, description, payoutDate } = parsed.data;
+  const { itemTypeId, totalAmount, description, payoutDate, memberUserIds } = parsed.data;
 
   const itemType = await findFactionItemType(factionId, itemTypeId);
   if (!itemType) {
@@ -297,10 +300,22 @@ router.post('/even-split', requirePermission('manage_payouts'), async (req: Requ
     return;
   }
 
-  const members = await db
+  // A named subset splits across exactly those members; no names means the
+  // whole roster, as before.
+  let memberList = await db
     .select({ userId: factionMembers.userId })
     .from(factionMembers)
     .where(eq(factionMembers.factionId, factionId));
+  if (memberUserIds) {
+    const memberIds = new Set(memberList.map((m) => m.userId));
+    const unknown = memberUserIds.filter((id) => !memberIds.has(id));
+    if (unknown.length > 0) {
+      error(res, 'VALIDATION_ERROR', 'Some recipients are not members of this faction');
+      return;
+    }
+    memberList = memberList.filter((m) => memberUserIds.includes(m.userId));
+  }
+  const members = memberList;
 
   if (members.length === 0) {
     error(res, 'VALIDATION_ERROR', 'Faction has no members to distribute to');
