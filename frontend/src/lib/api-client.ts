@@ -32,6 +32,11 @@ import type {
   UpdatePayoutInput,
   EvenSplitInput,
   EvenSplitResult,
+  ExpenseListData,
+  Expense,
+  CreateExpenseInput,
+  UpdateExpenseInput,
+  ConfigImportResult,
   TreasuryData,
   MemberProfile,
   MemberHistoryEntry,
@@ -451,6 +456,37 @@ export const treasuryApi = {
       .then(unwrap),
 };
 
+// ── Expenses ──
+
+export const expensesApi = {
+  list: (factionId: string, params?: {
+    category?: string;
+    item_type_id?: string;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    page_size?: number;
+  }) =>
+    api
+      .get<ApiSuccessResponse<ExpenseListData>>(`/factions/${factionId}/expenses`, { params })
+      .then(unwrap),
+
+  create: (factionId: string, input: CreateExpenseInput) =>
+    api
+      .post<ApiSuccessResponse<Expense>>(`/factions/${factionId}/expenses`, input)
+      .then(unwrap),
+
+  update: (factionId: string, expenseId: string, input: UpdateExpenseInput) =>
+    api
+      .patch<ApiSuccessResponse<Expense>>(`/factions/${factionId}/expenses/${expenseId}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, expenseId: string) =>
+    api.delete<ApiSuccessResponse<{ id: string; deleted: boolean }>>(
+      `/factions/${factionId}/expenses/${expenseId}`,
+    ),
+};
+
 // ── Provisional users (superadmin) ──
 
 /** The whole population, for the superadmin roster. Superadmin only. */
@@ -521,6 +557,32 @@ export const exportApi = {
 
   quotaReportUrl: (factionId: string) =>
     `${API_BASE}/api/v1/factions/${factionId}/export/quota-report`,
+};
+
+// ── Config import/export (settings: item types, quotas, ranks) ──
+
+export const configApi = {
+  itemTypesUrl: (factionId: string) =>
+    `${API_BASE}/api/v1/factions/${factionId}/config/item-types`,
+  quotasUrl: (factionId: string) =>
+    `${API_BASE}/api/v1/factions/${factionId}/config/quotas`,
+  ranksUrl: (factionId: string) =>
+    `${API_BASE}/api/v1/factions/${factionId}/config/ranks`,
+
+  importItemTypes: (factionId: string, csv: string) =>
+    api
+      .post<ApiSuccessResponse<ConfigImportResult>>(`/factions/${factionId}/config/item-types`, { csv })
+      .then(unwrap),
+
+  importQuotas: (factionId: string, csv: string) =>
+    api
+      .post<ApiSuccessResponse<ConfigImportResult>>(`/factions/${factionId}/config/quotas`, { csv })
+      .then(unwrap),
+
+  importRanks: (factionId: string, csv: string) =>
+    api
+      .post<ApiSuccessResponse<ConfigImportResult>>(`/factions/${factionId}/config/ranks`, { csv })
+      .then(unwrap),
 };
 
 // ── Admin Analytics ──

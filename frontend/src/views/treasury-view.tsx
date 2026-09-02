@@ -1,35 +1,52 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { treasuryApi } from '@/lib/api-client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { treasuryApi, expensesApi, itemTypesApi, apiErrorMessage } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
 import {
   Wallet, TrendingDown, Clock, ArrowDownToLine, AlertTriangle, Search,
-  ArrowDownWideNarrow, ArrowUpNarrowWide,
+  ArrowDownWideNarrow, ArrowUpNarrowWide, Receipt, Plus, Trash2, Pencil,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import { formatAmount, displayName, formatNumber } from '@/lib/format';
+import { formatAmount, displayName, formatNumber, todayLocalDateString } from '@/lib/format';
 import { getIntlLocale } from '@/lib/i18n';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
+import { useToast } from '@/hooks/use-toast';
+import type { TranslationKey } from '@/lib/i18n';
+import type { ItemType, ExpenseCategory, Expense } from '@/lib/api-types';
+import { EXPENSE_CATEGORIES } from '@/lib/api-types';
 
 interface Props {
   factionId: string;
+  canManageExpenses?: boolean;
 }
+
+/** Category names as the API spells them, with their label keys. */
+const EXPENSE_CATEGORY_KEYS: Record<ExpenseCategory, TranslationKey> = {
+  warehouse: 'expenses.category.warehouse',
+  utilities: 'expenses.category.utilities',
+  supplies: 'expenses.category.supplies',
+  other: 'expenses.category.other',
+};
 
 type SortField = 'name' | 'balance';
 type SortDirection = 'asc' | 'desc';
 
-export function TreasuryView({ factionId }: Props) {
+export function TreasuryView({ factionId, canManageExpenses = false }: Props) {
   const { t } = useTranslation();
   const brandColor = useAppStore((s) => s.brandColor);
 
@@ -332,6 +349,9 @@ export function TreasuryView({ factionId }: Props) {
         </Card>
       )}
 
+      {/* ══ Running Expenses ══ */}
+      <ExpensesSection factionId={factionId} canManage={canManageExpenses} />
+
       {/* ══ Recent Completed Payouts ══ */}
       <Card>
         <CardHeader>
@@ -369,5 +389,256 @@ export function TreasuryView({ factionId }: Props) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ── Running Expenses ──────────────────────────────────
+// Warehouse rent, utilities and the like: value that left the vault without
+// any member receiving it. Listed here rather than in a view of its own,
+// because the balance cards above already carry their effect.
+
+function ExpensesSection({ factionId, canManage }: { factionId: string; canManage: boolean }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [formItemType, setFormItemType] = useState('');
+  const [formCategory, setFormCategory] = useState<ExpenseCategory>('other');
+  const [formAmount, setFormAmount] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formDate, setFormDate] = useState(todayLocalDateString());
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['expenses', factionId],
+    queryFn: () => expensesApi.list(factionId, { page_size: 100 }),
+    staleTime: 0,
+  });
+
+  // Only needed to fill the picker; skip the request when the reader can no
+  // open the dialog anyway.
+  const { data: itemTypes = [] } = useQuery({
+    queryKey: ['item-types', factionId],
+    queryFn: () => itemTypesApi.list(factionId),
+    enabled: canManage,
+  });
+
+  const resetForm = () => {
+    setEditId(null);
+    setFormItemType('');
+    setFormCategory('other');
+    setFormAmount('');
+    setFormDescription('');
+    setFormDate(todayLocalDateString());
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setDialogOpen(true);
+  };
+
+  const openEdit = (e: Expense) => {
+    setEditId(e.id);
+    setFormItemType(e.itemTypeId);
+    setFormCategory(e.category);
+    setFormAmount(e.amount);
+    setFormDescription(e.description ?? '');
+    setFormDate(e.expenseDate);
+    setDialogOpen(true);
+  };
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['expenses', factionId] });
+    // The balance cards above the section read from the treasury query.
+    queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const body = {
+        itemTypeId: formItemType,
+        category: formCategory,
+        amount: formAmount,
+        description: formDescription.trim() || undefined,
+        expenseDate: formDate,
+      };
+      return editId
+        ? expensesApi.update(factionId, editId, body)
+        : expensesApi.create(factionId, body);
+    },
+    onSuccess: () => {
+      invalidate();
+      setDialogOpen(false);
+      toast({ title: editId ? t('expenses.updated') : t('expenses.created') });
+    },
+    onError: (err: unknown) => {
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (expenseId: string) => expensesApi.remove(factionId, expenseId),
+    onSuccess: () => {
+      invalidate();
+      toast({ title: t('expenses.deleted') });
+    },
+    onError: (err: unknown) => {
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const expenses = data?.expenses ?? [];
+  const categoryTotals = data?.categoryTotals ?? [];
+
+  const itemTypeOptions: SearchableSelectOption[] = useMemo(
+    () => itemTypes.map((it: ItemType) => ({ value: it.id, label: it.name })),
+    [itemTypes],
+  );
+
+  const categoryOptions: SearchableSelectOption[] = useMemo(
+    () => EXPENSE_CATEGORIES.map((c) => ({ value: c, label: t(EXPENSE_CATEGORY_KEYS[c]) })),
+    [t],
+  );
+
+  const selectedItemType = itemTypes.find((it: ItemType) => it.id === formItemType);
+
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
+        <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+          <Receipt className="h-4 w-4 text-zinc-400" />
+          {t('treasury.expenses')}
+        </CardTitle>
+        {canManage && (
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            {t('expenses.add')}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        {/* Totals per category over the filtered set the list below shows. */}
+        {categoryTotals.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {categoryTotals.map((ct) => (
+              <Badge key={ct.category} variant="outline" className="text-[11px] text-zinc-400">
+                {EXPENSE_CATEGORY_KEYS[ct.category] ? t(EXPENSE_CATEGORY_KEYS[ct.category]) : ct.category}
+                : <span className="tabular-nums text-zinc-200">{formatNumber(ct.total)}</span>
+              </Badge>
+            ))}
+          </div>
+        )}
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : expenses.length === 0 ? (
+          <p className="text-zinc-600 text-sm text-center py-8">{t('expenses.none')}</p>
+        ) : (
+          <div className="space-y-1">
+            {expenses.map((e) => (
+              <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                <ItemIcon src={e.itemImageUrl} className="size-7 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm">
+                    <Badge variant="outline" className="text-[10px] mr-2 text-zinc-400">
+                      {EXPENSE_CATEGORY_KEYS[e.category] ? t(EXPENSE_CATEGORY_KEYS[e.category]) : e.category}
+                    </Badge>
+                    <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
+                    <span className="text-zinc-600"> &middot; {e.itemTypeName}</span>
+                  </p>
+                  <p className="text-[11px] text-zinc-600 truncate">
+                    {e.expenseDate}
+                    {e.description && ` — ${e.description}`}
+                    {e.creatorUsername && ` — ${displayName({ username: e.creatorUsername, inGameName: e.creatorInGameName })}`}
+                  </p>
+                </div>
+                {canManage && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(e)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => deleteMutation.mutate(e.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Create / edit dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) setDialogOpen(false); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editId ? t('expenses.edit') : t('expenses.add')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>{t('expenses.itemType')}</Label>
+              <SearchableSelect
+                value={formItemType}
+                onValueChange={setFormItemType}
+                options={itemTypeOptions}
+                placeholder={t('expenses.itemTypePlaceholder')}
+                aria-label={t('expenses.itemType')}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('expenses.category')}</Label>
+                <SearchableSelect
+                  value={formCategory}
+                  onValueChange={(v) => setFormCategory(v as ExpenseCategory)}
+                  options={categoryOptions}
+                  aria-label={t('expenses.category')}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('common.amount')}{selectedItemType ? ` (${selectedItemType.unit})` : ''}</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formAmount}
+                  onChange={(e) => setFormAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('common.date')}</Label>
+              <Input
+                type="date"
+                max={todayLocalDateString()}
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('common.description')}</Label>
+              <Input
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                maxLength={500}
+                placeholder={t('expenses.descriptionPlaceholder')}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button
+              disabled={!formItemType || !formAmount || Number(formAmount) <= 0 || saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+            >
+              {saveMutation.isPending ? t('common.saving') : t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }

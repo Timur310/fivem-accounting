@@ -109,6 +109,7 @@ export const FACTION_PERMISSIONS = [
   'view_audit_logs',
   'view_reports',
   'manage_laundering',
+  'manage_expenses',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -125,6 +126,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   view_audit_logs: 'View Audit Logs',
   view_reports: 'View Reports',
   manage_laundering: 'Launder Money',
+  manage_expenses: 'Manage Expenses',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -234,6 +236,35 @@ export type NewPayout = typeof payouts.$inferInsert;
 /** Payout lifecycle states. Only 'completed' affects the treasury balance. */
 export const PAYOUT_STATUSES = ['pending', 'approved', 'rejected', 'completed'] as const;
 export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
+
+// ── expenses ───────────────────────────────────────────
+// Faction running costs — warehouse rent, utilities, supplies. Not payouts:
+// no member receives anything, and the vault is lighter for having paid them.
+export const EXPENSE_CATEGORIES = ['warehouse', 'utilities', 'supplies', 'other'] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const expenses = pgTable('expenses', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  createdBy:   uuid('created_by').notNull().references(() => users.id),
+  itemTypeId:  uuid('item_type_id').notNull().references(() => itemTypes.id),
+  category:    varchar('category', { length: 20 }).notNull().default('other'),
+  amount:      decimal('amount', { precision: 15, scale: 2 }).notNull(),
+  description: text('description'),
+  expenseDate: date('expense_date').notNull().defaultNow(),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }),
+  isDeleted:   boolean('is_deleted').notNull().default(false),
+});
+
+export const expensesRelations = relations(expenses, ({ one }) => ({
+  faction:  one(factions,  { fields: [expenses.factionId],  references: [factions.id] }),
+  creator:  one(users,     { fields: [expenses.createdBy],  references: [users.id] }),
+  itemType: one(itemTypes, { fields: [expenses.itemTypeId], references: [itemTypes.id] }),
+}));
+
+export type Expense = typeof expenses.$inferSelect;
+export type NewExpense = typeof expenses.$inferInsert;
 
 // ── member_notes ───────────────────────────────────────
 // Private admin notes about a member. Never visible to the member themselves.

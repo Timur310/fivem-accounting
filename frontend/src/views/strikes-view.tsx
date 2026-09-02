@@ -75,11 +75,10 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
   // `manage_strikes`, so the status buttons (Revoke, Reinstate) would only
   // invite a 403 — and the Member column would repeat one name down the page.
 
-  // 'all' rather than '': the API reads a missing status as "what still counts
-  // against the member" — active and not past its expiry — so the option
-  // labelled All Statuses has to say so explicitly, or it quietly shows the
-  // same list as the Active one.
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  // '' — the API reads a missing status as "what still counts against the
+  // member" (active and not past its expiry) — so the page opens on the
+  // strikes that matter; revoked and expired history is one filter away.
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [page, setPage] = useState(1);
 
@@ -110,8 +109,10 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
     },
   });
 
-  // The empty value is the unfiltered case, so it doubles as a way to clear.
+  // The empty value is the default — what still counts against the member —
+  // so it gets its own label rather than masquerading as a cleared filter.
   const statusOptions = useMemo<SearchableSelectOption[]>(() => [
+    { value: '', label: t('strikes.stillCounting') },
     { value: 'all', label: t('strikes.allStatuses') },
     ...Object.entries(STATUS_KEYS).map(([value, key]) => ({ value, label: t(key) })),
   ], [t]);
