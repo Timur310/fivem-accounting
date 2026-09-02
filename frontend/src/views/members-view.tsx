@@ -23,7 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { FactionSettings } from '@/lib/api-types';
@@ -38,9 +38,11 @@ interface Props {
    * refuses it, so the screen must not offer it.
    */
   isFactionAdmin?: boolean;
+  /** Whether the caller may run this roster — add, remove, rank, rename. */
+  canManageMembers?: boolean;
 }
 
-export function MembersView({ factionId, isFactionAdmin }: Props) {
+export function MembersView({ factionId, isFactionAdmin, canManageMembers = true }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -57,6 +59,9 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
   const [roleTarget, setRoleTarget] = useState<{ userId: string; currentRole: string; username: string } | null>(null);
   const [newRole, setNewRole] = useState<'admin' | 'member'>('member');
   const [removeTarget, setRemoveTarget] = useState<{ userId: string; username: string } | null>(null);
+  // In-game name dialog
+  const [nameTarget, setNameTarget] = useState<{ userId: string; username: string; inGameName: string | null } | null>(null);
+  const [newInGameName, setNewInGameName] = useState('');
   // Rank dialog
   const [rankDialogOpen, setRankDialogOpen] = useState(false);
   const [rankTarget, setRankTarget] = useState<{ userId: string; username: string; currentRank: string | null } | null>(null);
@@ -139,6 +144,25 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
     },
     onError: (err: unknown) => {
       toast({ title: t('members.rankUpdateFailed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const nameMutation = useMutation({
+    // Empty clears it rather than saving a blank: the roster then falls back to
+    // the Discord username, which is what an empty name has always meant here.
+    mutationFn: () => membersApi.updateInGameName(
+      factionId,
+      nameTarget!.userId,
+      newInGameName.trim() || null,
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['members', factionId] });
+      queryClient.invalidateQueries({ queryKey: ['member-profile', factionId] });
+      setNameTarget(null);
+      toast({ title: t('members.inGameNameUpdated') });
+    },
+    onError: (err: unknown) => {
+      toast({ title: t('members.inGameNameUpdateFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -310,6 +334,20 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
                           >
                             <ChevronsUp className="h-3 w-3" />
                           </Button>
+                          {canManageMembers && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-zinc-500 hover:text-zinc-200"
+                              title={t('members.editInGameName')}
+                              onClick={() => {
+                                setNameTarget({ userId: m.userId, username: m.username, inGameName: m.inGameName });
+                                setNewInGameName(m.inGameName ?? '');
+                              }}
+                            >
+                              <IdCard className="h-3 w-3" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title={t('common.remove')}>
                             <UserMinus className="h-3 w-3" />
                           </Button>
@@ -464,6 +502,45 @@ export function MembersView({ factionId, isFactionAdmin }: Props) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRankDialogOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={() => rankMutation.mutate()} disabled={rankMutation.isPending}>{rankMutation.isPending ? t('common.saving') : t('members.updateRank')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* In-Game Name Dialog */}
+      <Dialog open={!!nameTarget} onOpenChange={(open) => { if (!open) setNameTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('members.editInGameName')}</DialogTitle>
+            <DialogDescription>{t('members.editInGameNameHint')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>{t('inGameName.label')}</Label>
+            <Input
+              autoFocus
+              value={newInGameName}
+              maxLength={50}
+              placeholder={t('inGameName.placeholder')}
+              onChange={(e) => setNewInGameName(e.target.value)}
+              onKeyDown={(e) => {
+                const v = e.currentTarget.value.trim();
+                if (e.key === 'Enter' && (v === '' || v.length >= 2) && !nameMutation.isPending) {
+                  nameMutation.mutate();
+                }
+              }}
+            />
+            <p className="text-xs text-zinc-500">{t('members.inGameNameClearHint')}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNameTarget(null)}>{t('common.cancel')}</Button>
+            <Button
+              onClick={() => nameMutation.mutate()}
+              disabled={
+                nameMutation.isPending
+                || (newInGameName.trim() !== '' && newInGameName.trim().length < 2)
+              }
+            >
+              {nameMutation.isPending ? t('common.saving') : t('common.save')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

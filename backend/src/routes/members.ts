@@ -47,9 +47,13 @@ const updateMemberSchema = z.object({
   role: z.enum(['admin', 'member']).optional(),
   // null clears the rank; a string must match one of the faction's ranks
   rank: z.string().min(1).max(100).nullable().optional(),
+  // Same bounds the player gets on their own name in PATCH /auth/me, so a name
+  // an admin sets is one the player could have set. null clears it, which puts
+  // the Discord username back on screen as the fallback.
+  inGameName: z.string().trim().min(2).max(50).nullable().optional(),
 }).refine(
-  (d) => d.role !== undefined || d.rank !== undefined,
-  'Provide at least one of: role, rank',
+  (d) => d.role !== undefined || d.rank !== undefined || d.inGameName !== undefined,
+  'Provide at least one of: role, rank, inGameName',
 );
 
 // ── POST / — add member to faction ───────────────────
@@ -275,6 +279,20 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
   const oldRole = membership.role;
   const oldRank = membership.rank;
 
+  // The in-game name lives on the user, not the membership, so it is read and
+  // written separately — and changing it reaches every faction that player
+  // belongs to, not just this one. That is the nature of the field: it is the
+  // character's name, not a per-faction nickname.
+  let oldInGameName: string | null = null;
+  if (parsed.data.inGameName !== undefined) {
+    const [target] = await db
+      .select({ inGameName: users.inGameName })
+      .from(users)
+      .where(eq(users.id, targetUserId))
+      .limit(1);
+    oldInGameName = target?.inGameName ?? null;
+  }
+
   const updates: Record<string, unknown> = {};
   if (parsed.data.role !== undefined) updates.role = parsed.data.role;
 
@@ -327,11 +345,25 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
         if (admins.length <= 1) throw new LastAdminError();
       }
 
-      const [row] = await tx
-        .update(factionMembers)
-        .set(updates)
-        .where(eq(factionMembers.id, membership.id))
-        .returning();
+      // Only the in-game name may have changed, and that lives on the user —
+      // in which case there is nothing to write here, and an empty `set()`
+      // would throw rather than no-op.
+      let row = membership;
+      if (Object.keys(updates).length > 0) {
+        const [written] = await tx
+          .update(factionMembers)
+          .set(updates)
+          .where(eq(factionMembers.id, membership.id))
+          .returning();
+        if (written) row = written;
+      }
+
+      if (parsed.data.inGameName !== undefined) {
+        await tx
+          .update(users)
+          .set({ inGameName: parsed.data.inGameName })
+          .where(eq(users.id, targetUserId));
+      }
 
       // If promoting to admin, update user's global role inside the same
       // transaction so the user table never lags the membership table.
@@ -357,8 +389,12 @@ router.patch('/:userId', requirePermission('manage_members'), async (req: Reques
         entityId: membership.id,
         details: {
           userId: targetUserId,
-          before: { role: oldRole, rank: oldRank },
-          after: { role: updates.role ?? oldRole, rank: 'rank' in updates ? updates.rank : oldRank },
+          before: { role: oldRole, rank: oldRank, inGameName: oldInGameName },
+          after: {
+            role: updates.role ?? oldRole,
+            rank: 'rank' in updates ? updates.rank : oldRank,
+            inGameName: parsed.data.inGameName !== undefined ? parsed.data.inGameName : oldInGameName,
+          },
         },
         req,
         tx,

@@ -328,3 +328,84 @@ describe('faction settings', () => {
     expect(res.status).toBe(400);
   });
 });
+
+/**
+ * A faction admin fixes the character names on their own roster. The name lives
+ * on the user, so it is the same name everywhere that player appears — this is
+ * the character's name, not a per-faction nickname.
+ */
+describe('PATCH /members/:userId — in-game name', () => {
+  const f = () => `/api/v1/factions/${w.faction.id}`;
+
+  it('lets manage_members set a member in-game name', async () => {
+    const res = await api().patch(`${f()}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ inGameName: 'Vito Corleone' });
+    expect(res.status).toBe(200);
+
+    const roster = await api().get(`${f()}/members`).set('Cookie', w.admin.cookie);
+    const row = roster.body.data.find((m: { userId: string }) => m.userId === w.member.id);
+    expect(row.inGameName).toBe('Vito Corleone');
+  });
+
+  it('clears it with null, putting the Discord name back on screen', async () => {
+    await api().patch(`${f()}/members/${w.member.id}`).set('Cookie', w.admin.cookie)
+      .send({ inGameName: 'Vito Corleone' });
+
+    const res = await api().patch(`${f()}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ inGameName: null });
+    expect(res.status).toBe(200);
+
+    const roster = await api().get(`${f()}/members`).set('Cookie', w.admin.cookie);
+    const row = roster.body.data.find((m: { userId: string }) => m.userId === w.member.id);
+    expect(row.inGameName).toBeNull();
+  });
+
+  // It overrides a name the player set for themselves, which is the point:
+  // a faction wants its roster to read consistently.
+  it('overrides a name the player set themselves', async () => {
+    await api().patch('/api/v1/auth/me').set('Cookie', w.member.cookie)
+      .send({ inGameName: 'Chosen By Me' });
+
+    await api().patch(`${f()}/members/${w.member.id}`).set('Cookie', w.admin.cookie)
+      .send({ inGameName: 'Chosen By Admin' });
+
+    const me = await api().get('/api/v1/auth/me').set('Cookie', w.member.cookie);
+    expect(me.body.data.inGameName).toBe('Chosen By Admin');
+  });
+
+  it('refuses a member without manage_members', async () => {
+    const res = await api().patch(`${f()}/members/${w.admin.id}`)
+      .set('Cookie', w.member.cookie)
+      .send({ inGameName: 'Nice Try' });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses someone who is not in this faction', async () => {
+    const res = await api().patch(`${f()}/members/${w.outsider.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ inGameName: 'Not Here' });
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a name that is too short', async () => {
+    const res = await api().patch(`${f()}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ inGameName: 'X' });
+    expect(res.status).toBe(400);
+  });
+
+  it('records the change in the audit log', async () => {
+    await api().patch(`${f()}/members/${w.member.id}`).set('Cookie', w.admin.cookie)
+      .send({ inGameName: 'Vito Corleone' });
+
+    const logs = await api().get(`${f()}/audit-logs?entity_type=member`)
+      .set('Cookie', w.admin.cookie);
+    const entry = logs.body.data.find(
+      (l: { details: { after?: { inGameName?: string } } }) =>
+        l.details?.after?.inGameName === 'Vito Corleone',
+    );
+    expect(entry).toBeDefined();
+  });
+});

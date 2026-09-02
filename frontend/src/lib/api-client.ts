@@ -173,6 +173,14 @@ export const membersApi = {
       })
       .then(unwrap),
 
+  /** null clears it, which puts the Discord username back on screen. */
+  updateInGameName: (factionId: string, userId: string, inGameName: string | null) =>
+    api
+      .patch<ApiSuccessResponse<Member>>(`/factions/${factionId}/members/${userId}`, {
+        inGameName,
+      })
+      .then(unwrap),
+
   remove: (factionId: string, userId: string) =>
     api.delete(`/factions/${factionId}/members/${userId}`),
 
