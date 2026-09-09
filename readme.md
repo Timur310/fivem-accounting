@@ -88,11 +88,6 @@ the full phase-by-phase plan and what's already shipped.
 Issues and PRs welcome. If you're adding a feature, check the roadmap first
 so it lines up with where the project's headed.
 
-## License
-
-<!-- e.g. MIT — pick one and drop it in a LICENSE file -->
-Add your license here.
-
 ---
 
 *Built for FiveM roleplay servers. Self-hosted, your data, your rules.*
