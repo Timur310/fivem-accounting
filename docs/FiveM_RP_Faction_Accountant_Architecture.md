@@ -799,6 +799,66 @@ buttons (§8.8).
 - **State**: zustand for session, selected faction and view; TanStack Query for
   everything fetched.
 
+### 9.4 Redesign — "Serious Ledger, Game Soul" (Phase 9)
+
+A frontend redesign pass reworked the player-facing surfaces around a single
+identity: the faction's own terminal, not a SaaS dashboard. Numbers stay
+tabular and condensed, hairline rules and a dot-grid texture carry the
+"ledger paper" language already established in §9.1, and every playful
+element stays chrome-only — flavor lives in navigation, badges and card
+glows, never in the ledger rows themselves.
+
+**Player surfaces.** The dashboard reorders identity-first: the member's own
+stats strip and quota sit above faction totals, with the hero balance's
+count-up animation (§9.1) carried over. Quick log is now the star of the
+card — last-three-item chips, larger tap targets, a one-thumb three-tap
+flow. The entries list gained a filter bar that sticks on scroll and
+per-row hover actions. The leaderboard gained a podium treatment for the
+top three, animated movement arrows, and a segmented control in place of
+the period dropdown. Withdrawals render their pending → approved →
+completed lifecycle as a status pipeline instead of a text badge, so a
+member sees at a glance where their request sits.
+
+**Structure and navigation.** The sidebar now splits into a collapsible
+"Play" group (Dashboard, Entries, Withdrawals, Leaderboard) and a "Manage"
+group (Members, Strikes, Treasury, Settings) inside the icon rail, so
+leaders get density without surfacing admin screens to players. A Ctrl+K
+command palette jumps to any member, view, or action (e.g. "log entry").
+
+**Identity and delight.** The faction landing area got a masthead
+treatment: display-type name, accent glow, and an optional logo image URL
+a superadmin can set. The contribution heatmap became the hero of the
+member profile — enlarged, accent-tinted, with a "best day" tooltip. The
+app also ships as a PWA: manifest, home-screen icon, and fullscreen
+standalone mode.
+
+**Guardrails**, carried over from the design brief and enforced per
+component: animations stay under ~300ms and respect
+`prefers-reduced-motion`; figures never wear the faction accent — §9.3
+already established this for balances, scores, ranks and quota bars, and
+the redesign extends the same rule to every new surface; no sound,
+confetti, or emoji in ledger rows; every playful element is removable by
+config for a faction that wants it austere.
+
+**Not yet implemented from the plan:**
+
+- A shared shimmer skeleton and a single line-art empty-state component —
+  each view still hand-rolls its own, visually close but not unified.
+- Item types as full visual citizens: a built-in icon/emoji picker per item
+  type and cash/goods/contraband category color-coding. Only the existing
+  admin-pasted image URL is in place.
+- Row-level micro-feedback: a green/red pulse on a freshly logged entry and
+  an eased quota-bar fill on update — the hero count-up is done; this is
+  the rest of the "everything should move" principle.
+- Stats-strip fact-chips — "Best week so far", "12-week quota streak."
+- Roster rank sigils (Boss/Underboss emblem) and the stamped "IN THE RED"
+  mark on a negative balance.
+
+None of the above blocks testing or launch — it's polish. Of the remainder,
+the row-pulse micro-feedback and the shared empty-state component are the
+best value for the effort; the item-type icon picker is the largest, since
+it needs both a picker UI and a schema field.
+
 ---
 
 ## 10. Deployment
@@ -1081,6 +1141,28 @@ crontab -e
 | 5 | Data backup/restore | Full faction data export (JSON) and import. Superadmin can backup all data | Medium |
 | 6 | Faction templates | Preset configurations for common faction types (cartel, police, EMS, mechanic, etc.) | Low |
 | 7 | i18n framework | Translation infrastructure + community translation support | Low |
+
+### Phase 9: Frontend Redesign — "Serious Ledger, Game Soul" (Weeks 25-26) — MOSTLY COMPLETE
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Dashboard reorder + count-up | Identity-first layout: stats strip and quota above faction totals; hero balance count-up animation — **DONE** | High |
+| 2 | Quick-log redesign | Last-3 chips, larger tap targets, one-thumb three-tap flow — **DONE** | High |
+| 3 | Entries polish | Sticky filter bar on scroll, per-row hover edit/undo — **DONE** | Medium |
+| 4 | Leaderboard podium | Top-3 podium treatment, animated movement arrows, segmented period control — **DONE** | Medium |
+| 5 | Withdrawal status pipeline | Visual pending → approved → completed pipeline replacing text badges — **DONE** | Medium |
+| 6 | Sidebar Play/Manage grouping | Two-level collapsible sidebar split by role density — **DONE** | Medium |
+| 7 | Command palette (Ctrl+K) | Jump to any member, view, or action — **DONE** | Medium |
+| 8 | Faction masthead | Display-type name, accent glow, optional logo image URL — **DONE** | Medium |
+| 9 | Heatmap-as-hero | Enlarged, accent-tinted heatmap with "best day" tooltip on the member profile — **DONE** | Low |
+| 10 | PWA / mobile app feel | Manifest, home-screen icon, fullscreen standalone mode — **DONE** | Medium |
+| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component | Low — not started |
+| 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding | Low — not started (image URL only) |
+| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill | Low — not started |
+| 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" | Low — not started |
+| 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance | Low — not started |
+
+See §9.4 for the narrative writeup, guardrails, and what's left.
 
 ---
 
