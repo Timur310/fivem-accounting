@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { auditLogsApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
@@ -110,10 +111,7 @@ export function AuditLogsView({ factionId }: Props) {
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
           ) : logs.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600">
-              <ScrollText className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{t('audit.none')}</p>
-            </div>
+            <EmptyState icon={ScrollText} title={t('audit.none')} />
           ) : (
             <>
               <div className="overflow-x-auto">

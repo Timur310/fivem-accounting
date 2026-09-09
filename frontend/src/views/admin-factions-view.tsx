@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionsApi, adminAnalyticsApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -115,7 +116,7 @@ export function AdminFactionsView() {
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
           ) : factions.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600"><Shield className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">{t('admin.noFactionsYet')}</p></div>
+            <EmptyState icon={Shield} title={t('admin.noFactionsYet')} />
           ) : (
             <>
               <Table>

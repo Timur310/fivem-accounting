@@ -98,6 +98,14 @@ export const hu: Translations = {
 
   // ── Navigation ──
   'nav.dashboard': 'Áttekintés',
+  'nav.groupPlay': 'Játék',
+  'palette.placeholder': 'Nézetek és tagok keresése...',
+  'palette.search': 'Keresés',
+  'palette.empty': 'Nincs találat.',
+  'palette.views': 'Nézetek',
+  'palette.members': 'Tagok',
+  'nav.groupManage': 'Kezelés',
+  'nav.groupAdmin': 'Szerver',
   'nav.entries': 'Bejegyzések',
   'nav.withdrawals': 'Kifizetések',
   'nav.treasury': 'Kassza',
@@ -502,6 +510,7 @@ export const hu: Translations = {
   'profile.mostActive': 'legaktívabb',
   'profile.activityHeatmap': 'Aktivitási térkép',
   'profile.less': 'Kevesebb',
+  'profile.bestDay': 'legjobb nap {date}: {count} bejegyzés',
   'profile.more': 'Több',
   'profile.recentEntries': 'Legutóbbi bejegyzések',
   'profile.memberHistory': 'Tagsági előzmények',

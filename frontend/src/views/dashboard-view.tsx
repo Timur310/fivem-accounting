@@ -39,6 +39,8 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
 
+  const [displayBalance, setDisplayBalance] = useState(0);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard', factionId],
     queryFn: () => dashboardApi.get(factionId),
@@ -121,9 +123,49 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
     .filter((it) => it.isActive)
     .map((it) => ({ value: it.id, label: it.name }));
 
+  // One-tap chips for the member's usual items — the card should be usable
+  // in three taps, thumb-only.
+  const quickRecentTypes = useMemo(() => {
+    const recent = data?.recentEntries ?? [];
+    const names: string[] = [];
+    for (const e of recent) {
+      if (e.userId === user?.id && !names.includes(e.itemTypeName)) names.push(e.itemTypeName);
+      if (names.length === 3) break;
+    }
+    return names
+      .map((name) => (itemTypes as ItemType[]).find((it) => it.isActive && it.name === name))
+      .filter((it): it is ItemType => !!it);
+  }, [data, itemTypes, user?.id]);
+
   // Charts and export are reference material, not the daily glance — folded
   // away by default so the page reads in one screenful.
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  // Balance counts up on load: the vault "arrives" instead of popping in.
+  // Skipped entirely when the user prefers reduced motion.
+  // NOTE: this hook (and the value it depends on) must run on every render,
+  // so it lives above the isLoading/error early returns below. `data` may
+  // not exist yet at this point, hence the optional chaining/fallback.
+  const heroBalance = data?.netBalance ?? data?.grandTotal ?? 0;
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayBalance(heroBalance);
+      return;
+    }
+    const start = performance.now();
+    const from = 0;
+    const dur = 600;
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / dur, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplayBalance(from + (heroBalance - from) * eased);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [heroBalance]);
 
   if (isLoading) {
     return (
@@ -162,12 +204,20 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Faction Header */}
-      <div>
-        <h2 className="text-xl font-medium tracking-tight text-zinc-100">{faction.name}</h2>
-        {faction.description && (
-          <p className="text-zinc-500 mt-1 text-sm">{faction.description}</p>
-        )}
+      {/* Faction Header — the faction's own masthead: display type, its accent
+          as a rule under the name, and a faint accent wash behind it. */}
+      <div className="relative rounded-lg border border-white/[0.06] overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: `linear-gradient(120deg, ${brandColor}0f, transparent 55%)` }}
+        />
+        <div className="relative px-5 py-4">
+          <h2 className="text-2xl font-medium tracking-tight text-zinc-100">{faction.name}</h2>
+          <div className="h-0.5 w-10 rounded-full mt-2" style={{ backgroundColor: brandColor }} />
+          {faction.description && (
+            <p className="text-zinc-500 mt-2 text-sm">{faction.description}</p>
+          )}
+        </div>
       </div>
 
       {/* ══ Quick Log ══ */}
@@ -181,6 +231,21 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {quickRecentTypes.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {quickRecentTypes.map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => { setQuickTypeId(it.id); const mine = (data?.recentEntries ?? []).find((e) => e.userId === user?.id && e.itemTypeName === it.name); if (mine) setQuickAmount(mine.amount); }}
+                    className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.id ? 'border-primary text-primary bg-primary/10' : 'border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.2]'}`}
+                  >
+                    <ItemIcon src={it.imageUrl} className="size-4" />
+                    {it.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1.5 min-w-[180px] flex-1">
                 <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
@@ -195,7 +260,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
               <div className="space-y-1.5">
                 <Label className="text-xs text-zinc-500">{t('common.amount')}{quickType ? ` (${quickType.unit})` : ''}</Label>
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.decrease')} onClick={() => quickBump(-1)}>−</Button>
+                  <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" title={t('entries.decrease')} onClick={() => quickBump(-1)}>−</Button>
                   <Input
                     type="number"
                     step="0.01"
@@ -205,10 +270,11 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     onChange={(e) => setQuickAmount(e.target.value)}
                     className="tabular-nums w-32"
                   />
-                  <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
+                  <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
                 </div>
               </div>
               <Button
+                className="h-11 px-6 text-sm"
                 disabled={!quickTypeId || !quickAmount || Number(quickAmount) <= 0 || quickLogMutation.isPending}
                 onClick={() => quickLogMutation.mutate()}
                 style={{ backgroundColor: brandColor }}
@@ -219,80 +285,6 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
           </CardContent>
         </Card>
       )}
-
-      {/* ══ Bento Grid: Hero + 3 Stats ══ */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Hero Card — Grand Total with Glow */}
-        <Card className="faction-glow border-highlight lg:col-span-1 sm:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.netTreasuryBalance')}</CardTitle>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            {(() => {
-              const bal = netBalance ?? grandTotal;
-              // Money only: adding currency to kilograms and piece counts gives
-              // a figure with no unit. Goods are listed per type further down.
-              const currencyBalances = (treasuryBalances ?? []).filter((b) => b.isCurrency);
-              const goodsCount = (treasuryBalances ?? []).length - currencyBalances.length;
-              const hasTreasury = currencyBalances.length > 0;
-              const totalIn = hasTreasury ? currencyBalances.reduce((s, b) => s + b.inflow, 0) : grandTotal;
-              const totalOut = hasTreasury ? currencyBalances.reduce((s, b) => s + b.outflow, 0) : 0;
-              return (
-                <>
-                  {/* Neutral unless the figure is actually negative: a faction
-                      whose accent is green or red would otherwise colour an
-                      ordinary balance as if it meant something. */}
-                  <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : '#e4e4e7' }}>
-                    {fmt(bal)}
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-1.5">
-                    {hasTreasury
-                      ? <>
-                          {t('dashboard.inflowOutflow', { inflow: fmt(totalIn), outflow: fmt(totalOut) })}
-                          {goodsCount > 0 && <> &middot; {t('dashboard.currencyOnly')}</>}
-                        </>
-                      : t('treasury.totalsNoteAll')
-                    }
-                  </p>
-                </>
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        {/* Stat: Total Entries */}
-        <Card className="border-highlight">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</CardTitle>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{formatCount(totalEntries)}</div>
-            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.loggedContributions')}</p>
-          </CardContent>
-        </Card>
-
-        {/* Stat: Members */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.members')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{memberCount}</div>
-            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.adminCount', { count: adminCount })}</p>
-          </CardContent>
-        </Card>
-
-        {/* Stat: Item Types */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.categories')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalsByType.length}</div>
-            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.activeItemTypes')}</p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* ══ My Stats Strip ══ */}
       {canLogEntries && user && (lbWeek || myProfile) && (
@@ -344,6 +336,80 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
           })()}
         </div>
       )}
+
+      {/* ══ Bento Grid: Hero + 3 Stats ══ */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Hero Card — Grand Total with Glow */}
+        <Card className="faction-glow border-highlight lg:col-span-1 sm:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.netTreasuryBalance')}</CardTitle>
+          </CardHeader>
+          <CardContent className="relative z-10">
+            {(() => {
+              const bal = netBalance ?? grandTotal;
+              // Money only: adding currency to kilograms and piece counts gives
+              // a figure with no unit. Goods are listed per type further down.
+              const currencyBalances = (treasuryBalances ?? []).filter((b) => b.isCurrency);
+              const goodsCount = (treasuryBalances ?? []).length - currencyBalances.length;
+              const hasTreasury = currencyBalances.length > 0;
+              const totalIn = hasTreasury ? currencyBalances.reduce((s, b) => s + b.inflow, 0) : grandTotal;
+              const totalOut = hasTreasury ? currencyBalances.reduce((s, b) => s + b.outflow, 0) : 0;
+              return (
+                <>
+                  {/* Neutral unless the figure is actually negative: a faction
+                      whose accent is green or red would otherwise colour an
+                      ordinary balance as if it meant something. */}
+                  <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : '#e4e4e7' }}>
+                    {fmt(displayBalance)}
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1.5">
+                    {hasTreasury
+                      ? <>
+                          {t('dashboard.inflowOutflow', { inflow: fmt(totalIn), outflow: fmt(totalOut) })}
+                          {goodsCount > 0 && <> &middot; {t('dashboard.currencyOnly')}</>}
+                        </>
+                      : t('treasury.totalsNoteAll')
+                    }
+                  </p>
+                </>
+              );
+            })()}
+          </CardContent>
+        </Card>
+
+        {/* Stat: Total Entries */}
+        <Card className="border-highlight">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</CardTitle>
+          </CardHeader>
+          <CardContent className="relative z-10">
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{formatCount(totalEntries)}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.loggedContributions')}</p>
+          </CardContent>
+        </Card>
+
+        {/* Stat: Members */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.members')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{memberCount}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.adminCount', { count: adminCount })}</p>
+          </CardContent>
+        </Card>
+
+        {/* Stat: Item Types */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.categories')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalsByType.length}</div>
+            <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.activeItemTypes')}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ══ Quota Progress — Energy Bars ══ */}
       {activeQuotas.length > 0 && (

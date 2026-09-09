@@ -106,6 +106,14 @@ export const en = {
 
   // ── Navigation ──
   'nav.dashboard': 'Dashboard',
+  'nav.groupPlay': 'Play',
+  'palette.placeholder': 'Search views and members...',
+  'palette.search': 'Search',
+  'palette.empty': 'No matches.',
+  'palette.views': 'Views',
+  'palette.members': 'Members',
+  'nav.groupManage': 'Manage',
+  'nav.groupAdmin': 'Server',
   'nav.entries': 'Entries',
   'nav.withdrawals': 'Withdrawals',
   'nav.treasury': 'Treasury',
@@ -510,6 +518,7 @@ export const en = {
   'profile.mostActive': 'most active',
   'profile.activityHeatmap': 'Activity Heatmap',
   'profile.less': 'Less',
+  'profile.bestDay': 'best day {date}: {count} entries',
   'profile.more': 'More',
   'profile.recentEntries': 'Recent Entries',
   'profile.memberHistory': 'Member History',

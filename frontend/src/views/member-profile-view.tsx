@@ -527,6 +527,13 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm text-zinc-200 flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 text-zinc-400" /> {t('profile.activityHeatmap')}
+                    {/* The best day of the year, stated as a fact. */}
+                    {(() => {
+                      const best = heatmap.data.reduce((a, b) => (b.count > (a?.count ?? -1) ? b : a), heatmap.data[0]);
+                      return best && best.count > 0 ? (
+                        <span className="text-[10px] text-zinc-500 font-normal ml-2">· {t('profile.bestDay', { count: best.count, date: best.date })}</span>
+                      ) : null;
+                    })()}
                   </CardTitle>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-zinc-500" onClick={() => setHeatmapYear(heatmapYear - 1)}>&lt;</Button>
@@ -543,7 +550,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                     return (
                       <div
                         key={d.date}
-                        className="w-[11px] h-[11px] rounded-[2px] transition-colors duration-100"
+                        className={`rounded-[2px] transition-colors duration-100 ${d.count === heatmap.maxCount && d.count > 0 ? 'w-[13px] h-[13px] ring-1 ring-white/30' : 'w-[11px] h-[11px]'}`}
                         style={{ backgroundColor: `${brandColor}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` }}
                         title={`${d.date}: ${t('entries.count', { count: d.count })}${d.currencyTotal > 0 ? ` · ${fmt(d.currencyTotal)}` : ''}${d.itemTotal > 0 ? ` · ${fmtItems(d.itemTotal)}` : ''}`}
                       />

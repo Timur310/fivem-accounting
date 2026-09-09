@@ -272,6 +272,29 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
     },
   });
 
+  // Where a request sits, at a glance: requested → committed → paid. A
+  // rejected request shows the same rail with a red end — the road not taken.
+  function statusPipeline(status: PayoutStatus) {
+    const steps = status === 'rejected' ? ['rejected', 'rejected', 'rejected'] : ['pending', 'approved', 'completed'];
+    const activeIdx = steps.indexOf(status);
+    return (
+      <div className="flex items-center gap-1" title={t(sc_label(status))}>
+        {steps.map((step, i) => (
+          <span
+            key={i}
+            className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${
+              i < activeIdx ? 'bg-emerald-500/70'
+              : i === activeIdx
+                ? status === 'rejected' ? 'bg-red-500' : status === 'pending' ? 'bg-amber-400' : 'bg-blue-400'
+                : 'bg-white/[0.07]'
+            }`}
+          />
+        ))}
+      </div>
+    );
+  }
+  const sc_label = (s: PayoutStatus) => STATUS_CONFIG[s].label;
+
   const handleStatusChange = (payout: Payout, newStatus: PayoutStatus) => {
     updateMutation.mutate({ payoutId: payout.id, input: { status: newStatus } });
   };
@@ -421,9 +444,12 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                     </TableCell>
                     <TableCell className="text-sm text-zinc-500">{p.payoutDate}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-[11px]`}>
-                        {t(sc.label)}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {statusPipeline(p.status)}
+                        <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-[11px]`}>
+                          {t(sc.label)}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       {/* Approving, completing, rejecting, editing and deleting are

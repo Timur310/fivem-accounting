@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionStrikesApi, memberStrikesApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -170,7 +171,7 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : strikes.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600"><AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" /><p className="text-sm">{t('strikes.none')}</p></div>
+            <EmptyState icon={AlertTriangle} title={t('strikes.none')} />
           ) : (
             <Table>
               <TableHeader>

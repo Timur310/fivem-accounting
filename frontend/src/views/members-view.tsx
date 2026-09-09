@@ -6,6 +6,7 @@ import { membersApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-clien
 import type { Member } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState, ListSkeleton } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -236,12 +237,9 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
       <Card className="py-0 gap-0">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
+            <ListSkeleton rows={4} />
           ) : members.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600">
-              <UserPlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{t('members.noneYet')}</p>
-            </div>
+            <EmptyState icon={UserPlus} title={t('members.noneYet')} />
           ) : (
             <Table>
               <TableHeader>

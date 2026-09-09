@@ -36,12 +36,14 @@ import {
   AlertTriangle,
   WashingMachine,
   BookOpen,
+  Search,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
 import { PayoutsView } from '@/views/payouts-view';
 import { TreasuryView } from '@/views/treasury-view';
 import { GuideView } from '@/views/guide-view';
+import { CommandPalette } from '@/components/command-palette';
 import { MembersView } from '@/views/members-view';
 import { SettingsView } from '@/views/settings-view';
 import { AuditLogsView } from '@/views/audit-logs-view';
@@ -72,7 +74,10 @@ function isDesktop() {
   }
 }
 
+type NavGroup = 'play' | 'manage' | 'admin';
+
 interface NavItem {
+  group: NavGroup;
   view: AppView;
   /** Translation key rather than text: the sidebar has to follow the language. */
   label: TranslationKey;
@@ -94,6 +99,7 @@ export function AppShell() {
   const brandColor = useAppStore((s) => s.brandColor);
   const setBrandColor = useAppStore((s) => s.setBrandColor);
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const setUser = useAppStore((s) => s.setUser);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -214,20 +220,22 @@ export function AppShell() {
   }, [activeFactions, browseableOnly, t]);
 
   const navItems: NavItem[] = [
-    { view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
-    { view: 'entries', label: 'nav.entries', icon: List },
-    { view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine },
-    { view: 'treasury', label: 'nav.treasury', icon: Wallet },
+    { group: 'play', view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
+    { group: 'play', view: 'entries', label: 'nav.entries', icon: List },
+    { group: 'play', view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine },
+    { group: 'manage', view: 'treasury', label: 'nav.treasury', icon: Wallet },
     {
+      group: 'manage',
       view: 'laundering',
       label: 'nav.laundering',
       icon: WashingMachine,
       anyPermission: ['manage_laundering'],
     },
-    { view: 'members', label: 'nav.members', icon: Users },
-    { view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
-    { view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
+    { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
+    { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
+    { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
     {
+      group: 'manage',
       view: 'settings',
       label: 'nav.settings',
       icon: Settings,
@@ -235,6 +243,7 @@ export function AppShell() {
       anyPermission: ['manage_settings', 'manage_customization'],
     },
     {
+      group: 'manage',
       view: 'audit-logs',
       label: 'nav.auditLogs',
       icon: ScrollText,
@@ -243,10 +252,10 @@ export function AppShell() {
       // faction they do not belong to has no business reading it.
       membersOnly: true,
     },
-    { view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'] },
-    { view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
+    { group: 'manage', view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'] },
+    { group: 'admin', view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
     // The guide is for everyone, in every faction — the last item, never hidden.
-    { view: 'guide', label: 'nav.guide', icon: BookOpen },
+    { group: 'play', view: 'guide', label: 'nav.guide', icon: BookOpen },
   ];
 
   const isNavItemVisible = (item: NavItem) => {
@@ -482,29 +491,41 @@ export function AppShell() {
 
         {/* Nav Items */}
         <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
-            if (!isNavItemVisible(item)) return null;
-            const active = currentView === item.view;
+          {(['play', 'manage', 'admin'] as const).map((group) => {
+            const items = navItems.filter((g) => g.group === group && isNavItemVisible(g));
+            if (items.length === 0) return null;
+            const groupLabel = group === 'play' ? t('nav.groupPlay') : group === 'manage' ? t('nav.groupManage') : t('nav.groupAdmin');
             return (
-              <button
-                key={item.view}
-                onClick={() => handleNavClick(item.view)}
-                aria-current={active ? 'page' : undefined}
-                className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
-                  active
-                    ? 'text-white font-medium'
-                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
-                } ${!sidebarOpen ? 'justify-center' : ''}`}
-                style={active ? {
-                  backgroundColor: `${brandColor}12`,
-                  boxShadow: `inset 0 0 0 1px ${brandColor}25`,
-                  color: brandColor,
-                } : undefined}
-                title={!sidebarOpen ? t(item.label) : undefined}
-              >
-                <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
-                {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
-              </button>
+              <div key={group} className="mb-1">
+                {sidebarOpen && (
+                  <p className="px-2.5 pt-2 pb-1 text-[10px] uppercase tracking-wider text-zinc-600">{groupLabel}</p>
+                )}
+                {!sidebarOpen && <div className="mx-2 my-2 border-t border-white/[0.06]" />}
+                {items.map((item) => {
+                  const active = currentView === item.view;
+                  return (
+                    <button
+                      key={item.view}
+                      onClick={() => handleNavClick(item.view)}
+                      aria-current={active ? 'page' : undefined}
+                      className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
+                        active
+                          ? 'text-white font-medium'
+                          : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
+                      } ${!sidebarOpen ? 'justify-center' : ''}`}
+                      style={active ? {
+                        backgroundColor: `${brandColor}12`,
+                        boxShadow: `inset 0 0 0 1px ${brandColor}25`,
+                        color: brandColor,
+                      } : undefined}
+                      title={!sidebarOpen ? t(item.label) : undefined}
+                    >
+                      <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
+                      {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
@@ -522,6 +543,12 @@ export function AppShell() {
           </Button>
         </div>
       </aside>
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        views={navItems.filter(isNavItemVisible).map((i) => ({ view: i.view, label: i.label }))}
+      />
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -553,6 +580,17 @@ export function AppShell() {
           </div>
 
           <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden md:flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 border border-white/[0.06] rounded-md px-2 h-7"
+            onClick={() => setPaletteOpen(true)}
+            aria-label={t('palette.placeholder')}
+          >
+            <Search className="h-3.5 w-3.5" />
+            {t('palette.search')}
+            <kbd className="text-[10px] text-zinc-600 border border-white/[0.08] rounded px-1">Ctrl K</kbd>
+          </Button>
           <LanguageSwitcher className="text-zinc-400" />
 
           <DropdownMenu>

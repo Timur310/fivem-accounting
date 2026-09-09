@@ -6,6 +6,7 @@ import { entriesApi, itemTypesApi, exportApi, factionsApi, membersApi } from '@/
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState, ListSkeleton } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -81,6 +82,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const customFields = factionDetail?.customFields ?? [];
 
   const [createOpen, setCreateOpen] = useState(false);
+  // The id of an entry created in this session: its row pulses once, so the
+  // user sees the ledger accept it.
+  const [justCreatedId, setJustCreatedId] = useState<string | null>(null);
   const [newItemTypeId, setNewItemTypeId] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -168,7 +172,11 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
         ...(newAnonymous ? { anonymous: true } : {}),
         ...(newOwnerId && !newAnonymous ? { userId: newOwnerId } : {}),
       }),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      setJustCreatedId(created.id);
+      // The pulse class is removed after the animation so a refetch rerender
+      // doesn't restart it.
+      setTimeout(() => setJustCreatedId((id) => (id === created.id ? null : id)), 1200);
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
@@ -301,7 +309,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   return (
     <div className="space-y-4">
       {/* Filters + CTA */}
-      <Card>
+      <Card className="sticky top-14 z-20 backdrop-blur-md bg-background/85">
         <CardContent className="p-4">
           <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 items-start lg:items-end">
             <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
@@ -383,12 +391,9 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
       <Card className="py-0 gap-0">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
+            <ListSkeleton rows={5} />
           ) : entries.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600">
-              <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{t('entries.noneFound')}</p>
-            </div>
+            <EmptyState icon={Search} title={t('entries.noneFound')} />
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -406,7 +411,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   </TableHeader>
                   <TableBody>
                     {entries.map((entry) => (
-                      <TableRow key={entry.id}>
+                      <TableRow key={entry.id} className={entry.id === justCreatedId ? 'row-flash' : ''}>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">

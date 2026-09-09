@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +34,12 @@ interface Props {
 export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   const { t } = useTranslation();
   const brandColor = useAppStore((s) => s.brandColor);
+  const setSelectedMemberUserId = useAppStore((s) => s.setSelectedMemberUserId);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const handleOpenProfile = (userId: string) => {
+    setSelectedMemberUserId(userId);
+    setCurrentView('member-profile');
+  };
   const [period, setPeriod] = useState<string>('month');
   const [itemTypeId, setItemTypeId] = useState<string>('');
   const [showGlobal, setShowGlobal] = useState(false);
@@ -115,14 +122,20 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
               {showGlobal ? t('leaderboard.global') : t('leaderboard.faction')}
             </Button>
           )}
-          <SearchableSelect
-            className="w-[120px]"
-            triggerClassName="h-8 text-xs"
-            aria-label={t('leaderboard.period')}
-            value={period}
-            onValueChange={setPeriod}
-            options={periodOptions}
-          />
+          {/* Segmented period control — a race you can flip with a tap. */}
+          <div className="flex rounded-lg border border-white/[0.08] p-0.5" role="tablist" aria-label={t('leaderboard.period')}>
+            {(Object.keys(PERIOD_KEYS) as string[]).map((value) => (
+              <button
+                key={value}
+                role="tab"
+                aria-selected={period === value}
+                onClick={() => setPeriod(value)}
+                className={`h-7 px-3 rounded-md text-xs font-medium transition-colors ${period === value ? 'bg-white/[0.09] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                {t(PERIOD_KEYS[value])}
+              </button>
+            ))}
+          </div>
           {!showGlobal && (
             <SearchableSelect
               className="w-[140px]"
@@ -158,11 +171,40 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           {loading ? (
             <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
           ) : rankings.length === 0 ? (
-            <div className="p-12 text-center text-zinc-600">
-              <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{t('leaderboard.noEntriesForPeriod')}</p>
-            </div>
+            <EmptyState icon={Trophy} title={t('leaderboard.noEntriesForPeriod')} />
           ) : (
+            <div>
+            {/* Podium: the top three get an emphasized header row — the race
+                should look like one. Skipped on the global board and when a
+                filter narrows the field to fewer than three. */}
+            {!showGlobal && rankings.length >= 3 && (
+              <div className="grid grid-cols-3 gap-2 p-3 border-b border-white/[0.06]">
+                {[1, 0, 2].map((idx) => {
+                  const r = rankings[idx];
+                  if (!r) return null;
+                  const isMe = 'isMe' in r && r.isMe;
+                  const sigil = r.rank === 1 ? <Crown className="h-4 w-4" style={{ color: '#eab308' }} />
+                    : r.rank === 2 ? <Medal className="h-4 w-4 text-zinc-300" />
+                    : <Medal className="h-4 w-4" style={{ color: '#d97706' }} />;
+                  return (
+                    <button
+                      key={r.userId}
+                      onClick={() => handleOpenProfile?.(r.userId)}
+                      className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-colors ${r.rank === 1 ? 'border-white/[0.14] bg-white/[0.04]' : 'border-white/[0.06]'} ${isMe ? 'ring-1' : ''}`}
+                      style={isMe ? { borderColor: brandColor } : undefined}
+                    >
+                      {sigil}
+                      <Avatar className={r.rank === 1 ? 'h-11 w-11' : 'h-9 w-9'}>
+                        <AvatarImage src={r.avatarUrl ?? undefined} />
+                        <AvatarFallback className="text-xs">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <p className="text-xs text-zinc-300 truncate max-w-full">{displayName(r)}</p>
+                      <p className={`font-medium tabular-nums ${r.rank === 1 ? 'text-sm text-zinc-100' : 'text-xs text-zinc-300'}`}>{formatNumber(r.total)}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="divide-y divide-white/[0.04]">
               {rankings.map((r) => {
                 const isMe = 'isMe' in r && r.isMe;
@@ -228,6 +270,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                   </div>
                 );
               })}
+            </div>
             </div>
           )}
         </CardContent>

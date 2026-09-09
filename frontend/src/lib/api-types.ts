@@ -207,6 +207,7 @@ export interface DashboardData {
   }[];
   recentEntries: {
     id: string;
+    userId: string;
     amount: string;
     description: string | null;
     entryDate: string;
@@ -725,6 +726,7 @@ export interface MemberProfile {
   activeStrikeCount: number;
   recentEntries: {
     id: string;
+    userId: string;
     amount: string;
     description: string | null;
     entryDate: string;
