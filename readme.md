@@ -1,0 +1,98 @@
+# Faction Accountant
+
+**A self-hosted ledger for FiveM roleplay factions.** Track who put what in
+the vault, what got paid out, what's expected this week, and who's carrying
+the crew — with an audit trail nobody can rewrite.
+
+Cartels, PDs, EMS, mechanic shops, biker clubs — any faction that pools
+money, goods or contraband and needs an honest record of it.
+
+<!-- 
+  Swap in real badges once the repo is live, e.g.:
+  ![License](https://img.shields.io/github/license/your-org/faction-accountant)
+  ![Docker](https://img.shields.io/badge/deploy-docker--compose-2496ED?logo=docker)
+  ![Next.js](https://img.shields.io/badge/frontend-Next.js-black?logo=nextdotjs)
+-->
+
+---
+
+## Why
+
+Discord threads and spreadsheets lose the thread the moment a faction gets
+past a dozen members. Faction Accountant replaces both with one page: log an
+entry in three taps, see the vault balance in real time, and settle a
+dispute by pointing at an append-only audit log instead of scrolling
+Discord history.
+
+## Features
+
+- 💰 **Entries & treasury** — every contribution logged per member, per item
+  type; the vault balance is always derived, never stored, so it can't drift
+- 🏦 **Withdrawals** — request → approve → complete pipeline, plus even-split
+  payouts and vault-count reconciliation
+- 🎯 **Quotas** — weekly/monthly targets, per-member or faction-wide, with a
+  full history of every period, met or missed
+- 🏆 **Leaderboards & streaks** — ranked contributors, logging streaks, a
+  GitHub-style contribution heatmap per member
+- ⚖️ **Discipline** — strikes with severity, expiry and appeal tracking;
+  private admin notes members never see
+- 🧾 **Audit log** — append-only record of every write in the system, actor
+  and timestamp included
+- 🌐 **English & Hungarian** out of the box, with amounts formatted
+  consistently in both
+- ⚡ **Command palette (Ctrl+K)**, installable as a PWA, mobile-first UI
+- 🔐 **Discord OAuth** login — no separate accounts, ranks map to your
+  faction's own hierarchy
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Frontend | Next.js (App Router), TypeScript, Tailwind, TanStack Query, zustand |
+| Backend | Node.js 22 LTS, TypeScript |
+| Database | PostgreSQL, Drizzle ORM |
+| Auth | Discord OAuth 2.0 + JWT sessions |
+| Deploy | Docker Compose, self-hosted on your own VPS |
+
+## Quick start
+
+```bash
+git clone https://github.com/<your-org>/faction-accountant.git
+cd faction-accountant
+
+cp .env.example .env
+# fill in Discord OAuth credentials, JWT secret, DB config
+
+docker compose up -d
+```
+
+Then open the app, sign in with Discord, and the first superadmin bootstrap
+script creates the initial faction. Full deployment steps (VPS sizing, TLS,
+backups) live in [`docs/Architecture.md`](docs/Architecture.md).
+
+## Documentation
+
+- 📘 [`docs/UserGuide.md`](docs/UserGuide.md) — the complete player/leader/
+  superadmin manual (also served in-app)
+- 🏗️ [`docs/Architecture.md`](docs/Architecture.md) — system design, data
+  model, API, and the full development roadmap
+
+## Roadmap
+
+Actively developed. Discord bot commands, automated reports, webhooks and
+faction templates are next up — see the roadmap in the architecture doc for
+the full phase-by-phase plan and what's already shipped.
+
+## Contributing
+
+Issues and PRs welcome. If you're adding a feature, check the roadmap first
+so it lines up with where the project's headed.
+
+## License
+
+<!-- e.g. MIT — pick one and drop it in a LICENSE file -->
+Add your license here.
+
+---
+
+*Built for FiveM roleplay servers. Self-hosted, your data, your rules.*
