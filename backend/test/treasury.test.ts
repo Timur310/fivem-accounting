@@ -144,3 +144,69 @@ describe('GET /laundering — unused currencies stay available', () => {
     expect(ids).toContain(fresh);
   });
 });
+
+/**
+ * Vault verification is what the disputes are about, so the gate on it has to
+ * be coherent: `manage_payouts` lets a member record a count, and the same
+ * permission has to let them read the counts back. Granting a write into a
+ * list its holder cannot see is the bug these pin down.
+ */
+describe('treasury checks — who may record and read vault counts', () => {
+  /** Define a rank with the given permissions and put the plain member on it. */
+  async function giveMemberRank(permissions: string[], name = 'Capo') {
+    const ranks = await api()
+      .patch(`/api/v1/factions/${w.faction.id}/settings`)
+      .set('Cookie', w.admin.cookie)
+      .send({ ranks: [{ name, level: 1, permissions }] });
+    expect(ranks.status).toBe(200);
+
+    const assigned = await api()
+      .patch(`/api/v1/factions/${w.faction.id}/members/${w.member.id}`)
+      .set('Cookie', w.admin.cookie)
+      .send({ rank: name });
+    expect(assigned.status).toBe(200);
+  }
+
+  // The recorded balance is derived as of the check's own day, so the entry
+  // behind it has to be dated on or before that day.
+  const CHECK_DATE = '2026-01-15';
+  const recordCheck = (cookie: string, amount = '900') =>
+    api()
+      .post(`${treasury()}/checks`)
+      .set('Cookie', cookie)
+      .send({ itemTypeId: w.itemTypeId, countedAmount: amount, checkDate: CHECK_DATE });
+
+  it('lets a member with manage_payouts read the counts they may record', async () => {
+    await giveMemberRank(['manage_payouts']);
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '1000', CHECK_DATE);
+
+    expect((await recordCheck(w.member.cookie)).status).toBe(201);
+
+    const res = await api().get(`${treasury()}/checks`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.checks).toHaveLength(1);
+    expect(res.body.data.checks[0].variance).toBe(-100);
+  });
+
+  it('refuses a member whose rank does not grant manage_payouts', async () => {
+    await giveMemberRank(['manage_expenses']);
+
+    expect((await recordCheck(w.member.cookie)).status).toBe(403);
+    const res = await api().get(`${treasury()}/checks`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses a member on no rank at all', async () => {
+    const res = await api().get(`${treasury()}/checks`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(403);
+  });
+
+  it('still lets a faction admin read them without any rank', async () => {
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '1000', CHECK_DATE);
+    expect((await recordCheck(w.admin.cookie, '1000')).status).toBe(201);
+
+    const res = await api().get(`${treasury()}/checks`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.checks[0].variance).toBe(0);
+  });
+});
