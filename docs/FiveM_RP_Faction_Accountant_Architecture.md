@@ -602,7 +602,10 @@ exists to settle, so an admin can record a physical count
 (`POST /treasury/checks`, `manage_payouts`): item type, counted amount, date,
 note. The recorded balance for that day is derived from the same source as the
 live balance, and each check answers with a `variance` — counted minus
-recorded. Counts are admin-readable (`GET /treasury/checks`); nothing is
+recorded. Reading them (`GET /treasury/checks`) takes the same `manage_payouts`
+permission as recording one: a permission that grants a write into a list its
+holder cannot see is not a permission, and the treasury page renders the form
+and the listing as one section off that single grant. Nothing is
 reconciled automatically, the number is the point. Only item
 types with at least one live entry or completed payout are listed — on both the
 treasury page and the dashboard card. The list can be filtered by name and

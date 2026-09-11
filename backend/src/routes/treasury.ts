@@ -203,14 +203,12 @@ async function recordedBalanceAt(factionId: string, itemTypeId: string, dateStr:
   return Number(entrySum[0]?.total ?? 0) - Number(payoutSum[0]?.total ?? 0) - Number(expenseSum[0]?.total ?? 0);
 }
 
-// ── GET /checks — recent vault counts (admin) ────────
-router.get('/checks', async (req: Request, res: Response) => {
+// ── GET /checks — recent vault counts (manage_payouts) ────────
+// Same gate as POST below: whoever may record a count has to be able to read
+// the counts back, otherwise the permission grants a write into a list its
+// holder cannot see. Admins and superadmins pass implicitly.
+router.get('/checks', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
-  const isAdmin = req.factionRole === 'admin' || req.factionRole === 'superadmin';
-  if (!isAdmin) {
-    error(res, 'FORBIDDEN', 'Admin access required', 403);
-    return;
-  }
 
   const rows = await db
     .select({
