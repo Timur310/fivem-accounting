@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionsApi, adminAnalyticsApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,7 +52,7 @@ export function AdminFactionsView() {
 
   const [deleteTarget, setDeleteTarget] = useState<Faction | null>(null);
 
-  const { data: factionsData, isLoading } = useQuery({
+  const { data: factionsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-factions', page, search],
     queryFn: () => factionsApi.list({ page, page_size: 20, search: search || undefined }),
     staleTime: 30 * 1000,
@@ -115,6 +115,8 @@ export function AdminFactionsView() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => refetch()} />
           ) : factions.length === 0 ? (
             <EmptyState icon={Shield} title={t('admin.noFactionsYet')} />
           ) : (

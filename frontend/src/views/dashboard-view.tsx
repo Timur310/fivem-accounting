@@ -1,13 +1,14 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, leaderboardApi, membersApi, apiErrorMessage } from '@/lib/api-client';
 import { Input } from '@/components/ui/input';
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
-import { LogIn, Flame, Trophy, Target as TargetIcon, Coins } from 'lucide-react';
+import { LogIn, Flame, Trophy, Target as TargetIcon, Coins, Check } from 'lucide-react';
 import type { ItemType } from '@/lib/api-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -41,7 +42,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
 
   const [displayBalance, setDisplayBalance] = useState(0);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard', factionId],
     queryFn: () => dashboardApi.get(factionId),
     staleTime: 0,
@@ -84,19 +85,52 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
   const [quickTypeId, setQuickTypeId] = useState('');
   const [quickAmount, setQuickAmount] = useState('');
 
+  // `myRecentItems` is the caller's own last three item types, newest first,
+  // resolved on the server. Filtering the faction-wide `recentEntries` for the
+  // caller — which is what this did — only worked while the faction was quiet
+  // enough for the member to be in its last ten rows.
+  const myRecentItems = useMemo(() => data?.myRecentItems ?? [], [data]);
+
   const quickDefaults = useMemo(() => {
-    const recent = (data?.recentEntries ?? []) as { userId?: string; itemTypeName: string; amount: string }[];
-    const mine = recent.find((e) => e.userId === user?.id);
-    if (!mine) return null;
-    const type = (itemTypes as ItemType[]).find((it) => it.isActive && it.name === mine.itemTypeName);
-    return type ? { typeId: type.id, amount: mine.amount } : null;
-  }, [data, itemTypes, user?.id]);
+    const mine = myRecentItems[0];
+    return mine ? { typeId: mine.itemTypeId, amount: mine.amount } : null;
+  }, [myRecentItems]);
+
+  // Prefill once, on arrival — not on every change of `quickDefaults`.
+  //
+  // Logging invalidates the dashboard, so the refetch used to hand back a new
+  // defaults object and refill the amount the success handler had just
+  // cleared, putting the card straight back into "one tap logs this again".
+  // The prefill is a convenience when you open the page, not something that
+  // should reassert itself over what you just did.
+  const hasPrefilled = useRef(false);
+  // The view is not remounted when the faction selector changes, so the
+  // "already prefilled" latch has to be released by hand — otherwise the
+  // first faction you opened is the only one that ever prefills.
+  useEffect(() => {
+    hasPrefilled.current = false;
+    setQuickTypeId('');
+    setQuickAmount('');
+  }, [factionId]);
 
   useEffect(() => {
-    if (!quickDefaults) return;
+    if (!quickDefaults || hasPrefilled.current) return;
+    hasPrefilled.current = true;
     setQuickTypeId((prev) => prev || quickDefaults.typeId);
     setQuickAmount((prev) => prev || quickDefaults.amount);
   }, [quickDefaults]);
+
+  // Brief "Logged" state on the button after a successful quick log.
+  //
+  // The card previously kept type and amount filled and re-enabled the button
+  // the moment the request returned, with only a toast to say anything had
+  // happened — so a second thumb tap on a phone silently logged the same haul
+  // twice. Clearing the amount and holding the button for a beat makes the
+  // repeat deliberate rather than accidental, and gives the card the
+  // confirmation it never had.
+  const [quickJustLogged, setQuickJustLogged] = useState(false);
+  const quickFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (quickFlashTimer.current) clearTimeout(quickFlashTimer.current); }, []);
 
   const quickType = (itemTypes as ItemType[]).find((it) => it.id === quickTypeId);
   const quickStep = quickType?.isCurrency ? 1000 : 1;
@@ -113,6 +147,10 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
       toast({ title: t('entries.logged') });
+      setQuickAmount('');
+      setQuickJustLogged(true);
+      if (quickFlashTimer.current) clearTimeout(quickFlashTimer.current);
+      quickFlashTimer.current = setTimeout(() => setQuickJustLogged(false), 1200);
     },
     onError: (err: unknown) => {
       toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
@@ -125,17 +163,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
 
   // One-tap chips for the member's usual items — the card should be usable
   // in three taps, thumb-only.
-  const quickRecentTypes = useMemo(() => {
-    const recent = data?.recentEntries ?? [];
-    const names: string[] = [];
-    for (const e of recent) {
-      if (e.userId === user?.id && !names.includes(e.itemTypeName)) names.push(e.itemTypeName);
-      if (names.length === 3) break;
-    }
-    return names
-      .map((name) => (itemTypes as ItemType[]).find((it) => it.isActive && it.name === name))
-      .filter((it): it is ItemType => !!it);
-  }, [data, itemTypes, user?.id]);
+  const quickRecentTypes = myRecentItems;
 
   // Charts and export are reference material, not the daily glance — folded
   // away by default so the page reads in one screenful.
@@ -182,9 +210,9 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
 
   if (error || !data) {
     return (
-      <Card className="border-red-500/20">
-        <CardContent className="p-6 text-center text-red-400">
-          {t('dashboard.loadFailed')}
+      <Card>
+        <CardContent className="p-0">
+          <ErrorState error={error} onRetry={() => refetch()} />
         </CardContent>
       </Card>
     );
@@ -222,7 +250,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
 
       {/* ══ Quick Log ══ */}
       {canLogEntries && (
-        <Card>
+        <Card className={quickJustLogged ? 'row-flash' : ''}>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
               <LogIn className="h-4 w-4 text-zinc-400" />
@@ -235,13 +263,13 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
               <div className="flex flex-wrap gap-2 mb-3">
                 {quickRecentTypes.map((it) => (
                   <button
-                    key={it.id}
+                    key={it.itemTypeId}
                     type="button"
-                    onClick={() => { setQuickTypeId(it.id); const mine = (data?.recentEntries ?? []).find((e) => e.userId === user?.id && e.itemTypeName === it.name); if (mine) setQuickAmount(mine.amount); }}
-                    className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.id ? 'border-primary text-primary bg-primary/10' : 'border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.2]'}`}
+                    onClick={() => { setQuickTypeId(it.itemTypeId); setQuickAmount(it.amount); }}
+                    className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.itemTypeId ? 'border-primary text-primary bg-primary/10' : 'border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.2]'}`}
                   >
-                    <ItemIcon src={it.imageUrl} className="size-4" />
-                    {it.name}
+                    <ItemIcon src={it.itemImageUrl} className="size-4" />
+                    {it.itemTypeName}
                   </button>
                 ))}
               </div>
@@ -275,11 +303,13 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
               </div>
               <Button
                 className="h-11 px-6 text-sm"
-                disabled={!quickTypeId || !quickAmount || Number(quickAmount) <= 0 || quickLogMutation.isPending}
+                disabled={quickJustLogged || !quickTypeId || !quickAmount || Number(quickAmount) <= 0 || quickLogMutation.isPending}
                 onClick={() => quickLogMutation.mutate()}
-                style={{ backgroundColor: brandColor }}
+                style={quickJustLogged ? undefined : { backgroundColor: brandColor }}
               >
-                {quickLogMutation.isPending ? t('common.saving') : t('dashboard.quickLogSubmit')}
+                {quickJustLogged ? (
+                  <><Check className="h-4 w-4 mr-1.5" />{t('dashboard.quickLogDone')}</>
+                ) : quickLogMutation.isPending ? t('common.saving') : t('dashboard.quickLogSubmit')}
               </Button>
             </div>
           </CardContent>

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { auditLogsApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
@@ -57,7 +57,7 @@ export function AuditLogsView({ factionId }: Props) {
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [entityFilter, setEntityFilter] = useState<string>('all');
 
-  const { data: logsData, isLoading } = useQuery({
+  const { data: logsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['auditLogs', factionId, page, actionFilter, entityFilter],
     queryFn: () => auditLogsApi.list(factionId, { page, page_size: 25, action: actionFilter === 'all' ? undefined : actionFilter, entity_type: entityFilter === 'all' ? undefined : entityFilter }),
     staleTime: 30 * 1000,
@@ -110,6 +110,8 @@ export function AuditLogsView({ factionId }: Props) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => refetch()} />
           ) : logs.length === 0 ? (
             <EmptyState icon={ScrollText} title={t('audit.none')} />
           ) : (

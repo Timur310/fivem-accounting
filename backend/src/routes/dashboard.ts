@@ -104,6 +104,50 @@ router.get('/', async (req: Request, res: Response) => {
     .orderBy(desc(entries.createdAt))
     .limit(10);
 
+  // The caller's own last few item types, for the quick-log chips.
+  //
+  // These used to be derived on the client by filtering `recentEntries` for the
+  // caller's rows. That list is the faction's last ten entries overall, so in
+  // any faction busier than a handful of people a member is simply not in it —
+  // their chips and their prefill silently disappeared. Asking for the member's
+  // own rows is the only way the feature works at every roster size.
+  //
+  // DISTINCT ON keeps the newest row per item type, so three chips means three
+  // different items rather than the same one logged three times. Inactive and
+  // deleted types are left out: a chip that cannot be logged is worse than no
+  // chip.
+  const myLatestPerType = db
+    .selectDistinctOn([entries.itemTypeId], {
+      itemTypeId: entries.itemTypeId,
+      amount: entries.amount,
+      createdAt: entries.createdAt,
+    })
+    .from(entries)
+    .where(
+      and(
+        eq(entries.factionId, factionId),
+        eq(entries.userId, req.user!.id),
+        eq(entries.isDeleted, false),
+      ),
+    )
+    .orderBy(entries.itemTypeId, desc(entries.createdAt))
+    .as('my_latest_per_type');
+
+  const myRecentItems = await db
+    .select({
+      itemTypeId: myLatestPerType.itemTypeId,
+      itemTypeName: itemTypes.name,
+      itemUnit: itemTypes.unit,
+      itemIsCurrency: itemTypes.isCurrency,
+      itemImageUrl: itemTypes.imageUrl,
+      amount: myLatestPerType.amount,
+    })
+    .from(myLatestPerType)
+    .innerJoin(itemTypes, eq(myLatestPerType.itemTypeId, itemTypes.id))
+    .where(eq(itemTypes.isActive, true))
+    .orderBy(desc(myLatestPerType.createdAt))
+    .limit(3);
+
   // Grand total
   const [grandTotal] = await db
     .select({ total: sum(entries.amount).mapWith(Number) })
@@ -194,6 +238,7 @@ router.get('/', async (req: Request, res: Response) => {
     totalEntries: entryStats?.count ?? 0,
     topContributors,
     recentEntries,
+    myRecentItems,
     ...(isAdmin ? { inactiveMembers, inactivityThresholdDays } : {}),
   });
 });

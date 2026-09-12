@@ -508,11 +508,13 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Edit a member's in-game name | Yes | Yes | `manage_members` | own only |
 | Log an entry for yourself | Yes¹ | Yes | Yes | Yes |
 | Log for another member, or anonymously | Yes | Yes | `manage_entries` | No |
-| Edit / delete entries | Yes | Yes | `manage_entries` | No |
+| Edit / delete entries | Yes | Yes | `manage_entries` | delete own, 5 min² |
 | Request a withdrawal for yourself | Yes | Yes | Yes | Yes |
 | Create one for someone else | Yes | Yes | `manage_payouts` | No |
 | Approve / complete / reject / edit / delete a withdrawal | Yes | Yes | `manage_payouts` | No |
+| Take back your own withdrawal request | Yes | Yes | Yes | while `pending`³ |
 | See the faction's whole withdrawal list | Yes | Yes | `manage_payouts` | own only |
+| Record and read vault verification counts | Yes | Yes | `manage_payouts` | No |
 | Issue and settle strikes | Yes | Yes | `manage_strikes` | No |
 | Launder currency | Yes | Yes | `manage_laundering` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
@@ -523,6 +525,14 @@ changing someone's `role` stays with the faction admin and the superadmin.
 
 ¹ A superadmin who is not on the roster cannot credit an entry to themselves —
 there is nobody for it to belong to. They name a member or mark it anonymous.
+
+² The five-minute self-undo (§8.2). It is a carve-out for people without
+`manage_entries`, not a limit on it: the permission still deletes any entry at
+any age.
+
+³ Nothing has left the vault while a request is pending, so taking it back moves
+no money (§8.3). Once anyone approves, rejects or completes it, the row is
+theirs, not yours.
 
 ---
 
@@ -578,6 +588,14 @@ There is no second-person requirement. Whoever holds the permission may settle a
 withdrawal they raised themselves — including a member who asked for one and was
 given the permission afterwards. Deleting works at any status; editing does not,
 because a completed or rejected withdrawal is part of the ledger.
+
+The one thing a member may do without the permission is take back their **own**
+request while it is still `pending`: nothing has left the vault yet, so the
+retraction moves no money, and without it someone who typed the wrong amount had
+to find a permission holder to undo a row nobody had acted on. The moment the
+request is approved, rejected or completed it is someone else's decision and
+part of the ledger, and self-cancel stops. The audit row carries
+`selfCancelled: true` so the two cases stay distinguishable.
 
 **Even split** distributes an amount across the roster, rounding down per member
 and leaving the remainder in the vault. An optional `memberUserIds` list (every
@@ -781,6 +799,12 @@ registrations still waiting, in one list with the registrations pinned to the to
 and labelled. Rename and remove appear only on those, because that is all the API
 allows.
 
+The sign-in screen is not in `views/`: it renders before a faction is ever
+selected, so it lives in `components/login-page.tsx` and is the one screen
+the shell does not wrap. It carries the language switcher above everything
+else, because someone who landed in the wrong language has to find it before
+reading anything.
+
 Expenses are not a view of their own: they render as a section inside the
 treasury view, because the balance cards above them already carry their effect.
 The Settings tabs for item types, quotas and ranks each carry CSV export/import
@@ -799,6 +823,16 @@ buttons (§8.8).
   quota bars are neutral unless the value is actually negative (red) or a quota is
   actually met (green). The accent is for chrome: navigation, buttons, badges,
   card glows and charts.
+- **Dates are the reader's local date, never UTC.** Every "today" in the
+  interface — a date field's default, its `max`, a computed period start —
+  goes through `todayLocalDateString()`. `new Date().toISOString()` is a bug
+  here: Hungary is UTC+1/+2, so between local midnight and 01:00 or 02:00 it
+  yields *yesterday*, which both mis-dates the entry into the wrong quota
+  period and sets a `max` that refuses to let the player pick today at all.
+  That window is exactly when a roleplay session ends.
+- **A failed fetch is its own state.** Views render loading, error and empty
+  as three separate branches, never two — see `ErrorState` in §9.4. Falling
+  through a failure to the empty state tells a member their ledger is gone.
 - **State**: zustand for session, selected faction and view; TanStack Query for
   everything fetched.
 
@@ -815,7 +849,13 @@ glows, never in the ledger rows themselves.
 stats strip and quota sit above faction totals, with the hero balance's
 count-up animation (§9.1) carried over. Quick log is now the star of the
 card — last-three-item chips, larger tap targets, a one-thumb three-tap
-flow. The entries list gained a filter bar that sticks on scroll and
+flow. Those chips are the caller's own last three item types, resolved
+server-side (`myRecentItems` on the dashboard payload) rather than filtered
+out of the faction-wide recent-entries feed: that feed is the last ten rows
+overall, so in any faction busier than a handful of people a member was
+simply not in it and their chips silently disappeared. The card prefills
+once on arrival and clears after a log, so the refetch cannot put the form
+back into a state where one more tap repeats the entry. The entries list gained a filter bar that sticks on scroll and
 per-row hover actions. The leaderboard gained a podium treatment for the
 top three, animated movement arrows, and a segmented control in place of
 the period dropdown. Withdrawals render their pending → approved →
@@ -843,24 +883,40 @@ the redesign extends the same rule to every new surface; no sound,
 confetti, or emoji in ledger rows; every playful element is removable by
 config for a faction that wants it austere.
 
+**A third state beside loading and empty.** `ui/empty-state.tsx` exports
+`EmptyState`, `ListSkeleton` and `ErrorState`. The third one is not
+cosmetic: a list whose request fails must never fall through to the empty
+state, because "nothing here yet" and "we could not load it" say opposite
+things about the same screen, and a member who reads a dropped connection
+as an empty ledger concludes their entries are gone. `ErrorState` reads the
+response status and splits two cases — a 403 is named as a missing
+permission and offers no retry, since retrying a permission error only
+teaches people to keep pressing; anything else offers `refetch()`. Every
+view that fetches renders it.
+
+**Partially implemented from the plan:**
+
+- The shared shimmer skeleton and single empty-state component exist
+  (`EmptyState`, `ListSkeleton`) and are used by the list-shaped views, but
+  adoption is not complete — the dashboard, reports, settings, laundering
+  and the member profile still hand-roll theirs, visually close but not
+  unified.
+- Row-level micro-feedback: the freshly-logged entry row pulses
+  (`.row-flash`), and the quick-log card pulses on a successful log. The
+  eased quota-bar fill is still missing.
+
 **Not yet implemented from the plan:**
 
-- A shared shimmer skeleton and a single line-art empty-state component —
-  each view still hand-rolls its own, visually close but not unified.
 - Item types as full visual citizens: a built-in icon/emoji picker per item
   type and cash/goods/contraband category color-coding. Only the existing
   admin-pasted image URL is in place.
-- Row-level micro-feedback: a green/red pulse on a freshly logged entry and
-  an eased quota-bar fill on update — the hero count-up is done; this is
-  the rest of the "everything should move" principle.
 - Stats-strip fact-chips — "Best week so far", "12-week quota streak."
 - Roster rank sigils (Boss/Underboss emblem) and the stamped "IN THE RED"
   mark on a negative balance.
 
 None of the above blocks testing or launch — it's polish. Of the remainder,
-the row-pulse micro-feedback and the shared empty-state component are the
-best value for the effort; the item-type icon picker is the largest, since
-it needs both a picker UI and a schema field.
+finishing the empty-state adoption is the cheapest; the item-type icon
+picker is the largest, since it needs both a picker UI and a schema field.
 
 ---
 
@@ -1159,9 +1215,9 @@ crontab -e
 | 8 | Faction masthead | Display-type name, accent glow, optional logo image URL — **DONE** | Medium |
 | 9 | Heatmap-as-hero | Enlarged, accent-tinted heatmap with "best day" tooltip on the member profile — **DONE** | Low |
 | 10 | PWA / mobile app feel | Manifest, home-screen icon, fullscreen standalone mode — **DONE** | Medium |
-| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component | Low — not started |
+| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component, plus an `ErrorState` so a failed load never reads as an empty list — **PARTIAL** (component done and used by the list views; dashboard, reports, settings, laundering and member profile still hand-roll theirs) | Low |
 | 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding | Low — not started (image URL only) |
-| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill | Low — not started |
+| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill — **PARTIAL** (entry row and quick-log card pulse; quota-bar fill still unanimated) | Low |
 | 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" | Low — not started |
 | 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance | Low — not started |
 

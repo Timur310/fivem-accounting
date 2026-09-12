@@ -40,7 +40,8 @@ import {
   type FactionPermission,
 } from '@/lib/api-types';
 import { useEffect, useMemo, useRef } from 'react';
-import { formatAmount, displayName } from '@/lib/format';
+import { formatAmount, displayName, todayLocalDateString } from '@/lib/format';
+import { ErrorState } from '@/components/ui/empty-state';
 import { ItemIcon } from '@/components/item-icon';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -243,7 +244,7 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
   const [editImageUrl, setEditImageUrl] = useState('');
   const [editActive, setEditActive] = useState(true);
 
-  const { data: itemTypes = [], isLoading } = useQuery({
+  const { data: itemTypes = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['itemTypes', factionId],
     queryFn: () => itemTypesApi.list(factionId),
     staleTime: 30 * 1000,
@@ -349,6 +350,8 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => refetch()} />
           ) : itemTypes.length === 0 ? (
             <div className="p-12 text-center text-zinc-500">
               <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -564,7 +567,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
     const diff = day === 0 ? 1 : 8 - day;
     const monday = new Date(d);
     monday.setDate(d.getDate() + diff);
-    return monday.toISOString().split('T')[0];
+    return todayLocalDateString(monday);
   });
 
   // Edit form
@@ -574,7 +577,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
   const [editPeriodStart, setEditPeriodStart] = useState('');
   const [editActive, setEditActive] = useState(true);
 
-  const { data: quotasList = [], isLoading: quotasLoading } = useQuery({
+  const { data: quotasList = [], isLoading: quotasLoading, isError: quotasIsError, error: quotasError, refetch: quotasRefetch } = useQuery({
     queryKey: ['quotas', factionId],
     queryFn: () => quotasApi.list(factionId),
     staleTime: 30 * 1000,
@@ -702,7 +705,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
     const diff = day === 0 ? 1 : 8 - day;
     const monday = new Date(d);
     monday.setDate(d.getDate() + diff);
-    setNewPeriodStart(monday.toISOString().split('T')[0]);
+    setNewPeriodStart(todayLocalDateString(monday));
   };
 
   const openEdit = (q: Quota) => {
@@ -746,6 +749,8 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
+          ) : quotasIsError ? (
+            <ErrorState error={quotasError} onRetry={() => quotasRefetch()} />
           ) : quotasList.length === 0 ? (
             <div className="p-12 text-center text-zinc-500">
               <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -1113,7 +1118,7 @@ function CustomizationSection({ factionId }: { factionId: string }) {
   // Customization is read/written through factionSettingsApi so faction
   // admins (manage_settings OR manage_customization) can edit it — the
   // factionsApi.update endpoint is superadmin-only and would 403 most users.
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['faction-settings', factionId],
     queryFn: () => factionSettingsApi.get(factionId),
     staleTime: 30 * 1000,
@@ -1175,6 +1180,10 @@ function CustomizationSection({ factionId }: { factionId: string }) {
 
   if (isLoading) {
     return <div className="p-6 space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div>;
+  }
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
   return (
@@ -1276,7 +1285,7 @@ function FactionSettingsSection({
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
 
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['faction-settings', factionId],
     queryFn: () => factionSettingsApi.get(factionId),
     staleTime: 0,
@@ -1355,6 +1364,10 @@ function FactionSettingsSection({
 
   if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-64 w-full" /><Skeleton className="h-48 w-full" /></div>;
+  }
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
   return (

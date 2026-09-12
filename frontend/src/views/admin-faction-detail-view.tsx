@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Users, Package, Settings } from 'lucide-react';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useAppStore } from '@/lib/store';
 import type { Member, ItemType } from '@/lib/api-types';
 import { formatDate, displayName } from '@/lib/format';
@@ -18,7 +19,7 @@ export function AdminFactionDetailView() {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const setSelectedFactionId = useAppStore((s) => s.setSelectedFactionId);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-faction-detail', adminDetailFactionId],
     queryFn: () => factionsApi.get(adminDetailFactionId!),
     enabled: !!adminDetailFactionId,
@@ -35,6 +36,10 @@ export function AdminFactionDetailView() {
         </div>
       </div>
     );
+  }
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
   if (!data) {

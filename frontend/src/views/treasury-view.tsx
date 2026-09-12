@@ -25,6 +25,7 @@ import { formatAmount, displayName, formatNumber, todayLocalDateString } from '@
 import { getIntlLocale } from '@/lib/i18n';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import type { TranslationKey } from '@/lib/i18n';
 import type { ItemType, ExpenseCategory, Expense } from '@/lib/api-types';
@@ -57,7 +58,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['treasury', factionId],
     queryFn: () => treasuryApi.get(factionId, 30),
     staleTime: 0,
@@ -78,9 +79,9 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
 
   if (error || !data) {
     return (
-      <Card className="border-red-500/20">
-        <CardContent className="p-6 text-center text-red-400">
-          {t('treasury.loadFailed')}
+      <Card>
+        <CardContent className="p-0">
+          <ErrorState error={error} onRetry={() => refetch()} />
         </CardContent>
       </Card>
     );
@@ -427,13 +428,13 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
   const [formDescription, setFormDescription] = useState('');
   const [formDate, setFormDate] = useState(todayLocalDateString());
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['expenses', factionId],
     queryFn: () => expensesApi.list(factionId, { page_size: 100 }),
     staleTime: 0,
   });
 
-  // Only needed to fill the picker; skip the request when the reader can no
+  // Only needed to fill the picker; skip the request when the reader cannot
   // open the dialog anyway.
   const { data: itemTypes = [] } = useQuery({
     queryKey: ['item-types', factionId],
@@ -601,8 +602,10 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
           <div className="space-y-2">
             {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
+        ) : isError ? (
+          <ErrorState error={error} onRetry={() => refetch()} compact />
         ) : expenses.length === 0 ? (
-          <p className="text-zinc-600 text-sm text-center py-8">{t('expenses.none')}</p>
+          <EmptyState icon={Receipt} title={t('expenses.none')} compact />
         ) : (
           <div className="space-y-1">
             {expenses.map((e) => (
@@ -726,7 +729,7 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
   const [formDate, setFormDate] = useState(todayLocalDateString());
   const [formNote, setFormNote] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['treasury-checks', factionId],
     queryFn: () => treasuryApi.listChecks(factionId),
     enabled: canManage,
@@ -829,8 +832,10 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
           <div className="space-y-2">
             {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
+        ) : isError ? (
+          <ErrorState error={error} onRetry={() => refetch()} compact />
         ) : checks.length === 0 ? (
-          <p className="text-zinc-600 text-sm text-center py-6">{t('treasury.noChecks')}</p>
+          <EmptyState icon={ClipboardCheck} title={t('treasury.noChecks')} compact />
         ) : (
           <div className="space-y-1">
             {checks.map((c) => {

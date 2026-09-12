@@ -6,7 +6,7 @@ import { membersApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-clien
 import type { Member } from '@/lib/api-types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { EmptyState, ListSkeleton } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -68,7 +68,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
   const [rankTarget, setRankTarget] = useState<{ userId: string; username: string; currentRank: string | null } | null>(null);
   const [newRank, setNewRank] = useState<string>('');
 
-  const { data: members = [], isLoading } = useQuery({
+  const { data: members = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['members', factionId],
     queryFn: () => membersApi.list(factionId),
     staleTime: 30 * 1000,
@@ -238,6 +238,8 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
         <CardContent className="p-0">
           {isLoading ? (
             <ListSkeleton rows={4} />
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => refetch()} />
           ) : members.length === 0 ? (
             <EmptyState icon={UserPlus} title={t('members.noneYet')} />
           ) : (

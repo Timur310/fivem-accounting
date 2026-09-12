@@ -514,7 +514,14 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
 });
 
 // ── DELETE /:payoutId — soft-delete a payout ─────────
-router.delete('/:payoutId', requirePermission('manage_payouts'), async (req: Request, res: Response) => {
+//
+// `manage_payouts` deletes any row at any status. A requester may additionally
+// withdraw their OWN request while it is still pending: a member who typed the
+// wrong amount otherwise has to find someone with the permission to undo a row
+// nobody has acted on yet, and a pending payout has not left the vault, so
+// taking it back moves no money. Once it is approved, rejected or completed it
+// is someone else's decision and part of the ledger, so self-cancel stops.
+router.delete('/:payoutId', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
   const payoutId = req.params.payoutId as string;
 
@@ -531,6 +538,16 @@ router.delete('/:payoutId', requirePermission('manage_payouts'), async (req: Req
     .limit(1);
   if (!existing) {
     error(res, 'NOT_FOUND', 'Payout not found', 404);
+    return;
+  }
+
+  const canManage = canManagePayouts(req);
+  const isMine = existing.recipientUserId === req.user!.id;
+  const selfCancel = !canManage && isMine && existing.status === 'pending';
+  if (!canManage && !selfCancel) {
+    error(res, 'FORBIDDEN', isMine
+      ? 'A withdrawal can only be withdrawn by you while it is still pending'
+      : 'You need the "manage_payouts" permission to do this', 403);
     return;
   }
 
@@ -553,6 +570,7 @@ router.delete('/:payoutId', requirePermission('manage_payouts'), async (req: Req
           recipientUserId: existing.recipientUserId,
           payoutDate: existing.payoutDate,
           status: existing.status,
+          ...(selfCancel ? { selfCancelled: true } : {}),
         },
         req,
         tx,

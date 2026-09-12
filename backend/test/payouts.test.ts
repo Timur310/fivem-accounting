@@ -241,6 +241,70 @@ describe('DELETE /payouts/:payoutId', () => {
     const list = await api().get(base()).set('Cookie', w.admin.cookie);
     expect(list.body.data).toHaveLength(0);
   });
+
+  /**
+   * A requester withdrawing their own ask.
+   *
+   * Nothing has moved while a payout is pending, so taking one back costs the
+   * treasury nothing — and without this a member who typed the wrong amount had
+   * to find someone holding `manage_payouts` to undo a row nobody had acted on.
+   * The moment somebody does act on it, it stops being theirs to take back.
+   */
+  async function myPendingRequest(): Promise<string> {
+    const res = await api().post(base()).set('Cookie', w.member.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
+    expect(res.body.data.status).toBe('pending');
+    return res.body.data.id;
+  }
+
+  it('lets a member cancel their own pending request', async () => {
+    const id = await myPendingRequest();
+
+    const del = await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
+    expect(del.status).toBe(200);
+
+    const list = await api().get(base()).set('Cookie', w.member.cookie);
+    expect(list.body.data).toHaveLength(0);
+  });
+
+  it('marks that cancellation as self-cancelled in the audit log', async () => {
+    const id = await myPendingRequest();
+    await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
+
+    const logs = await api()
+      .get(`/api/v1/factions/${w.faction.id}/audit-logs?entity_type=payout`)
+      .set('Cookie', w.admin.cookie);
+    const row = logs.body.data.find((l: { entityId: string }) => l.entityId === id);
+    expect(row.details.selfCancelled).toBe(true);
+  });
+
+  it('refuses once it has been approved', async () => {
+    const id = await myPendingRequest();
+    await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie).send({ status: 'approved' });
+
+    const del = await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
+    expect(del.status).toBe(403);
+  });
+
+  it('refuses a pending payout raised for somebody else', async () => {
+    const other = await createUser('other_member');
+    await addMember(w.faction.id, other.id, 'member');
+    const res = await api().post(base()).set('Cookie', other.cookie)
+      .send({ recipientUserId: other.id, itemTypeId: w.itemTypeId, amount: '500' });
+
+    const del = await api().delete(`${base()}/${res.body.data.id}`).set('Cookie', w.member.cookie);
+    expect(del.status).toBe(403);
+  });
+
+  // The permission still deletes anything, settled or not — unchanged.
+  it('still lets manage_payouts delete a completed one', async () => {
+    const created = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500' });
+    expect(created.body.data.status).toBe('completed');
+
+    const del = await api().delete(`${base()}/${created.body.data.id}`).set('Cookie', w.admin.cookie);
+    expect(del.status).toBe(200);
+  });
 });
 
 describe('POST /payouts/even-split', () => {

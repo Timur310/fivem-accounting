@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -68,7 +68,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   ], [itemTypes, t]);
 
   // Faction leaderboard
-  const { data: lbData, isLoading: lbLoading } = useQuery({
+  const { data: lbData, isLoading: lbLoading, isError: lbIsError, error: lbError, refetch: lbRefetch } = useQuery({
     queryKey: ['leaderboard', factionId, period, itemTypeId],
     queryFn: () => leaderboardApi.get(factionId, {
       period: period as 'week' | 'month' | 'all',
@@ -79,7 +79,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   });
 
   // Global leaderboard (superadmin only)
-  const { data: globalData, isLoading: globalLoading } = useQuery({
+  const { data: globalData, isLoading: globalLoading, isError: globalIsError, error: globalError, refetch: globalRefetch } = useQuery({
     queryKey: ['global-leaderboard', period],
     queryFn: () => globalLeaderboardApi.get({ period: period as 'week' | 'month' | 'all' }),
     staleTime: 0,
@@ -87,6 +87,9 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   });
 
   const loading = showGlobal ? globalLoading : lbLoading;
+  const isError = showGlobal ? globalIsError : lbIsError;
+  const loadError = showGlobal ? globalError : lbError;
+  const retry = showGlobal ? globalRefetch : lbRefetch;
   const rankings = showGlobal ? (globalData?.rankings ?? []) : (lbData?.rankings ?? []);
   const myRank = showGlobal ? null : (lbData?.myRank ?? null);
   // The API also sends a label for the period, but always in English. The
@@ -170,6 +173,8 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : isError ? (
+            <ErrorState error={loadError} onRetry={() => retry()} />
           ) : rankings.length === 0 ? (
             <EmptyState icon={Trophy} title={t('leaderboard.noEntriesForPeriod')} />
           ) : (

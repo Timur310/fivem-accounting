@@ -238,7 +238,11 @@ pending → approved → completed
    └──────→ rejected
 ```
 
-- **pending** — requested, nothing has moved.
+- **pending** — requested, nothing has moved. While it sits here it is still
+  yours: a **Withdraw request** button on your own row takes it back. Nothing
+  has been paid out, so nothing changes in the treasury, and you can ask again
+  whenever you like. Once a leader approves, rejects or pays it, that button
+  goes away — from then on it is their decision and part of the ledger.
 - **approved** — a leader committed to it; it still hasn't left the vault.
 - **completed** — paid out. **Only completed withdrawals reduce the
   treasury.**

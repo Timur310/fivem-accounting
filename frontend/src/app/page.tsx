@@ -47,7 +47,7 @@ export default function Home() {
     checkAuth();
   }, [checkAuth]);
 
-  if (!user) return <LoginPage onLogin={checkAuth} />;
+  if (!user) return <LoginPage />;
 
   // Nothing in the app exists outside a faction, so an account that belongs to
   // none of them waits instead of being let into a shell it cannot fill. A

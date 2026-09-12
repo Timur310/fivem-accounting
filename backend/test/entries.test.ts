@@ -4,6 +4,9 @@ import {
   createUser, createFaction, addMember, MISSING_UUID, type BasicWorld,
 } from './helpers.js';
 import { todayDateString } from '../src/lib/date.js';
+import { db } from '../src/db/index.js';
+import { entries } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
 
 let w: BasicWorld;
 const base = () => `/api/v1/factions/${w.faction.id}/entries`;
@@ -256,10 +259,69 @@ describe('DELETE /entries/:entryId', () => {
     expect(list.body.data).toHaveLength(0);
   });
 
-  it('forbids a plain member', async () => {
+  /**
+   * Deleting an entry is `manage_entries`, with one carve-out: a member may
+   * undo their OWN entry for five minutes after logging it (§8.2). These pin
+   * both edges of that window.
+   *
+   * This block used to be a single `forbids a plain member` expecting 403 on
+   * exactly the case the undo window now allows — it predates the feature and
+   * had been failing ever since.
+   */
+  /** Backdate an entry so it falls outside the five-minute undo window. */
+  async function ageBeyondUndoWindow(entryId: string): Promise<void> {
+    await db
+      .update(entries)
+      .set({ createdAt: new Date(Date.now() - 6 * 60 * 1000) })
+      .where(eq(entries.id, entryId));
+  }
+
+  it('lets a member undo their own entry inside the window', async () => {
     const id = await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100');
+
+    const res = await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+
+    const list = await api().get(base()).set('Cookie', w.member.cookie);
+    expect(list.body.data).toHaveLength(0);
+  });
+
+  it('marks that undo as self-undone in the audit log', async () => {
+    const id = await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100');
+    await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
+
+    const logs = await api()
+      .get(`/api/v1/factions/${w.faction.id}/audit-logs?entity_type=entry`)
+      .set('Cookie', w.admin.cookie);
+    const row = logs.body.data.find((l: { entityId: string }) => l.entityId === id);
+    expect(row.details.selfUndone).toBe(true);
+  });
+
+  it('forbids a member undoing their own entry once the window has passed', async () => {
+    const id = await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100');
+    await ageBeyondUndoWindow(id);
+
     const res = await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
     expect(res.status).toBe(403);
+    expect(res.body.error.message).toMatch(/5 minutes/i);
+  });
+
+  it("forbids a member deleting somebody else's entry, even a fresh one", async () => {
+    const id = await createEntry(w.faction.id, w.admin.id, w.itemTypeId, '100');
+
+    const res = await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toMatch(/your own entries/i);
+  });
+
+  // The permission is not bounded by the window — that carve-out exists only
+  // for people who do not hold it.
+  it('lets manage_entries delete an old entry belonging to someone else', async () => {
+    const id = await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100');
+    await ageBeyondUndoWindow(id);
+
+    const res = await api().delete(`${base()}/${id}`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
   });
 
   it('404s on a second delete', async () => {
