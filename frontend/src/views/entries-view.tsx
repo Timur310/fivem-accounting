@@ -6,7 +6,7 @@ import { entriesApi, itemTypesApi, exportApi, factionsApi, membersApi } from '@/
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { EmptyState, ListSkeleton } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ItemType, Entry } from '@/lib/api-types';
-import { formatAmount, displayName } from '@/lib/format';
+import { formatAmount, displayName, todayLocalDateString } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
 
@@ -92,7 +92,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   // Empty means "me" — the ordinary case, and what everyone without
   // `manage_entries` is limited to.
   const [newOwnerId, setNewOwnerId] = useState('');
-  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newDate, setNewDate] = useState(todayLocalDateString());
   const [newCustomValues, setNewCustomValues] = useState<Record<string, string>>({});
 
   const [editOpen, setEditOpen] = useState(false);
@@ -105,7 +105,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
 
-  const { data: entriesData, isLoading } = useQuery({
+  const { data: entriesData, isLoading, isError, error: entriesError, refetch: refetchEntries } = useQuery({
     queryKey: ['entries', factionId, page, itemTypeIdFilter, dateFrom, dateTo, searchQuery],
     queryFn: () =>
       entriesApi.list(factionId, {
@@ -230,7 +230,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     setNewItemTypeId('');
     setNewAmount('');
     setNewDescription('');
-    setNewDate(new Date().toISOString().split('T')[0]);
+    setNewDate(todayLocalDateString());
     setNewCustomValues({});
     setNewAnonymous(false);
     setNewOwnerId('');
@@ -392,6 +392,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
         <CardContent className="p-0">
           {isLoading ? (
             <ListSkeleton rows={5} />
+          ) : isError ? (
+            <ErrorState error={entriesError} onRetry={() => refetchEntries()} />
           ) : entries.length === 0 ? (
             <EmptyState icon={Search} title={t('entries.noneFound')} />
           ) : (
@@ -553,7 +555,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
-              <Input type="date" value={newDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setNewDate(e.target.value)} />
+              <Input type="date" value={newDate} max={todayLocalDateString()} onChange={(e) => setNewDate(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>{t('entries.descriptionOptional')}</Label>
@@ -628,7 +630,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
-              <Input type="date" value={editDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setEditDate(e.target.value)} />
+              <Input type="date" value={editDate} max={todayLocalDateString()} onChange={(e) => setEditDate(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>{t('common.description')}</Label>

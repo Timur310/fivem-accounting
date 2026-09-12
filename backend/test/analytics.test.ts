@@ -293,3 +293,81 @@ describe('POST /bulk', () => {
     expect(res.status).toBe(403);
   });
 });
+
+/**
+ * The quick-log chips on the dashboard are the member's own last few items.
+ *
+ * They used to be filtered client-side out of `recentEntries`, which is the
+ * faction's last ten rows overall — so in a busy faction a member fell off the
+ * list and their chips vanished. These pin the behaviour that fixes it.
+ */
+describe('GET /dashboard — myRecentItems (quick-log chips)', () => {
+  const chips = async (cookie: string) => {
+    const res = await api().get(`${f()}/dashboard`).set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    return res.body.data.myRecentItems as {
+      itemTypeId: string; itemTypeName: string; amount: string; itemIsCurrency: boolean;
+    }[];
+  };
+
+  it('returns only the caller\'s own item types', async () => {
+    const mine = await createItemType(w.faction.id, 'Mine');
+    const theirs = await createItemType(w.faction.id, 'Theirs');
+    await createEntry(w.faction.id, w.member.id, mine, '100');
+    await createEntry(w.faction.id, w.admin.id, theirs, '200');
+
+    const names = (await chips(w.member.cookie)).map((c) => c.itemTypeName);
+    expect(names).toContain('Mine');
+    expect(names).not.toContain('Theirs');
+  });
+
+  // The whole point of the change: a member buried under other people's
+  // activity still gets their chips back.
+  it('still finds the caller behind more than ten newer faction entries', async () => {
+    const mine = await createItemType(w.faction.id, 'Buried');
+    await createEntry(w.faction.id, w.member.id, mine, '100');
+
+    const noisy = await createItemType(w.faction.id, 'Noise');
+    for (let i = 0; i < 15; i++) {
+      await createEntry(w.faction.id, w.admin.id, noisy, '1');
+    }
+
+    const names = (await chips(w.member.cookie)).map((c) => c.itemTypeName);
+    expect(names).toContain('Buried');
+  });
+
+  it('collapses repeats of one type to its newest amount', async () => {
+    const cash = await createItemType(w.faction.id, 'Cash Only');
+    await createEntry(w.faction.id, w.member.id, cash, '100');
+    await createEntry(w.faction.id, w.member.id, cash, '250');
+    await createEntry(w.faction.id, w.member.id, cash, '900');
+
+    const rows = await chips(w.member.cookie);
+    const forCash = rows.filter((c) => c.itemTypeName === 'Cash Only');
+    expect(forCash).toHaveLength(1);
+    expect(Number(forCash[0]!.amount)).toBe(900);
+  });
+
+  it('caps at three distinct types, newest first', async () => {
+    for (const name of ['One', 'Two', 'Three', 'Four']) {
+      const id = await createItemType(w.faction.id, name);
+      await createEntry(w.faction.id, w.member.id, id, '10');
+    }
+
+    const names = (await chips(w.member.cookie)).map((c) => c.itemTypeName);
+    expect(names).toEqual(['Four', 'Three', 'Two']);
+  });
+
+  // A chip the member cannot actually log is worse than no chip.
+  it('leaves out a type that has since been deactivated', async () => {
+    const retired = await createItemType(w.faction.id, 'Retired', { isActive: false });
+    await createEntry(w.faction.id, w.member.id, retired, '100');
+
+    const names = (await chips(w.member.cookie)).map((c) => c.itemTypeName);
+    expect(names).not.toContain('Retired');
+  });
+
+  it('is empty for a member who has never logged anything', async () => {
+    expect(await chips(w.member.cookie)).toEqual([]);
+  });
+});

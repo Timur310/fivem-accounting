@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionStrikesApi, memberStrikesApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { EmptyState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -81,7 +81,7 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['faction-strikes', factionId, statusFilter, severityFilter, page],
     queryFn: () => factionStrikesApi.list(factionId, {
       status: statusFilter || undefined,
@@ -170,6 +170,8 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => refetch()} />
           ) : strikes.length === 0 ? (
             <EmptyState icon={AlertTriangle} title={t('strikes.none')} />
           ) : (

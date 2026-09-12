@@ -21,6 +21,7 @@ import {
 import { UserPlus, Pencil, Trash2, UserCog, Search } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import type { AdminUser } from '@/lib/api-types';
 import { displayName, formatDate } from '@/lib/format';
@@ -62,7 +63,7 @@ export function UsersPanel() {
 
   const [search, setSearch] = useState('');
 
-  const { data: allUsers = [], isLoading } = useQuery({
+  const { data: allUsers = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['admin-users'],
     queryFn: () => adminUsersApi.list(),
     staleTime: 30 * 1000,
@@ -171,6 +172,8 @@ export function UsersPanel() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-6 space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => refetch()} />
           ) : allUsers.length === 0 ? (
             <p className="px-6 py-10 text-center text-sm text-zinc-600">
               {t('users.none')}

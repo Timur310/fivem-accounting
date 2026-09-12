@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp, Printer } from 'lucide-react';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -37,13 +38,13 @@ export function ReportsView({ factionId }: Props) {
   const [periodA, setPeriodA] = useState('this_month');
   const [periodB, setPeriodB] = useState('last_month');
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary, isLoading: summaryLoading, isError: summaryIsError, error: summaryError, refetch: summaryRefetch } = useQuery({
     queryKey: ['reports-summary', factionId, period],
     queryFn: () => reportsApi.summary(factionId, period),
     staleTime: 2 * 60 * 1000,
   });
 
-  const { data: comparison, isLoading: compLoading } = useQuery({
+  const { data: comparison, isLoading: compLoading, isError: compIsError, error: compError, refetch: compRefetch } = useQuery({
     queryKey: ['reports-comparison', factionId, periodA, periodB],
     queryFn: () => reportsApi.comparison(factionId, periodA, periodB),
     staleTime: 2 * 60 * 1000,
@@ -190,6 +191,8 @@ export function ReportsView({ factionId }: Props) {
                 </Card>
               </div>
             </>
+          ) : summaryIsError ? (
+            <ErrorState error={summaryError} onRetry={() => summaryRefetch()} />
           ) : null}
         </>
       )}
@@ -285,6 +288,8 @@ export function ReportsView({ factionId }: Props) {
                 ))}
               </div>
             </>
+          ) : compIsError ? (
+            <ErrorState error={compError} onRetry={() => compRefetch()} />
           ) : null}
         </>
       )}

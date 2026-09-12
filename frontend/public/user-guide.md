@@ -89,6 +89,22 @@ below it shows the selected faction.
 The sidebar has two states: full labels, or a slim icon rail. The bottom-most
 button collapses it.
 
+**Play and Manage.** Inside the sidebar, screens split into two groups:
+**Play** — Dashboard, Entries, Withdrawals, Leaderboard, the ones you open
+daily — and **Manage** — Members, Strikes, Treasury, Settings, visible only
+if your rank grants them (§4). Each group collapses on its own, so a plain
+member's sidebar stays short even before permissions enter the picture.
+
+**Command palette.** Press **Ctrl+K** (⌘K on a Mac) from anywhere in the app
+to open a search box that jumps straight to a member, a screen, or an action
+like "log entry" — faster than clicking through the sidebar, and handy on a
+desktop mid-session.
+
+**Install it like an app.** On a phone, or a desktop browser that supports
+it, your browser's menu offers *Add to Home Screen* / *Install App*.
+Installed, it opens full-screen with no address bar and sits on your home
+screen next to your other apps — the fastest way in mid-heist.
+
 ---
 
 ## 4. Roles and permissions
@@ -130,32 +146,36 @@ promoting someone to admin stays with faction admins and superadmins.
 
 ### 5.1 Dashboard — your first glance
 
-The dashboard is one page, top to bottom:
+The dashboard is one page, top to bottom — ordered around *you first, then
+the faction*:
 
-1. **Faction header** — name and description.
+1. **Faction header** — name, description, and, if a superadmin set one
+   (§9.1), a small logo with the faction's accent color glowing behind it.
 2. **Quick log** (§5.2) — pre-filled, one-click logging.
-3. **Net treasury balance** — what the vault holds. Money-only, because
-   dollars and kilograms don't add up; goods are listed per type further down.
-4. **My stats strip** — *your* week at a glance:
+3. **My stats strip** — *your* week at a glance, ahead of the faction's own
+   totals:
    - **Your week** — total contributed this week and entry count,
    - **Leaderboard** — your rank this week,
    - **Streak** — consecutive days with at least one entry (🔥 amber when
      you've logged today),
    - **Your quota** — your progress on a per-person quota, if the faction
      runs one.
-5. **Stats cards** — total entries, member count, item type count.
-6. **Quota progress** — faction targets as energy bars. Unmet bars read
+4. **Net treasury balance & stats cards** — what the vault holds, counting
+   up on load. Money-only, because dollars and kilograms don't add up; goods
+   are listed per type further down. Sits alongside total entries, member
+   count and item type count.
+5. **Quota progress** — faction targets as energy bars. Unmet bars read
    *"Még $2,400"* — the amount still missing, not a percentage.
-7. **Quotas missed last period** — only appears when a just-ended period was
+6. **Quotas missed last period** — only appears when a just-ended period was
    missed. It stays visible until the next period ends, so a silent failure
    can't hide.
-8. **Top contributors / Recent activity** — who's carrying this period, and
+7. **Top contributors / Recent activity** — who's carrying this period, and
    the latest ledger movement.
+8. **Balances by item type** — the per-item view of the vault.
 9. **Inactive members** (admins only) — members who haven't logged anything
    within the faction's inactivity threshold. Newcomers and already-struck
    members are excluded automatically.
-10. **Balances by item type** — the per-item view of the vault.
-11. **Charts & export** — folded away at the bottom; open when you want the
+10. **Charts & export** — folded away at the bottom; open when you want the
     graphs or a CSV.
 
 ### 5.2 Logging an entry
@@ -192,9 +212,16 @@ The full ledger, newest first, searchable.
 - **Filters:** item type, from/to dates, free-text search on descriptions.
   The **Quick range** buttons (Today / This week / This month) fill the dates
   for you — "did I log yesterday?" is two taps.
+- **The filter bar stays put.** Scroll a long list and the filters ride along
+  at the top instead of scrolling out of view, so you can change one without
+  scrolling back up.
 - **CSV exports** (top right):
   - **Entries CSV** — everything matching the current filters,
   - **My entries CSV** — only your rows, for your own bookkeeping.
+
+**Leaders:** anyone holding `manage_entries` can hover a row to reveal inline
+edit and delete controls — not limited to your own entry within the first
+five minutes (§5.2).
 
 ### 5.4 Withdrawals (getting something out of the vault)
 
@@ -202,14 +229,20 @@ The full ledger, newest first, searchable.
 often ammunition or drugs as it is money.
 
 **Anyone can request one for themselves.** It starts **pending** and waits
-for a leader to settle it. The status flow:
+for a leader to settle it. The status shows as a visual pipeline on the
+withdrawal itself, not just a badge, so you can see at a glance where a
+request sits:
 
 ```
 pending → approved → completed
    └──────→ rejected
 ```
 
-- **pending** — requested, nothing has moved.
+- **pending** — requested, nothing has moved. While it sits here it is still
+  yours: a **Withdraw request** button on your own row takes it back. Nothing
+  has been paid out, so nothing changes in the treasury, and you can ask again
+  whenever you like. Once a leader approves, rejects or pays it, that button
+  goes away — from then on it is their decision and part of the ledger.
 - **approved** — a leader committed to it; it still hasn't left the vault.
 - **completed** — paid out. **Only completed withdrawals reduce the
   treasury.**
@@ -238,7 +271,10 @@ on the dashboard until the next one ends too (§6.3).
 ### 5.6 Leaderboard
 
 *Leaderboard* — ranked members for **this week**, **this month** or **all
-time**.
+time**, switched with a segmented control at the top instead of a dropdown.
+
+The **top three sit on a podium** — #1 raised and centered — before the
+ranked list continues underneath.
 
 - ▲2 / ▼1 next to a rank = places gained or lost versus the previous period.
   No arrow = unchanged; a newcomer has no arrow either.
@@ -324,8 +360,11 @@ page with everything the faction knows about them:
   means "leads this faction", not "contributed a lot in absolute terms".
 - **Quota progress** — every active quota that involves this member, and
   their contribution this period.
-- **Activity heatmap** — a GitHub-style grid of the calendar year: darker
-  days, more logged. Pick the year at the top.
+- **Activity heatmap** — the largest element on the page: an enlarged,
+  accent-tinted, GitHub-style grid of the calendar year. Darker days mean
+  more logged; hover or tap a day for the exact count, and a "best day"
+  callout marks the single biggest day of the year. Pick the year at the
+  top.
 - **Recent entries / payouts received** — the last 20 of each.
 - **Strike history** — every strike ever, including revoked and expired ones
   (leaders' view; the faction-wide list hides those by default).
@@ -546,6 +585,10 @@ Create, edit and **deactivate** factions (deactivation hides all data but
 keeps it for history), and appoint the first admin. A deactivated faction's
 roster and ledger are invisible to everyone except superadmins.
 
+When creating or editing a faction you can also set a **logo image URL** — it
+appears in that faction's dashboard masthead alongside its accent color, so
+each faction's app feels like its own rather than a shared shell.
+
 ### 9.2 Users panel
 
 Everyone the system knows: signed-in users, plus **provisional registrations**
@@ -627,7 +670,7 @@ After that, ask a leader to remove it.
 
 **The undo button isn't on my entry.**
 Five minutes have passed, or it isn't yours. Only `manage_entries` holders
-can remove it now.
+can remove it now — hovering the row shows them the controls.
 
 **My dashboard says "waiting for approval".**
 You're not in a faction yet. Copy the Discord ID shown on that screen and
@@ -664,6 +707,14 @@ here is numbers and history.
 **Can I use the app in Hungarian?**
 Yes — globe icon in the header. Everything is translated, and your choice is
 remembered.
+
+**Is there a faster way to get around than clicking the sidebar?**
+Press Ctrl+K (⌘K on a Mac) anywhere to search for a member, a screen, or an
+action.
+
+**Can I put this on my home screen like a real app?**
+Yes — your browser's menu has *Add to Home Screen* or *Install App*. It then
+opens full-screen, no address bar.
 
 ---
 

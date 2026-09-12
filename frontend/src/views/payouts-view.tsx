@@ -28,12 +28,13 @@ import {
 } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import {
-  Plus, ArrowDownToLine, Pencil, Trash2, Check, X, Split, Filter,
+  Plus, ArrowDownToLine, Pencil, Trash2, Check, X, Split, Filter, Undo2,
 } from 'lucide-react';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import type { Payout, PayoutStatus, Member } from '@/lib/api-types';
-import { formatAmount, displayName, fullDisplayName, formatNumber } from '@/lib/format';
+import { formatAmount, displayName, fullDisplayName, formatNumber, todayLocalDateString } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
@@ -71,7 +72,7 @@ interface Props {
   canManagePayouts?: boolean;
 }
 
-export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
+export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -89,6 +90,9 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editPayout, setEditPayout] = useState<Payout | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  // A requester taking back their own pending ask is the same DELETE, but it
+  // is not the admin's delete and must not be worded as one.
+  const [deleteIsSelfCancel, setDeleteIsSelfCancel] = useState(false);
   const [evenSplitOpen, setEvenSplitOpen] = useState(false);
 
   // ── Create form ──
@@ -96,7 +100,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   const [formItemType, setFormItemType] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
+  const [formDate, setFormDate] = useState(todayLocalDateString());
 
   // ── Edit form ──
   const [editAmount, setEditAmount] = useState('');
@@ -107,13 +111,13 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   const [splitItemType, setSplitItemType] = useState('');
   const [splitTotal, setSplitTotal] = useState('');
   const [splitDescription, setSplitDescription] = useState('');
-  const [splitDate, setSplitDate] = useState(new Date().toISOString().slice(0, 10));
+  const [splitDate, setSplitDate] = useState(todayLocalDateString());
   // Who shares the pot: the whole roster, or a picked subset of it.
   const [splitMode, setSplitMode] = useState<'all' | 'pick'>('all');
   const [splitSelected, setSplitSelected] = useState<string[]>([]);
 
   // ── Data ──
-  const { data: payoutsData, isLoading } = useQuery({
+  const { data: payoutsData, isLoading, isError, error: payoutsError, refetch: refetchPayouts } = useQuery({
     queryKey: ['payouts', factionId, filterStatus, filterItemTypeId, filterDateFrom, filterDateTo, page],
     queryFn: () => payoutsApi.list(factionId, {
       status: filterStatus || undefined,
@@ -183,7 +187,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
     setFormItemType('');
     setFormAmount('');
     setFormDescription('');
-    setFormDate(new Date().toISOString().slice(0, 10));
+    setFormDate(todayLocalDateString());
   };
 
   // ── Mutations ──
@@ -229,7 +233,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   const deleteMutation = useMutation({
     mutationFn: (payoutId: string) => payoutsApi.remove(factionId, payoutId),
     onSuccess: () => {
-      toast({ title: t('payouts.deleted') });
+      toast({ title: deleteIsSelfCancel ? t('payouts.cancelled') : t('payouts.deleted') });
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
@@ -262,7 +266,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
       setSplitItemType('');
       setSplitTotal('');
       setSplitDescription('');
-      setSplitDate(new Date().toISOString().slice(0, 10));
+      setSplitDate(todayLocalDateString());
       queryClient.invalidateQueries({ queryKey: ['payouts', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
@@ -327,8 +331,29 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
   // button here would only hide something the server would have allowed.
   const canApprove = (payout: Payout) => canTransition(payout, 'approved');
 
+  /**
+   * Whether the actions column has anything to hold.
+   *
+   * A member without the permission can only act on their own pending rows, so
+   * on a page of settled history every button is gated away and the column was
+   * left as a labelled strip of empty cells.
+   */
+  const canCancelOwn = (payout: Payout) =>
+    !canManagePayouts && payout.status === 'pending' && payout.recipientUserId === user?.id;
+  const showActions = canManagePayouts || payouts.some(canCancelOwn);
+
   if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-64 w-full" /></div>;
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="p-0">
+          <ErrorState error={payoutsError} onRetry={() => refetchPayouts()} />
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -406,12 +431,12 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                 <TableHead className="text-zinc-500 text-right">{t('common.amount')}</TableHead>
                 <TableHead className="text-zinc-500">{t('common.date')}</TableHead>
                 <TableHead className="text-zinc-500">{t('common.status')}</TableHead>
-                <TableHead className="text-zinc-500 text-right">{t('common.actions')}</TableHead>
+                {showActions && <TableHead className="text-zinc-500 text-right">{t('common.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {payouts.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-zinc-600 py-10">{canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={showActions ? 6 : 5} className="text-center text-zinc-600 py-10">{canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')}</TableCell></TableRow>
               ) : payouts.map((p) => {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
@@ -451,7 +476,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                         </Badge>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right">
+                    {showActions && <TableCell className="text-right">
                       {/* Approving, completing, rejecting, editing and deleting are
                           all reach over a row someone else has to answer for. A
                           requester watches; they do not settle their own ask. */}
@@ -516,13 +541,27 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                             size="icon"
                             className="h-7 w-7 text-destructive hover:text-red-300"
                             title={t('common.delete')}
-                            onClick={() => setDeleteId(p.id)}
+                            onClick={() => { setDeleteIsSelfCancel(false); setDeleteId(p.id); }}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        {/* Taking back your own ask, while nobody has acted on
+                            it. The API allows exactly this much and refuses the
+                            moment the request is approved, rejected or paid. */}
+                        {canCancelOwn(p) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                            onClick={() => { setDeleteIsSelfCancel(true); setDeleteId(p.id); }}
+                          >
+                            <Undo2 className="h-3.5 w-3.5 mr-1" />
+                            {t('payouts.cancelOwn')}
+                          </Button>
+                        )}
                       </div>
-                    </TableCell>
+                    </TableCell>}
                   </TableRow>
                 );
               })}
@@ -604,7 +643,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                 type="date"
                 value={formDate}
                 onChange={(e) => setFormDate(e.target.value)}
-                max={new Date().toISOString().slice(0, 10)}
+                max={todayLocalDateString()}
               />
             </div>
           </div>
@@ -658,7 +697,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                 type="date"
                 value={editDate}
                 onChange={(e) => setEditDate(e.target.value)}
-                max={new Date().toISOString().slice(0, 10)}
+                max={todayLocalDateString()}
               />
             </div>
           </div>
@@ -779,7 +818,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
                 type="date"
                 value={splitDate}
                 onChange={(e) => setSplitDate(e.target.value)}
-                max={new Date().toISOString().slice(0, 10)}
+                max={todayLocalDateString()}
               />
             </div>
           </div>
@@ -802,8 +841,8 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
       <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('payouts.deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('payouts.deleteConfirm')}</AlertDialogDescription>
+            <AlertDialogTitle>{deleteIsSelfCancel ? t('payouts.cancelOwnTitle') : t('payouts.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{deleteIsSelfCancel ? t('payouts.cancelOwnConfirm') : t('payouts.deleteConfirm')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
@@ -812,7 +851,7 @@ export function PayoutsView({ factionId, canManagePayouts = true }: Props) {
               disabled={deleteMutation.isPending}
               onClick={() => { if (deleteId) deleteMutation.mutate(deleteId); }}
             >
-              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
+              {deleteMutation.isPending ? t('common.deleting') : (deleteIsSelfCancel ? t('payouts.cancelOwn') : t('common.delete'))}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

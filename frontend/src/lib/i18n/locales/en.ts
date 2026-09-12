@@ -103,6 +103,15 @@ export const en = {
   'error.fatalTitle': 'Application error',
   'error.fatalBody': 'A critical error occurred and the application cannot continue. Please reload the page.',
   'error.errorId': 'Error ID',
+  // Shown in place of a list when its request fails. Distinct from the empty
+  // state on purpose: "nothing here yet" and "we could not load it" are
+  // different facts, and reading one as the other is how a member concludes
+  // their ledger was wiped.
+  'error.loadTitle': 'Could not load this',
+  'error.loadHint': 'The data could not be fetched. Check your connection and try again.',
+  'error.retry': 'Retry',
+  'error.forbiddenTitle': 'You do not have access to this',
+  'error.forbiddenHint': 'Your rank does not grant the permission this needs. Ask a faction admin.',
 
   // ── Navigation ──
   'nav.dashboard': 'Dashboard',
@@ -360,6 +369,13 @@ export const en = {
   'payouts.reject': 'Reject',
   'payouts.deleteTitle': 'Delete Withdrawal',
   'payouts.deleteConfirm': 'This will soft-delete this withdrawal. If it was completed, the treasury balance will be adjusted accordingly.',
+  // A requester taking back their own untouched ask is not the admin's delete,
+  // and calling it "Delete" reads as destroying a record rather than
+  // retracting a request nobody has acted on.
+  'payouts.cancelOwn': 'Withdraw request',
+  'payouts.cancelOwnTitle': 'Withdraw Your Request',
+  'payouts.cancelOwnConfirm': 'This takes back your pending withdrawal request. Nothing has been paid out yet, so nothing changes in the treasury. You can ask again at any time.',
+  'payouts.cancelled': 'Request withdrawn',
   'payouts.allStatuses': 'All Statuses',
   'payouts.searchStatuses': 'Search statuses...',
   'payouts.noStatusesMatch': 'No statuses match.',
@@ -609,6 +625,7 @@ export const en = {
   'dashboard.quickLog': 'Quick log',
   'dashboard.quickLogPrefilled': 'pre-filled from your last entry',
   'dashboard.quickLogSubmit': 'Log it',
+  'dashboard.quickLogDone': 'Logged',
   'dashboard.showAnalytics': 'Show charts & export',
   'dashboard.hideAnalytics': 'Hide charts & export',
   'entries.increase': 'Increase',

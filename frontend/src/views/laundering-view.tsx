@@ -12,6 +12,7 @@ import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
 import { ArrowRight, WashingMachine } from 'lucide-react';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, todayLocalDateString } from '@/lib/format';
@@ -42,7 +43,7 @@ export function LaunderingView({ factionId }: Props) {
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayLocalDateString());
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['laundering', factionId],
     queryFn: () => launderingApi.get(factionId),
     staleTime: 0,
@@ -103,6 +104,10 @@ export function LaunderingView({ factionId }: Props) {
 
   if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-72 w-full" /></div>;
+  }
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
   return (

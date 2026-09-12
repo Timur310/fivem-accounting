@@ -24,6 +24,7 @@ import {
   ArrowLeft, Flame, Trophy, Target, Calendar, FileText, AlertTriangle,
   Flag, Plus, Pencil, Trash2, Activity, Zap, Clock,
 } from 'lucide-react';
+import { ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
@@ -120,7 +121,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
   // ── Queries ──
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['member-profile', factionId, userId],
     queryFn: () => membersApi.getProfile(factionId, userId),
     staleTime: 0,
@@ -137,7 +138,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   ];
   const activeTab: ProfileTab = visibleTabs.includes(tab) ? tab : 'overview';
 
-  const { data: notes = [], isLoading: notesLoading } = useQuery({
+  const { data: notes = [], isLoading: notesLoading, isError: notesIsError, error: notesError, refetch: notesRefetch } = useQuery({
     queryKey: ['member-notes', factionId, userId],
     queryFn: () => notesApi.list(factionId, userId),
     enabled: profile?.canViewNotes === true,
@@ -228,6 +229,10 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
 
   const fmt = (n: number) => `$${formatNumber(n)}`;
   const fmtItems = (n: number) => `${formatCount(n)} ${t('common.pieces')}`;
+
+  if (isError) {
+    return <ErrorState error={error} onRetry={() => refetch()} />;
+  }
 
   if (isLoading || !profile) {
     return (
@@ -605,7 +610,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <p className="text-sm text-zinc-500">{t('notes.count', { count: notes.length })}</p>
             <Button size="sm" onClick={() => { setEditingNoteId(null); setNoteOpen(true); }}><Plus className="mr-1.5 h-3.5 w-3.5" /> {t('notes.add')}</Button>
           </div>
-          {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notes.length === 0 ? (
+          {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notesIsError ? (
+            <Card><CardContent className="p-0"><ErrorState error={notesError} onRetry={() => notesRefetch()} compact /></CardContent></Card>
+          ) : notes.length === 0 ? (
             <Card><CardContent className="py-8 text-center text-zinc-600 text-sm">{t('notes.none')}</CardContent></Card>
           ) : (
             <div className="space-y-2">

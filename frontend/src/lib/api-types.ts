@@ -220,6 +220,20 @@ export interface DashboardData {
     itemIsCurrency: boolean;
     itemImageUrl: string | null;
   }[];
+  /**
+   * The caller's own last three item types, newest first, for the quick-log
+   * chips. Server-derived rather than filtered out of `recentEntries`: that
+   * list is the faction's last ten rows overall, so a member in a busy faction
+   * was simply absent from it.
+   */
+  myRecentItems: {
+    itemTypeId: string;
+    itemTypeName: string;
+    itemUnit: string;
+    itemIsCurrency: boolean;
+    itemImageUrl: string | null;
+    amount: string;
+  }[];
   inactiveMembers?: {
     userId: string;
     username: string;
