@@ -22,6 +22,8 @@ import {
 import {
   LayoutDashboard,
   LifeBuoy,
+  Megaphone,
+  Activity,
   Inbox,
   List,
   Users,
@@ -58,12 +60,15 @@ import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
+import { AnnouncementsView } from '@/views/announcements-view';
+import { FeedView } from '@/views/feed-view';
 import { AdminSupportView } from '@/views/admin-support-view';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
 import type { AppView } from '@/lib/store';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { NotificationBell } from '@/components/notification-bell';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -250,6 +255,11 @@ export function AppShell() {
     },
     { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
     { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
+    // Everyone reads the board; posting is gated inside the view.
+    { group: 'play', view: 'announcements', label: 'nav.announcements', icon: Megaphone },
+    // The timeline is scoped per source inside the query, so it needs no
+    // permission of its own: everyone sees their own slice of it.
+    { group: 'play', view: 'feed', label: 'nav.feed', icon: Activity },
     { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
     {
       group: 'manage',
@@ -391,10 +401,14 @@ export function AppShell() {
       // selected-faction guard alongside the guide.
       case 'support':
         return <SupportView />;
+      case 'feed':
+        return selectedFactionId ? <FeedView factionId={selectedFactionId} /> : null;
+      case 'announcements':
+        return selectedFactionId ? <AnnouncementsView factionId={selectedFactionId} canManage={hasPermission('manage_settings')} /> : null;
       case 'admin-support':
         return <AdminSupportView />;
       case 'dashboard':
-        return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} /> : null;
+        return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} isFactionMember={canCreditSelf} /> : null;
       case 'entries':
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canCreditSelf={canCreditSelf} canManageEntries={hasPermission('manage_entries')} /> : null;
       case 'payouts':
@@ -664,6 +678,10 @@ export function AppShell() {
             {t('palette.search')}
             <kbd className="text-[10px] text-zinc-600 border border-white/[0.08] rounded px-1">Ctrl K</kbd>
           </Button>
+          {/* Left of the language switcher and the avatar: the bell is a thing
+              that changes on its own, so it sits where the eye already goes
+              for the account controls rather than competing with navigation. */}
+          <NotificationBell />
           <LanguageSwitcher className="text-zinc-400" />
 
           <DropdownMenu>

@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { auditLogsApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
+import { DateRangePresets, type DatePreset } from '@/components/ui/date-range-presets';
+import { Input } from '@/components/ui/input';
 import {
   SearchableSelect, type SearchableSelectOption,
 } from '@/components/ui/searchable-select';
@@ -56,10 +58,13 @@ export function AuditLogsView({ factionId }: Props) {
   const [page, setPage] = useState(1);
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [entityFilter, setEntityFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
 
   const { data: logsData, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['auditLogs', factionId, page, actionFilter, entityFilter],
-    queryFn: () => auditLogsApi.list(factionId, { page, page_size: 25, action: actionFilter === 'all' ? undefined : actionFilter, entity_type: entityFilter === 'all' ? undefined : entityFilter }),
+    queryKey: ['auditLogs', factionId, page, actionFilter, entityFilter, dateFrom, dateTo],
+    queryFn: () => auditLogsApi.list(factionId, { page, page_size: 25, action: actionFilter === 'all' ? undefined : actionFilter, entity_type: entityFilter === 'all' ? undefined : entityFilter, date_from: dateFrom || undefined, date_to: dateTo || undefined }),
     staleTime: 30 * 1000,
   });
 
@@ -101,6 +106,35 @@ export function AuditLogsView({ factionId }: Props) {
                 onValueChange={(v) => { setEntityFilter(v); setPage(1); }}
                 options={entityOptions}
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-zinc-500">{t('common.date')}</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setActivePreset(null); setPage(1); }}
+                  className="w-[140px] h-9 text-xs"
+                  aria-label={t('entries.from')}
+                />
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }}
+                  className="w-[140px] h-9 text-xs"
+                  aria-label={t('entries.to')}
+                />
+                <DateRangePresets
+                  active={activePreset}
+                  onApply={(preset, range) => {
+                    setDateFrom(range.from);
+                    setDateTo(range.to);
+                    setActivePreset(preset);
+                    setPage(1);
+                  }}
+                  onClear={() => { setDateFrom(''); setDateTo(''); setActivePreset(null); setPage(1); }}
+                />
+              </div>
             </div>
           </div>
         </CardContent>

@@ -1,7 +1,7 @@
 import { db } from '../db/index.js';
 import { entries, quotas, factionMembers, itemTypes } from '../db/schema.js';
 import { eq, and, sql, gte, lte } from 'drizzle-orm';
-import { toDateString } from './date.js';
+import { toDateString, periodHasStarted } from './date.js';
 import { getPeriodRange } from './period.js';
 
 // ── Streaks ────────────────────────────────────────────
@@ -248,7 +248,7 @@ export async function computePerformanceScore(
   // contributed to in the current period. No active quotas means the component
   // cannot be measured, so it is treated as neutral (1) rather than punishing.
   const today = new Date();
-  const started = activeQuotas.filter((q) => new Date(q.periodStart) <= today);
+  const started = activeQuotas.filter((q) => periodHasStarted(q.periodStart, today));
   let quotaHitRate = 1;
   if (started.length > 0) {
     const hits = await Promise.all(

@@ -30,10 +30,14 @@ import { Label } from '@/components/ui/label';
 import {
   Plus, ArrowDownToLine, Pencil, Trash2, Check, X, Split, Filter, Undo2,
 } from 'lucide-react';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
+import { SortableHeader, type SortState } from '@/components/ui/sortable-header';
+import { DateRangePresets, type DatePreset } from '@/components/ui/date-range-presets';
+import { usePersistedState } from '@/hooks/use-persisted-state';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { Payout, PayoutStatus, Member } from '@/lib/api-types';
+import type { Payout, PayoutStatus, Member, ItemType } from '@/lib/api-types';
 import { formatAmount, displayName, fullDisplayName, formatNumber, todayLocalDateString } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -80,8 +84,21 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
   const brandColor = useAppStore((s) => s.brandColor);
 
   // ── Filters ──
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterItemTypeId, setFilterItemTypeId] = useState<string>('');
+  // Filters and sort are settings, not transient UI: settling one withdrawal
+  // and coming back should not reset the view. Keyed per faction.
+  const [sort, setSort] = usePersistedState<SortState>(
+    `payouts.sort.${factionId}`,
+    { sort: 'date', dir: 'desc' },
+  );
+  const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
+  const [filterStatus, setFilterStatus] = usePersistedState<string>(
+    `payouts.filter.status.${factionId}`,
+    '',
+  );
+  const [filterItemTypeId, setFilterItemTypeId] = usePersistedState<string>(
+    `payouts.filter.type.${factionId}`,
+    '',
+  );
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -118,7 +135,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
 
   // ── Data ──
   const { data: payoutsData, isLoading, isError, error: payoutsError, refetch: refetchPayouts } = useQuery({
-    queryKey: ['payouts', factionId, filterStatus, filterItemTypeId, filterDateFrom, filterDateTo, page],
+    queryKey: ['payouts', factionId, filterStatus, filterItemTypeId, filterDateFrom, filterDateTo, page, sort],
     queryFn: () => payoutsApi.list(factionId, {
       status: filterStatus || undefined,
       item_type_id: filterItemTypeId || undefined,
@@ -126,6 +143,8 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
       date_to: filterDateTo || undefined,
       page,
       page_size: 20,
+      sort: sort.sort,
+      dir: sort.dir,
     }),
     staleTime: 0,
   });
@@ -162,7 +181,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
     value: item.id,
     label: item.name,
     hint: item.unit ? `(${item.unit})` : undefined,
-    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
+    icon: <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-5" />,
   })), [itemTypes]);
 
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
@@ -338,6 +357,18 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
    * on a page of settled history every button is gated away and the column was
    * left as a labelled strip of empty cells.
    */
+  // One predicate per dialog, read by the submit button and the form alike.
+  const formType = itemTypes.find((it: ItemType) => it.id === formItemType);
+  const splitType = itemTypes.find((it: ItemType) => it.id === splitItemType);
+  const canCreatePayout =
+    !(canManagePayouts && !formRecipient) &&
+    !!formItemType && !!formAmount && Number(formAmount) > 0 && !createMutation.isPending;
+  const canSavePayoutEdit =
+    !!editAmount && Number(editAmount) > 0 && !updateMutation.isPending;
+  const canEvenSplit =
+    !!splitItemType && !!splitTotal && Number(splitTotal) > 0 &&
+    !(splitMode === 'pick' && splitSelected.length === 0) && !evenSplitMutation.isPending;
+
   const canCancelOwn = (payout: Payout) =>
     !canManagePayouts && payout.status === 'pending' && payout.recipientUserId === user?.id;
   const showActions = canManagePayouts || payouts.some(canCancelOwn);
@@ -409,10 +440,20 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               searchPlaceholder={t('itemTypes.search')}
               emptyMessage={t('itemTypes.noneMatch')}
             />
-            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
-            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <DateRangePresets
+              active={activePreset}
+              onApply={(preset, range) => {
+                setFilterDateFrom(range.from);
+                setFilterDateTo(range.to);
+                setActivePreset(preset);
+                setPage(1);
+              }}
+              onClear={() => { setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}
+            />
             {(filterStatus || filterItemTypeId || filterDateFrom || filterDateTo) && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}>
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}>
                 {t('common.clear')}
               </Button>
             )}
@@ -426,17 +467,27 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="border-white/[0.06] hover:bg-transparent">
-                <TableHead className="text-zinc-500">{t('payouts.recipient')}</TableHead>
-                <TableHead className="text-zinc-500">{t('entries.type')}</TableHead>
-                <TableHead className="text-zinc-500 text-right">{t('common.amount')}</TableHead>
-                <TableHead className="text-zinc-500">{t('common.date')}</TableHead>
-                <TableHead className="text-zinc-500">{t('common.status')}</TableHead>
+                <SortableHeader field="recipient" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                  {t('payouts.recipient')}
+                </SortableHeader>
+                <SortableHeader field="type" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                  {t('entries.type')}
+                </SortableHeader>
+                <SortableHeader field="amount" state={sort} onChange={(n) => { setSort(n); setPage(1); }} align="right">
+                  {t('common.amount')}
+                </SortableHeader>
+                <SortableHeader field="date" state={sort} onChange={(n) => { setSort(n); setPage(1); }}>
+                  {t('common.date')}
+                </SortableHeader>
+                <SortableHeader field="status" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                  {t('common.status')}
+                </SortableHeader>
                 {showActions && <TableHead className="text-zinc-500 text-right">{t('common.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {payouts.length === 0 ? (
-                <TableRow><TableCell colSpan={showActions ? 6 : 5} className="text-center text-zinc-600 py-10">{canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={showActions ? 6 : 5} className="p-0"><EmptyState icon={ArrowDownToLine} title={canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')} compact /></TableCell></TableRow>
               ) : payouts.map((p) => {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
@@ -460,7 +511,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                     </TableCell>
                     <TableCell className="text-sm text-zinc-400">
                       <span className="inline-flex items-center gap-2">
-                        <ItemIcon src={p.itemImageUrl} className="size-5" />
+                        <ItemIcon src={p.itemImageUrl} icon={p.itemIcon} category={p.itemCategory} className="size-5" />
                         {p.itemTypeName}
                       </span>
                     </TableCell>
@@ -588,6 +639,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               {canManagePayouts ? t('payouts.newHint') : t('payouts.requestHint')}
             </DialogDescription>
           </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (canCreatePayout) createMutation.mutate(); }}>
           <div className="space-y-4 py-2">
             {/* With no reach over other names there is nothing to choose here,
                 so the field goes and the request simply carries yours. */}
@@ -627,6 +679,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 value={formAmount}
                 onChange={(e) => setFormAmount(e.target.value)}
               />
+              <AmountPreview value={formAmount} unit={formType?.unit} isCurrency={formType?.isCurrency} />
             </div>
             <div className="space-y-2">
               <Label>{t('common.description')}</Label>
@@ -647,16 +700,17 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => { setCreateOpen(false); resetCreateForm(); }}>{t('common.cancel')}</Button>
             <Button
-              disabled={(canManagePayouts && !formRecipient) || !formItemType || !formAmount || Number(formAmount) <= 0 || createMutation.isPending}
-              onClick={() => createMutation.mutate()}
+              type="submit"
+              disabled={!canCreatePayout}
               style={{ backgroundColor: brandColor }}
             >
               {createMutation.isPending ? t('common.creating') : (canManagePayouts ? t('payouts.create') : t('payouts.request'))}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -672,6 +726,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               })}
             </DialogDescription>
           </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (canSavePayoutEdit) handleEditSave(); }}>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>{t('common.amount')}</Label>
@@ -681,6 +736,11 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 min="0.01"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
+              />
+              <AmountPreview
+                value={editAmount}
+                unit={editPayout?.itemUnit}
+                isCurrency={editPayout?.itemIsCurrency}
               />
             </div>
             <div className="space-y-2">
@@ -705,12 +765,13 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button variant="outline" onClick={() => setEditPayout(null)}>{t('common.cancel')}</Button>
             <Button
               disabled={updateMutation.isPending || Number(editAmount) <= 0}
-              onClick={handleEditSave}
+              type="submit"
               style={{ backgroundColor: brandColor }}
             >
               {updateMutation.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -721,6 +782,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <DialogTitle>{t('payouts.evenSplitTitle')}</DialogTitle>
             <DialogDescription>{t('payouts.evenSplitHint')}</DialogDescription>
           </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (canEvenSplit) evenSplitMutation.mutate(); }}>
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-300">
               {t('payouts.evenSplitWarning', { count: splitMode === 'pick' && splitSelected.length > 0 ? splitSelected.length : members.length })}
@@ -789,6 +851,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 value={splitTotal}
                 onChange={(e) => setSplitTotal(e.target.value)}
               />
+              <AmountPreview value={splitTotal} unit={splitType?.unit} isCurrency={splitType?.isCurrency} />
               {splitTotal && Number(splitTotal) > 0 && members.length > 0 && (
                 <p className="text-xs text-zinc-500">
                   {t('payouts.splitPreview', {
@@ -822,11 +885,11 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEvenSplitOpen(false)}>{t('common.cancel')}</Button>
             <Button
-              disabled={!splitItemType || !splitTotal || Number(splitTotal) <= 0 || (splitMode === 'pick' && splitSelected.length === 0) || evenSplitMutation.isPending}
-              onClick={() => evenSplitMutation.mutate()}
+              type="submit"
+              disabled={!canEvenSplit}
               style={{ backgroundColor: brandColor }}
             >
               {evenSplitMutation.isPending
@@ -834,6 +897,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 : t('payouts.splitAction', { amount: splitTotal || '0', count: members.length })}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

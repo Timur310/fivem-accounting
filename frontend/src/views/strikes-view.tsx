@@ -6,6 +6,8 @@ import { factionStrikesApi, memberStrikesApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
+import { SortableHeader, type SortState } from '@/components/ui/sortable-header';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -77,17 +79,29 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
   // '' — the API reads a missing status as "what still counts against the
   // member" (active and not past its expiry) — so the page opens on the
   // strikes that matter; revoked and expired history is one filter away.
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [severityFilter, setSeverityFilter] = useState<string>('');
+  const [sort, setSort] = usePersistedState<SortState>(
+    `strikes.sort.${factionId}`,
+    { sort: 'date', dir: 'desc' },
+  );
+  const [statusFilter, setStatusFilter] = usePersistedState<string>(
+    `strikes.filter.status.${factionId}`,
+    '',
+  );
+  const [severityFilter, setSeverityFilter] = usePersistedState<string>(
+    `strikes.filter.severity.${factionId}`,
+    '',
+  );
   const [page, setPage] = useState(1);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['faction-strikes', factionId, statusFilter, severityFilter, page],
+    queryKey: ['faction-strikes', factionId, statusFilter, severityFilter, page, sort],
     queryFn: () => factionStrikesApi.list(factionId, {
       status: statusFilter || undefined,
       severity: severityFilter || undefined,
       page,
       page_size: 20,
+      sort: sort.sort,
+      dir: sort.dir,
     }),
     staleTime: 0,
   });
@@ -178,9 +192,17 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {canManageStrikes && <TableHead>{t('role.member')}</TableHead>}
-                  <TableHead>{t('strikes.severityColumn')}</TableHead>
-                  <TableHead>{t('common.status')}</TableHead>
+                  {canManageStrikes && (
+                    <SortableHeader field="member" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                      {t('role.member')}
+                    </SortableHeader>
+                  )}
+                  <SortableHeader field="severity" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                    {t('strikes.severityColumn')}
+                  </SortableHeader>
+                  <SortableHeader field="status" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                    {t('common.status')}
+                  </SortableHeader>
                   <TableHead className="hidden md:table-cell">{t('strikes.reason')}</TableHead>
                   <TableHead>{t('strikes.issued')}</TableHead>
                   <TableHead className="w-[100px]"></TableHead>

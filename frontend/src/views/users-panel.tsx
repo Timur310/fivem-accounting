@@ -18,10 +18,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { UserPlus, Pencil, Trash2, UserCog, Search } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, UserCog, Search , Users} from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import type { AdminUser } from '@/lib/api-types';
 import { displayName, formatDate } from '@/lib/format';
@@ -175,13 +175,9 @@ export function UsersPanel() {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : allUsers.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-zinc-600">
-              {t('users.none')}
-            </p>
+            <EmptyState icon={Users} title={t('users.none')} />
           ) : users.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-zinc-600">
-              {t('members.noneMatch')}
-            </p>
+            <EmptyState icon={Search} title={t('members.noneMatch')} />
           ) : (
             <Table>
               <TableHeader>

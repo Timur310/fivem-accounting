@@ -25,7 +25,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard, Crown, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import { displayName, formatDate } from '@/lib/format';
@@ -82,6 +82,23 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
   });
 
   const sortedRanks = (settings?.ranks ?? []).sort((a, b) => a.level - b.level);
+
+  /**
+   * The emblem beside a rank name on the roster.
+   *
+   * Lower level means more senior (Boss is level 1), so the first two entries
+   * of `sortedRanks` are the top of the hierarchy. Only those two get a mark —
+   * a sigil on every rank is wallpaper, and the point is that the top of the
+   * roster is visible at a glance.
+   *
+   * Decorative: the rank's name is right beside it.
+   */
+  const rankSigil = (rank: string) => {
+    const index = sortedRanks.findIndex((r) => r.name === rank);
+    if (index === 0) return Crown;
+    if (index === 1) return Star;
+    return null;
+  };
 
   // Roster order: admins always on top, then by rank level (a lower level is
   // higher in the hierarchy), rankless members last, join date breaking ties.
@@ -303,7 +320,13 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {m.rank ? (
-                          <Badge variant="outline" className="text-[11px]" style={{ borderColor: `${brandColor}30`, color: brandColor }}>{m.rank}</Badge>
+                          <Badge variant="outline" className="text-[11px] gap-1" style={{ borderColor: `${brandColor}30`, color: brandColor }}>
+                            {(() => {
+                              const Sigil = rankSigil(m.rank);
+                              return Sigil ? <Sigil className="h-3 w-3" aria-hidden="true" /> : null;
+                            })()}
+                            {m.rank}
+                          </Badge>
                         ) : (
                           <span className="text-xs text-zinc-700">—</span>
                         )}

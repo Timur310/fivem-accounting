@@ -12,6 +12,7 @@ import {
   jsonb,
   inet,
   uniqueIndex,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -180,9 +181,32 @@ export const itemTypes = pgTable('item_types', {
   // Optional icon for the item, stored as a link rather than a file: the
   // backend hosts nothing, it only hands the URL to whoever renders it.
   imageUrl:  text('image_url'),
+  // An emoji standing in for the item — the cheap version of the image URL,
+  // and the one most factions will actually use. Kept alongside `imageUrl`
+  // rather than replacing it: a faction with real artwork should not lose it,
+  // and the renderer prefers the image when both are set.
+  //
+  // Wide enough for a multi-codepoint emoji with modifiers, which can run to
+  // several characters even though it reads as one glyph.
+  icon:      varchar('icon', { length: 16 }),
+  // What kind of thing this is, for colour coding only. It changes no
+  // arithmetic anywhere — `isCurrency` remains the only flag that affects how
+  // an amount is computed or formatted.
+  category:  varchar('category', { length: 20 }).notNull().default('other'),
   isActive:  boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Item categories, for colour coding and nothing else.
+ *
+ * Deliberately not derived from `isCurrency`: a faction can hold clean money
+ * and dirty money that are both currency but read very differently across a
+ * table, and contraband is the distinction people actually care about at a
+ * glance.
+ */
+export const ITEM_CATEGORIES = ['cash', 'goods', 'contraband', 'other'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 
 export const itemTypesRelations = relations(itemTypes, ({ one, many }) => ({
   faction: one(factions, { fields: [itemTypes.factionId], references: [factions.id] }),
@@ -410,6 +434,111 @@ export type Quota = typeof quotas.$inferSelect;
 export type NewQuota = typeof quotas.$inferInsert;
 
 // ── audit_logs ─────────────────────────────────────────
+// ── announcements ──────────────────────────────────────
+// A faction's bulletin board. Announcements outlive the Discord messages they
+// replace: "quota deadline is Friday" buried under three hours of chat is the
+// problem this exists to solve.
+export const announcements = pgTable('announcements', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  authorId:  uuid('author_id').notNull().references(() => users.id),
+  title:     varchar('title', { length: 200 }).notNull(),
+  // Markdown, rendered by the same pipeline as the in-app user guide.
+  body:      text('body').notNull(),
+  priority:  varchar('priority', { length: 20 }).notNull().default('normal'),
+  isPinned:  boolean('is_pinned').notNull().default(false),
+  // When set, the announcement stops being listed after this moment. Nothing
+  // deletes it — an expired notice is still history, and a leader should be
+  // able to prove what was posted and when.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const announcementsRelations = relations(announcements, ({ one, many }) => ({
+  faction: one(factions, { fields: [announcements.factionId], references: [factions.id] }),
+  author:  one(users,    { fields: [announcements.authorId],  references: [users.id] }),
+  reads:   many(announcementReads),
+}));
+
+export type Announcement = typeof announcements.$inferSelect;
+export type NewAnnouncement = typeof announcements.$inferInsert;
+
+export const ANNOUNCEMENT_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type AnnouncementPriority = (typeof ANNOUNCEMENT_PRIORITIES)[number];
+
+// ── announcement_reads ─────────────────────────────────
+// Who has seen what. The point is not surveillance: a leader posting "quota
+// doubles on Friday" needs to know whether the people it applies to have
+// actually read it before enforcing it.
+export const announcementReads = pgTable('announcement_reads', {
+  announcementId: uuid('announcement_id').notNull().references(() => announcements.id, { onDelete: 'cascade' }),
+  userId:         uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  readAt:         timestamp('read_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.announcementId, table.userId] }),
+]);
+
+export const announcementReadsRelations = relations(announcementReads, ({ one }) => ({
+  announcement: one(announcements, { fields: [announcementReads.announcementId], references: [announcements.id] }),
+  user:         one(users,         { fields: [announcementReads.userId],         references: [users.id] }),
+}));
+
+export type AnnouncementRead = typeof announcementReads.$inferSelect;
+
+// ── notifications ──────────────────────────────────────
+// Everything the app knows that somebody should be told.
+//
+// Only a `type` and a `data` bag are stored, never rendered text. The
+// interface is bilingual and a member can switch language at any time, so a
+// notification written in English at the moment it fired would be stuck that
+// way forever. The client renders `type` through the same i18n layer as the
+// rest of the app and interpolates `data`.
+//
+// `factionId` is where it happened, and is what the bell uses to switch the
+// user into the right faction when they click through. Nullable because not
+// every notification belongs to one — a support reply does not.
+export const notifications = pgTable('notifications', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  factionId: uuid('faction_id').references(() => factions.id, { onDelete: 'cascade' }),
+  type:      varchar('type', { length: 40 }).notNull(),
+  data:      jsonb('data').$type<Record<string, string | number | null>>(),
+  // Where clicking it should take you, as an app view name. The row carries it
+  // rather than the client mapping type -> view, so a type can be re-pointed
+  // without a frontend release.
+  linkView:  varchar('link_view', { length: 40 }),
+  readAt:    timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user:    one(users,    { fields: [notifications.userId],    references: [users.id] }),
+  faction: one(factions, { fields: [notifications.factionId], references: [factions.id] }),
+}));
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+
+/**
+ * Every kind of notification the server can raise.
+ *
+ * Each one needs a matching `notification.<type>` translation key in both
+ * locales; the client falls back to the raw type if one is missing, which
+ * makes the omission visible rather than silent.
+ */
+export const NOTIFICATION_TYPES = [
+  'payout_approved',
+  'payout_rejected',
+  'payout_completed',
+  'strike_issued',
+  'support_resolved',
+  'support_declined',
+  'announcement_posted',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
 // ── support_tickets ────────────────────────────────────
 // Bug reports and feature requests, sent by anyone with an account to the
 // superadmin who maintains the app. Deliberately not faction-scoped

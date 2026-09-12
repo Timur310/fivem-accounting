@@ -36,6 +36,14 @@ Discord history.
   GitHub-style contribution heatmap per member
 - ⚖️ **Discipline** — strikes with severity, expiry and appeal tracking;
   private admin notes members never see
+- 📣 **Announcements** — a faction bulletin board with priorities, pinning,
+  expiry and read tracking, so "quota deadline is Friday" stops getting buried
+- 🔔 **Notifications** — an in-app bell: your withdrawal was approved, you were
+  given a strike, your bug report was answered
+- 🕑 **Activity feed** — one timeline over the whole faction, narrowed to what
+  each member is allowed to see
+- 🛟 **Support** — anyone can send a bug report or feature request straight to
+  whoever maintains the instance
 - 🧾 **Audit log** — append-only record of every write in the system, actor
   and timestamp included
 - 🌐 **English & Hungarian** out of the box, with amounts formatted

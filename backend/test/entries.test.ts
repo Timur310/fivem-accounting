@@ -331,3 +331,86 @@ describe('DELETE /entries/:entryId', () => {
     expect(again.status).toBe(404);
   });
 });
+
+/**
+ * Sorting a paginated list has to happen in SQL.
+ *
+ * Reordering the page the client happens to hold produces something that
+ * looks like "the biggest entries" and is actually "the biggest of this
+ * page" — wrong rather than merely missing, which is worse.
+ */
+describe('GET /entries — sorting', () => {
+  async function threeAmounts() {
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100', '2026-01-01');
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '900', '2026-01-02');
+    await createEntry(w.faction.id, w.member.id, w.itemTypeId, '500', '2026-01-03');
+  }
+
+  const amounts = async (qs: string) => {
+    const res = await api().get(`${base()}${qs}`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+    return res.body.data.map((e: { amount: string }) => Number(e.amount));
+  };
+
+  it('sorts by amount, both ways', async () => {
+    await threeAmounts();
+    expect(await amounts('?sort=amount&dir=desc')).toEqual([900, 500, 100]);
+    expect(await amounts('?sort=amount&dir=asc')).toEqual([100, 500, 900]);
+  });
+
+  it('sorts by date', async () => {
+    await threeAmounts();
+    // Newest first by date means the 3rd of January, which holds 500.
+    expect((await amounts('?sort=date&dir=desc'))[0]).toBe(500);
+    expect((await amounts('?sort=date&dir=asc'))[0]).toBe(100);
+  });
+
+  it('defaults to newest first with no sort given', async () => {
+    await threeAmounts();
+    expect((await amounts(''))[0]).toBe(500);
+  });
+
+  // A stale bookmark should degrade to the normal view, not 400.
+  it('falls back to the default on an unknown field', async () => {
+    await threeAmounts();
+    expect(await amounts('?sort=nonsense&dir=desc')).toEqual(await amounts(''));
+  });
+
+  it('refuses a direction that is not asc or desc', async () => {
+    const res = await api().get(`${base()}?sort=amount&dir=sideways`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(400);
+  });
+
+  // The whole reason this is server-side: page two must be the real page two
+  // of the sorted set, not a re-shuffle of whatever arrived.
+  it('sorts across pages rather than within one', async () => {
+    for (const amount of ['10', '20', '30', '40', '50']) {
+      await createEntry(w.faction.id, w.member.id, w.itemTypeId, amount);
+    }
+
+    const page1 = await amounts('?sort=amount&dir=desc&page=1&page_size=2');
+    const page2 = await amounts('?sort=amount&dir=desc&page=2&page_size=2');
+    expect(page1).toEqual([50, 40]);
+    expect(page2).toEqual([30, 20]);
+  });
+
+  // Equal keys have no inherent order in Postgres, so without a tiebreaker
+  // rows can repeat or vanish between pages.
+  it('keeps equal amounts in a stable order across pages', async () => {
+    for (let i = 0; i < 6; i++) {
+      await createEntry(w.faction.id, w.member.id, w.itemTypeId, '100');
+    }
+
+    const ids = async (page: number) => {
+      const res = await api()
+        .get(`${base()}?sort=amount&dir=desc&page=${page}&page_size=3`)
+        .set('Cookie', w.member.cookie);
+      return res.body.data.map((e: { id: string }) => e.id);
+    };
+
+    const first = [...(await ids(1)), ...(await ids(2))];
+    const again = [...(await ids(1)), ...(await ids(2))];
+    expect(first).toEqual(again);
+    expect(new Set(first).size).toBe(6);
+  });
+});

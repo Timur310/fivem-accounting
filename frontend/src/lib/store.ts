@@ -20,6 +20,8 @@ export type AppView =
   | 'admin-faction-detail'
   | 'reports'
   | 'support'
+  | 'announcements'
+  | 'feed'
   | 'admin-support'
   | 'guide';
 

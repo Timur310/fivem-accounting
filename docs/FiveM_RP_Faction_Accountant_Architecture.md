@@ -524,6 +524,13 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | View audit logs | Yes | Yes | `view_audit_logs` | No |
 | View reports | Yes | Yes | `view_reports` | No |
 | Send a bug report or feature request | Yes | Yes | Yes | Yes |
+| Read faction announcements | Yes | Yes | Yes | Yes |
+| Post an announcement | Yes | Yes | `manage_settings` | No |
+| Edit an announcement | author only | author only | author only | author only |
+| Remove an announcement | Yes | Yes | `manage_settings`, or own | own only |
+| See who has read one | Yes | Yes | `manage_settings` | No |
+| Read the activity feed | Yes | Yes | Yes | Yes⁴ |
+| Read your own notifications | own only | own only | own only | own only |
 | Read everybody's support tickets | Yes | No | — | No |
 | Read the treasury and dashboard | Yes | Yes | Yes | Yes |
 
@@ -537,6 +544,10 @@ any age.
 ³ Nothing has left the vault while a request is pending, so taking it back moves
 no money (§8.3). Once anyone approves, rejects or completes it, the row is
 theirs, not yours.
+
+⁴ Everyone reaches the feed, but each source inside it keeps its own rule
+(§8.12): withdrawals and strikes narrow to your own without the matching
+permission, and joins and rank changes are absent without `view_audit_logs`.
 
 ---
 
@@ -797,6 +808,140 @@ depends on it, and there is nothing for a tombstone to preserve.
 the inbox sorts `open` above everything else regardless of date — it should open
 on the work, not on the history of it.
 
+### 8.10 Notifications
+
+Until this existed, every piece of state in the app was *pull*: a member found
+out their withdrawal had been approved by opening the app and going to look.
+The bell is the push half — the things the app already knew, reaching the
+person they concern.
+
+**Only a `type` and a `data` bag are stored, never rendered text.** The
+interface is bilingual and a member can switch language at any time, so a
+sentence written in English at the moment the event fired would be stuck that
+way forever. The client renders `notification.<type>` through the same i18n
+layer as everything else and interpolates `data`; amounts are formatted on the
+client too, so they follow the same rules as every other figure. A missing
+translation falls back to the raw type rather than an empty row, which makes
+the omission visible.
+
+What raises one:
+
+| Type | Who is told |
+|---|---|
+| `payout_approved` / `payout_rejected` / `payout_completed` | the recipient |
+| `strike_issued` | the member struck |
+| `support_resolved` / `support_declined` | the reporter (§8.9) |
+
+**Nobody is told about their own action.** Someone who settles a withdrawal
+raised for themselves is not notified; a reporter who cancels their own ticket
+is not notified. Telling people what they just did is the single most reliable
+way to make a bell something they switch off.
+
+**A notification never breaks what caused it.** `notify()` swallows and logs
+its own failures, and is called *after* the transaction that did the real work
+rather than inside it. The payout genuinely was approved and the strike
+genuinely was issued; trading that outcome for a courtesy would be the wrong
+way round.
+
+**The bell is private, superadmin included.** Every route is scoped to
+`req.user` and there is no permission that opens somebody else's. This is the
+one place in the app where reading another account's rows would be reading
+their mail rather than auditing a faction. Ownership is enforced in the `WHERE`
+clause rather than a separate lookup, so another user's row answers 404 exactly
+as a non-existent one does.
+
+`linkView` is stored on the row rather than mapped from `type` on the client,
+so where a notification points can be changed without a frontend release.
+Clicking one switches the reader into the faction it came from first — they may
+be looking at a different one.
+
+The badge polls a dedicated count endpoint once a minute; the list itself is
+only fetched while the panel is open.
+
+**Not built:** anything needing a scheduler. Quota deadline warnings and the
+weekly recap both want a cron the app does not have. Discord delivery — bot or
+webhook — was considered and set aside; the reasons are recorded against
+Phase 8 below.
+
+### 8.11 Announcements
+
+The faction's bulletin board, and the answer to "quota deadline is Friday"
+being buried under three hours of Discord chat.
+
+**Reading is open to every member; posting runs on `manage_settings`.** An
+announcement nobody can see is not an announcement, so the read side has no
+gate at all. The write side deliberately reuses an existing permission rather
+than adding a thirteenth: `manage_settings` is already what decides who speaks
+for the faction — ranks, expiry rules, the faction's own configuration — and
+"what the faction is telling its members" belongs in the same hand.
+
+**Editing and removing are split on purpose.** Only the *author* may edit:
+someone else rewriting the body leaves your name on words you did not write,
+and the audit log would agree with them. Removing is moderation rather than
+authorship, so the author can retract their own and anyone holding
+`manage_settings` can take down anybody's.
+
+**Priority** is `low` / `normal` / `high` / `urgent`, rendered as a left rule
+and — for the top two only — a badge. Low and normal get nothing: if every
+notice wears a badge, the badge stops meaning anything. This is colour carrying
+urgency rather than value, which §9.3 permits because the thing coloured is a
+label, not a figure.
+
+**Expiry hides, never deletes.** An expired notice drops out of the default
+list and comes back with `?include_expired=true`. A leader has to be able to
+prove what was posted and when, so nothing removes it.
+
+**Read tracking** (`announcement_reads`, composite PK) answers "have the people
+this applies to actually seen it" before a leader enforces it. The reads
+endpoint returns the **whole roster** with a nullable `readAt`, because the
+useful question is who has *not* read it — returning only readers would be the
+wrong half of the answer. Marking read twice is not an error and does not move
+the timestamp: "when did they first see this" is what it records. The client
+marks everything on screen as read, since reading the board *is* reading the
+announcements.
+
+Posting notifies the whole roster except the author (§8.10).
+
+### 8.12 Activity Feed
+
+One timeline over everything the faction has done, newest first:
+`GET /factions/:id/feed`, a `UNION ALL` across entries, payouts,
+announcements, strikes and the audit rows that record joins and rank changes.
+
+**The feed is a view, never a back door.** This is the whole design problem.
+Each source keeps the visibility rule it has on its own screen, applied as a
+`WHERE` clause in the union rather than left to the client:
+
+| Source | Who sees it |
+|---|---|
+| entries, announcements | every member — the ledger is open by design |
+| payouts | `manage_payouts`, otherwise only your own |
+| strikes | `manage_strikes`, otherwise only your own |
+| member joins, rank changes | `view_audit_logs` — the branch is omitted entirely, not filtered |
+
+Without that, a plain member could read every withdrawal in the faction and
+everybody's discipline record through a screen that looks like a news feed: the
+permission system intact everywhere else and completely bypassed here. Six
+tests check it from both sides.
+
+**No rendered text is stored or returned.** §12.3.3 originally specified a
+`summary` string per item. That cannot work here for the same reason it cannot
+in the notification bell (§8.10): the interface is bilingual and a member can
+switch language at any time, so a sentence written in English at write time
+would be frozen in it. Each row carries a `type` and a jsonb `data` bag, and
+the client renders `feed.<type>` through the i18n layer. Amounts are cast to
+text in SQL — `jsonb_build_object` turns a `numeric` into a JSON *number*, and
+every other endpoint in the app returns amounts as strings.
+
+**Anonymous activity** surfaces with `actorIsSystem` rather than a name: the
+shared placeholder that carries anonymous entries and both sides of a
+laundering run is not a person, and the client renders it as "the faction".
+
+The route hand-writes its SQL, so it wraps execution in `try`/`catch`. Express
+4 does not catch a rejected promise from an async handler, and without the
+guard a query error leaves the request hanging open forever rather than
+answering 500 — a far worse failure, and one that is invisible in logs.
+
 ---
 
 ## 9. Frontend Architecture
@@ -859,6 +1004,11 @@ registrations still waiting, in one list with the registrations pinned to the to
 and labelled. Rename and remove appear only on those, because that is all the API
 allows.
 
+`announcements` and `feed` are the two Phase 6 surfaces: the board and the
+timeline. Neither carries a permission of its own — the feed narrows itself
+per source inside the query (§8.12), and posting is gated inside the
+announcements view rather than on the nav item.
+
 The sign-in screen is not in `views/`: it renders before a faction is ever
 selected, so it lives in `components/login-page.tsx` and is the one screen
 the shell does not wrap. It carries the language switcher above everything
@@ -893,6 +1043,18 @@ buttons (§8.8).
 - **A failed fetch is its own state.** Views render loading, error and empty
   as three separate branches, never two — see `ErrorState` in §9.4. Falling
   through a failure to the empty state tells a member their ledger is gone.
+- **Sorting a paginated list happens in SQL, never on the client.** Reordering
+  the page in hand produces "the biggest of page three" dressed up as "the
+  biggest" — wrong rather than merely missing. `lib/sort.ts` resolves
+  `?sort=&dir=` against a per-route allow-list and always appends a tiebreaker,
+  because Postgres gives no stable order for equal keys and rows otherwise
+  repeat or vanish across page boundaries. An unknown field falls back to the
+  default instead of erroring, so a stale bookmark degrades rather than breaks.
+- **Filters and sort orders are settings, not transient UI.** They persist per
+  faction through `usePersistedState`, because the shell unmounts views on every
+  navigation and someone who narrowed a list and clicked into a profile expects
+  to come back to it. Reads happen in an effect, never in the initializer —
+  this tree renders on the server, where `localStorage` does not exist.
 - **State**: zustand for session, selected faction and view; TanStack Query for
   everything fetched.
 
@@ -954,29 +1116,50 @@ permission and offers no retry, since retrying a permission error only
 teaches people to keep pressing; anything else offers `refetch()`. Every
 view that fetches renders it.
 
+**Item types as visual citizens.** An item type carries an `icon` (an emoji)
+and a `category` (`cash`, `goods`, `contraband`, `other`) alongside the
+admin-pasted `imageUrl`. `ItemIcon` renders them in that order of
+preference — image, then emoji, then the package placeholder — so a faction
+that went to the trouble of hosting artwork does not lose it to an emoji
+picked later.
+
+The category tints only the tile behind the glyph, and this does not bend
+the §9.3 rule. That rule is about colour on a *figure*; nothing here touches
+a number, and amounts, balances and quota bars stay exactly as neutral as
+they were. The tint exists so a mixed table can be scanned by kind at a
+glance. It is deliberately not derived from `isCurrency`: clean money and
+dirty money are both currency and read completely differently across a
+table, and contraband is the distinction people actually care about.
+
+The picker offers a curated palette rather than pulling in an emoji-picker
+dependency — this is a ledger for a crime roleplay server, and the glyphs
+its factions need fit on one panel.
+
+**Rank sigils.** The top two ranks by level (lower is more senior, so Boss is
+level 1) wear a crown and a star beside their name on the roster. Only the top
+two: a sigil on every rank is wallpaper, and the point is that the head of the
+roster is visible without reading.
+
+**"IN THE RED".** A rotated, low-opacity stamp struck across the treasury's net
+balance when the faction has paid out more than it took in. Decorative and
+`aria-hidden` — the figure beside it is already red and the line under it says
+the same thing in words.
+
 **Partially implemented from the plan:**
 
-- The shared shimmer skeleton and single empty-state component exist
-  (`EmptyState`, `ListSkeleton`) and are used by the list-shaped views, but
-  adoption is not complete — the dashboard, reports, settings, laundering
-  and the member profile still hand-roll theirs, visually close but not
-  unified.
-- Row-level micro-feedback: the freshly-logged entry row pulses
-  (`.row-flash`), and the quick-log card pulses on a successful log. The
-  eased quota-bar fill is still missing.
+- (Empty-state adoption is now complete — every view that can show an empty
+  list uses the shared component.)
+- Stats-strip fact-chips: "best streak" is in, shown only once the record
+  beats the current run so it reads as something you did rather than another
+  live figure. The quota-streak chip ("12 weeks running") is not — it needs
+  an aggregation over quota history the app does not compute yet.
 
 **Not yet implemented from the plan:**
 
-- Item types as full visual citizens: a built-in icon/emoji picker per item
-  type and cash/goods/contraband category color-coding. Only the existing
-  admin-pasted image URL is in place.
-- Stats-strip fact-chips — "Best week so far", "12-week quota streak."
-- Roster rank sigils (Boss/Underboss emblem) and the stamped "IN THE RED"
-  mark on a negative balance.
+- Nothing else from the Phase 9 list.
 
-None of the above blocks testing or launch — it's polish. Of the remainder,
-finishing the empty-state adoption is the cheapest; the item-type icon
-picker is the largest, since it needs both a picker UI and a schema field.
+None of the above blocks testing or launch — it's polish. Finishing the
+empty-state adoption is the cheapest piece left.
 
 ---
 
@@ -1228,15 +1411,15 @@ crontab -e
 | 5 | Inactivity detection | Flag members who haven't logged entries in X days. Dashboard alert | Medium |
 | 6 | Member join/leave history | Track when members joined, left, were kicked, or were reinstated | Medium |
 
-### Phase 6: Faction Communication (Weeks 16-18)
+### Phase 6: Faction Communication (Weeks 16-18) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
-| 1 | Announcements system | Admin posts announcements with priority levels (normal, high, urgent) | High |
-| 2 | Pinned announcements | Pin important announcements to top of feed, auto-expire after set time | Medium |
-| 3 | Announcement read tracking | Track which members have read each announcement | Medium |
-| 4 | Markdown rendering | Announcements support full markdown with preview | Low |
-| 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline | Medium |
+| 1 | Announcements system | Admin posts announcements with priority levels (low, normal, high, urgent) — **DONE** (§8.11) | High |
+| 2 | Pinned announcements | Pin important announcements to top of feed, auto-expire after set time — **DONE** (expiry hides, never deletes) | Medium |
+| 3 | Announcement read tracking | Track which members have read each announcement — **DONE** | Medium |
+| 4 | Markdown rendering | Announcements support full markdown — **DONE** (rendered through the same pipeline as the in-app guide; no side-by-side preview) | Low |
+| 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline — **DONE** (§8.12) | Medium |
 
 ### Phase 7: Advanced Analytics & Gamification (Weeks 19-21) — COMPLETE
 
@@ -1253,13 +1436,26 @@ crontab -e
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
-| 1 | Discord bot integration | Bot commands: /balance, /log <amount> <type>, /top, /quotas, /announce | High |
-| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings | High |
-| 3 | Webhook system | Outgoing webhooks on configurable events (entry logged, quota met, strike issued) | Medium |
+| 1 | Discord bot integration | Bot commands: /balance, /log <amount> <type>, /top, /quotas, /announce — **NOT PLANNED**¹ | High |
+| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings — **BLOCKED**² | High |
+| 3 | Webhook system | Outgoing webhooks on configurable events — **DEFERRED**³ | Medium |
 | 4 | API tokens | Faction-level API tokens for server-side scripts (FiveM in-game resource tracking) | Medium |
 | 5 | Data backup/restore | Full faction data export (JSON) and import. Superadmin can backup all data | Medium |
 | 6 | Faction templates | Preset configurations for common faction types (cartel, police, EMS, mechanic, etc.) | Low |
 | 7 | i18n framework | Translation infrastructure + community translation support | Low |
+
+¹ A bot has to be invited into, and managed on, each faction's own Discord
+server. The operator does not have that access and does not want it, so the
+feature cannot be delivered as specified regardless of effort.
+
+² Wants a scheduler the app does not have, and a delivery channel — see ¹ and ³.
+The in-app bell (§8.10) covers the event half of what this was for.
+
+³ A webhook needs no bot and no hosting: a faction admin pastes a URL from
+their own server settings. It was deferred rather than refused, on the grounds
+that the user base is currently small enough that the in-app bell reaches
+everyone and there is not yet enough feedback to know what people would want
+pushed. Worth revisiting as the user base grows.
 
 ### Phase 9: Frontend Redesign — "Serious Ledger, Game Soul" (Weeks 25-26) — MOSTLY COMPLETE
 
@@ -1275,11 +1471,11 @@ crontab -e
 | 8 | Faction masthead | Display-type name, accent glow, optional logo image URL — **DONE** | Medium |
 | 9 | Heatmap-as-hero | Enlarged, accent-tinted heatmap with "best day" tooltip on the member profile — **DONE** | Low |
 | 10 | PWA / mobile app feel | Manifest, home-screen icon, fullscreen standalone mode — **DONE** | Medium |
-| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component, plus an `ErrorState` so a failed load never reads as an empty list — **PARTIAL** (component done and used by the list views; dashboard, reports, settings, laundering and member profile still hand-roll theirs) | Low |
-| 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding | Low — not started (image URL only) |
-| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill — **PARTIAL** (entry row and quick-log card pulse; quota-bar fill still unanimated) | Low |
-| 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" | Low — not started |
-| 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance | Low — not started |
+| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component, plus an `ErrorState` so a failed load never reads as an empty list — **DONE** | Low |
+| 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding — **DONE** | Low |
+| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill — **DONE** | Low |
+| 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" — **PARTIAL** (best streak done; quota streak needs an aggregation that does not exist yet) | Low |
+| 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance — **DONE** | Low |
 
 See §9.4 for the narrative writeup, guardrails, and what's left.
 

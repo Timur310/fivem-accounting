@@ -3,6 +3,7 @@ import {
   api, resetDatabase, seedBasicWorld, createEntry, createItemType,
   createPayout, type BasicWorld,
 } from './helpers.js';
+import { todayDateString } from '../src/lib/date.js';
 
 let w: BasicWorld;
 const f = () => `/api/v1/factions/${w.faction.id}`;
@@ -172,8 +173,10 @@ describe('GET /leaderboard', () => {
 
   it('never advertises a period end in the future', async () => {
     const res = await api().get(`${f()}/leaderboard?period=month`).set('Cookie', w.admin.cookie);
-    const today = new Date().toISOString().slice(0, 10);
-    expect(res.body.data.period.to <= today).toBe(true);
+    // The app's own local-calendar today, not toISOString(): east of Greenwich
+    // the UTC date is still yesterday for the first hours after midnight, and
+    // the assertion would fail against an API that is behaving correctly.
+    expect(res.body.data.period.to <= todayDateString()).toBe(true);
   });
 });
 

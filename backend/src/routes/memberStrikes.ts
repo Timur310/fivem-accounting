@@ -7,6 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { notify } from '../lib/notify.js';
 import { resolveStrikeExpiry, effectiveStatus } from '../lib/strikes.js';
 
 const router = Router({ mergeParams: true });
@@ -80,6 +81,15 @@ router.post('/', requirePermission('manage_strikes'), async (req: Request, res: 
     entityId: strike.id,
     details: { targetUserId, severity, expiresAt: expiresAt?.toISOString() ?? null },
     req,
+  });
+
+  // Discovering a strike by stumbling on it is the worst way to find out.
+  await notify({
+    userId: targetUserId,
+    type: 'strike_issued',
+    factionId,
+    linkView: 'strikes',
+    data: { severity, reason: parsed.data.reason ?? null },
   });
 
   success(res, { ...strike, effectiveStatus: effectiveStatus(strike) }, 201);

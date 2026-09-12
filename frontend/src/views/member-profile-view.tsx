@@ -22,9 +22,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   ArrowLeft, Flame, Trophy, Target, Calendar, FileText, AlertTriangle,
-  Flag, Plus, Pencil, Trash2, Activity, Zap, Clock,
+  Flag, Plus, Pencil, Trash2, Activity, Zap, Clock, StickyNote,
 } from 'lucide-react';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
@@ -422,7 +422,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {quotaProgress.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-6">{t('quota.noneActive')}</p>
+                  <EmptyState icon={Target} title={t('quota.noneActive')} compact />
                 ) : (
                   <div className="space-y-3">
                     {quotaProgress.map((q) => {
@@ -431,7 +431,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                         <div key={q.quotaId}>
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-sm text-zinc-300 flex items-center gap-2 min-w-0">
-                              <ItemIcon src={q.imageUrl} className="size-5" />
+                              <ItemIcon src={q.imageUrl} icon={q.icon} category={q.category} className="size-5" />
                               <span className="truncate">{q.itemTypeName}</span>
                             </span>
                             <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-zinc-400'}`}>{q.percentage.toFixed(1)}%</span>
@@ -440,7 +440,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             {/* Neutral until met, like the same bar on the
                                 dashboard — the faction accent must not stand in
                                 for "done". */}
-                            <div className={`h-full rounded-full transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
+                            <div className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
                           </div>
                           <div className="flex justify-between text-[10px] text-zinc-600 mt-0.5">
                             <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>
@@ -467,7 +467,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {strikes.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-6">{t('strikes.none')}</p>
+                  <EmptyState icon={AlertTriangle} title={t('strikes.none')} compact />
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
                     {strikes.slice(0, 5).map((s) => (
@@ -507,7 +507,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                     return (
                       <div key={row.itemTypeId} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3" style={isTop ? { borderColor: `${brandColor}25`, backgroundColor: `${brandColor}08` } : undefined}>
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <ItemIcon src={row.imageUrl} className="size-8" />
+                          <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
                           <div className="min-w-0">
                             <p className="text-sm text-zinc-300 truncate">{row.itemTypeName}</p>
                             <p className="text-[11px] text-zinc-600">{t('entries.count', { count: row.count })}</p>
@@ -586,7 +586,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   {recentEntries.map((e) => (
                     <div key={e.id} className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
                       <div className="flex items-center gap-2 min-w-0">
-                        <ItemIcon src={e.itemImageUrl} className="size-5" />
+                        <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-5" />
                         <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                         <span className="text-xs text-zinc-600 truncate">{e.itemTypeName}</span>
                       </div>
@@ -613,7 +613,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notesIsError ? (
             <Card><CardContent className="p-0"><ErrorState error={notesError} onRetry={() => notesRefetch()} compact /></CardContent></Card>
           ) : notes.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-zinc-600 text-sm">{t('notes.none')}</CardContent></Card>
+            <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')} compact /></CardContent></Card>
           ) : (
             <div className="space-y-2">
               {notes.map((n) => (
@@ -649,7 +649,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </CardHeader>
           <CardContent>
             {!historyData?.data?.length ? (
-              <p className="text-zinc-600 text-sm text-center py-6">{t('profile.noHistory')}</p>
+              <EmptyState icon={Clock} title={t('profile.noHistory')} compact />
             ) : (
               <div className="space-y-2">
                 {historyData.data.map((h) => (

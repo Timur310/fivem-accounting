@@ -33,6 +33,13 @@ import type {
   SupportTicketKind,
   SupportTicketStatus,
   CreateSupportTicketInput,
+  AppNotification,
+  Announcement,
+  FeedItem,
+  FeedType,
+  AnnouncementRead,
+  CreateAnnouncementInput,
+  UpdateAnnouncementInput,
   Payout,
   CreatePayoutInput,
   UpdatePayoutInput,
@@ -268,6 +275,8 @@ export const factionStrikesApi = {
   list: (factionId: string, params?: {
     status?: string;
     severity?: string;
+    sort?: string;
+    dir?: 'asc' | 'desc';
     user_id?: string;
     page?: number;
     page_size?: number;
@@ -329,6 +338,8 @@ export const entriesApi = {
       search?: string;
       page?: number;
       page_size?: number;
+      sort?: string;
+      dir?: 'asc' | 'desc';
     },
   ) =>
     api
@@ -371,6 +382,8 @@ export const auditLogsApi = {
     params?: {
       action?: string;
       entity_type?: string;
+      date_from?: string;
+      date_to?: string;
       user_id?: string;
       page?: number;
       page_size?: number;
@@ -428,6 +441,8 @@ export const payoutsApi = {
       date_to?: string;
       page?: number;
       page_size?: number;
+      sort?: string;
+      dir?: 'asc' | 'desc';
     },
   ) =>
     api
@@ -715,6 +730,70 @@ export const supportApi = {
 
   remove: (ticketId: string) =>
     api.delete<ApiSuccessResponse<{ id: string }>>(`/support/${ticketId}`).then(unwrap),
+};
+
+// ── Notifications ──
+// Scoped to the caller by the server; there is no faction or id to pass.
+
+export const notificationsApi = {
+  list: (params?: { unread?: boolean; limit?: number }) =>
+    api
+      .get<ApiSuccessResponse<AppNotification[]>>('/notifications', {
+        params: { ...(params?.unread ? { unread: 'true' } : {}), ...(params?.limit ? { limit: params.limit } : {}) },
+      })
+      .then(unwrap),
+
+  unreadCount: () =>
+    api.get<ApiSuccessResponse<{ unread: number }>>('/notifications/unread-count').then(unwrap),
+
+  markRead: (id: string) =>
+    api.post<ApiSuccessResponse<{ id: string }>>(`/notifications/${id}/read`).then(unwrap),
+
+  markAllRead: () =>
+    api.post<ApiSuccessResponse<{ readAt: string }>>('/notifications/read-all').then(unwrap),
+
+  clear: () => api.delete<ApiSuccessResponse<{ cleared: boolean }>>('/notifications').then(unwrap),
+};
+
+// ── Announcements ──
+
+export const announcementsApi = {
+  list: (factionId: string, params?: { include_expired?: boolean }) =>
+    api
+      .get<ApiSuccessResponse<Announcement[]>>(`/factions/${factionId}/announcements`, {
+        params: params?.include_expired ? { include_expired: 'true' } : undefined,
+      })
+      .then(unwrap),
+
+  create: (factionId: string, input: CreateAnnouncementInput) =>
+    api
+      .post<ApiSuccessResponse<Announcement>>(`/factions/${factionId}/announcements`, input)
+      .then(unwrap),
+
+  update: (factionId: string, id: string, input: UpdateAnnouncementInput) =>
+    api
+      .patch<ApiSuccessResponse<Announcement>>(`/factions/${factionId}/announcements/${id}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/announcements/${id}`),
+
+  markRead: (factionId: string, id: string) =>
+    api.post(`/factions/${factionId}/announcements/${id}/read`),
+
+  reads: (factionId: string, id: string) =>
+    api
+      .get<ApiSuccessResponse<AnnouncementRead[]>>(`/factions/${factionId}/announcements/${id}/reads`)
+      .then(unwrap),
+};
+
+// ── Activity feed ──
+
+export const feedApi = {
+  list: (factionId: string, params?: { page?: number; page_size?: number; type?: FeedType }) =>
+    api
+      .get<ApiSuccessResponse<FeedItem[]>>(`/factions/${factionId}/feed`, { params })
+      .then((r) => ({ data: r.data.data, meta: r.data.meta })),
 };
 
 export { api };

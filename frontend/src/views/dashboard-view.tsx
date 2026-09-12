@@ -6,7 +6,8 @@ import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, leaderboa
 import { Input } from '@/components/ui/input';
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Flame, Trophy, Target as TargetIcon, Coins, Check } from 'lucide-react';
 import type { ItemType } from '@/lib/api-types';
@@ -33,9 +34,17 @@ const QUOTA_PERIOD_KEYS: Record<string, TranslationKey> = {
 interface Props {
   factionId: string;
   canLogEntries?: boolean;
+  /**
+   * Whether the caller is actually on this faction's roster.
+   *
+   * Distinct from `canLogEntries`, which a superadmin has everywhere. The
+   * "my stats" strip only means something for a member, and its endpoints
+   * refuse anyone else.
+   */
+  isFactionMember?: boolean;
 }
 
-export function DashboardView({ factionId, canLogEntries = false }: Props) {
+export function DashboardView({ factionId, canLogEntries = false, isFactionMember = false }: Props) {
   const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
@@ -65,15 +74,23 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
   // Assembled from endpoints that already exist: the week leaderboard carries
   // the member's rank, the profile carries the streak.
   const user = useAppStore((s) => s.user);
+  // Gated on actual membership, not on `canLogEntries`.
+  //
+  // `canLogEntries` is true for a superadmin browsing a faction they never
+  // joined, and these two endpoints are about *this member's* standing in
+  // *this faction* — a stats strip, a streak, a rank. Someone who is not on
+  // the roster has none of those, so asking produced a 404 on every dashboard
+  // load: "Member not found in this faction". The API is right to refuse; the
+  // question was the wrong one to ask.
   const { data: lbWeek } = useQuery({
     queryKey: ['leaderboard', 'week', factionId],
     queryFn: () => leaderboardApi.get(factionId, { period: 'week', limit: 100 }),
-    enabled: canLogEntries && !!user,
+    enabled: isFactionMember && !!user,
   });
   const { data: myProfile } = useQuery({
     queryKey: ['member-profile', factionId, user?.id],
     queryFn: () => membersApi.getProfile(factionId, user!.id),
-    enabled: canLogEntries && !!user,
+    enabled: isFactionMember && !!user,
     retry: false,
   });
 
@@ -156,6 +173,13 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
       toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
+
+  const canQuickLog =
+    !quickJustLogged &&
+    !!quickTypeId &&
+    !!quickAmount &&
+    Number(quickAmount) > 0 &&
+    !quickLogMutation.isPending;
 
   const quickTypeOptions: SearchableSelectOption[] = (itemTypes as ItemType[])
     .filter((it) => it.isActive)
@@ -268,13 +292,18 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     onClick={() => { setQuickTypeId(it.itemTypeId); setQuickAmount(it.amount); }}
                     className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.itemTypeId ? 'border-primary text-primary bg-primary/10' : 'border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.2]'}`}
                   >
-                    <ItemIcon src={it.itemImageUrl} className="size-4" />
+                    <ItemIcon src={it.itemImageUrl} icon={it.itemIcon} category={it.itemCategory} className="size-4" />
                     {it.itemTypeName}
                   </button>
                 ))}
               </div>
             )}
-            <div className="flex flex-wrap items-end gap-3">
+            {/* A real form: Enter anywhere in the card logs the entry, which is
+                what a one-thumb flow wants on a phone keyboard too. */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (canQuickLog) quickLogMutation.mutate(); }}
+              className="flex flex-wrap items-end gap-3"
+            >
               <div className="space-y-1.5 min-w-[180px] flex-1">
                 <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
                 <SearchableSelect
@@ -300,18 +329,19 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                   />
                   <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
                 </div>
+                <AmountPreview value={quickAmount} unit={quickType?.unit} isCurrency={quickType?.isCurrency} />
               </div>
               <Button
+                type="submit"
                 className="h-11 px-6 text-sm"
-                disabled={quickJustLogged || !quickTypeId || !quickAmount || Number(quickAmount) <= 0 || quickLogMutation.isPending}
-                onClick={() => quickLogMutation.mutate()}
+                disabled={!canQuickLog}
                 style={quickJustLogged ? undefined : { backgroundColor: brandColor }}
               >
                 {quickJustLogged ? (
                   <><Check className="h-4 w-4 mr-1.5" />{t('dashboard.quickLogDone')}</>
                 ) : quickLogMutation.isPending ? t('common.saving') : t('dashboard.quickLogSubmit')}
               </Button>
-            </div>
+            </form>
           </CardContent>
         </Card>
       )}
@@ -343,6 +373,16 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                 label: t('dashboard.myStreak'),
                 value: t('dashboard.daysShort2', { count: streak.current }),
                 hint: streak.activeToday ? t('dashboard.activeToday') : t('dashboard.logToday'),
+              },
+              // A fact-chip rather than another live figure: it only appears
+              // once you have beaten your current run, so it reads as
+              // something you did rather than a number that follows you
+              // around. `best` was already computed for the profile.
+              streak && streak.best > streak.current && streak.best > 1 && {
+                icon: <Flame className="h-4 w-4 text-zinc-400" />,
+                label: t('dashboard.myBestStreak'),
+                value: t('dashboard.daysShort2', { count: streak.best }),
+                hint: t('dashboard.bestStreakHint'),
               },
               myQuota && {
                 icon: <TargetIcon className="h-4 w-4 text-zinc-400" />,
@@ -459,7 +499,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                   <div key={q.id} className="rounded-lg border border-white/[0.06] p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <ItemIcon src={q.itemImageUrl} />
+                        <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-zinc-200 truncate">{q.itemTypeName}</p>
                           <p className="text-[11px] text-zinc-500">{QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</p>
@@ -514,7 +554,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                 const prev = q.previousPeriod!;
                 return (
                   <div key={q.id} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
-                    <ItemIcon src={q.itemImageUrl} className="size-5" />
+                    <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} className="size-5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-300 truncate">
                         {q.itemTypeName}
@@ -548,7 +588,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
           </CardHeader>
           <CardContent>
             {topContributors.length === 0 ? (
-              <p className="text-zinc-600 text-sm text-center py-8">{t('dashboard.noContributions')}</p>
+              <EmptyState icon={Trophy} title={t('dashboard.noContributions')} compact />
             ) : (
               <div className="space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
@@ -589,7 +629,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
-              <p className="text-zinc-600 text-sm text-center py-8">{t('entries.noneYet')}</p>
+              <EmptyState icon={List} title={t('entries.noneYet')} compact />
             ) : (
               <div className="space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (
@@ -605,7 +645,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                         <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                       </p>
                       <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
-                        <ItemIcon src={e.itemImageUrl} className="size-4" />
+                        <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-4" />
                         <span className="truncate">
                           {e.itemTypeName} &middot; {e.entryDate}
                           {e.description && ` — ${e.description}`}
@@ -644,7 +684,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={b.imageUrl} className="size-8" />
+                      <ItemIcon src={b.imageUrl} icon={b.icon} category={b.category} className="size-8" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-zinc-300 truncate">{b.itemTypeName}</p>
                         <p className="text-xs text-zinc-600">{t('dashboard.inOut', { inflow: formatAmount(b.inflow, b.unit, b.isCurrency), outflow: formatAmount(b.outflow, b.unit, b.isCurrency) })}</p>
@@ -663,7 +703,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={row.imageUrl} className="size-8" />
+                      <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-zinc-300 truncate">{row.itemTypeName}</p>
                         <p className="text-xs text-zinc-600">{row.unit}</p>

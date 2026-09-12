@@ -113,7 +113,11 @@ export function SupportView() {
             {t('support.newTicket')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (canSubmit) createMutation.mutate(); }}
+            className="space-y-4"
+          >
           {/* Two cards rather than a dropdown: there are exactly two kinds, and
               which one you pick changes what the maintainer needs from you, so
               the choice carries a line of guidance with it. */}
@@ -174,14 +178,15 @@ export function SupportView() {
 
           <div className="flex justify-end">
             <Button
+              type="submit"
               disabled={!canSubmit}
-              onClick={() => createMutation.mutate()}
               style={canSubmit ? { backgroundColor: brandColor } : undefined}
             >
               <Send className="h-4 w-4 mr-1.5" />
               {createMutation.isPending ? t('common.saving') : t('support.send')}
             </Button>
           </div>
+          </form>
         </CardContent>
       </Card>
 

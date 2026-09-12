@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/searchable-select';
 import { ArrowRight, WashingMachine } from 'lucide-react';
 import { ErrorState } from '@/components/ui/empty-state';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, todayLocalDateString } from '@/lib/format';
@@ -142,7 +143,11 @@ export function LaunderingView({ factionId }: Props) {
         </Card>
       ) : (
         <Card>
-          <CardContent className="py-5 space-y-5">
+          <CardContent className="py-5">
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (canSubmit) launderMutation.mutate(); }}
+              className="space-y-5"
+            >
             <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
               <div className="space-y-2">
                 <Label>{t('laundering.from')}</Label>
@@ -164,10 +169,12 @@ export function LaunderingView({ factionId }: Props) {
                   className="tabular-nums"
                   aria-invalid={overBalance || undefined}
                 />
-                {overBalance && from && (
+                {overBalance && from ? (
                   <p className="text-xs text-red-400">
                     {t('laundering.treasuryHolds', { amount: formatAmount(from.balance, from.unit, true) })}
                   </p>
+                ) : (
+                  <AmountPreview value={amountIn} unit={from?.unit} isCurrency />
                 )}
               </div>
 
@@ -194,6 +201,7 @@ export function LaunderingView({ factionId }: Props) {
                   onChange={(e) => setAmountOut(e.target.value)}
                   className="tabular-nums"
                 />
+                <AmountPreview value={amountOut} unit={to?.unit} isCurrency />
               </div>
             </div>
 
@@ -234,13 +242,14 @@ export function LaunderingView({ factionId }: Props) {
 
             <div className="flex justify-end">
               <Button
+                type="submit"
                 disabled={!canSubmit}
-                onClick={() => launderMutation.mutate()}
                 style={{ backgroundColor: brandColor }}
               >
                 {launderMutation.isPending ? t('laundering.washing') : t('laundering.launder')}
               </Button>
             </div>
+            </form>
           </CardContent>
         </Card>
       )}

@@ -7,6 +7,9 @@ import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/empty-state';
+import { SortableHeader, type SortState } from '@/components/ui/sortable-header';
+import { DateRangePresets, type DatePreset } from '@/components/ui/date-range-presets';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,6 +33,7 @@ import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } fro
 import { useToast } from '@/hooks/use-toast';
 import type { ItemType, Entry } from '@/lib/api-types';
 import { formatAmount, displayName, todayLocalDateString } from '@/lib/format';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
 
@@ -58,7 +62,18 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const { toast } = useToast();
 
   const [page, setPage] = useState(1);
-  const [itemTypeIdFilter, setItemTypeIdFilter] = useState<string>('all');
+  // Filters and sort are settings rather than transient UI: clicking into a
+  // member's profile and coming back should not throw them away. Keyed per
+  // faction, since a filter naming one faction's item type means nothing in
+  // another.
+  const [sort, setSort] = usePersistedState<SortState>(
+    `entries.sort.${factionId}`,
+    { sort: 'date', dir: 'desc' },
+  );
+  const [itemTypeIdFilter, setItemTypeIdFilter] = usePersistedState<string>(
+    `entries.filter.type.${factionId}`,
+    'all',
+  );
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,7 +121,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
 
   const { data: entriesData, isLoading, isError, error: entriesError, refetch: refetchEntries } = useQuery({
-    queryKey: ['entries', factionId, page, itemTypeIdFilter, dateFrom, dateTo, searchQuery],
+    queryKey: ['entries', factionId, page, itemTypeIdFilter, dateFrom, dateTo, searchQuery, sort],
     queryFn: () =>
       entriesApi.list(factionId, {
         page,
@@ -115,6 +130,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         search: searchQuery || undefined,
+        sort: sort.sort,
+        dir: sort.dir,
       }),
     staleTime: 0,
   });
@@ -153,7 +170,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     value: item.id,
     label: item.name,
     hint: item.unit ? `(${item.unit})` : undefined,
-    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
+    icon: <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-5" />,
   })), [activeItemTypes]);
 
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
@@ -255,26 +272,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     [entries, user?.id],
   );
   // Date presets: today / this week / this month, in local calendar time.
-  const [activePreset, setActivePreset] = useState<'today' | 'week' | 'month' | null>(null);
-  const applyPreset = (preset: 'today' | 'week' | 'month') => {
-    const now = new Date();
-    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const day = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-    if (preset === 'today') {
-      setDateFrom(iso(now));
-      setDateTo(iso(now));
-    } else if (preset === 'week') {
-      setDateFrom(iso(monday));
-      setDateTo(iso(now));
-    } else {
-      setDateFrom(iso(new Date(now.getFullYear(), now.getMonth(), 1)));
-      setDateTo(iso(now));
-    }
-    setActivePreset(preset);
-    setPage(1);
-  };
+  const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
 
   // Five-minute self-service undo, mirroring the API rule.
   const isUndoable = (entry: Entry) =>
@@ -306,6 +304,25 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const meta = entriesData?.meta;
   const totalPages = meta ? Math.ceil(meta.total_count / meta.page_size) : 1;
 
+  // One predicate for the create dialog, read by both the submit button and
+  // the form's onSubmit. Pressing Enter must be able to do exactly what
+  // clicking can and no more.
+  const canCreateEntry =
+    !!newItemTypeId &&
+    !!newAmount &&
+    Number(newAmount) > 0 &&
+    !createMutation.isPending &&
+    (canCreditSelf || newAnonymous || !!newOwnerId) &&
+    !customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim());
+
+  const canSaveEdit =
+    !!editAmount && Number(editAmount) > 0 && !updateMutation.isPending;
+
+  // Unit for the edit dialog's echo, taken from the row being edited.
+  const editingEntry = entries.find((e) => e.id === editEntryId);
+  const editUnit = editingEntry?.itemUnit;
+  const editIsCurrency = editingEntry?.itemIsCurrency;
+
   return (
     <div className="space-y-4">
       {/* Filters + CTA */}
@@ -336,21 +353,16 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <div className="flex flex-col gap-1.5 w-full lg:w-auto">
               <Label className="text-xs text-zinc-500">{t('entries.quickRange')}</Label>
               <div className="flex flex-wrap gap-1">
-                {([
-                  ['today', 'entries.today'],
-                  ['week', 'entries.thisWeek'],
-                  ['month', 'entries.thisMonth'],
-                ] as const).map(([preset, key]) => (
-                  <Button
-                    key={preset}
-                    variant={activePreset === preset ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => applyPreset(preset)}
-                  >
-                    {t(key)}
-                  </Button>
-                ))}
+                <DateRangePresets
+                  active={activePreset}
+                  onApply={(preset, range) => {
+                    setDateFrom(range.from);
+                    setDateTo(range.to);
+                    setActivePreset(preset);
+                    setPage(1);
+                  }}
+                  onClear={() => { setDateFrom(''); setDateTo(''); setActivePreset(null); setPage(1); }}
+                />
               </div>
             </div>
             <div className="flex flex-col gap-1.5 w-full lg:w-auto">
@@ -402,12 +414,20 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('role.member')}</TableHead>
-                      <TableHead>{t('entries.type')}</TableHead>
-                      <TableHead className="text-right">{t('common.amount')}</TableHead>
+                      <SortableHeader field="member" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                        {t('role.member')}
+                      </SortableHeader>
+                      <SortableHeader field="type" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                        {t('entries.type')}
+                      </SortableHeader>
+                      <SortableHeader field="amount" state={sort} onChange={(n) => { setSort(n); setPage(1); }} align="right">
+                        {t('common.amount')}
+                      </SortableHeader>
                       <TableHead>{t('common.description')}</TableHead>
                       {customFields.length > 0 && <TableHead>{t('entries.custom')}</TableHead>}
-                      <TableHead>{t('common.date')}</TableHead>
+                      <SortableHeader field="date" state={sort} onChange={(n) => { setSort(n); setPage(1); }}>
+                        {t('common.date')}
+                      </SortableHeader>
                       {(isAdmin || entries.some((e) => isUndoable(e))) && <TableHead className="w-[80px]"></TableHead>}
                     </TableRow>
                   </TableHeader>
@@ -425,7 +445,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                         </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1.5 text-xs bg-white/[0.04] border border-white/[0.06] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
-                            <ItemIcon src={entry.itemImageUrl} className="size-4" />
+                            <ItemIcon src={entry.itemImageUrl} icon={entry.itemIcon} category={entry.itemCategory} className="size-4" />
                             {entry.itemTypeName}
                           </span>
                         </TableCell>
@@ -504,6 +524,12 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <DialogTitle>{t('entries.logNew')}</DialogTitle>
             <DialogDescription>{t('entries.logNewHint')}</DialogDescription>
           </DialogHeader>
+          {/* A real form, so Enter in any single-line field logs the entry —
+              and Enter in the description textarea still inserts a newline,
+              which is the behaviour a hand-rolled key handler gets wrong. */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (canCreateEntry) createMutation.mutate(); }}
+          >
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>{t('entries.itemType')}</Label>
@@ -516,7 +542,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                       onClick={() => setNewItemTypeId(it.id)}
                       className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'}`}
                     >
-                      <ItemIcon src={it.imageUrl} className="size-3.5" />
+                      <ItemIcon src={it.imageUrl} icon={it.icon} category={it.category} className="size-3.5" />
                       {it.name}
                     </button>
                   ))}
@@ -552,6 +578,11 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   </div>
                 );
               })()}
+              <AmountPreview
+                value={newAmount}
+                unit={activeItemTypes.find((it: ItemType) => it.id === newItemTypeId)?.unit}
+                isCurrency={activeItemTypes.find((it: ItemType) => it.id === newItemTypeId)?.isCurrency}
+              />
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
@@ -607,12 +638,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending || (!canCreditSelf && !newAnonymous && !newOwnerId) || customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())}>
+            <Button type="submit" disabled={!canCreateEntry}>
               {createMutation.isPending ? t('entries.logging') : newAnonymous ? t('entries.logAnonymously') : t('entries.logEntry')}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -623,10 +655,12 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <DialogTitle>{t('entries.editEntry')}</DialogTitle>
             <DialogDescription>{t('entries.editHint')}</DialogDescription>
           </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (canSaveEdit) updateMutation.mutate(); }}>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>{t('common.amount')}</Label>
               <Input type="number" step="0.01" min="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="tabular-nums" />
+              <AmountPreview value={editAmount} unit={editUnit} isCurrency={editIsCurrency} />
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
@@ -648,12 +682,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => updateMutation.mutate()} disabled={!editAmount || Number(editAmount) <= 0 || updateMutation.isPending}>
+            <Button type="submit" disabled={!canSaveEdit}>
               {updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -63,7 +63,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
       value: item.id,
       label: item.name,
       hint: item.unit ? `(${item.unit})` : undefined,
-      icon: <ItemIcon src={item.imageUrl} className="size-5" />,
+      icon: <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-5" />,
     })),
   ], [itemTypes, t]);
 

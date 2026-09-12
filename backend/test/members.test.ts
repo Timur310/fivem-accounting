@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  api, resetDatabase, seedBasicWorld, createUser, createEntry,
+  api, resetDatabase, seedBasicWorld, createUser, createEntry, addMember,
   MISSING_UUID, type BasicWorld,
 } from './helpers.js';
 
@@ -407,5 +407,33 @@ describe('PATCH /members/:userId — in-game name', () => {
         l.details?.after?.inGameName === 'Vito Corleone',
     );
     expect(entry).toBeDefined();
+  });
+});
+
+/**
+ * A profile is a member's standing *in a faction*: streak, rank, contribution.
+ * Someone who is not on the roster has none of that, superadmin included — so
+ * 404 is the right answer and not a gap to be papered over.
+ *
+ * This is pinned because the dashboard used to ask anyway: it gated the "my
+ * stats" strip on `canLogEntries`, which a superadmin holds everywhere, and
+ * every dashboard load in a faction they had not joined produced this error.
+ * The fix belonged on the caller.
+ */
+describe('GET /members/:userId — profiles require membership', () => {
+  it('404s for a superadmin who is not on the roster', async () => {
+    const res = await api()
+      .get(`${base()}/${w.superadmin.id}`)
+      .set('Cookie', w.superadmin.cookie);
+    expect(res.status).toBe(404);
+    expect(res.body.error.message).toMatch(/not found in this faction/i);
+  });
+
+  it('still returns a profile for a superadmin who did join', async () => {
+    await addMember(w.faction.id, w.superadmin.id, 'member');
+    const res = await api()
+      .get(`${base()}/${w.superadmin.id}`)
+      .set('Cookie', w.superadmin.cookie);
+    expect(res.status).toBe(200);
   });
 });

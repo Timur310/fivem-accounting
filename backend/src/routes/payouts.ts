@@ -5,9 +5,11 @@ import { payouts, itemTypes, users, factionMembers } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
+import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
 import { PAYOUT_STATUSES } from '../db/schema.js';
@@ -48,6 +50,9 @@ const updatePayoutSchema = z.object({
 });
 
 const listPayoutsQuerySchema = z.object({
+  sort: z.string().max(40).optional(),
+  dir: z.enum(['asc', 'desc']).optional(),
+
   item_type_id: z.string().uuid().optional(),
   recipient_user_id: z.string().uuid().optional(),
   status: z.enum(PAYOUT_STATUSES).optional(),
@@ -255,6 +260,8 @@ router.get('/', async (req: Request, res: Response) => {
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
         itemImageUrl: itemTypes.imageUrl,
+      itemIcon: itemTypes.icon,
+      itemCategory: itemTypes.category,
         createdBy: payouts.createdBy,
         approvedBy: payouts.approvedBy,
       })
@@ -262,7 +269,18 @@ router.get('/', async (req: Request, res: Response) => {
       .innerJoin(users, eq(payouts.recipientUserId, users.id))
       .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
       .where(where)
-      .orderBy(desc(payouts.createdAt))
+      .orderBy(...resolveSort(
+        query.data,
+        {
+          date: payouts.payoutDate,
+          amount: payouts.amount,
+          status: payouts.status,
+          recipient: users.username,
+          type: itemTypes.name,
+        },
+        { key: 'date', dir: 'desc' },
+        payouts.createdAt,
+      ))
       .limit(pageSize)
       .offset(offset),
     db
@@ -508,6 +526,42 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
     console.error('[UPDATE PAYOUT ERROR]', err);
     error(res, 'INTERNAL_ERROR', 'Failed to update payout', 500);
     return;
+  }
+
+  // Tell the recipient what happened to their request.
+  //
+  // Raised after the transaction rather than inside it: the status change is
+  // the real outcome, and a notification is a courtesy on top of it. A failed
+  // insert must never roll back a payout that was genuinely approved.
+  //
+  // Skipped when the person settling it is the recipient — someone who just
+  // approved their own request does not need telling.
+  if (parsed.data.status && parsed.data.status !== existing.status) {
+    const type =
+      parsed.data.status === 'approved' ? 'payout_approved' :
+      parsed.data.status === 'rejected' ? 'payout_rejected' :
+      parsed.data.status === 'completed' ? 'payout_completed' : null;
+
+    if (type && existing.recipientUserId !== req.user!.id) {
+      const [item] = await db
+        .select({ name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency })
+        .from(itemTypes)
+        .where(eq(itemTypes.id, existing.itemTypeId))
+        .limit(1);
+
+      await notify({
+        userId: existing.recipientUserId,
+        type,
+        factionId,
+        linkView: 'payouts',
+        data: {
+          amount: existing.amount,
+          itemTypeName: item?.name ?? '',
+          itemUnit: item?.unit ?? '',
+          itemIsCurrency: item?.isCurrency ? 1 : 0,
+        },
+      });
+    }
   }
 
   success(res, updated);

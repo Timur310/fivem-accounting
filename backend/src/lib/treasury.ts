@@ -75,7 +75,7 @@ export async function computeTreasuryBalances(
       .where(and(eq(expenses.factionId, factionId), eq(expenses.isDeleted, false)))
       .groupBy(expenses.itemTypeId),
     db
-      .select({ id: itemTypes.id, name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency, imageUrl: itemTypes.imageUrl })
+      .select({ id: itemTypes.id, name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency, imageUrl: itemTypes.imageUrl, icon: itemTypes.icon, category: itemTypes.category })
       .from(itemTypes)
       .where(eq(itemTypes.factionId, factionId)),
   ]);
@@ -105,6 +105,8 @@ export async function computeTreasuryBalances(
       unit: t.unit,
       isCurrency: t.isCurrency,
       imageUrl: t.imageUrl,
+      icon: t.icon,
+      category: t.category,
       inflow,
       outflow,
       balance: inflow - outflow,

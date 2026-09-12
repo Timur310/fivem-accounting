@@ -81,19 +81,42 @@ formatted the same way in both languages — see §11.
 One sidebar on the left, content on the right. On phones the sidebar becomes
 a slide-in drawer (hamburger button in the top bar).
 
-**Top bar:** language switcher · your name (click it to change your in-game
-name) · your role badge. If you belong to more than one faction — or a
-superadmin gave you browse rights — a **faction selector** appears; everything
-below it shows the selected faction.
+**Top bar:** the **bell** (below) · language switcher · your name (click it to
+change your in-game name) · your role badge. If you belong to more than one
+faction — or a superadmin gave you browse rights — a **faction selector**
+appears; everything below it shows the selected faction.
 
 The sidebar has two states: full labels, or a slim icon rail. The bottom-most
 button collapses it.
 
-**Play and Manage.** Inside the sidebar, screens split into two groups:
-**Play** — Dashboard, Entries, Withdrawals, Leaderboard, the ones you open
-daily — and **Manage** — Members, Strikes, Treasury, Settings, visible only
-if your rank grants them (§4). Each group collapses on its own, so a plain
-member's sidebar stays short even before permissions enter the picture.
+**Play, Manage and Server.** Inside the sidebar, screens split into groups:
+
+- **Play** — Dashboard, Entries, Withdrawals, Announcements, Activity,
+  Leaderboard, Support and the User Guide. The ones you open daily, and all
+  open to every member whatever their rank.
+- **Manage** — Members, Strikes, Treasury, Laundering, Reports, Audit logs,
+  Settings. Visible only if your rank grants them (§4).
+- **Server** — superadmin only: faction administration and the Support Inbox.
+
+Each group collapses on its own, so a plain member's sidebar stays short even
+before permissions enter the picture. At the very bottom sit the app's version
+and copyright line, above the collapse button.
+
+**Small things worth knowing.**
+
+- **Press Enter to save.** Every form in the app submits on Enter — logging an
+  entry, requesting a withdrawal, recording an expense. Enter inside a longer
+  *message* box still starts a new line, as you would expect.
+- **Amounts echo back formatted.** Type `1500000` and **$1,500,000** appears
+  under the field. FiveM money is long, and `1500000` and `150000` look almost
+  identical while you are typing.
+- **Column headers sort.** On Entries, Withdrawals and Strikes, click a header
+  to sort by it; click again to flip direction. It sorts the *whole* list, not
+  just the page you are looking at.
+- **Filters and sorting stay put.** Narrow a list, click into a member, come
+  back — it is how you left it. Remembered per faction.
+- **Quick ranges.** Today / This week / This month fill both date boxes for
+  you, on Entries, Withdrawals and the audit log.
 
 **Command palette.** Press **Ctrl+K** (⌘K on a Mac) from anywhere in the app
 to open a search box that jumps straight to a member, a screen, or an action
@@ -107,6 +130,26 @@ screen next to your other apps — the fastest way in mid-heist.
 
 ---
 
+### The bell — what the app tells you
+
+The **bell** in the top bar is how the app reaches you instead of waiting to be
+found. A number on it means unread.
+
+You get one when:
+
+- a withdrawal of yours is **approved**, **rejected** or **paid out**
+- you are given a **strike**
+- a bug report or idea you sent is **resolved** or **declined**
+
+Clicking one takes you to where it happened — and switches you into the right
+faction first, if you were looking at a different one. **Mark all read** clears
+the number; **Clear** empties the list.
+
+You are never notified about something you did yourself, and nobody else can
+see your bell — not other members, not your faction admin, not the developer.
+
+---
+
 ## 4. Roles and permissions
 
 There are two layers: your **global role**, and your **rank inside the
@@ -114,7 +157,7 @@ faction**.
 
 | Role | Where it comes from | What it means |
 |---|---|---|
-| **Member** | default | Dashboard, entries, own withdrawals, treasury, leaderboard |
+| **Member** | default | Dashboard, entries, own withdrawals, treasury, leaderboard, announcements, activity, support |
 | **Faction admin** | appointed by a superadmin | Everything in *their* faction, including all rank permissions |
 | **Superadmin** | server owner / bootstrap | Everything, everywhere, plus creating and deleting factions |
 
@@ -132,10 +175,16 @@ sidebar shows exactly what your rank gives you:
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
-| `manage_settings` | Ranks, thresholds, expiry, escalation, budgets |
+| `manage_settings` | Ranks, thresholds, expiry, escalation, budgets — and **posting announcements** (§5.9) |
 | `manage_customization` | Accent color and custom entry fields |
 | `view_audit_logs` | The audit trail |
 | `view_reports` | Period summaries and comparisons |
+
+**Some screens have no permission at all.** Announcements, Activity, Support
+and the User Guide are open to every member. That is deliberate: a notice
+nobody can read is not a notice, and the people most likely to hit a bug are
+the ones holding the fewest rights. The Activity feed narrows itself instead of
+being gated — it shows you only what you could already see elsewhere (§5.10).
 
 The **admin seat itself is not delegable**: a rank can run the roster, but
 promoting someone to admin stays with faction admins and superadmins.
@@ -292,6 +341,9 @@ ranked list continues underneath.
 
 - **Net balance / Total in / Total out** — the headline numbers. Money only;
   the note under them tells you how many goods types are tracked separately.
+  If the faction has paid out more than it took in, an **IN THE RED** stamp
+  sits beside the figure — the same fact the red number and the line beneath
+  it already tell you, hard to miss.
 - **Running expenses** — the faction's costs, with budget bars showing the
   month against the caps (§6.4). If you want to know why the vault shrank,
   start here.
@@ -343,6 +395,48 @@ a new one.
 
 The faction you were looking at when you sent it is attached automatically, so
 you do not have to explain where you were.
+
+---
+
+### 5.9 Announcements — what the faction needs you to know
+
+**Announcements** is in the sidebar for everyone. It is the faction's notice
+board: quota changes, meeting times, rule updates — the things that used to get
+buried in Discord.
+
+- **Pinned** notices stay at the top however old they get.
+- **High** and **Urgent** ones carry a coloured badge and a coloured edge.
+  Normal and low ones do not, on purpose — if everything is urgent, nothing is.
+- **Expired** notices drop off the list automatically. They are never deleted;
+  tick **Show expired** to read them again.
+
+Opening the page marks everything on it as read. You do not have to click each
+one.
+
+If you can post (that is `manage_settings`, the same permission as faction
+settings), **New announcement** takes a title, a message in markdown, a
+priority, an optional pin, and an optional hide-after time. Everyone on the
+roster gets a notification except you. You can also see **who has read it** —
+the list shows the whole roster, so the useful part is who has not.
+
+You can edit only your own announcements. You can remove your own, and with
+`manage_settings` you can remove anybody's.
+
+---
+
+### 5.10 Activity — what the faction has been doing
+
+**Activity** is the faction's timeline: entries, withdrawals, announcements,
+strikes and roster changes, newest first. Filter it to one kind with the
+buttons across the top.
+
+**You only ever see what you could already see.** Withdrawals and strikes that
+are not yours are hidden unless you hold the permission for them, and roster
+history needs `view_audit_logs`. The feed does not show you anything a normal
+screen would not.
+
+Anonymous entries appear as **The faction** rather than a name, because that is
+who they belong to.
 
 ---
 
@@ -567,6 +661,12 @@ The faction's vocabulary: Dirty Money, Clean Money, Lock Picks, …
 - Deactivate instead of delete — old entries keep their type readable.
 - **Export/Import CSV** (§8.5).
 
+**Icons and categories.** Each item type can carry an **emoji** and a
+**category** (cash, goods, contraband, other). The emoji shows wherever the
+item appears; the category tints the tile behind it, so a mixed table can be
+read by kind at a glance. A pasted image URL still wins over the emoji if you
+have artwork. Neither changes any number — only `isCurrency` does that.
+
 ### 8.2 Quotas (`manage_quotas`)
 
 See §6.3.
@@ -581,6 +681,11 @@ See §6.3.
 
 ### 8.4 Faction settings (`manage_settings`)
 
+- **Item icons and categories** — give each item type an emoji and a
+  category (cash, goods, contraband, other). The emoji shows wherever the
+  item is listed, and the category tints the tile behind it so a mixed
+  table can be read by kind at a glance. A pasted image URL still wins over
+  the emoji if you have one. Neither changes any number.
 - **Ranks** — the hierarchy, each with a level (lower = higher) and the
   permissions it grants. The rank editor shows every permission in the system
   (§4). Deleting a rank clears it off members automatically. *Granting
@@ -652,8 +757,6 @@ rules keep the ledger honest:
 - Superadmin with no factions? You're exactly the person who creates the
   first one — the app gives you the management screens instead of an empty
   dashboard.
-
----
 
 ### 9.5 Support inbox
 

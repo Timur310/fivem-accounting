@@ -11,6 +11,7 @@ import {
 import { eq, and, sql, desc, gte, lte, ilike } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
+import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
@@ -66,6 +67,8 @@ const updateEntrySchema = z.object({
 });
 
 const listEntriesQuerySchema = z.object({
+  sort: z.string().max(40).optional(),
+  dir: z.enum(['asc', 'desc']).optional(),
   item_type_id: z.string().uuid().optional(),
   user_id: z.string().uuid().optional(),
   date_from: z.string().date().optional(),
@@ -305,12 +308,24 @@ router.get('/', async (req: Request, res: Response) => {
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
         itemImageUrl: itemTypes.imageUrl,
+      itemIcon: itemTypes.icon,
+      itemCategory: itemTypes.category,
       })
       .from(entries)
       .innerJoin(users, eq(entries.userId, users.id))
       .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))
       .where(where)
-      .orderBy(desc(entries.createdAt))
+      .orderBy(...resolveSort(
+        query.data,
+        {
+          date: entries.entryDate,
+          amount: entries.amount,
+          member: users.username,
+          type: itemTypes.name,
+        },
+        { key: 'date', dir: 'desc' },
+        entries.createdAt,
+      ))
       .limit(pageSize)
       .offset(offset),
     db
