@@ -133,3 +133,69 @@ describe('DELETE /item-types/:typeId', () => {
     expect(res.status).toBe(403);
   });
 });
+
+/**
+ * Icon and category are presentation only. Neither touches arithmetic:
+ * `isCurrency` stays the single flag that decides how an amount is computed
+ * or formatted, and these pin that they stay out of its way.
+ */
+describe('item type icon and category', () => {
+  const base = () => `/api/v1/factions/${w.faction.id}/item-types`;
+
+  it('stores an emoji icon and a category', async () => {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Weed', unit: 'g', isCurrency: false, icon: '🌿', category: 'contraband' });
+    expect(res.status).toBe(201);
+    expect(res.body.data.icon).toBe('🌿');
+    expect(res.body.data.category).toBe('contraband');
+  });
+
+  it('defaults the category when none is given', async () => {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Unlabelled', unit: 'pcs', isCurrency: false });
+    expect(res.body.data.category).toBe('other');
+  });
+
+  // A multi-codepoint emoji reads as one glyph but is several UTF-16 units,
+  // so a naive length check would reject it.
+  it('accepts a multi-codepoint emoji', async () => {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Flagged', unit: 'pcs', isCurrency: false, icon: '🏴‍☠️' });
+    expect(res.status).toBe(201);
+  });
+
+  it('refuses letters and digits as an icon', async () => {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Lettered', unit: 'pcs', isCurrency: false, icon: 'AB' });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses an unknown category', async () => {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Odd', unit: 'pcs', isCurrency: false, category: 'jewellery' });
+    expect(res.status).toBe(400);
+  });
+
+  it('clears the icon when an empty string is sent', async () => {
+    const created = await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Temporary Icon', unit: 'pcs', isCurrency: false, icon: '💊' });
+
+    const res = await api().patch(`${base()}/${created.body.data.id}`)
+      .set('Cookie', w.admin.cookie).send({ icon: '' });
+    expect(res.status).toBe(200);
+
+    const list = await api().get(base()).set('Cookie', w.member.cookie);
+    const row = list.body.data.find((r: { id: string }) => r.id === created.body.data.id);
+    expect(row.icon).toBeNull();
+  });
+
+  it('lists icon and category back to a plain member', async () => {
+    await api().post(base()).set('Cookie', w.admin.cookie)
+      .send({ name: 'Dirty Money', unit: '$', isCurrency: true, icon: '💵', category: 'cash' });
+
+    const list = await api().get(base()).set('Cookie', w.member.cookie);
+    const row = list.body.data.find((r: { name: string }) => r.name === 'Dirty Money');
+    expect(row.icon).toBe('💵');
+    expect(row.category).toBe('cash');
+  });
+});

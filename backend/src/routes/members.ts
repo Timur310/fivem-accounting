@@ -648,6 +648,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
         itemImageUrl: itemTypes.imageUrl,
+      itemIcon: itemTypes.icon,
+      itemCategory: itemTypes.category,
       })
       .from(payouts)
       .innerJoin(itemTypes, eq(payouts.itemTypeId, itemTypes.id))
@@ -731,6 +733,8 @@ router.get('/:userId', async (req: Request, res: Response) => {
           itemUnit: itemTypes.unit,
           itemIsCurrency: itemTypes.isCurrency,
           itemImageUrl: itemTypes.imageUrl,
+      itemIcon: itemTypes.icon,
+      itemCategory: itemTypes.category,
         })
         .from(entries)
         .innerJoin(itemTypes, eq(entries.itemTypeId, itemTypes.id))

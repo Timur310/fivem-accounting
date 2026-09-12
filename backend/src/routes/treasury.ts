@@ -55,6 +55,8 @@ router.get('/', async (req: Request, res: Response) => {
         itemUnit: itemTypes.unit,
         itemIsCurrency: itemTypes.isCurrency,
         itemImageUrl: itemTypes.imageUrl,
+      itemIcon: itemTypes.icon,
+      itemCategory: itemTypes.category,
       })
       .from(payouts)
       .innerJoin(users, eq(payouts.recipientUserId, users.id))

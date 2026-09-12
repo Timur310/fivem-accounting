@@ -262,6 +262,8 @@ router.get('/', async (req: Request, res: Response) => {
       itemUnit: itemTypes.unit,
       itemIsCurrency: itemTypes.isCurrency,
       itemImageUrl: itemTypes.imageUrl,
+      itemIcon: itemTypes.icon,
+      itemCategory: itemTypes.category,
       targetAmount: quotas.targetAmount,
       scope: quotas.scope,
       periodType: quotas.periodType,

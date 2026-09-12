@@ -324,3 +324,22 @@
   .row-flash { animation: none; }
   .energy-bar { transition: none !important; }
 }
+
+/* "IN THE RED" — a rubber stamp on a faction that has paid out more than it
+   took in. Rotated and low-opacity so it reads as a mark struck across the
+   card rather than another label competing with the figure.
+
+   Purely decorative: the number beside it is already red, and screen readers
+   get the same fact from the sentence under it, so the stamp is aria-hidden
+   at the call site. */
+.stamp {
+  transform: rotate(-8deg);
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp { transform: none; }
+}

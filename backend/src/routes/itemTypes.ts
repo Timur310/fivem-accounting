@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
-import { itemTypes } from '../db/schema.js';
+import { itemTypes, ITEM_CATEGORIES } from '../db/schema.js';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -28,12 +28,26 @@ const imageUrlSchema = z
   .url('Image URL must be a valid URL')
   .refine((v) => /^https?:\/\//i.test(v), 'Image URL must start with http:// or https://');
 
+
+// An emoji standing in for the item. Length is capped in codepoints rather
+// than UTF-16 units: a single flag or skin-toned emoji is several units long
+// and would otherwise be rejected for being "too long" while reading as one
+// glyph. The cap is deliberately loose — this is a display field, and the
+// column bounds it anyway.
+const iconSchema = z
+  .string()
+  .trim()
+  .refine((v) => [...v].length <= 4, 'Icon must be a single emoji')
+  .refine((v) => !/[\p{L}\p{N}]/u.test(v), 'Icon must be an emoji, not letters or digits');
+
 const createItemTypeSchema = z.object({
   name: z.string().min(1).max(100),
   unit: z.string().min(1).max(20).default('$'),
   // Presentation hint only: money vs. countable goods. Defaults to false.
   isCurrency: z.boolean().default(false),
   imageUrl: imageUrlSchema.optional(),
+  icon: iconSchema.optional(),
+  category: z.enum(ITEM_CATEGORIES).default('other'),
 });
 
 const updateItemTypeSchema = z.object({
@@ -43,6 +57,8 @@ const updateItemTypeSchema = z.object({
   isActive: z.boolean().optional(),
   // Explicit null removes the image; omitting the key leaves it untouched.
   imageUrl: imageUrlSchema.nullable().optional(),
+  icon: iconSchema.nullable().optional(),
+  category: z.enum(ITEM_CATEGORIES).optional(),
 });
 
 /** Derive the display unit from the currency flag. */
@@ -59,14 +75,14 @@ router.post('/', requirePermission('manage_item_types'), async (req: Request, re
     return;
   }
 
-  const { name, unit, isCurrency, imageUrl } = parsed.data;
+  const { name, unit, isCurrency, imageUrl, icon, category } = parsed.data;
 
   let created;
   try {
     created = await db.transaction(async (tx: TransactionLike) => {
       const [row] = await tx
         .insert(itemTypes)
-        .values({ factionId, name, unit, isCurrency, imageUrl: imageUrl ?? null })
+        .values({ factionId, name, unit, isCurrency, imageUrl: imageUrl ?? null, icon: icon || null, category })
         .returning();
 
       if (!row) throw new Error('Failed to create item type');
@@ -77,7 +93,7 @@ router.post('/', requirePermission('manage_item_types'), async (req: Request, re
         action: 'create',
         entityType: 'item_type',
         entityId: row.id,
-        details: { name, unit, isCurrency, imageUrl: imageUrl ?? null },
+        details: { name, unit, isCurrency, imageUrl: imageUrl ?? null, icon: icon || null, category },
         req,
         tx,
       });
@@ -104,6 +120,8 @@ router.get('/', async (req: Request, res: Response) => {
       unit: itemTypes.unit,
       isCurrency: itemTypes.isCurrency,
       imageUrl: itemTypes.imageUrl,
+      icon: itemTypes.icon,
+      category: itemTypes.category,
       isActive: itemTypes.isActive,
       createdAt: itemTypes.createdAt,
       entryCount: sql<number>`(SELECT COUNT(*) FROM entries WHERE item_type_id = item_types.id AND is_deleted = false)::int`,
@@ -152,6 +170,10 @@ router.patch('/:typeId', requirePermission('manage_item_types'), async (req: Req
   }
   if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
   if (parsed.data.imageUrl !== undefined) updates.imageUrl = parsed.data.imageUrl;
+  // An empty string is how the picker says "no emoji"; store it as null so
+  // the column never holds a blank that renders as an invisible icon.
+  if (parsed.data.icon !== undefined) updates.icon = parsed.data.icon || null;
+  if (parsed.data.category !== undefined) updates.category = parsed.data.category;
 
   let updated;
   try {

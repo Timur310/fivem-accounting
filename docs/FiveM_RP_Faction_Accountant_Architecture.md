@@ -1009,29 +1009,52 @@ permission and offers no retry, since retrying a permission error only
 teaches people to keep pressing; anything else offers `refetch()`. Every
 view that fetches renders it.
 
+**Item types as visual citizens.** An item type carries an `icon` (an emoji)
+and a `category` (`cash`, `goods`, `contraband`, `other`) alongside the
+admin-pasted `imageUrl`. `ItemIcon` renders them in that order of
+preference — image, then emoji, then the package placeholder — so a faction
+that went to the trouble of hosting artwork does not lose it to an emoji
+picked later.
+
+The category tints only the tile behind the glyph, and this does not bend
+the §9.3 rule. That rule is about colour on a *figure*; nothing here touches
+a number, and amounts, balances and quota bars stay exactly as neutral as
+they were. The tint exists so a mixed table can be scanned by kind at a
+glance. It is deliberately not derived from `isCurrency`: clean money and
+dirty money are both currency and read completely differently across a
+table, and contraband is the distinction people actually care about.
+
+The picker offers a curated palette rather than pulling in an emoji-picker
+dependency — this is a ledger for a crime roleplay server, and the glyphs
+its factions need fit on one panel.
+
+**Rank sigils.** The top two ranks by level (lower is more senior, so Boss is
+level 1) wear a crown and a star beside their name on the roster. Only the top
+two: a sigil on every rank is wallpaper, and the point is that the head of the
+roster is visible without reading.
+
+**"IN THE RED".** A rotated, low-opacity stamp struck across the treasury's net
+balance when the faction has paid out more than it took in. Decorative and
+`aria-hidden` — the figure beside it is already red and the line under it says
+the same thing in words.
+
 **Partially implemented from the plan:**
 
-- The shared shimmer skeleton and single empty-state component exist
-  (`EmptyState`, `ListSkeleton`) and are used by the list-shaped views, but
-  adoption is not complete — the dashboard, reports, settings, laundering
-  and the member profile still hand-roll theirs, visually close but not
-  unified.
-- Row-level micro-feedback: the freshly-logged entry row pulses
-  (`.row-flash`), and the quick-log card pulses on a successful log. The
-  eased quota-bar fill is still missing.
+- The shared shimmer skeleton, empty-state and error-state components exist
+  and are used by the list-shaped views, but adoption is not complete — the
+  dashboard, reports, settings, laundering and the member profile still
+  hand-roll their empty states, visually close but not unified.
+- Stats-strip fact-chips: "best streak" is in, shown only once the record
+  beats the current run so it reads as something you did rather than another
+  live figure. The quota-streak chip ("12 weeks running") is not — it needs
+  an aggregation over quota history the app does not compute yet.
 
 **Not yet implemented from the plan:**
 
-- Item types as full visual citizens: a built-in icon/emoji picker per item
-  type and cash/goods/contraband category color-coding. Only the existing
-  admin-pasted image URL is in place.
-- Stats-strip fact-chips — "Best week so far", "12-week quota streak."
-- Roster rank sigils (Boss/Underboss emblem) and the stamped "IN THE RED"
-  mark on a negative balance.
+- Nothing else from the Phase 9 list.
 
-None of the above blocks testing or launch — it's polish. Of the remainder,
-finishing the empty-state adoption is the cheapest; the item-type icon
-picker is the largest, since it needs both a picker UI and a schema field.
+None of the above blocks testing or launch — it's polish. Finishing the
+empty-state adoption is the cheapest piece left.
 
 ---
 
@@ -1331,10 +1354,10 @@ crontab -e
 | 9 | Heatmap-as-hero | Enlarged, accent-tinted heatmap with "best day" tooltip on the member profile — **DONE** | Low |
 | 10 | PWA / mobile app feel | Manifest, home-screen icon, fullscreen standalone mode — **DONE** | Medium |
 | 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component, plus an `ErrorState` so a failed load never reads as an empty list — **PARTIAL** (component done and used by the list views; dashboard, reports, settings, laundering and member profile still hand-roll theirs) | Low |
-| 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding | Low — not started (image URL only) |
-| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill — **PARTIAL** (entry row and quick-log card pulse; quota-bar fill still unanimated) | Low |
-| 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" | Low — not started |
-| 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance | Low — not started |
+| 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding — **DONE** | Low |
+| 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill — **DONE** | Low |
+| 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" — **PARTIAL** (best streak done; quota streak needs an aggregation that does not exist yet) | Low |
+| 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance — **DONE** | Low |
 
 See §9.4 for the narrative writeup, guardrails, and what's left.
 

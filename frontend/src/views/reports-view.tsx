@@ -145,7 +145,7 @@ export function ReportsView({ factionId }: Props) {
                         {summary.byType.map((row) => (
                           <div key={row.itemTypeName} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3 transition-all duration-150 hover:border-white/[0.1]">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <ItemIcon src={row.imageUrl} className="size-8" />
+                              <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-zinc-300 truncate">{row.itemTypeName}</p>
                                 <p className="text-[11px] text-zinc-600">{t('entries.count', { count: row.count })} &middot; {t('reports.avg', { amount: fmt(row.avg) })} &middot; {t('reports.max', { amount: fmt(row.max) })}</p>
@@ -277,7 +277,7 @@ export function ReportsView({ factionId }: Props) {
                       {p.byType.map((row) => (
                         <div key={row.itemTypeName} className="flex justify-between text-sm border-t border-white/[0.06] pt-2">
                           <span className="text-zinc-500 flex items-center gap-1.5">
-                            <ItemIcon src={row.imageUrl} className="size-4" />
+                            <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-4" />
                             {row.itemTypeName}
                           </span>
                           <span className="tabular-nums text-zinc-300">{formatAmount(row.total, row.unit, row.isCurrency)} ({row.count})</span>

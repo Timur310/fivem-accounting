@@ -154,7 +154,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     value: item.id,
     label: item.name,
     hint: item.unit ? `(${item.unit})` : undefined,
-    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
+    icon: <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-5" />,
   })), [activeItemTypes]);
 
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
@@ -445,7 +445,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                         </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1.5 text-xs bg-white/[0.04] border border-white/[0.06] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
-                            <ItemIcon src={entry.itemImageUrl} className="size-4" />
+                            <ItemIcon src={entry.itemImageUrl} icon={entry.itemIcon} category={entry.itemCategory} className="size-4" />
                             {entry.itemTypeName}
                           </span>
                         </TableCell>
@@ -542,7 +542,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                       onClick={() => setNewItemTypeId(it.id)}
                       className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'}`}
                     >
-                      <ItemIcon src={it.imageUrl} className="size-3.5" />
+                      <ItemIcon src={it.imageUrl} icon={it.icon} category={it.category} className="size-3.5" />
                       {it.name}
                     </button>
                   ))}

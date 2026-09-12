@@ -601,6 +601,11 @@ See §6.3.
 
 ### 8.4 Faction settings (`manage_settings`)
 
+- **Item icons and categories** — give each item type an emoji and a
+  category (cash, goods, contraband, other). The emoji shows wherever the
+  item is listed, and the category tints the tile behind it so a mixed
+  table can be read by kind at a glance. A pasted image URL still wins over
+  the emoji if you have one. Neither changes any number.
 - **Ranks** — the hierarchy, each with a level (lower = higher) and the
   permissions it grants. The rank editor shows every permission in the system
   (§4). Deleting a rank clears it off members automatically. *Granting

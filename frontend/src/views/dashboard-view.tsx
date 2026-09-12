@@ -276,7 +276,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     onClick={() => { setQuickTypeId(it.itemTypeId); setQuickAmount(it.amount); }}
                     className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.itemTypeId ? 'border-primary text-primary bg-primary/10' : 'border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.2]'}`}
                   >
-                    <ItemIcon src={it.itemImageUrl} className="size-4" />
+                    <ItemIcon src={it.itemImageUrl} icon={it.itemIcon} category={it.itemCategory} className="size-4" />
                     {it.itemTypeName}
                   </button>
                 ))}
@@ -357,6 +357,16 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                 label: t('dashboard.myStreak'),
                 value: t('dashboard.daysShort2', { count: streak.current }),
                 hint: streak.activeToday ? t('dashboard.activeToday') : t('dashboard.logToday'),
+              },
+              // A fact-chip rather than another live figure: it only appears
+              // once you have beaten your current run, so it reads as
+              // something you did rather than a number that follows you
+              // around. `best` was already computed for the profile.
+              streak && streak.best > streak.current && streak.best > 1 && {
+                icon: <Flame className="h-4 w-4 text-zinc-400" />,
+                label: t('dashboard.myBestStreak'),
+                value: t('dashboard.daysShort2', { count: streak.best }),
+                hint: t('dashboard.bestStreakHint'),
               },
               myQuota && {
                 icon: <TargetIcon className="h-4 w-4 text-zinc-400" />,
@@ -473,7 +483,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                   <div key={q.id} className="rounded-lg border border-white/[0.06] p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <ItemIcon src={q.itemImageUrl} />
+                        <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-zinc-200 truncate">{q.itemTypeName}</p>
                           <p className="text-[11px] text-zinc-500">{QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</p>
@@ -528,7 +538,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                 const prev = q.previousPeriod!;
                 return (
                   <div key={q.id} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
-                    <ItemIcon src={q.itemImageUrl} className="size-5" />
+                    <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} className="size-5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-300 truncate">
                         {q.itemTypeName}
@@ -619,7 +629,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                         <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                       </p>
                       <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
-                        <ItemIcon src={e.itemImageUrl} className="size-4" />
+                        <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-4" />
                         <span className="truncate">
                           {e.itemTypeName} &middot; {e.entryDate}
                           {e.description && ` — ${e.description}`}
@@ -658,7 +668,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={b.imageUrl} className="size-8" />
+                      <ItemIcon src={b.imageUrl} icon={b.icon} category={b.category} className="size-8" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-zinc-300 truncate">{b.itemTypeName}</p>
                         <p className="text-xs text-zinc-600">{t('dashboard.inOut', { inflow: formatAmount(b.inflow, b.unit, b.isCurrency), outflow: formatAmount(b.outflow, b.unit, b.isCurrency) })}</p>
@@ -677,7 +687,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                     className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={row.imageUrl} className="size-8" />
+                      <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-zinc-300 truncate">{row.itemTypeName}</p>
                         <p className="text-xs text-zinc-600">{row.unit}</p>

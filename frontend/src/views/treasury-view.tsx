@@ -141,8 +141,20 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
           <CardContent className="relative z-10">
             {/* Neutral unless the figure is actually negative — see the note
                 on the per-item balances below. */}
-            <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: netBalance < 0 ? '#ef4444' : '#e4e4e7' }}>
-              {netBalance < 0 ? '-' : ''}{fmt(Math.abs(netBalance))}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: netBalance < 0 ? '#ef4444' : '#e4e4e7' }}>
+                {netBalance < 0 ? '-' : ''}{fmt(Math.abs(netBalance))}
+              </div>
+              {/* Decorative: the figure is already red and the line below says
+                  the same thing in words, so this is hidden from readers. */}
+              {netBalance < 0 && (
+                <span
+                  aria-hidden="true"
+                  className="stamp px-2 py-0.5 text-[10px] font-semibold uppercase text-red-500"
+                >
+                  {t('treasury.inTheRed')}
+                </span>
+              )}
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">
               {netBalance < 0 && <span className="text-red-400">⚠ {t('treasury.negativeBalance')}</span>}
@@ -284,7 +296,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={b.imageUrl} className="size-8" />
+                      <ItemIcon src={b.imageUrl} icon={b.icon} category={b.category} className="size-8" />
                       <p className="text-sm font-medium text-zinc-200 truncate">{b.itemTypeName}</p>
                     </span>
                     <Badge
@@ -394,7 +406,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                       <span className="font-medium tabular-nums text-zinc-200">{formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}</span>
                     </p>
                     <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
-                      <ItemIcon src={p.itemImageUrl} className="size-4" />
+                      <ItemIcon src={p.itemImageUrl} icon={p.itemIcon} category={p.itemCategory} className="size-4" />
                       <span className="truncate">
                         {p.itemTypeName} &middot; {p.payoutDate}
                         {p.description && ` — ${p.description}`}
@@ -593,7 +605,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                   </div>
                   <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      className={`h-full rounded-full energy-bar transition-all duration-500 ${over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'}`}
                       style={{ width: `${Math.min(b.pct, 100)}%` }}
                     />
                   </div>
@@ -614,7 +626,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
           <div className="space-y-1">
             {expenses.map((e) => (
               <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
-                <ItemIcon src={e.itemImageUrl} className="size-7 shrink-0" />
+                <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-7 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm">
                     <Badge variant="outline" className="text-[10px] mr-2 text-zinc-400">

@@ -33,7 +33,7 @@ const EXPENSE_CATEGORY_LABELS = {
 } as const;
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
+import type { ItemCategory, ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
 import {
   FACTION_PERMISSIONS,
   PERMISSION_LABEL_KEYS,
@@ -43,6 +43,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { formatAmount, displayName, todayLocalDateString } from '@/lib/format';
 import { ErrorState } from '@/components/ui/empty-state';
 import { ItemIcon } from '@/components/item-icon';
+import { IconCategoryPicker } from '@/components/ui/icon-category-picker';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
@@ -238,10 +239,14 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
   const [newName, setNewName] = useState('');
   const [newIsCurrency, setNewIsCurrency] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [newIcon, setNewIcon] = useState('');
+  const [newCategory, setNewCategory] = useState<ItemCategory>('other');
   const [editTarget, setEditTarget] = useState<ItemType | null>(null);
   const [editName, setEditName] = useState('');
   const [editIsCurrency, setEditIsCurrency] = useState(false);
   const [editImageUrl, setEditImageUrl] = useState('');
+  const [editIcon, setEditIcon] = useState('');
+  const [editCategory, setEditCategory] = useState<ItemCategory>('other');
   const [editActive, setEditActive] = useState(true);
 
   const { data: itemTypes = [], isLoading, isError, error, refetch } = useQuery({
@@ -258,6 +263,10 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
         isCurrency: newIsCurrency,
         // Omitted rather than sent empty: the API only accepts a real URL.
         ...(newImageUrl.trim() ? { imageUrl: newImageUrl.trim() } : {}),
+        // Omitted rather than sent empty for the same reason as the URL: the
+        // API rejects a blank where it expects an emoji.
+        ...(newIcon ? { icon: newIcon } : {}),
+        category: newCategory,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
@@ -265,6 +274,8 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
       setNewName('');
       setNewIsCurrency(false);
       setNewImageUrl('');
+      setNewIcon('');
+      setNewCategory('other');
       toast({ title: t('itemTypes.created') });
     },
     onError: (err: unknown) => {
@@ -285,6 +296,8 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
         isActive: editActive,
         // An emptied field means "remove the image", which the API spells null.
         imageUrl: editImageUrl.trim() || null,
+        icon: editIcon || null,
+        category: editCategory,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['itemTypes', factionId] });
@@ -322,6 +335,8 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
     setEditName(item.name);
     setEditIsCurrency(item.isCurrency);
     setEditImageUrl(item.imageUrl ?? '');
+    setEditIcon(item.icon ?? '');
+    setEditCategory(item.category ?? 'other');
     setEditActive(item.isActive);
     setEditOpen(true);
   };
@@ -373,7 +388,7 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
                 {itemTypes.map((item: ItemType) => (
                   <TableRow key={item.id} className={!item.isActive ? 'opacity-50' : ''}>
                     <TableCell>
-                      <ItemIcon src={item.imageUrl} className="size-8" />
+                      <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-8" />
                     </TableCell>
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell>
@@ -439,7 +454,7 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
             <div className="space-y-2">
               <Label>{t('itemTypes.imageUrl')}</Label>
               <div className="flex items-center gap-3">
-                <ItemIcon src={newImageUrl.trim() || null} className="size-10" />
+                <ItemIcon src={newImageUrl.trim() || null} icon={newIcon || null} category={newCategory} className="size-10" />
                 <Input
                   placeholder="https://example.com/icon.png"
                   value={newImageUrl}
@@ -448,6 +463,12 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
               </div>
               <p className="text-xs text-zinc-500">{t('itemTypes.imageUrlHint')}</p>
             </div>
+            <IconCategoryPicker
+              icon={newIcon}
+              onIconChange={setNewIcon}
+              category={newCategory}
+              onCategoryChange={setNewCategory}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
@@ -483,7 +504,7 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
             <div className="space-y-2">
               <Label>{t('itemTypes.imageUrl')}</Label>
               <div className="flex items-center gap-3">
-                <ItemIcon src={editImageUrl.trim() || null} className="size-10" />
+                <ItemIcon src={editImageUrl.trim() || null} icon={editIcon || null} category={editCategory} className="size-10" />
                 <Input
                   placeholder="https://example.com/icon.png"
                   value={editImageUrl}
@@ -492,6 +513,12 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
               </div>
               <p className="text-xs text-zinc-500">{t('itemTypes.clearImageHint')}</p>
             </div>
+            <IconCategoryPicker
+              icon={editIcon}
+              onIconChange={setEditIcon}
+              category={editCategory}
+              onCategoryChange={setEditCategory}
+            />
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">{t('common.active')}</p>
@@ -603,7 +630,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
     value: item.id,
     label: item.name,
     hint: item.unit ? `(${item.unit})` : undefined,
-    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
+    icon: <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-5" />,
   })), [activeItemTypes]);
 
   const scopeOptions = useMemo<SearchableSelectOption[]>(
@@ -778,7 +805,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                     <TableRow key={q.id} className={!q.isActive ? 'opacity-50' : ''}>
                       <TableCell>
                         <div className="font-medium flex items-center gap-2">
-                          <ItemIcon src={q.itemImageUrl} className="size-5" />
+                          <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} className="size-5" />
                           {q.itemTypeName}
                         </div>
                         {q.periodActive && q.periodStartComputed && q.periodEndComputed && (
@@ -819,7 +846,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                             </div>
                             <div className="h-2 bg-muted rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full transition-all ${met ? 'bg-green-500' : 'bg-primary'}`}
+                                className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-green-500' : 'bg-primary'}`}
                                 style={{ width: `${Math.min(pct, 100)}%` }}
                               />
                             </div>

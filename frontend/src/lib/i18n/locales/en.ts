@@ -142,6 +142,23 @@ export const en = {
 
   // -- Notifications --
   'notification.title': 'Notifications',
+  'dashboard.myBestStreak': 'Best streak',
+  'dashboard.bestStreakHint': 'your record so far',
+
+  // -- Item categories and icons --
+  'itemTypes.category': 'Category',
+  'itemTypes.categoryCash': 'Cash',
+  'itemTypes.categoryGoods': 'Goods',
+  'itemTypes.categoryContraband': 'Contraband',
+  'itemTypes.categoryOther': 'Other',
+  'itemTypes.icon': 'Icon',
+  'itemTypes.iconNone': 'None',
+  'itemTypes.iconHint': 'Shown wherever this item is listed. A pasted image URL takes precedence.',
+  'itemTypes.iconGroupContraband': 'Contraband',
+  'itemTypes.iconGroupWeapons': 'Hardware',
+  'itemTypes.iconGroupGear': 'Vehicles & gear',
+  'itemTypes.iconGroupOther': 'Other',
+  'treasury.inTheRed': 'IN THE RED',
   'notification.none': 'Nothing here yet.',
   'notification.markAllRead': 'Mark all read',
   'notification.clear': 'Clear',

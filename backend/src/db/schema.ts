@@ -180,9 +180,32 @@ export const itemTypes = pgTable('item_types', {
   // Optional icon for the item, stored as a link rather than a file: the
   // backend hosts nothing, it only hands the URL to whoever renders it.
   imageUrl:  text('image_url'),
+  // An emoji standing in for the item — the cheap version of the image URL,
+  // and the one most factions will actually use. Kept alongside `imageUrl`
+  // rather than replacing it: a faction with real artwork should not lose it,
+  // and the renderer prefers the image when both are set.
+  //
+  // Wide enough for a multi-codepoint emoji with modifiers, which can run to
+  // several characters even though it reads as one glyph.
+  icon:      varchar('icon', { length: 16 }),
+  // What kind of thing this is, for colour coding only. It changes no
+  // arithmetic anywhere — `isCurrency` remains the only flag that affects how
+  // an amount is computed or formatted.
+  category:  varchar('category', { length: 20 }).notNull().default('other'),
   isActive:  boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Item categories, for colour coding and nothing else.
+ *
+ * Deliberately not derived from `isCurrency`: a faction can hold clean money
+ * and dirty money that are both currency but read very differently across a
+ * table, and contraband is the distinction people actually care about at a
+ * glance.
+ */
+export const ITEM_CATEGORIES = ['cash', 'goods', 'contraband', 'other'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 
 export const itemTypesRelations = relations(itemTypes, ({ one, many }) => ({
   faction: one(factions, { fields: [itemTypes.factionId], references: [factions.id] }),

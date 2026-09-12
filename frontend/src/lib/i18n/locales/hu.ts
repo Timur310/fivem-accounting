@@ -130,6 +130,23 @@ export const hu: Translations = {
 
   // -- Értesítések --
   'notification.title': 'Értesítések',
+  'dashboard.myBestStreak': 'Leghosszabb sorozat',
+  'dashboard.bestStreakHint': 'az eddigi rekordod',
+
+  // -- Tárgykategóriák és ikonok --
+  'itemTypes.category': 'Kategória',
+  'itemTypes.categoryCash': 'Készpénz',
+  'itemTypes.categoryGoods': 'Áru',
+  'itemTypes.categoryContraband': 'Csempészáru',
+  'itemTypes.categoryOther': 'Egyéb',
+  'itemTypes.icon': 'Ikon',
+  'itemTypes.iconNone': 'Nincs',
+  'itemTypes.iconHint': 'Mindenhol ez jelenik meg a tárgy mellett. A beillesztett képhivatkozás elsőbbséget élvez.',
+  'itemTypes.iconGroupContraband': 'Csempészáru',
+  'itemTypes.iconGroupWeapons': 'Felszerelés',
+  'itemTypes.iconGroupGear': 'Járművek és eszközök',
+  'itemTypes.iconGroupOther': 'Egyéb',
+  'treasury.inTheRed': 'MÍNUSZBAN',
   'notification.none': 'Még nincs itt semmi.',
   'notification.markAllRead': 'Összes olvasottnak',
   'notification.clear': 'Törlés',

@@ -163,7 +163,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
     value: item.id,
     label: item.name,
     hint: item.unit ? `(${item.unit})` : undefined,
-    icon: <ItemIcon src={item.imageUrl} className="size-5" />,
+    icon: <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-5" />,
   })), [itemTypes]);
 
   const itemTypeFilterOptions = useMemo<SearchableSelectOption[]>(
@@ -473,7 +473,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                     </TableCell>
                     <TableCell className="text-sm text-zinc-400">
                       <span className="inline-flex items-center gap-2">
-                        <ItemIcon src={p.itemImageUrl} className="size-5" />
+                        <ItemIcon src={p.itemImageUrl} icon={p.itemIcon} category={p.itemCategory} className="size-5" />
                         {p.itemTypeName}
                       </span>
                     </TableCell>

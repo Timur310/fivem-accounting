@@ -115,16 +115,28 @@ export interface ItemType {
   isCurrency: boolean;
   /** Link to an icon for this item; null until an admin sets one. */
   imageUrl: string | null;
+  /** Emoji standing in for the item. The image wins when both are set. */
+  icon: string | null;
+  category: ItemCategory;
   isActive: boolean;
   createdAt: string;
   entryCount?: number;
 }
+
+/**
+ * Colour coding only. Never derived from `isCurrency`: clean and dirty money
+ * are both currency and read completely differently across a table.
+ */
+export const ITEM_CATEGORIES = ['cash', 'goods', 'contraband', 'other'] as const;
+export type ItemCategory = (typeof ITEM_CATEGORIES)[number];
 
 export interface CreateItemTypeInput {
   name: string;
   unit?: string;
   isCurrency?: boolean;
   imageUrl?: string;
+  icon?: string;
+  category?: ItemCategory;
 }
 
 export interface UpdateItemTypeInput {
@@ -134,6 +146,9 @@ export interface UpdateItemTypeInput {
   isActive?: boolean;
   /** null clears the image; omit the key to leave it untouched. */
   imageUrl?: string | null;
+  /** An empty string or null clears the emoji. */
+  icon?: string | null;
+  category?: ItemCategory;
 }
 
 // ── Entries ──
@@ -154,6 +169,8 @@ export interface Entry {
   itemUnit: string;
   itemIsCurrency: boolean;
   itemImageUrl: string | null;
+  itemIcon: string | null;
+  itemCategory: ItemCategory;
 }
 
 export interface CreateEntryInput {
@@ -189,6 +206,8 @@ export interface DashboardData {
     unit: string;
     isCurrency: boolean;
     imageUrl: string | null;
+    icon: string | null;
+    category: ItemCategory;
     total: number;
   }[];
   grandTotal: number;
@@ -219,6 +238,8 @@ export interface DashboardData {
     itemUnit: string;
     itemIsCurrency: boolean;
     itemImageUrl: string | null;
+    itemIcon: string | null;
+    itemCategory: ItemCategory;
   }[];
   /**
    * The caller's own last three item types, newest first, for the quick-log
@@ -232,6 +253,8 @@ export interface DashboardData {
     itemUnit: string;
     itemIsCurrency: boolean;
     itemImageUrl: string | null;
+    itemIcon: string | null;
+    itemCategory: ItemCategory;
     amount: string;
   }[];
   inactiveMembers?: {
@@ -254,6 +277,8 @@ export interface Quota {
   itemUnit: string;
   itemIsCurrency: boolean;
   itemImageUrl: string | null;
+  itemIcon: string | null;
+  itemCategory: ItemCategory;
   targetAmount: string;
   periodType: 'weekly' | 'monthly';
   periodStart: string;
@@ -343,6 +368,8 @@ export interface ChartData {
     unit: string;
     isCurrency: boolean;
     imageUrl: string | null;
+    icon: string | null;
+    category: ItemCategory;
     total: number;
     entryCount: number;
   }[];
@@ -360,6 +387,8 @@ export interface ChartData {
     unit: string;
     isCurrency: boolean;
     imageUrl: string | null;
+    icon: string | null;
+    category: ItemCategory;
     total: number;
   }[];
 }
@@ -425,6 +454,8 @@ export interface ReportSummary {
     unit: string;
     isCurrency: boolean;
     imageUrl: string | null;
+    icon: string | null;
+    category: ItemCategory;
     total: number;
     count: number;
     avg: number;
@@ -455,7 +486,9 @@ interface ComparisonPeriod {
   itemTotal: number;
   count: number;
   members: number;
-  byType: { itemTypeName: string; unit: string; isCurrency: boolean; imageUrl: string | null; total: number; count: number }[];
+  byType: { itemTypeName: string; unit: string; isCurrency: boolean; imageUrl: string | null;
+ icon: string | null;
+ category: ItemCategory; total: number; count: number }[];
 }
 
 export interface ReportComparison {
@@ -494,6 +527,8 @@ export interface Payout {
   itemUnit: string;
   itemIsCurrency: boolean;
   itemImageUrl: string | null;
+  itemIcon: string | null;
+  itemCategory: ItemCategory;
   createdBy: string;
   approvedBy: string | null;
 }
@@ -551,6 +586,8 @@ export interface Expense {
   itemUnit: string;
   itemIsCurrency: boolean;
   itemImageUrl: string | null;
+  itemIcon: string | null;
+  itemCategory: ItemCategory;
 }
 
 export interface ExpenseListData {
@@ -591,6 +628,8 @@ export interface TreasuryBalanceItem {
   unit: string;
   isCurrency: boolean;
   imageUrl: string | null;
+  icon: string | null;
+  category: ItemCategory;
   inflow: number;
   outflow: number;
   balance: number;
@@ -654,6 +693,8 @@ export interface TreasuryData {
     itemUnit: string;
     itemIsCurrency: boolean;
     itemImageUrl: string | null;
+    itemIcon: string | null;
+    itemCategory: ItemCategory;
   }[];
 }
 
@@ -714,6 +755,8 @@ export interface MemberProfile {
       unit: string;
       isCurrency: boolean;
       imageUrl: string | null;
+      icon: string | null;
+      category: ItemCategory;
       total: number;
       count: number;
     }[];
@@ -730,6 +773,8 @@ export interface MemberProfile {
     unit: string;
     isCurrency: boolean;
     imageUrl: string | null;
+    icon: string | null;
+    category: ItemCategory;
     periodType: string;
     periodStart: string;
     periodEnd: string;
@@ -749,6 +794,8 @@ export interface MemberProfile {
     itemUnit: string;
     itemIsCurrency: boolean;
     itemImageUrl: string | null;
+    itemIcon: string | null;
+    itemCategory: ItemCategory;
   }[];
   recentPayouts: {
     id: string;
@@ -760,6 +807,8 @@ export interface MemberProfile {
     itemUnit: string;
     itemIsCurrency: boolean;
     itemImageUrl: string | null;
+    itemIcon: string | null;
+    itemCategory: ItemCategory;
   }[];
   streak: {
     current: number;
