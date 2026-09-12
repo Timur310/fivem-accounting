@@ -34,9 +34,17 @@ const QUOTA_PERIOD_KEYS: Record<string, TranslationKey> = {
 interface Props {
   factionId: string;
   canLogEntries?: boolean;
+  /**
+   * Whether the caller is actually on this faction's roster.
+   *
+   * Distinct from `canLogEntries`, which a superadmin has everywhere. The
+   * "my stats" strip only means something for a member, and its endpoints
+   * refuse anyone else.
+   */
+  isFactionMember?: boolean;
 }
 
-export function DashboardView({ factionId, canLogEntries = false }: Props) {
+export function DashboardView({ factionId, canLogEntries = false, isFactionMember = false }: Props) {
   const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
@@ -66,15 +74,23 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
   // Assembled from endpoints that already exist: the week leaderboard carries
   // the member's rank, the profile carries the streak.
   const user = useAppStore((s) => s.user);
+  // Gated on actual membership, not on `canLogEntries`.
+  //
+  // `canLogEntries` is true for a superadmin browsing a faction they never
+  // joined, and these two endpoints are about *this member's* standing in
+  // *this faction* — a stats strip, a streak, a rank. Someone who is not on
+  // the roster has none of those, so asking produced a 404 on every dashboard
+  // load: "Member not found in this faction". The API is right to refuse; the
+  // question was the wrong one to ask.
   const { data: lbWeek } = useQuery({
     queryKey: ['leaderboard', 'week', factionId],
     queryFn: () => leaderboardApi.get(factionId, { period: 'week', limit: 100 }),
-    enabled: canLogEntries && !!user,
+    enabled: isFactionMember && !!user,
   });
   const { data: myProfile } = useQuery({
     queryKey: ['member-profile', factionId, user?.id],
     queryFn: () => membersApi.getProfile(factionId, user!.id),
-    enabled: canLogEntries && !!user,
+    enabled: isFactionMember && !!user,
     retry: false,
   });
 

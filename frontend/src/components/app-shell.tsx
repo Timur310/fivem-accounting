@@ -401,7 +401,7 @@ export function AppShell() {
       case 'admin-support':
         return <AdminSupportView />;
       case 'dashboard':
-        return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} /> : null;
+        return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} isFactionMember={canCreditSelf} /> : null;
       case 'entries':
         return selectedFactionId ? <EntriesView factionId={selectedFactionId} isAdmin={!!isAdmin} canLogEntries={canLogEntries} canCreditSelf={canCreditSelf} canManageEntries={hasPermission('manage_entries')} /> : null;
       case 'payouts':
