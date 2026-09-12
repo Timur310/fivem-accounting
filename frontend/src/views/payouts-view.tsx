@@ -30,7 +30,10 @@ import { Label } from '@/components/ui/label';
 import {
   Plus, ArrowDownToLine, Pencil, Trash2, Check, X, Split, Filter, Undo2,
 } from 'lucide-react';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
+import { SortableHeader, type SortState } from '@/components/ui/sortable-header';
+import { DateRangePresets, type DatePreset } from '@/components/ui/date-range-presets';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
@@ -81,8 +84,21 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
   const brandColor = useAppStore((s) => s.brandColor);
 
   // ── Filters ──
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterItemTypeId, setFilterItemTypeId] = useState<string>('');
+  // Filters and sort are settings, not transient UI: settling one withdrawal
+  // and coming back should not reset the view. Keyed per faction.
+  const [sort, setSort] = usePersistedState<SortState>(
+    `payouts.sort.${factionId}`,
+    { sort: 'date', dir: 'desc' },
+  );
+  const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
+  const [filterStatus, setFilterStatus] = usePersistedState<string>(
+    `payouts.filter.status.${factionId}`,
+    '',
+  );
+  const [filterItemTypeId, setFilterItemTypeId] = usePersistedState<string>(
+    `payouts.filter.type.${factionId}`,
+    '',
+  );
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -119,7 +135,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
 
   // ── Data ──
   const { data: payoutsData, isLoading, isError, error: payoutsError, refetch: refetchPayouts } = useQuery({
-    queryKey: ['payouts', factionId, filterStatus, filterItemTypeId, filterDateFrom, filterDateTo, page],
+    queryKey: ['payouts', factionId, filterStatus, filterItemTypeId, filterDateFrom, filterDateTo, page, sort],
     queryFn: () => payoutsApi.list(factionId, {
       status: filterStatus || undefined,
       item_type_id: filterItemTypeId || undefined,
@@ -127,6 +143,8 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
       date_to: filterDateTo || undefined,
       page,
       page_size: 20,
+      sort: sort.sort,
+      dir: sort.dir,
     }),
     staleTime: 0,
   });
@@ -422,10 +440,20 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               searchPlaceholder={t('itemTypes.search')}
               emptyMessage={t('itemTypes.noneMatch')}
             />
-            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
-            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <DateRangePresets
+              active={activePreset}
+              onApply={(preset, range) => {
+                setFilterDateFrom(range.from);
+                setFilterDateTo(range.to);
+                setActivePreset(preset);
+                setPage(1);
+              }}
+              onClear={() => { setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}
+            />
             {(filterStatus || filterItemTypeId || filterDateFrom || filterDateTo) && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }}>
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}>
                 {t('common.clear')}
               </Button>
             )}
@@ -439,17 +467,27 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="border-white/[0.06] hover:bg-transparent">
-                <TableHead className="text-zinc-500">{t('payouts.recipient')}</TableHead>
-                <TableHead className="text-zinc-500">{t('entries.type')}</TableHead>
-                <TableHead className="text-zinc-500 text-right">{t('common.amount')}</TableHead>
-                <TableHead className="text-zinc-500">{t('common.date')}</TableHead>
-                <TableHead className="text-zinc-500">{t('common.status')}</TableHead>
+                <SortableHeader field="recipient" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                  {t('payouts.recipient')}
+                </SortableHeader>
+                <SortableHeader field="type" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                  {t('entries.type')}
+                </SortableHeader>
+                <SortableHeader field="amount" state={sort} onChange={(n) => { setSort(n); setPage(1); }} align="right">
+                  {t('common.amount')}
+                </SortableHeader>
+                <SortableHeader field="date" state={sort} onChange={(n) => { setSort(n); setPage(1); }}>
+                  {t('common.date')}
+                </SortableHeader>
+                <SortableHeader field="status" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                  {t('common.status')}
+                </SortableHeader>
                 {showActions && <TableHead className="text-zinc-500 text-right">{t('common.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {payouts.length === 0 ? (
-                <TableRow><TableCell colSpan={showActions ? 6 : 5} className="text-center text-zinc-600 py-10">{canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={showActions ? 6 : 5} className="p-0"><EmptyState icon={ArrowDownToLine} title={canManagePayouts ? t('payouts.none') : t('payouts.noneOfYours')} compact /></TableCell></TableRow>
               ) : payouts.map((p) => {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);

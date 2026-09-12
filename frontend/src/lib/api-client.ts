@@ -269,6 +269,8 @@ export const factionStrikesApi = {
   list: (factionId: string, params?: {
     status?: string;
     severity?: string;
+    sort?: string;
+    dir?: 'asc' | 'desc';
     user_id?: string;
     page?: number;
     page_size?: number;
@@ -330,6 +332,8 @@ export const entriesApi = {
       search?: string;
       page?: number;
       page_size?: number;
+      sort?: string;
+      dir?: 'asc' | 'desc';
     },
   ) =>
     api
@@ -372,6 +376,8 @@ export const auditLogsApi = {
     params?: {
       action?: string;
       entity_type?: string;
+      date_from?: string;
+      date_to?: string;
       user_id?: string;
       page?: number;
       page_size?: number;
@@ -429,6 +435,8 @@ export const payoutsApi = {
       date_to?: string;
       page?: number;
       page_size?: number;
+      sort?: string;
+      dir?: 'asc' | 'desc';
     },
   ) =>
     api

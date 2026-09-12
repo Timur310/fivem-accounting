@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp, Printer } from 'lucide-react';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -139,7 +139,7 @@ export function ReportsView({ factionId }: Props) {
                   <CardHeader className="pb-2"><CardTitle className="text-sm text-zinc-200">{t('reports.byItemType')}</CardTitle></CardHeader>
                   <CardContent>
                     {summary.byType.length === 0 ? (
-                      <p className="text-zinc-600 text-sm text-center py-8">{t('common.noData')}</p>
+                      <EmptyState icon={FileBarChart} title={t('common.noData')} compact />
                     ) : (
                       <div className="space-y-2">
                         {summary.byType.map((row) => (
@@ -163,7 +163,7 @@ export function ReportsView({ factionId }: Props) {
                   <CardHeader className="pb-2"><CardTitle className="text-sm text-zinc-200 flex items-center gap-2"><Users className="h-4 w-4 text-zinc-400" /> {t('reports.memberRanking')}</CardTitle></CardHeader>
                   <CardContent>
                     {summary.memberRanking.length === 0 ? (
-                      <p className="text-zinc-600 text-sm text-center py-8">{t('common.noData')}</p>
+                      <EmptyState icon={FileBarChart} title={t('common.noData')} compact />
                     ) : (
                       <div className="space-y-1 max-h-[400px] overflow-y-auto">
                         {summary.memberRanking.map((m, i) => (

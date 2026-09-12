@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { auditLogs, users } from '../db/schema.js';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, gte, lt } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -53,7 +53,30 @@ const listAuditQuerySchema = z.object({
   user_id: z.string().uuid().optional(),
   page: z.string().optional(),
   page_size: z.string().optional(),
+  // The audit log is the screen people reach for to answer "what happened
+  // today", and until now the only way to narrow it was to page backwards.
+  date_from: z.string().date().optional(),
+  date_to: z.string().date().optional(),
 });
+
+/** Local midnight at the start of the given YYYY-MM-DD. */
+function startOfDay(date: string): Date {
+  return new Date(`${date}T00:00:00`);
+}
+
+/**
+ * Local midnight at the start of the FOLLOWING day.
+ *
+ * `createdAt` is a timestamp, not a date, so an inclusive upper bound has to
+ * be `< next midnight` rather than `<= that date`. Written as `<= date` it
+ * would silently drop everything logged after 00:00:00 on the closing day —
+ * which is the whole day.
+ */
+function endOfDayExclusive(date: string): Date {
+  const d = startOfDay(date);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
 
 router.get('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
@@ -64,7 +87,7 @@ router.get('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const { action, entity_type, user_id, page: pageStr, page_size: pageSizeStr } = query.data;
+  const { action, entity_type, user_id, date_from, date_to, page: pageStr, page_size: pageSizeStr } = query.data;
   const { page, pageSize, offset } = parsePagination({ page: pageStr, page_size: pageSizeStr });
 
   const where = buildWhere([
@@ -72,6 +95,8 @@ router.get('/', async (req: Request, res: Response) => {
     action ? eq(auditLogs.action, action) : undefined,
     entity_type ? eq(auditLogs.entityType, entity_type) : undefined,
     user_id ? eq(auditLogs.userId, user_id) : undefined,
+    date_from ? gte(auditLogs.createdAt, startOfDay(date_from)) : undefined,
+    date_to ? lt(auditLogs.createdAt, endOfDayExclusive(date_to)) : undefined,
   ]);
 
   const [items, countResult] = await Promise.all([

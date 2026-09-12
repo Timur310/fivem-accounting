@@ -427,3 +427,46 @@ describe('a superadmin can settle and delete payouts either way', () => {
     expect(res.body.data.recipientUserId).toBe(w.member.id);
   });
 });
+
+/**
+ * The audit log gained date filtering so "what happened today" stops meaning
+ * "page backwards until you find it".
+ *
+ * `created_at` is a timestamp rather than a date, so the upper bound has to be
+ * exclusive-next-midnight. Written as `<= date` it drops everything logged
+ * after 00:00:00 on the closing day, which is the entire day.
+ */
+describe('GET /audit-logs — date filtering', () => {
+  it('includes rows logged later on the closing day', async () => {
+    await giveMemberRank(['view_audit_logs']);
+    // Any write produces an audit row stamped now.
+    await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie)
+      .send({ inactivityThresholdDays: 9 });
+
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    const res = await api()
+      .get(`${f()}/audit-logs?date_from=${iso}&date_to=${iso}`)
+      .set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
+
+  it('excludes rows outside the range', async () => {
+    await giveMemberRank(['view_audit_logs']);
+    await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie)
+      .send({ inactivityThresholdDays: 11 });
+
+    const res = await api()
+      .get(`${f()}/audit-logs?date_from=2020-01-01&date_to=2020-01-02`)
+      .set('Cookie', w.member.cookie);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it('refuses a malformed date', async () => {
+    await giveMemberRank(['view_audit_logs']);
+    const res = await api().get(`${f()}/audit-logs?date_from=yesterday`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(400);
+  });
+});

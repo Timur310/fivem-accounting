@@ -7,6 +7,9 @@ import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/empty-state';
+import { SortableHeader, type SortState } from '@/components/ui/sortable-header';
+import { DateRangePresets, type DatePreset } from '@/components/ui/date-range-presets';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,7 +62,18 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const { toast } = useToast();
 
   const [page, setPage] = useState(1);
-  const [itemTypeIdFilter, setItemTypeIdFilter] = useState<string>('all');
+  // Filters and sort are settings rather than transient UI: clicking into a
+  // member's profile and coming back should not throw them away. Keyed per
+  // faction, since a filter naming one faction's item type means nothing in
+  // another.
+  const [sort, setSort] = usePersistedState<SortState>(
+    `entries.sort.${factionId}`,
+    { sort: 'date', dir: 'desc' },
+  );
+  const [itemTypeIdFilter, setItemTypeIdFilter] = usePersistedState<string>(
+    `entries.filter.type.${factionId}`,
+    'all',
+  );
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -107,7 +121,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
 
   const { data: entriesData, isLoading, isError, error: entriesError, refetch: refetchEntries } = useQuery({
-    queryKey: ['entries', factionId, page, itemTypeIdFilter, dateFrom, dateTo, searchQuery],
+    queryKey: ['entries', factionId, page, itemTypeIdFilter, dateFrom, dateTo, searchQuery, sort],
     queryFn: () =>
       entriesApi.list(factionId, {
         page,
@@ -116,6 +130,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         search: searchQuery || undefined,
+        sort: sort.sort,
+        dir: sort.dir,
       }),
     staleTime: 0,
   });
@@ -256,26 +272,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     [entries, user?.id],
   );
   // Date presets: today / this week / this month, in local calendar time.
-  const [activePreset, setActivePreset] = useState<'today' | 'week' | 'month' | null>(null);
-  const applyPreset = (preset: 'today' | 'week' | 'month') => {
-    const now = new Date();
-    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const day = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-    if (preset === 'today') {
-      setDateFrom(iso(now));
-      setDateTo(iso(now));
-    } else if (preset === 'week') {
-      setDateFrom(iso(monday));
-      setDateTo(iso(now));
-    } else {
-      setDateFrom(iso(new Date(now.getFullYear(), now.getMonth(), 1)));
-      setDateTo(iso(now));
-    }
-    setActivePreset(preset);
-    setPage(1);
-  };
+  const [activePreset, setActivePreset] = useState<DatePreset | null>(null);
 
   // Five-minute self-service undo, mirroring the API rule.
   const isUndoable = (entry: Entry) =>
@@ -356,21 +353,16 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <div className="flex flex-col gap-1.5 w-full lg:w-auto">
               <Label className="text-xs text-zinc-500">{t('entries.quickRange')}</Label>
               <div className="flex flex-wrap gap-1">
-                {([
-                  ['today', 'entries.today'],
-                  ['week', 'entries.thisWeek'],
-                  ['month', 'entries.thisMonth'],
-                ] as const).map(([preset, key]) => (
-                  <Button
-                    key={preset}
-                    variant={activePreset === preset ? 'default' : 'outline'}
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => applyPreset(preset)}
-                  >
-                    {t(key)}
-                  </Button>
-                ))}
+                <DateRangePresets
+                  active={activePreset}
+                  onApply={(preset, range) => {
+                    setDateFrom(range.from);
+                    setDateTo(range.to);
+                    setActivePreset(preset);
+                    setPage(1);
+                  }}
+                  onClear={() => { setDateFrom(''); setDateTo(''); setActivePreset(null); setPage(1); }}
+                />
               </div>
             </div>
             <div className="flex flex-col gap-1.5 w-full lg:w-auto">
@@ -422,12 +414,20 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('role.member')}</TableHead>
-                      <TableHead>{t('entries.type')}</TableHead>
-                      <TableHead className="text-right">{t('common.amount')}</TableHead>
+                      <SortableHeader field="member" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                        {t('role.member')}
+                      </SortableHeader>
+                      <SortableHeader field="type" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
+                        {t('entries.type')}
+                      </SortableHeader>
+                      <SortableHeader field="amount" state={sort} onChange={(n) => { setSort(n); setPage(1); }} align="right">
+                        {t('common.amount')}
+                      </SortableHeader>
                       <TableHead>{t('common.description')}</TableHead>
                       {customFields.length > 0 && <TableHead>{t('entries.custom')}</TableHead>}
-                      <TableHead>{t('common.date')}</TableHead>
+                      <SortableHeader field="date" state={sort} onChange={(n) => { setSort(n); setPage(1); }}>
+                        {t('common.date')}
+                      </SortableHeader>
                       {(isAdmin || entries.some((e) => isUndoable(e))) && <TableHead className="w-[80px]"></TableHead>}
                     </TableRow>
                   </TableHeader>

@@ -6,7 +6,7 @@ import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, leaderboa
 import { Input } from '@/components/ui/input';
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Flame, Trophy, Target as TargetIcon, Coins, Check } from 'lucide-react';
@@ -572,7 +572,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
           </CardHeader>
           <CardContent>
             {topContributors.length === 0 ? (
-              <p className="text-zinc-600 text-sm text-center py-8">{t('dashboard.noContributions')}</p>
+              <EmptyState icon={Trophy} title={t('dashboard.noContributions')} compact />
             ) : (
               <div className="space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
@@ -613,7 +613,7 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
-              <p className="text-zinc-600 text-sm text-center py-8">{t('entries.noneYet')}</p>
+              <EmptyState icon={List} title={t('entries.noneYet')} compact />
             ) : (
               <div className="space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (

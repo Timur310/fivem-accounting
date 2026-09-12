@@ -22,9 +22,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   ArrowLeft, Flame, Trophy, Target, Calendar, FileText, AlertTriangle,
-  Flag, Plus, Pencil, Trash2, Activity, Zap, Clock,
+  Flag, Plus, Pencil, Trash2, Activity, Zap, Clock, StickyNote,
 } from 'lucide-react';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
@@ -422,7 +422,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {quotaProgress.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-6">{t('quota.noneActive')}</p>
+                  <EmptyState icon={Target} title={t('quota.noneActive')} compact />
                 ) : (
                   <div className="space-y-3">
                     {quotaProgress.map((q) => {
@@ -467,7 +467,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {strikes.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-6">{t('strikes.none')}</p>
+                  <EmptyState icon={AlertTriangle} title={t('strikes.none')} compact />
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
                     {strikes.slice(0, 5).map((s) => (
@@ -613,7 +613,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notesIsError ? (
             <Card><CardContent className="p-0"><ErrorState error={notesError} onRetry={() => notesRefetch()} compact /></CardContent></Card>
           ) : notes.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-zinc-600 text-sm">{t('notes.none')}</CardContent></Card>
+            <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')} compact /></CardContent></Card>
           ) : (
             <div className="space-y-2">
               {notes.map((n) => (
@@ -649,7 +649,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </CardHeader>
           <CardContent>
             {!historyData?.data?.length ? (
-              <p className="text-zinc-600 text-sm text-center py-6">{t('profile.noHistory')}</p>
+              <EmptyState icon={Clock} title={t('profile.noHistory')} compact />
             ) : (
               <div className="space-y-2">
                 {historyData.data.map((h) => (

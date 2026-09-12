@@ -41,7 +41,7 @@ import {
 } from '@/lib/api-types';
 import { useEffect, useMemo, useRef } from 'react';
 import { formatAmount, displayName, todayLocalDateString } from '@/lib/format';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { ItemIcon } from '@/components/item-icon';
 import { IconCategoryPicker } from '@/components/ui/icon-category-picker';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -1416,7 +1416,7 @@ function FactionSettingsSection({
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
-            <p className="text-zinc-600 text-sm text-center py-6">{t('settings.noRanksYet')}</p>
+            <EmptyState icon={Shield} title={t('settings.noRanksYet')} compact />
           ) : (
             <div className="space-y-3">
               {[...ranks].sort((a, b) => a.level - b.level).map((r, sortedIdx) => {

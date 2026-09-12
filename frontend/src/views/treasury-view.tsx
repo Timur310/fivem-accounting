@@ -282,9 +282,9 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         {balancesOpen && (
         <CardContent>
           {balances.length === 0 ? (
-            <p className="text-zinc-600 text-sm text-center py-8">{t('treasury.noBalances')}</p>
+            <EmptyState icon={Wallet} title={t('treasury.noBalances')} compact />
           ) : visibleBalances.length === 0 ? (
-            <p className="text-zinc-600 text-sm text-center py-8">{t('itemTypes.noneMatch')}</p>
+            <EmptyState icon={Search} title={t('itemTypes.noneMatch')} compact />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleBalances.map((b) => (
@@ -390,7 +390,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         </CardHeader>
         <CardContent>
           {recentPayouts.length === 0 ? (
-            <p className="text-zinc-600 text-sm text-center py-8">{t('treasury.noCompletedWithdrawals')}</p>
+            <EmptyState icon={ArrowDownToLine} title={t('treasury.noCompletedWithdrawals')} compact />
           ) : (
             <div className="space-y-1">
               {recentPayouts.map((p) => (

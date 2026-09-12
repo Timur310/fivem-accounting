@@ -948,6 +948,18 @@ buttons (§8.8).
 - **A failed fetch is its own state.** Views render loading, error and empty
   as three separate branches, never two — see `ErrorState` in §9.4. Falling
   through a failure to the empty state tells a member their ledger is gone.
+- **Sorting a paginated list happens in SQL, never on the client.** Reordering
+  the page in hand produces "the biggest of page three" dressed up as "the
+  biggest" — wrong rather than merely missing. `lib/sort.ts` resolves
+  `?sort=&dir=` against a per-route allow-list and always appends a tiebreaker,
+  because Postgres gives no stable order for equal keys and rows otherwise
+  repeat or vanish across page boundaries. An unknown field falls back to the
+  default instead of erroring, so a stale bookmark degrades rather than breaks.
+- **Filters and sort orders are settings, not transient UI.** They persist per
+  faction through `usePersistedState`, because the shell unmounts views on every
+  navigation and someone who narrowed a list and clicked into a profile expects
+  to come back to it. Reads happen in an effect, never in the initializer —
+  this tree renders on the server, where `localStorage` does not exist.
 - **State**: zustand for session, selected faction and view; TanStack Query for
   everything fetched.
 
@@ -1040,10 +1052,8 @@ the same thing in words.
 
 **Partially implemented from the plan:**
 
-- The shared shimmer skeleton, empty-state and error-state components exist
-  and are used by the list-shaped views, but adoption is not complete — the
-  dashboard, reports, settings, laundering and the member profile still
-  hand-roll their empty states, visually close but not unified.
+- (Empty-state adoption is now complete — every view that can show an empty
+  list uses the shared component.)
 - Stats-strip fact-chips: "best streak" is in, shown only once the record
   beats the current run so it reads as something you did rather than another
   live figure. The quota-streak chip ("12 weeks running") is not — it needs
@@ -1353,7 +1363,7 @@ crontab -e
 | 8 | Faction masthead | Display-type name, accent glow, optional logo image URL — **DONE** | Medium |
 | 9 | Heatmap-as-hero | Enlarged, accent-tinted heatmap with "best day" tooltip on the member profile — **DONE** | Low |
 | 10 | PWA / mobile app feel | Manifest, home-screen icon, fullscreen standalone mode — **DONE** | Medium |
-| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component, plus an `ErrorState` so a failed load never reads as an empty list — **PARTIAL** (component done and used by the list views; dashboard, reports, settings, laundering and member profile still hand-roll theirs) | Low |
+| 11 | Skeleton/empty-state unification | One shared shimmer skeleton + one line-art empty-state component, plus an `ErrorState` so a failed load never reads as an empty list — **DONE** | Low |
 | 12 | Item type icon/category system | Built-in icon/emoji picker per item type, cash/goods/contraband color coding — **DONE** | Low |
 | 13 | Row/quota micro-feedback | Green/red pulse on a freshly logged row, eased quota-bar fill — **DONE** | Low |
 | 14 | Stats-strip fact-chips | "Best week so far", "12-week quota streak" — **PARTIAL** (best streak done; quota streak needs an aggregation that does not exist yet) | Low |

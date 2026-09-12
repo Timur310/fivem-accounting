@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Users, Package, Settings } from 'lucide-react';
-import { ErrorState } from '@/components/ui/empty-state';
+import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useAppStore } from '@/lib/store';
 import type { Member, ItemType } from '@/lib/api-types';
 import { formatDate, displayName } from '@/lib/format';
@@ -80,7 +80,7 @@ export function AdminFactionDetailView() {
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-sm text-zinc-200 flex items-center gap-2"><Users className="h-4 w-4 text-zinc-400" />{t('nav.members')} ({data.members.length})</CardTitle></CardHeader>
           <CardContent>
-            {data.members.length === 0 ? (<p className="text-zinc-600 text-sm text-center py-6">{t('members.none')}</p>) : (
+            {data.members.length === 0 ? (<EmptyState icon={Users} title={t('members.none')} compact />) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.members.map((m: Member) => (
                   <div key={m.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
@@ -97,7 +97,7 @@ export function AdminFactionDetailView() {
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-sm text-zinc-200 flex items-center gap-2"><Package className="h-4 w-4 text-zinc-400" />{t('settings.itemTypes')} ({data.itemTypes.length})</CardTitle></CardHeader>
           <CardContent>
-            {data.itemTypes.length === 0 ? (<p className="text-zinc-600 text-sm text-center py-6">{t('itemTypes.none')}</p>) : (
+            {data.itemTypes.length === 0 ? (<EmptyState icon={Package} title={t('itemTypes.none')} compact />) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.itemTypes.map((item: ItemType) => (
                   <div key={item.id} className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">

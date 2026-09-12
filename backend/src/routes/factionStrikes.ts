@@ -5,6 +5,7 @@ import { strikes, users, STRIKE_SEVERITIES, STRIKE_STATUSES } from '../db/schema
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
+import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { buildWhere } from '../lib/query.js';
@@ -19,6 +20,8 @@ const router = Router({ mergeParams: true });
 router.use(requireAuth, requireFactionMember);
 
 const listQuerySchema = z.object({
+  sort: z.string().max(40).optional(),
+  dir: z.enum(['asc', 'desc']).optional(),
   // Default view is what still counts against members; pass status=all to see
   // revoked and expired history too.
   status: z.enum([...STRIKE_STATUSES, 'all']).optional(),
@@ -95,7 +98,17 @@ router.get('/', async (req: Request, res: Response) => {
       .from(strikes)
       .innerJoin(users, eq(strikes.targetUserId, users.id))
       .where(where)
-      .orderBy(desc(strikes.createdAt))
+      .orderBy(...resolveSort(
+        query.data,
+        {
+          date: strikes.createdAt,
+          severity: strikes.severity,
+          status: strikes.status,
+          member: users.username,
+        },
+        { key: 'date', dir: 'desc' },
+        strikes.createdAt,
+      ))
       .limit(pageSize)
       .offset(offset),
     db.select({ count: sql<number>`COUNT(*)::int` }).from(strikes).where(where),
