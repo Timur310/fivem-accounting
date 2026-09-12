@@ -25,7 +25,7 @@ export function toDateString(d: Date): string {
 }
 
 /**
- * Today's date as a `YYYY-MM-DD` string (UTC).
+ * Today's date as a `YYYY-MM-DD` string, in the **local** calendar.
  */
 export function todayDateString(): string {
   return toDateString(new Date());
@@ -50,4 +50,38 @@ export function daysSince(dateStr: string | null | undefined): number | null {
   const then = new Date(`${dateStr}T00:00:00`).getTime();
   if (Number.isNaN(then)) return null;
   return Math.floor((Date.now() - then) / 86_400_000);
+}
+
+/**
+ * Has a `YYYY-MM-DD` period start arrived yet, in the local calendar?
+ *
+ * Written as a string comparison on purpose. The obvious version —
+ * `new Date(periodStart) > new Date()` — is wrong east of Greenwich, because
+ * `new Date("2026-09-13")` parses a bare date as **UTC midnight** while
+ * `new Date()` is the actual instant. Between local midnight and 02:00 at
+ * UTC+2, a period starting today therefore compares as still in the future,
+ * and every quota reading it reports zero progress and "not started".
+ *
+ * That window is exactly when a roleplay session ends and people log what
+ * they earned — and for weekly quotas, which start on a Monday, it recurred
+ * every single week.
+ *
+ * ISO dates sort lexicographically, so comparing the strings is both correct
+ * and cheaper.
+ */
+export function periodHasStarted(periodStart: string, reference: Date = new Date()): boolean {
+  return periodStart <= toDateString(reference);
+}
+
+/**
+ * Parse a `YYYY-MM-DD` string as **local** midnight.
+ *
+ * `new Date("2026-09-13")` gives UTC midnight, which is a different instant
+ * and, west of Greenwich, a different calendar day once read back with
+ * `getFullYear`/`getMonth`/`getDate`. Anything that walks calendar periods has
+ * to start from the local day the string names.
+ */
+export function parseLocalDate(value: string): Date {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y!, m! - 1, d!);
 }

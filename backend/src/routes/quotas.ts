@@ -8,7 +8,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange, getPreviousPeriodRange, type PeriodRange } from '../lib/period.js';
-import { toDateString } from '../lib/date.js';
+import { toDateString, periodHasStarted, parseLocalDate } from '../lib/date.js';
 import { QUOTA_SCOPES, type QuotaScope } from '../db/schema.js';
 
 const router = Router({ mergeParams: true });
@@ -69,7 +69,6 @@ async function computeQuotaProgress(
   viewerUserId: string,
 ) {
   const today = new Date();
-  const startDate = new Date(quota.periodStart);
 
   // Whose entries this quota reads for the person looking at it.
   const subjectUserId = quota.scope === 'everyone'
@@ -77,7 +76,7 @@ async function computeQuotaProgress(
     : quota.targetUserId;
 
   // Quota hasn't started yet
-  if (startDate > today) {
+  if (!periodHasStarted(quota.periodStart, today)) {
     return {
       currentAmount: 0,
       targetAmount: Number(quota.targetAmount),
@@ -337,8 +336,7 @@ router.get('/:quotaId/history', async (req: Request, res: Response) => {
   }
 
   const today = new Date();
-  const startDate = new Date(quota.periodStart);
-  if (startDate > today) {
+  if (!periodHasStarted(quota.periodStart, today)) {
     success(res, { periods: [], summary: { met: 0, total: 0 } });
     return;
   }
@@ -360,7 +358,7 @@ router.get('/:quotaId/history', async (req: Request, res: Response) => {
   // the one before the current. The cursor re-anchors on each period's first
   // day, so month lengths cannot make it skip a period.
   const completed: PeriodRange[] = [];
-  let cursor = new Date(startDate);
+  let cursor = parseLocalDate(quota.periodStart);
   while (completed.length < 260) {
     const range = getPeriodRange(quota.periodType, cursor);
     if (range.end >= currentRange.start || range.end >= toDateString(today)) break;

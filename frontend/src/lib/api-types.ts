@@ -1260,3 +1260,30 @@ export interface CreateAnnouncementInput {
 }
 
 export type UpdateAnnouncementInput = Partial<CreateAnnouncementInput>;
+
+// ── Activity feed ──
+
+export const FEED_TYPES = [
+  'entry', 'payout', 'announcement', 'strike', 'member_join', 'rank_change',
+] as const;
+export type FeedType = (typeof FEED_TYPES)[number];
+
+/**
+ * One line of the faction timeline.
+ *
+ * No rendered sentence is stored or sent: the interface is bilingual, so the
+ * client renders `feed.<type>` through the i18n layer and interpolates `data`.
+ * The architecture doc's original spec had a `summary` string here; see §8.12.
+ */
+export interface FeedItem {
+  id: string;
+  type: FeedType;
+  createdAt: string;
+  actorId: string;
+  actorUsername: string;
+  actorInGameName: string | null;
+  actorAvatarUrl: string | null;
+  /** The shared placeholder that carries anonymous entries and laundering. */
+  actorIsSystem: boolean;
+  data: Record<string, string | number | boolean | null>;
+}

@@ -9,7 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange } from '../lib/period.js';
-import { daysSince, toDateString } from '../lib/date.js';
+import { daysSince, toDateString, periodHasStarted } from '../lib/date.js';
 import { countActiveStrikes, countActiveStrikesBySeverity } from '../lib/strikes.js';
 import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/analytics.js';
 
@@ -771,7 +771,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
   const today = new Date();
   const quotaProgress = await Promise.all(
     activeQuotas
-      .filter((q) => new Date(q.periodStart) <= today)
+      .filter((q) => periodHasStarted(q.periodStart, today))
       .map(async (q) => {
         const range = getPeriodRange(q.periodType, today);
         const [row] = await db

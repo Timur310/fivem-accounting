@@ -21,6 +21,7 @@ export type AppView =
   | 'reports'
   | 'support'
   | 'announcements'
+  | 'feed'
   | 'admin-support'
   | 'guide';
 

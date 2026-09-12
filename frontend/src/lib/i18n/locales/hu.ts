@@ -128,6 +128,24 @@ export const hu: Translations = {
   'nav.guide': 'Útmutató',
   'nav.support': 'Támogatás',
   'nav.announcements': 'Közlemények',
+  'nav.feed': 'Történések',
+
+  // -- Történések --
+  'feed.intro': 'Minden, ami a frakcióban történt, a legújabbal kezdve.',
+  'feed.none': 'Még nem történt semmi.',
+  'feed.noneHint': 'A bejegyzések, kifizetések, közlemények és fegyelmi ügyek mind itt jelennek meg.',
+  'feed.theFaction': 'A frakció',
+  'feed.filterAll': 'Minden',
+  'feed.filterEntries': 'Bejegyzések',
+  'feed.filterPayouts': 'Kifizetések',
+  'feed.filterAnnouncements': 'Közlemények',
+  'feed.filterStrikes': 'Figyelmeztetések',
+  'feed.entry': '{who} rögzített: {amount} {itemType}.',
+  'feed.payout': '{who} — kifizetés: {amount} {itemType} ({status}).',
+  'feed.announcement': '{who} közzétette: {title}',
+  'feed.strike': '{who} {severity} fokozatú figyelmeztetést kapott.',
+  'feed.member_join': '{who} csatlakozott a frakcióhoz.',
+  'feed.rank_change': '{who} mostantól {rank}.',
 
   // -- Közlemények --
   'announcements.intro': 'Amit a frakciónak mindenkivel tudatnia kell.',

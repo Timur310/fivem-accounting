@@ -529,6 +529,7 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Edit an announcement | author only | author only | author only | author only |
 | Remove an announcement | Yes | Yes | `manage_settings`, or own | own only |
 | See who has read one | Yes | Yes | `manage_settings` | No |
+| Read the activity feed | Yes | Yes | Yes | Yes⁴ |
 | Read your own notifications | own only | own only | own only | own only |
 | Read everybody's support tickets | Yes | No | — | No |
 | Read the treasury and dashboard | Yes | Yes | Yes | Yes |
@@ -543,6 +544,10 @@ any age.
 ³ Nothing has left the vault while a request is pending, so taking it back moves
 no money (§8.3). Once anyone approves, rejects or completes it, the row is
 theirs, not yours.
+
+⁴ Everyone reaches the feed, but each source inside it keeps its own rule
+(§8.12): withdrawals and strikes narrow to your own without the matching
+permission, and joins and rank changes are absent without `view_audit_logs`.
 
 ---
 
@@ -854,8 +859,9 @@ The badge polls a dedicated count endpoint once a minute; the list itself is
 only fetched while the panel is open.
 
 **Not built:** anything needing a scheduler. Quota deadline warnings and the
-weekly recap both want a cron the app does not have, and Discord webhooks were
-dropped deliberately — see §12.
+weekly recap both want a cron the app does not have. Discord delivery — bot or
+webhook — was considered and set aside; the reasons are recorded against
+Phase 8 below.
 
 ### 8.11 Announcements
 
@@ -895,6 +901,46 @@ marks everything on screen as read, since reading the board *is* reading the
 announcements.
 
 Posting notifies the whole roster except the author (§8.10).
+
+### 8.12 Activity Feed
+
+One timeline over everything the faction has done, newest first:
+`GET /factions/:id/feed`, a `UNION ALL` across entries, payouts,
+announcements, strikes and the audit rows that record joins and rank changes.
+
+**The feed is a view, never a back door.** This is the whole design problem.
+Each source keeps the visibility rule it has on its own screen, applied as a
+`WHERE` clause in the union rather than left to the client:
+
+| Source | Who sees it |
+|---|---|
+| entries, announcements | every member — the ledger is open by design |
+| payouts | `manage_payouts`, otherwise only your own |
+| strikes | `manage_strikes`, otherwise only your own |
+| member joins, rank changes | `view_audit_logs` — the branch is omitted entirely, not filtered |
+
+Without that, a plain member could read every withdrawal in the faction and
+everybody's discipline record through a screen that looks like a news feed: the
+permission system intact everywhere else and completely bypassed here. Six
+tests check it from both sides.
+
+**No rendered text is stored or returned.** §12.3.3 originally specified a
+`summary` string per item. That cannot work here for the same reason it cannot
+in the notification bell (§8.10): the interface is bilingual and a member can
+switch language at any time, so a sentence written in English at write time
+would be frozen in it. Each row carries a `type` and a jsonb `data` bag, and
+the client renders `feed.<type>` through the i18n layer. Amounts are cast to
+text in SQL — `jsonb_build_object` turns a `numeric` into a JSON *number*, and
+every other endpoint in the app returns amounts as strings.
+
+**Anonymous activity** surfaces with `actorIsSystem` rather than a name: the
+shared placeholder that carries anonymous entries and both sides of a
+laundering run is not a person, and the client renders it as "the faction".
+
+The route hand-writes its SQL, so it wraps execution in `try`/`catch`. Express
+4 does not catch a rejected promise from an async handler, and without the
+guard a query error leaves the request hanging open forever rather than
+answering 500 — a far worse failure, and one that is invisible in logs.
 
 ---
 
@@ -957,6 +1003,11 @@ own inbox.
 registrations still waiting, in one list with the registrations pinned to the top
 and labelled. Rename and remove appear only on those, because that is all the API
 allows.
+
+`announcements` and `feed` are the two Phase 6 surfaces: the board and the
+timeline. Neither carries a permission of its own — the feed narrows itself
+per source inside the query (§8.12), and posting is gated inside the
+announcements view rather than on the nav item.
 
 The sign-in screen is not in `views/`: it renders before a faction is ever
 selected, so it lives in `components/login-page.tsx` and is the one screen
@@ -1360,7 +1411,7 @@ crontab -e
 | 5 | Inactivity detection | Flag members who haven't logged entries in X days. Dashboard alert | Medium |
 | 6 | Member join/leave history | Track when members joined, left, were kicked, or were reinstated | Medium |
 
-### Phase 6: Faction Communication (Weeks 16-18) — MOSTLY COMPLETE
+### Phase 6: Faction Communication (Weeks 16-18) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -1368,7 +1419,7 @@ crontab -e
 | 2 | Pinned announcements | Pin important announcements to top of feed, auto-expire after set time — **DONE** (expiry hides, never deletes) | Medium |
 | 3 | Announcement read tracking | Track which members have read each announcement — **DONE** | Medium |
 | 4 | Markdown rendering | Announcements support full markdown — **DONE** (rendered through the same pipeline as the in-app guide; no side-by-side preview) | Low |
-| 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline | Medium |
+| 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline — **DONE** (§8.12) | Medium |
 
 ### Phase 7: Advanced Analytics & Gamification (Weeks 19-21) — COMPLETE
 
@@ -1385,13 +1436,26 @@ crontab -e
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
-| 1 | Discord bot integration | Bot commands: /balance, /log <amount> <type>, /top, /quotas, /announce | High |
-| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings | High |
-| 3 | Webhook system | Outgoing webhooks on configurable events (entry logged, quota met, strike issued) | Medium |
+| 1 | Discord bot integration | Bot commands: /balance, /log <amount> <type>, /top, /quotas, /announce — **NOT PLANNED**¹ | High |
+| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings — **BLOCKED**² | High |
+| 3 | Webhook system | Outgoing webhooks on configurable events — **DEFERRED**³ | Medium |
 | 4 | API tokens | Faction-level API tokens for server-side scripts (FiveM in-game resource tracking) | Medium |
 | 5 | Data backup/restore | Full faction data export (JSON) and import. Superadmin can backup all data | Medium |
 | 6 | Faction templates | Preset configurations for common faction types (cartel, police, EMS, mechanic, etc.) | Low |
 | 7 | i18n framework | Translation infrastructure + community translation support | Low |
+
+¹ A bot has to be invited into, and managed on, each faction's own Discord
+server. The operator does not have that access and does not want it, so the
+feature cannot be delivered as specified regardless of effort.
+
+² Wants a scheduler the app does not have, and a delivery channel — see ¹ and ³.
+The in-app bell (§8.10) covers the event half of what this was for.
+
+³ A webhook needs no bot and no hosting: a faction admin pastes a URL from
+their own server settings. It was deferred rather than refused, on the grounds
+that the user base is currently small enough that the in-app bell reaches
+everyone and there is not yet enough feedback to know what people would want
+pushed. Worth revisiting as the user base grows.
 
 ### Phase 9: Frontend Redesign — "Serious Ledger, Game Soul" (Weeks 25-26) — MOSTLY COMPLETE
 

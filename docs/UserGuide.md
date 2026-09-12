@@ -392,6 +392,22 @@ You can edit only your own announcements. You can remove your own, and with
 
 ---
 
+### 5.10 Activity — what the faction has been doing
+
+**Activity** is the faction's timeline: entries, withdrawals, announcements,
+strikes and roster changes, newest first. Filter it to one kind with the
+buttons across the top.
+
+**You only ever see what you could already see.** Withdrawals and strikes that
+are not yours are hidden unless you hold the permission for them, and roster
+history needs `view_audit_logs`. The feed does not show you anything a normal
+screen would not.
+
+Anonymous entries appear as **The faction** rather than a name, because that is
+who they belong to.
+
+---
+
 ## 6. For leaders — running the faction
 
 These sections appear only if your role or rank grants them. The permission

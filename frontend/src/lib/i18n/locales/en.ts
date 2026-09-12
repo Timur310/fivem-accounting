@@ -140,6 +140,27 @@ export const en = {
   'nav.guide': 'User Guide',
   'nav.support': 'Support',
   'nav.announcements': 'Announcements',
+  'nav.feed': 'Activity',
+
+  // -- Activity feed --
+  // Rendered from a type and a data bag, never a stored sentence: the
+  // interface is bilingual and a summary written in English at write time
+  // would be frozen in it.
+  'feed.intro': 'Everything that has happened in the faction, newest first.',
+  'feed.none': 'Nothing has happened yet.',
+  'feed.noneHint': 'Entries, withdrawals, announcements and discipline all land here.',
+  'feed.theFaction': 'The faction',
+  'feed.filterAll': 'Everything',
+  'feed.filterEntries': 'Entries',
+  'feed.filterPayouts': 'Withdrawals',
+  'feed.filterAnnouncements': 'Announcements',
+  'feed.filterStrikes': 'Strikes',
+  'feed.entry': '{who} logged {amount} {itemType}.',
+  'feed.payout': '{who} — withdrawal of {amount} {itemType} ({status}).',
+  'feed.announcement': '{who} posted: {title}',
+  'feed.strike': '{who} received a {severity} strike.',
+  'feed.member_join': '{who} joined the faction.',
+  'feed.rank_change': '{who} is now {rank}.',
 
   // -- Announcements --
   'announcements.intro': 'What the faction needs everyone to know.',

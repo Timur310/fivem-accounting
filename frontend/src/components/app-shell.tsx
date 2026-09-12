@@ -23,6 +23,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
+  Activity,
   Inbox,
   List,
   Users,
@@ -60,6 +61,7 @@ import { LaunderingView } from '@/views/laundering-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
 import { AnnouncementsView } from '@/views/announcements-view';
+import { FeedView } from '@/views/feed-view';
 import { AdminSupportView } from '@/views/admin-support-view';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -255,6 +257,9 @@ export function AppShell() {
     { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
     // Everyone reads the board; posting is gated inside the view.
     { group: 'play', view: 'announcements', label: 'nav.announcements', icon: Megaphone },
+    // The timeline is scoped per source inside the query, so it needs no
+    // permission of its own: everyone sees their own slice of it.
+    { group: 'play', view: 'feed', label: 'nav.feed', icon: Activity },
     { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
     {
       group: 'manage',
@@ -396,6 +401,8 @@ export function AppShell() {
       // selected-faction guard alongside the guide.
       case 'support':
         return <SupportView />;
+      case 'feed':
+        return selectedFactionId ? <FeedView factionId={selectedFactionId} /> : null;
       case 'announcements':
         return selectedFactionId ? <AnnouncementsView factionId={selectedFactionId} canManage={hasPermission('manage_settings')} /> : null;
       case 'admin-support':

@@ -35,6 +35,8 @@ import type {
   CreateSupportTicketInput,
   AppNotification,
   Announcement,
+  FeedItem,
+  FeedType,
   AnnouncementRead,
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
@@ -783,6 +785,15 @@ export const announcementsApi = {
     api
       .get<ApiSuccessResponse<AnnouncementRead[]>>(`/factions/${factionId}/announcements/${id}/reads`)
       .then(unwrap),
+};
+
+// ── Activity feed ──
+
+export const feedApi = {
+  list: (factionId: string, params?: { page?: number; page_size?: number; type?: FeedType }) =>
+    api
+      .get<ApiSuccessResponse<FeedItem[]>>(`/factions/${factionId}/feed`, { params })
+      .then((r) => ({ data: r.data.data, meta: r.data.meta })),
 };
 
 export { api };
