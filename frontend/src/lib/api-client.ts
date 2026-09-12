@@ -34,6 +34,10 @@ import type {
   SupportTicketStatus,
   CreateSupportTicketInput,
   AppNotification,
+  Announcement,
+  AnnouncementRead,
+  CreateAnnouncementInput,
+  UpdateAnnouncementInput,
   Payout,
   CreatePayoutInput,
   UpdatePayoutInput,
@@ -747,6 +751,38 @@ export const notificationsApi = {
     api.post<ApiSuccessResponse<{ readAt: string }>>('/notifications/read-all').then(unwrap),
 
   clear: () => api.delete<ApiSuccessResponse<{ cleared: boolean }>>('/notifications').then(unwrap),
+};
+
+// ── Announcements ──
+
+export const announcementsApi = {
+  list: (factionId: string, params?: { include_expired?: boolean }) =>
+    api
+      .get<ApiSuccessResponse<Announcement[]>>(`/factions/${factionId}/announcements`, {
+        params: params?.include_expired ? { include_expired: 'true' } : undefined,
+      })
+      .then(unwrap),
+
+  create: (factionId: string, input: CreateAnnouncementInput) =>
+    api
+      .post<ApiSuccessResponse<Announcement>>(`/factions/${factionId}/announcements`, input)
+      .then(unwrap),
+
+  update: (factionId: string, id: string, input: UpdateAnnouncementInput) =>
+    api
+      .patch<ApiSuccessResponse<Announcement>>(`/factions/${factionId}/announcements/${id}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/announcements/${id}`),
+
+  markRead: (factionId: string, id: string) =>
+    api.post(`/factions/${factionId}/announcements/${id}/read`),
+
+  reads: (factionId: string, id: string) =>
+    api
+      .get<ApiSuccessResponse<AnnouncementRead[]>>(`/factions/${factionId}/announcements/${id}/reads`)
+      .then(unwrap),
 };
 
 export { api };

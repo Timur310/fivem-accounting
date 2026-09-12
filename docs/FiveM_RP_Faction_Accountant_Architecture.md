@@ -524,6 +524,11 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | View audit logs | Yes | Yes | `view_audit_logs` | No |
 | View reports | Yes | Yes | `view_reports` | No |
 | Send a bug report or feature request | Yes | Yes | Yes | Yes |
+| Read faction announcements | Yes | Yes | Yes | Yes |
+| Post an announcement | Yes | Yes | `manage_settings` | No |
+| Edit an announcement | author only | author only | author only | author only |
+| Remove an announcement | Yes | Yes | `manage_settings`, or own | own only |
+| See who has read one | Yes | Yes | `manage_settings` | No |
 | Read your own notifications | own only | own only | own only | own only |
 | Read everybody's support tickets | Yes | No | — | No |
 | Read the treasury and dashboard | Yes | Yes | Yes | Yes |
@@ -851,6 +856,45 @@ only fetched while the panel is open.
 **Not built:** anything needing a scheduler. Quota deadline warnings and the
 weekly recap both want a cron the app does not have, and Discord webhooks were
 dropped deliberately — see §12.
+
+### 8.11 Announcements
+
+The faction's bulletin board, and the answer to "quota deadline is Friday"
+being buried under three hours of Discord chat.
+
+**Reading is open to every member; posting runs on `manage_settings`.** An
+announcement nobody can see is not an announcement, so the read side has no
+gate at all. The write side deliberately reuses an existing permission rather
+than adding a thirteenth: `manage_settings` is already what decides who speaks
+for the faction — ranks, expiry rules, the faction's own configuration — and
+"what the faction is telling its members" belongs in the same hand.
+
+**Editing and removing are split on purpose.** Only the *author* may edit:
+someone else rewriting the body leaves your name on words you did not write,
+and the audit log would agree with them. Removing is moderation rather than
+authorship, so the author can retract their own and anyone holding
+`manage_settings` can take down anybody's.
+
+**Priority** is `low` / `normal` / `high` / `urgent`, rendered as a left rule
+and — for the top two only — a badge. Low and normal get nothing: if every
+notice wears a badge, the badge stops meaning anything. This is colour carrying
+urgency rather than value, which §9.3 permits because the thing coloured is a
+label, not a figure.
+
+**Expiry hides, never deletes.** An expired notice drops out of the default
+list and comes back with `?include_expired=true`. A leader has to be able to
+prove what was posted and when, so nothing removes it.
+
+**Read tracking** (`announcement_reads`, composite PK) answers "have the people
+this applies to actually seen it" before a leader enforces it. The reads
+endpoint returns the **whole roster** with a nullable `readAt`, because the
+useful question is who has *not* read it — returning only readers would be the
+wrong half of the answer. Marking read twice is not an error and does not move
+the timestamp: "when did they first see this" is what it records. The client
+marks everything on screen as read, since reading the board *is* reading the
+announcements.
+
+Posting notifies the whole roster except the author (§8.10).
 
 ---
 
@@ -1316,14 +1360,14 @@ crontab -e
 | 5 | Inactivity detection | Flag members who haven't logged entries in X days. Dashboard alert | Medium |
 | 6 | Member join/leave history | Track when members joined, left, were kicked, or were reinstated | Medium |
 
-### Phase 6: Faction Communication (Weeks 16-18)
+### Phase 6: Faction Communication (Weeks 16-18) — MOSTLY COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
-| 1 | Announcements system | Admin posts announcements with priority levels (normal, high, urgent) | High |
-| 2 | Pinned announcements | Pin important announcements to top of feed, auto-expire after set time | Medium |
-| 3 | Announcement read tracking | Track which members have read each announcement | Medium |
-| 4 | Markdown rendering | Announcements support full markdown with preview | Low |
+| 1 | Announcements system | Admin posts announcements with priority levels (low, normal, high, urgent) — **DONE** (§8.11) | High |
+| 2 | Pinned announcements | Pin important announcements to top of feed, auto-expire after set time — **DONE** (expiry hides, never deletes) | Medium |
+| 3 | Announcement read tracking | Track which members have read each announcement — **DONE** | Medium |
+| 4 | Markdown rendering | Announcements support full markdown — **DONE** (rendered through the same pipeline as the in-app guide; no side-by-side preview) | Low |
 | 5 | Activity feed | Combined feed of entries, payouts, announcements, strikes — faction timeline | Medium |
 
 ### Phase 7: Advanced Analytics & Gamification (Weeks 19-21) — COMPLETE

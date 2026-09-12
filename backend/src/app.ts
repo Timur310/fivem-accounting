@@ -34,6 +34,7 @@ import leaderboardRoutes from './routes/leaderboard.js';
 import globalLeaderboardRoutes from './routes/globalLeaderboard.js';
 import supportRoutes from './routes/support.js';
 import notificationRoutes from './routes/notifications.js';
+import announcementRoutes from './routes/announcements.js';
 import expenseRoutes from './routes/expenses.js';
 import configIoRoutes from './routes/configIo.js';
 
@@ -165,6 +166,7 @@ app.use('/api/v1/factions/:id/bulk', bulkRoutes);
 app.use('/api/v1/factions/:id/payouts', payoutRoutes);
 app.use('/api/v1/factions/:id/treasury', treasuryRoutes);
 app.use('/api/v1/factions/:id/laundering', launderingRoutes);
+app.use('/api/v1/factions/:id/announcements', announcementRoutes);
 app.use('/api/v1/factions/:id/expenses', expenseRoutes);
 app.use('/api/v1/factions/:id/config', configIoRoutes);
 

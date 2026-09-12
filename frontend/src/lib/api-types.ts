@@ -1199,6 +1199,7 @@ export const NOTIFICATION_TYPES = [
   'strike_issued',
   'support_resolved',
   'support_declined',
+  'announcement_posted',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -1217,3 +1218,45 @@ export interface AppNotification {
   factionId: string | null;
   factionName: string | null;
 }
+
+// ── Announcements ──
+
+export const ANNOUNCEMENT_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type AnnouncementPriority = (typeof ANNOUNCEMENT_PRIORITIES)[number];
+
+export interface Announcement {
+  id: string;
+  title: string;
+  /** Markdown, rendered with the same pipeline as the in-app guide. */
+  body: string;
+  priority: AnnouncementPriority;
+  isPinned: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  authorId: string;
+  authorUsername: string;
+  authorInGameName: string | null;
+  authorAvatarUrl: string | null;
+  readCount: number;
+  isReadByMe: boolean;
+}
+
+/** One roster row against an announcement — `readAt` is null for unread. */
+export interface AnnouncementRead {
+  userId: string;
+  username: string;
+  inGameName: string | null;
+  avatarUrl: string | null;
+  readAt: string | null;
+}
+
+export interface CreateAnnouncementInput {
+  title: string;
+  body: string;
+  priority?: AnnouncementPriority;
+  isPinned?: boolean;
+  expiresAt?: string | null;
+}
+
+export type UpdateAnnouncementInput = Partial<CreateAnnouncementInput>;

@@ -22,6 +22,7 @@ import {
 import {
   LayoutDashboard,
   LifeBuoy,
+  Megaphone,
   Inbox,
   List,
   Users,
@@ -58,6 +59,7 @@ import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
+import { AnnouncementsView } from '@/views/announcements-view';
 import { AdminSupportView } from '@/views/admin-support-view';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -251,6 +253,8 @@ export function AppShell() {
     },
     { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
     { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
+    // Everyone reads the board; posting is gated inside the view.
+    { group: 'play', view: 'announcements', label: 'nav.announcements', icon: Megaphone },
     { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
     {
       group: 'manage',
@@ -392,6 +396,8 @@ export function AppShell() {
       // selected-faction guard alongside the guide.
       case 'support':
         return <SupportView />;
+      case 'announcements':
+        return selectedFactionId ? <AnnouncementsView factionId={selectedFactionId} canManage={hasPermission('manage_settings')} /> : null;
       case 'admin-support':
         return <AdminSupportView />;
       case 'dashboard':

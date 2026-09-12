@@ -12,6 +12,7 @@ import {
   jsonb,
   inet,
   uniqueIndex,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -433,6 +434,59 @@ export type Quota = typeof quotas.$inferSelect;
 export type NewQuota = typeof quotas.$inferInsert;
 
 // ── audit_logs ─────────────────────────────────────────
+// ── announcements ──────────────────────────────────────
+// A faction's bulletin board. Announcements outlive the Discord messages they
+// replace: "quota deadline is Friday" buried under three hours of chat is the
+// problem this exists to solve.
+export const announcements = pgTable('announcements', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  authorId:  uuid('author_id').notNull().references(() => users.id),
+  title:     varchar('title', { length: 200 }).notNull(),
+  // Markdown, rendered by the same pipeline as the in-app user guide.
+  body:      text('body').notNull(),
+  priority:  varchar('priority', { length: 20 }).notNull().default('normal'),
+  isPinned:  boolean('is_pinned').notNull().default(false),
+  // When set, the announcement stops being listed after this moment. Nothing
+  // deletes it — an expired notice is still history, and a leader should be
+  // able to prove what was posted and when.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const announcementsRelations = relations(announcements, ({ one, many }) => ({
+  faction: one(factions, { fields: [announcements.factionId], references: [factions.id] }),
+  author:  one(users,    { fields: [announcements.authorId],  references: [users.id] }),
+  reads:   many(announcementReads),
+}));
+
+export type Announcement = typeof announcements.$inferSelect;
+export type NewAnnouncement = typeof announcements.$inferInsert;
+
+export const ANNOUNCEMENT_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type AnnouncementPriority = (typeof ANNOUNCEMENT_PRIORITIES)[number];
+
+// ── announcement_reads ─────────────────────────────────
+// Who has seen what. The point is not surveillance: a leader posting "quota
+// doubles on Friday" needs to know whether the people it applies to have
+// actually read it before enforcing it.
+export const announcementReads = pgTable('announcement_reads', {
+  announcementId: uuid('announcement_id').notNull().references(() => announcements.id, { onDelete: 'cascade' }),
+  userId:         uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  readAt:         timestamp('read_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.announcementId, table.userId] }),
+]);
+
+export const announcementReadsRelations = relations(announcementReads, ({ one }) => ({
+  announcement: one(announcements, { fields: [announcementReads.announcementId], references: [announcements.id] }),
+  user:         one(users,         { fields: [announcementReads.userId],         references: [users.id] }),
+}));
+
+export type AnnouncementRead = typeof announcementReads.$inferSelect;
+
 // ── notifications ──────────────────────────────────────
 // Everything the app knows that somebody should be told.
 //
@@ -481,6 +535,7 @@ export const NOTIFICATION_TYPES = [
   'strike_issued',
   'support_resolved',
   'support_declined',
+  'announcement_posted',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

@@ -366,6 +366,32 @@ you do not have to explain where you were.
 
 ---
 
+### 5.9 Announcements — what the faction needs you to know
+
+**Announcements** is in the sidebar for everyone. It is the faction's notice
+board: quota changes, meeting times, rule updates — the things that used to get
+buried in Discord.
+
+- **Pinned** notices stay at the top however old they get.
+- **High** and **Urgent** ones carry a coloured badge and a coloured edge.
+  Normal and low ones do not, on purpose — if everything is urgent, nothing is.
+- **Expired** notices drop off the list automatically. They are never deleted;
+  tick **Show expired** to read them again.
+
+Opening the page marks everything on it as read. You do not have to click each
+one.
+
+If you can post (that is `manage_settings`, the same permission as faction
+settings), **New announcement** takes a title, a message in markdown, a
+priority, an optional pin, and an optional hide-after time. Everyone on the
+roster gets a notification except you. You can also see **who has read it** —
+the list shows the whole roster, so the useful part is who has not.
+
+You can edit only your own announcements. You can remove your own, and with
+`manage_settings` you can remove anybody's.
+
+---
+
 ## 6. For leaders — running the faction
 
 These sections appear only if your role or rank grants them. The permission
