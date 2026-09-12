@@ -50,6 +50,13 @@ function Button({
   return (
     <Comp
       data-slot="button"
+      // A bare <button> inside a <form> defaults to type="submit", which makes
+      // every Cancel and every stepper submit the form the moment dialogs are
+      // wrapped in one. Defaulting to "button" inverts that: submitting is
+      // opt-in via type="submit" on the one button that means it. `asChild`
+      // renders a Slot, which passes the attribute down to whatever it wraps
+      // and is harmless on a non-button element.
+      type={asChild ? undefined : "button"}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

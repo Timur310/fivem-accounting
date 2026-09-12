@@ -30,6 +30,7 @@ import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } fro
 import { useToast } from '@/hooks/use-toast';
 import type { ItemType, Entry } from '@/lib/api-types';
 import { formatAmount, displayName, todayLocalDateString } from '@/lib/format';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
 
@@ -306,6 +307,25 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const meta = entriesData?.meta;
   const totalPages = meta ? Math.ceil(meta.total_count / meta.page_size) : 1;
 
+  // One predicate for the create dialog, read by both the submit button and
+  // the form's onSubmit. Pressing Enter must be able to do exactly what
+  // clicking can and no more.
+  const canCreateEntry =
+    !!newItemTypeId &&
+    !!newAmount &&
+    Number(newAmount) > 0 &&
+    !createMutation.isPending &&
+    (canCreditSelf || newAnonymous || !!newOwnerId) &&
+    !customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim());
+
+  const canSaveEdit =
+    !!editAmount && Number(editAmount) > 0 && !updateMutation.isPending;
+
+  // Unit for the edit dialog's echo, taken from the row being edited.
+  const editingEntry = entries.find((e) => e.id === editEntryId);
+  const editUnit = editingEntry?.itemUnit;
+  const editIsCurrency = editingEntry?.itemIsCurrency;
+
   return (
     <div className="space-y-4">
       {/* Filters + CTA */}
@@ -504,6 +524,12 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <DialogTitle>{t('entries.logNew')}</DialogTitle>
             <DialogDescription>{t('entries.logNewHint')}</DialogDescription>
           </DialogHeader>
+          {/* A real form, so Enter in any single-line field logs the entry —
+              and Enter in the description textarea still inserts a newline,
+              which is the behaviour a hand-rolled key handler gets wrong. */}
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (canCreateEntry) createMutation.mutate(); }}
+          >
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>{t('entries.itemType')}</Label>
@@ -552,6 +578,11 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   </div>
                 );
               })()}
+              <AmountPreview
+                value={newAmount}
+                unit={activeItemTypes.find((it: ItemType) => it.id === newItemTypeId)?.unit}
+                isCurrency={activeItemTypes.find((it: ItemType) => it.id === newItemTypeId)?.isCurrency}
+              />
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
@@ -607,12 +638,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={!newItemTypeId || !newAmount || Number(newAmount) <= 0 || createMutation.isPending || (!canCreditSelf && !newAnonymous && !newOwnerId) || customFields.some((f) => f.required && !(newCustomValues[f.name] ?? '').trim())}>
+            <Button type="submit" disabled={!canCreateEntry}>
               {createMutation.isPending ? t('entries.logging') : newAnonymous ? t('entries.logAnonymously') : t('entries.logEntry')}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -623,10 +655,12 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <DialogTitle>{t('entries.editEntry')}</DialogTitle>
             <DialogDescription>{t('entries.editHint')}</DialogDescription>
           </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (canSaveEdit) updateMutation.mutate(); }}>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>{t('common.amount')}</Label>
               <Input type="number" step="0.01" min="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="tabular-nums" />
+              <AmountPreview value={editAmount} unit={editUnit} isCurrency={editIsCurrency} />
             </div>
             <div className="space-y-2">
               <Label>{t('common.date')}</Label>
@@ -648,12 +682,13 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={() => updateMutation.mutate()} disabled={!editAmount || Number(editAmount) <= 0 || updateMutation.isPending}>
+            <Button type="submit" disabled={!canSaveEdit}>
               {updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

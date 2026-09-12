@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/empty-state';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, Flame, Trophy, Target as TargetIcon, Coins, Check } from 'lucide-react';
 import type { ItemType } from '@/lib/api-types';
@@ -157,6 +158,13 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
     },
   });
 
+  const canQuickLog =
+    !quickJustLogged &&
+    !!quickTypeId &&
+    !!quickAmount &&
+    Number(quickAmount) > 0 &&
+    !quickLogMutation.isPending;
+
   const quickTypeOptions: SearchableSelectOption[] = (itemTypes as ItemType[])
     .filter((it) => it.isActive)
     .map((it) => ({ value: it.id, label: it.name }));
@@ -274,7 +282,12 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                 ))}
               </div>
             )}
-            <div className="flex flex-wrap items-end gap-3">
+            {/* A real form: Enter anywhere in the card logs the entry, which is
+                what a one-thumb flow wants on a phone keyboard too. */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (canQuickLog) quickLogMutation.mutate(); }}
+              className="flex flex-wrap items-end gap-3"
+            >
               <div className="space-y-1.5 min-w-[180px] flex-1">
                 <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
                 <SearchableSelect
@@ -300,18 +313,19 @@ export function DashboardView({ factionId, canLogEntries = false }: Props) {
                   />
                   <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
                 </div>
+                <AmountPreview value={quickAmount} unit={quickType?.unit} isCurrency={quickType?.isCurrency} />
               </div>
               <Button
+                type="submit"
                 className="h-11 px-6 text-sm"
-                disabled={quickJustLogged || !quickTypeId || !quickAmount || Number(quickAmount) <= 0 || quickLogMutation.isPending}
-                onClick={() => quickLogMutation.mutate()}
+                disabled={!canQuickLog}
                 style={quickJustLogged ? undefined : { backgroundColor: brandColor }}
               >
                 {quickJustLogged ? (
                   <><Check className="h-4 w-4 mr-1.5" />{t('dashboard.quickLogDone')}</>
                 ) : quickLogMutation.isPending ? t('common.saving') : t('dashboard.quickLogSubmit')}
               </Button>
-            </div>
+            </form>
           </CardContent>
         </Card>
       )}

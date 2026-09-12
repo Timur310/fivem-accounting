@@ -26,6 +26,7 @@ import { getIntlLocale } from '@/lib/i18n';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
+import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
 import type { TranslationKey } from '@/lib/i18n';
 import type { ItemType, ExpenseCategory, Expense } from '@/lib/api-types';
@@ -541,6 +542,9 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
     [itemTypes],
   );
 
+  const canSaveExpense =
+    !!formItemType && !!formAmount && Number(formAmount) > 0 && !saveMutation.isPending;
+
   const categoryOptions: SearchableSelectOption[] = useMemo(
     () => EXPENSE_CATEGORIES.map((c) => ({ value: c, label: t(EXPENSE_CATEGORY_KEYS[c]) })),
     [t],
@@ -647,6 +651,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
           <DialogHeader>
             <DialogTitle>{editId ? t('expenses.edit') : t('expenses.add')}</DialogTitle>
           </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (canSaveExpense) saveMutation.mutate(); }}>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>{t('expenses.itemType')}</Label>
@@ -678,6 +683,11 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                   onChange={(e) => setFormAmount(e.target.value)}
                   placeholder="0.00"
                 />
+                <AmountPreview
+                  value={formAmount}
+                  unit={selectedItemType?.unit}
+                  isCurrency={selectedItemType?.isCurrency}
+                />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -699,15 +709,13 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-            <Button
-              disabled={!formItemType || !formAmount || Number(formAmount) <= 0 || saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}
-            >
+            <Button type="submit" disabled={!canSaveExpense}>
               {saveMutation.isPending ? t('common.saving') : t('common.save')}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </Card>
@@ -767,6 +775,9 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
     },
   });
 
+  const canRecordCheck =
+    !!formItemType && formCounted !== '' && Number(formCounted) >= 0 && !createMutation.isPending;
+
   const checks = data?.checks ?? [];
 
   if (!canManage) return null;
@@ -783,7 +794,10 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
         <p className="text-xs text-zinc-500 mb-3">{t('treasury.checksIntro')}</p>
 
         {/* Record a count */}
-        <div className="flex flex-wrap items-end gap-3 mb-4">
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (canRecordCheck) createMutation.mutate(); }}
+          className="flex flex-wrap items-end gap-3 mb-4"
+        >
           <div className="space-y-1.5 min-w-[180px] flex-1">
             <Label className="text-xs text-zinc-500">{t('expenses.itemType')}</Label>
             <SearchableSelect
@@ -805,6 +819,7 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
               onChange={(e) => setFormCounted(e.target.value)}
               className="tabular-nums w-36"
             />
+            <AmountPreview value={formCounted} unit={countedType?.unit} isCurrency={countedType?.isCurrency} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs text-zinc-500">{t('common.date')}</Label>
@@ -820,13 +835,10 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
             <Label className="text-xs text-zinc-500">{t('common.description')}</Label>
             <Input value={formNote} onChange={(e) => setFormNote(e.target.value)} maxLength={500} placeholder={t('treasury.checkNotePlaceholder')} />
           </div>
-          <Button
-            disabled={!formItemType || formCounted === '' || Number(formCounted) < 0 || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-          >
+          <Button type="submit" disabled={!canRecordCheck}>
             {createMutation.isPending ? t('common.saving') : t('treasury.recordCheck')}
           </Button>
-        </div>
+        </form>
 
         {isLoading ? (
           <div className="space-y-2">
