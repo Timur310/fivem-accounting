@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { version as packageVersion } from "./package.json";
 
 /**
  * In dev, the Next.js dev server proxies /api/* to the backend so the browser
@@ -17,6 +18,9 @@ const DEV_BACKEND = 'http://localhost:8000';
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // The version shown in the app comes from package.json and nowhere else, so
+  // bumping the release is one edit and the footer cannot drift from it.
+  env: { NEXT_PUBLIC_APP_VERSION: packageVersion },
   reactStrictMode: true,
   poweredByHeader: false,
   images: {

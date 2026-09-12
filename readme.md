@@ -88,6 +88,17 @@ the full phase-by-phase plan and what's already shipped.
 Issues and PRs welcome. If you're adding a feature, check the roadmap first
 so it lines up with where the project's headed.
 
+## Version and attribution
+
+The app shows its version and copyright line in the sidebar footer and on the
+sign-in screen. The version has one source — `version` in
+`frontend/package.json` — which `next.config.ts` injects as
+`NEXT_PUBLIC_APP_VERSION`. Bump it there to cut a release; nothing else needs
+editing, and the footer cannot drift from the package.
+
+Owner and copyright holder: **Mustafa Yildiz**. The name and year live in
+`frontend/src/lib/app-meta.ts`.
+
 ---
 
 *Built for FiveM roleplay servers. Self-hosted, your data, your rules.*

@@ -95,6 +95,10 @@ export const hu: Translations = {
   'error.fatalTitle': 'Alkalmazáshiba',
   'error.fatalBody': 'Súlyos hiba történt, az alkalmazás nem tud tovább futni. Töltsd újra az oldalt.',
   'error.errorId': 'Hibaazonosító',
+
+  // ── Lábléc ──
+  'app.allRightsReserved': 'Minden jog fenntartva.',
+  'app.version': 'Verzió: {version}',
   'error.loadTitle': 'Nem sikerült betölteni',
   'error.loadHint': 'Az adatok lekérése nem sikerült. Ellenőrizd a kapcsolatot, majd próbáld újra.',
   'error.retry': 'Újra',
