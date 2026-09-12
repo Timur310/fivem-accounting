@@ -10,6 +10,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
 import { buildWhere } from '../lib/query.js';
 import { parsePagination } from '../lib/types.js';
+import { notify } from '../lib/notify.js';
 
 /**
  * Bug reports and feature requests, from anyone with an account to whoever
@@ -224,6 +225,17 @@ router.patch('/:ticketId', async (req: Request, res: Response) => {
     })
     .where(eq(supportTickets.id, ticketId))
     .returning();
+
+  // Answering a ticket is worth nothing if the person who sent it never finds
+  // out. A cancellation raises nothing — the reporter did that themselves.
+  if (superadmin && status !== 'cancelled') {
+    await notify({
+      userId: existing.userId,
+      type: status === 'resolved' ? 'support_resolved' : 'support_declined',
+      linkView: 'support',
+      data: { subject: existing.subject },
+    });
+  }
 
   success(res, row);
 });

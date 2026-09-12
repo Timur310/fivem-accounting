@@ -33,6 +33,7 @@ import type {
   SupportTicketKind,
   SupportTicketStatus,
   CreateSupportTicketInput,
+  AppNotification,
   Payout,
   CreatePayoutInput,
   UpdatePayoutInput,
@@ -715,6 +716,29 @@ export const supportApi = {
 
   remove: (ticketId: string) =>
     api.delete<ApiSuccessResponse<{ id: string }>>(`/support/${ticketId}`).then(unwrap),
+};
+
+// ── Notifications ──
+// Scoped to the caller by the server; there is no faction or id to pass.
+
+export const notificationsApi = {
+  list: (params?: { unread?: boolean; limit?: number }) =>
+    api
+      .get<ApiSuccessResponse<AppNotification[]>>('/notifications', {
+        params: { ...(params?.unread ? { unread: 'true' } : {}), ...(params?.limit ? { limit: params.limit } : {}) },
+      })
+      .then(unwrap),
+
+  unreadCount: () =>
+    api.get<ApiSuccessResponse<{ unread: number }>>('/notifications/unread-count').then(unwrap),
+
+  markRead: (id: string) =>
+    api.post<ApiSuccessResponse<{ id: string }>>(`/notifications/${id}/read`).then(unwrap),
+
+  markAllRead: () =>
+    api.post<ApiSuccessResponse<{ readAt: string }>>('/notifications/read-all').then(unwrap),
+
+  clear: () => api.delete<ApiSuccessResponse<{ cleared: boolean }>>('/notifications').then(unwrap),
 };
 
 export { api };

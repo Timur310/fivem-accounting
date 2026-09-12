@@ -1140,3 +1140,31 @@ export interface CreateSupportTicketInput {
   message: string;
   factionId?: string;
 }
+
+// ── Notifications ──
+
+export const NOTIFICATION_TYPES = [
+  'payout_approved',
+  'payout_rejected',
+  'payout_completed',
+  'strike_issued',
+  'support_resolved',
+  'support_declined',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+/**
+ * Text is never stored server-side — only a type and a data bag — so the bell
+ * renders through the same i18n layer as everything else and follows a
+ * language switch like the rest of the interface.
+ */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  data: Record<string, string | number | null> | null;
+  linkView: string | null;
+  readAt: string | null;
+  createdAt: string;
+  factionId: string | null;
+  factionName: string | null;
+}

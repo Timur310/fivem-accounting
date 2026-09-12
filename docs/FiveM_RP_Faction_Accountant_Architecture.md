@@ -524,6 +524,7 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | View audit logs | Yes | Yes | `view_audit_logs` | No |
 | View reports | Yes | Yes | `view_reports` | No |
 | Send a bug report or feature request | Yes | Yes | Yes | Yes |
+| Read your own notifications | own only | own only | own only | own only |
 | Read everybody's support tickets | Yes | No | — | No |
 | Read the treasury and dashboard | Yes | Yes | Yes | Yes |
 
@@ -796,6 +797,60 @@ depends on it, and there is nothing for a tombstone to preserve.
 `GET /support/open-count` feeds the badge on the maintainer's sidebar item, and
 the inbox sorts `open` above everything else regardless of date — it should open
 on the work, not on the history of it.
+
+### 8.10 Notifications
+
+Until this existed, every piece of state in the app was *pull*: a member found
+out their withdrawal had been approved by opening the app and going to look.
+The bell is the push half — the things the app already knew, reaching the
+person they concern.
+
+**Only a `type` and a `data` bag are stored, never rendered text.** The
+interface is bilingual and a member can switch language at any time, so a
+sentence written in English at the moment the event fired would be stuck that
+way forever. The client renders `notification.<type>` through the same i18n
+layer as everything else and interpolates `data`; amounts are formatted on the
+client too, so they follow the same rules as every other figure. A missing
+translation falls back to the raw type rather than an empty row, which makes
+the omission visible.
+
+What raises one:
+
+| Type | Who is told |
+|---|---|
+| `payout_approved` / `payout_rejected` / `payout_completed` | the recipient |
+| `strike_issued` | the member struck |
+| `support_resolved` / `support_declined` | the reporter (§8.9) |
+
+**Nobody is told about their own action.** Someone who settles a withdrawal
+raised for themselves is not notified; a reporter who cancels their own ticket
+is not notified. Telling people what they just did is the single most reliable
+way to make a bell something they switch off.
+
+**A notification never breaks what caused it.** `notify()` swallows and logs
+its own failures, and is called *after* the transaction that did the real work
+rather than inside it. The payout genuinely was approved and the strike
+genuinely was issued; trading that outcome for a courtesy would be the wrong
+way round.
+
+**The bell is private, superadmin included.** Every route is scoped to
+`req.user` and there is no permission that opens somebody else's. This is the
+one place in the app where reading another account's rows would be reading
+their mail rather than auditing a faction. Ownership is enforced in the `WHERE`
+clause rather than a separate lookup, so another user's row answers 404 exactly
+as a non-existent one does.
+
+`linkView` is stored on the row rather than mapped from `type` on the client,
+so where a notification points can be changed without a frontend release.
+Clicking one switches the reader into the faction it came from first — they may
+be looking at a different one.
+
+The badge polls a dedicated count endpoint once a minute; the list itself is
+only fetched while the panel is open.
+
+**Not built:** anything needing a scheduler. Quota deadline warnings and the
+weekly recap both want a cron the app does not have, and Discord webhooks were
+dropped deliberately — see §12.
 
 ---
 

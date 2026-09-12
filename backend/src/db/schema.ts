@@ -410,6 +410,57 @@ export type Quota = typeof quotas.$inferSelect;
 export type NewQuota = typeof quotas.$inferInsert;
 
 // ── audit_logs ─────────────────────────────────────────
+// ── notifications ──────────────────────────────────────
+// Everything the app knows that somebody should be told.
+//
+// Only a `type` and a `data` bag are stored, never rendered text. The
+// interface is bilingual and a member can switch language at any time, so a
+// notification written in English at the moment it fired would be stuck that
+// way forever. The client renders `type` through the same i18n layer as the
+// rest of the app and interpolates `data`.
+//
+// `factionId` is where it happened, and is what the bell uses to switch the
+// user into the right faction when they click through. Nullable because not
+// every notification belongs to one — a support reply does not.
+export const notifications = pgTable('notifications', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  factionId: uuid('faction_id').references(() => factions.id, { onDelete: 'cascade' }),
+  type:      varchar('type', { length: 40 }).notNull(),
+  data:      jsonb('data').$type<Record<string, string | number | null>>(),
+  // Where clicking it should take you, as an app view name. The row carries it
+  // rather than the client mapping type -> view, so a type can be re-pointed
+  // without a frontend release.
+  linkView:  varchar('link_view', { length: 40 }),
+  readAt:    timestamp('read_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user:    one(users,    { fields: [notifications.userId],    references: [users.id] }),
+  faction: one(factions, { fields: [notifications.factionId], references: [factions.id] }),
+}));
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+
+/**
+ * Every kind of notification the server can raise.
+ *
+ * Each one needs a matching `notification.<type>` translation key in both
+ * locales; the client falls back to the raw type if one is missing, which
+ * makes the omission visible rather than silent.
+ */
+export const NOTIFICATION_TYPES = [
+  'payout_approved',
+  'payout_rejected',
+  'payout_completed',
+  'strike_issued',
+  'support_resolved',
+  'support_declined',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
 // ── support_tickets ────────────────────────────────────
 // Bug reports and feature requests, sent by anyone with an account to the
 // superadmin who maintains the app. Deliberately not faction-scoped

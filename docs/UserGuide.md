@@ -107,6 +107,26 @@ screen next to your other apps — the fastest way in mid-heist.
 
 ---
 
+### The bell — what the app tells you
+
+The **bell** in the top bar is how the app reaches you instead of waiting to be
+found. A number on it means unread.
+
+You get one when:
+
+- a withdrawal of yours is **approved**, **rejected** or **paid out**
+- you are given a **strike**
+- a bug report or idea you sent is **resolved** or **declined**
+
+Clicking one takes you to where it happened — and switches you into the right
+faction first, if you were looking at a different one. **Mark all read** clears
+the number; **Clear** empties the list.
+
+You are never notified about something you did yourself, and nobody else can
+see your bell — not other members, not your faction admin, not the developer.
+
+---
+
 ## 4. Roles and permissions
 
 There are two layers: your **global role**, and your **rank inside the

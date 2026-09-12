@@ -139,6 +139,22 @@ export const en = {
   'nav.reports': 'Reports',
   'nav.guide': 'User Guide',
   'nav.support': 'Support',
+
+  // -- Notifications --
+  'notification.title': 'Notifications',
+  'notification.none': 'Nothing here yet.',
+  'notification.markAllRead': 'Mark all read',
+  'notification.clear': 'Clear',
+  'notification.unreadCount': { one: '{count} unread notification', other: '{count} unread notifications' } as PluralForms,
+  // One sentence per type. These are rendered from the stored type and data,
+  // never stored as text, so they follow a language switch like everything
+  // else.
+  'notification.payout_approved': 'Your withdrawal of {amount} was approved.',
+  'notification.payout_rejected': 'Your withdrawal of {amount} was rejected.',
+  'notification.payout_completed': 'Your withdrawal of {amount} was paid out.',
+  'notification.strike_issued': 'You were given a {severity} strike.',
+  'notification.support_resolved': 'Your report "{subject}" was resolved.',
+  'notification.support_declined': 'Your report "{subject}" was declined.',
   'nav.supportInbox': 'Support Inbox',
 
   // -- Support tickets --

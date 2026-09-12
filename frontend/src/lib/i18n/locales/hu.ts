@@ -127,6 +127,19 @@ export const hu: Translations = {
   'nav.reports': 'Jelentések',
   'nav.guide': 'Útmutató',
   'nav.support': 'Támogatás',
+
+  // -- Értesítések --
+  'notification.title': 'Értesítések',
+  'notification.none': 'Még nincs itt semmi.',
+  'notification.markAllRead': 'Összes olvasottnak',
+  'notification.clear': 'Törlés',
+  'notification.unreadCount': { one: '{count} olvasatlan értesítés', other: '{count} olvasatlan értesítés' },
+  'notification.payout_approved': 'A(z) {amount} összegű kifizetési kérésedet jóváhagyták.',
+  'notification.payout_rejected': 'A(z) {amount} összegű kifizetési kérésedet elutasították.',
+  'notification.payout_completed': 'A(z) {amount} összegű kifizetésedet teljesítették.',
+  'notification.strike_issued': '{severity} fokozatú figyelmeztetést kaptál.',
+  'notification.support_resolved': 'A(z) „{subject}” bejelentésedet megoldották.',
+  'notification.support_declined': 'A(z) „{subject}” bejelentésedet elutasították.',
   'nav.supportInbox': 'Beérkezett bejelentések',
 
   // -- Hibajelentések és ötletek --
