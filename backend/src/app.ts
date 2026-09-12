@@ -32,6 +32,7 @@ import factionStrikeRoutes from './routes/factionStrikes.js';
 import factionSettingsRoutes from './routes/factionSettings.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import globalLeaderboardRoutes from './routes/globalLeaderboard.js';
+import supportRoutes from './routes/support.js';
 import expenseRoutes from './routes/expenses.js';
 import configIoRoutes from './routes/configIo.js';
 
@@ -136,6 +137,9 @@ app.use('/api/v1/admin/provisional-users', provisionalUserRoutes);
 app.use('/api/v1/admin/users', adminUserRoutes);
 // Cross-faction ranking (superadmin) — not scoped to a faction.
 app.use('/api/v1/leaderboard', globalLeaderboardRoutes);
+// Bug reports and feature requests. Not faction-scoped: anyone signed in may
+// send one, and only the superadmin reads the rest.
+app.use('/api/v1/support', supportRoutes);
 
 // Faction-scoped routes (nested under /factions/:id/...)
 // Member sub-resources are mounted before /members so the more specific paths

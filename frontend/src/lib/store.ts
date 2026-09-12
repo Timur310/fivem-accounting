@@ -19,6 +19,8 @@ export type AppView =
   | 'admin-factions'
   | 'admin-faction-detail'
   | 'reports'
+  | 'support'
+  | 'admin-support'
   | 'guide';
 
 export const DEFAULT_BRAND_COLOR = '#3b82f6';

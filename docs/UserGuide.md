@@ -307,6 +307,45 @@ The treasury is read-only for members: transparency, not control.
 
 ---
 
+### 5.8 Support — reporting a bug or asking for a feature
+
+*Support* is in the sidebar for **everyone**, whatever your rank. You do not
+need a permission to tell the developer something is broken — the people who
+hit the most bugs usually hold the fewest rights.
+
+Pick one of two:
+
+- **Report a bug** — something is broken or behaves wrongly.
+- **Request a feature** — something is missing that would help.
+
+Then a short subject and the details. For a bug, the single most useful thing
+you can write is **the steps that led to it**: what you did, what you expected,
+and what happened instead. For a feature, say what problem it would solve, not
+just what it should look like.
+
+**You can follow what happens to it.** Everything you have sent is listed under
+the form with its status:
+
+| Status | Means |
+|---|---|
+| **Open** | Sent, not answered yet. |
+| **Resolved** | The developer dealt with it. |
+| **Declined** | The developer is not going to do it — usually with a reason. |
+| **Withdrawn** | You took it back. |
+
+If the developer writes a reply when closing your ticket, it appears on the
+ticket itself.
+
+**Withdraw** takes back a ticket you have not had an answer to yet — a typo, or
+you worked out it was not a bug after all. Once it has been answered the button
+is gone, because withdrawing it then would erase the answer. You can always send
+a new one.
+
+The faction you were looking at when you sent it is attached automatically, so
+you do not have to explain where you were.
+
+---
+
 ## 6. For leaders — running the faction
 
 These sections appear only if your role or rank grants them. The permission
@@ -613,6 +652,29 @@ rules keep the ledger honest:
 - Superadmin with no factions? You're exactly the person who creates the
   first one — the app gives you the management screens instead of an empty
   dashboard.
+
+---
+
+### 9.5 Support inbox
+
+Every ticket from every faction lands in **Support Inbox**, and the sidebar item
+carries a badge with the number still open. The list opens on the open ones
+regardless of date — it is a work queue, not an archive. Filter by status and by
+type across the top.
+
+Each ticket shows who sent it, which faction they were in, and the full message
+— no clicking through to read it.
+
+- **Resolve** — you dealt with it.
+- **Decline** — you are not going to do it. Both open a box for an optional
+  reply, which the reporter sees on their own ticket. A decline with no reason
+  is the one worth writing a line for.
+- **Delete** — removes the ticket permanently, for you *and* for the person who
+  sent it. Unlike the rest of the app this is a real delete, not a soft one: a
+  ticket is correspondence, not ledger history. It cannot be undone.
+
+A ticket the reporter withdrew shows as **Withdrawn** and needs nothing from
+you.
 
 ---
 

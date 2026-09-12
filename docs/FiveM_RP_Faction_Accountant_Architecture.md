@@ -455,6 +455,8 @@ Prefix: `/factions/:id`.
 | `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
 | `/dashboard`, `/charts`, `/reports`, `/leaderboard`, `/audit-logs`, `/export`, `/bulk` | reading and reporting |
 
+`/api/v1/support` sits outside the faction tree entirely — see §8.9.
+
 ### 6.4 Response Format
 
 Unchanged from the original design: `{ data, meta? }` on success,
@@ -521,6 +523,8 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
 | View audit logs | Yes | Yes | `view_audit_logs` | No |
 | View reports | Yes | Yes | `view_reports` | No |
+| Send a bug report or feature request | Yes | Yes | Yes | Yes |
+| Read everybody's support tickets | Yes | No | — | No |
 | Read the treasury and dashboard | Yes | Yes | Yes | Yes |
 
 ¹ A superadmin who is not on the roster cannot credit an entry to themselves —
@@ -743,6 +747,56 @@ Rules the importers share:
 - **Every import writes one audit log row** carrying the outcome counts — and
   for ranks, before/after rank lists and the removed names.
 
+### 8.9 Support Tickets
+
+Bug reports and feature requests, from anyone with an account to whoever
+maintains the app. `support_tickets` is the one table with no faction authority
+in front of it, and that is the design rather than an oversight: reporting that
+a screen is broken is not a faction action, and putting a rank in front of it
+would silence exactly the people most likely to hit a bug — ordinary members
+holding the fewest permissions. Being signed in is the whole requirement.
+
+Reading anybody else's tickets is the mirror image. It crosses every faction
+boundary the rest of the app enforces at once, so `GET /support` is superadmin
+and nothing else. `GET /support/mine` is the reporter's own, and always open.
+
+A ticket carries a `kind` — `bug` or `feature` — a subject, a message, and the
+`factionId` the reporter happened to be looking at. That last one is context for
+whoever reads it and never authorisation: an unknown id is stored as `null`
+rather than refused, because losing a breadcrumb must never cost somebody their
+bug report. It is also `ON DELETE SET NULL`, so the report outlives the faction
+that happened to hit the bug.
+
+**Four statuses, and the two closed ones are not interchangeable.**
+
+```
+open ──→ resolved     (maintainer: done)
+     ──→ declined     (maintainer: no)
+     ──→ cancelled    (reporter: withdrawn)
+```
+
+`declined` exists so that `resolved` keeps meaning what it says. Without it
+every ticket you were never going to act on has to be marked resolved, and
+within a month the status tells you nothing. `cancelled` is the reporter walking
+away, which is not a failure and wears neutral grey rather than red.
+
+Closing a ticket takes an optional **resolution note**, written by the
+maintainer and shown to the reporter on their own page. A declined ticket with
+no reason is worse than no answer at all, so the decline dialog says as much.
+A cancellation carries no note — there is nobody to answer.
+
+The reporter may cancel their own ticket, and only while it is still `open`:
+once it has been answered, withdrawing it would erase the answer. Everything
+else — resolve, decline, delete — is the maintainer's.
+
+Deletion is a real delete, not the soft-delete every ledger table uses. A ticket
+is correspondence rather than history: nothing derives from it, no balance
+depends on it, and there is nothing for a tombstone to preserve.
+
+`GET /support/open-count` feeds the badge on the maintainer's sidebar item, and
+the inbox sorts `open` above everything else regardless of date — it should open
+on the work, not on the history of it.
+
 ---
 
 ## 9. Frontend Architecture
@@ -793,6 +847,12 @@ the page never diverge).
 `views/` holds one component per screen: dashboard, entries, payouts, treasury,
 laundering, members, member-profile, strikes, leaderboard, reports, settings,
 audit-logs, admin-factions, admin-faction-detail, users-panel.
+
+`support` and `admin-support` are the two halves of §8.9: the form plus your
+own tickets, and the maintainer's inbox. Neither is faction-scoped, so both
+are on the short list of views that render with no faction selected —
+without that a superadmin belonging to no faction could never reach their
+own inbox.
 
 `users-panel` is the superadmin roster: everyone who has signed in plus the
 registrations still waiting, in one list with the registrations pinned to the top
