@@ -2,7 +2,7 @@
 
 import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
 import { APP_COPYRIGHT, APP_VERSION, APP_VERSION_LABEL } from '@/lib/app-meta';
-import { authApi, factionSettingsApi } from '@/lib/api-client';
+import { authApi, factionSettingsApi, supportApi } from '@/lib/api-client';
 import type { FactionPermission } from '@/lib/api-types';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/searchable-select';
 import {
   LayoutDashboard,
+  LifeBuoy,
+  Inbox,
   List,
   Users,
   Settings,
@@ -55,6 +57,8 @@ import { MemberProfileView } from '@/views/member-profile-view';
 import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
+import { SupportView } from '@/views/support-view';
+import { AdminSupportView } from '@/views/admin-support-view';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
@@ -88,6 +92,8 @@ interface NavItem {
   /** Hide unless the user actually belongs to the selected faction. */
   membersOnly?: boolean;
   superadminOnly?: boolean;
+  /** Unread-style count rendered on the right of the item, when above zero. */
+  badgeCount?: number;
 }
 
 export function AppShell() {
@@ -220,6 +226,16 @@ export function AppShell() {
     ];
   }, [activeFactions, browseableOnly, t]);
 
+  // How many tickets are still waiting, for the inbox badge. Superadmin-only
+  // endpoint, so it is not even asked for by anyone else.
+  const { data: openTickets } = useQuery({
+    queryKey: ['support-open-count'],
+    queryFn: () => supportApi.openCount(),
+    enabled: !!isSuperadmin,
+    staleTime: 60 * 1000,
+  });
+  const openTicketCount = openTickets?.open ?? 0;
+
   const navItems: NavItem[] = [
     { group: 'play', view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
     { group: 'play', view: 'entries', label: 'nav.entries', icon: List },
@@ -256,7 +272,18 @@ export function AppShell() {
     { group: 'manage', view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'] },
     { group: 'admin', view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
     // The guide is for everyone, in every faction — the last item, never hidden.
+    // Support sits with the player screens and carries no permission: the
+    // people most likely to hit a bug are the ones with the fewest rights.
+    { group: 'play', view: 'support', label: 'nav.support', icon: LifeBuoy },
     { group: 'play', view: 'guide', label: 'nav.guide', icon: BookOpen },
+    {
+      group: 'admin',
+      view: 'admin-support',
+      label: 'nav.supportInbox',
+      icon: Inbox,
+      superadminOnly: true,
+      badgeCount: openTicketCount,
+    },
   ];
 
   const isNavItemVisible = (item: NavItem) => {
@@ -316,13 +343,23 @@ export function AppShell() {
     }
   };
 
+  /**
+   * Screens that do not belong to a faction and must stay reachable when none
+   * is selected. Support is on this list for a concrete reason: a superadmin
+   * with no membership anywhere would otherwise be bounced to the faction list
+   * every time they tried to open their own ticket inbox.
+   */
+  const FACTIONLESS_VIEWS: AppView[] = [
+    'admin-factions', 'admin-faction-detail', 'support', 'admin-support', 'guide',
+  ];
+
   const handleNavClick = (view: AppView) => {
     if (view === 'member-profile') return;
     // Closing after navigation is a mobile affordance: there the sidebar covers
     // the page. Beside the content it is not in the way, and collapsing it on
     // every click threw away whatever the user had chosen.
     if (!isDesktop()) setSidebarOpen(false);
-    if (!selectedFactionId && view !== 'admin-factions' && view !== 'admin-faction-detail') {
+    if (!selectedFactionId && !FACTIONLESS_VIEWS.includes(view)) {
       if (isSuperadmin) {
         setCurrentView('admin-factions');
         return;
@@ -332,7 +369,7 @@ export function AppShell() {
   };
 
   const renderView = () => {
-    if (!selectedFactionId && currentView !== 'admin-factions' && currentView !== 'admin-faction-detail') {
+    if (!selectedFactionId && !FACTIONLESS_VIEWS.includes(currentView)) {
       if (isSuperadmin) {
         queueMicrotask(() => setCurrentView('admin-factions'));
         return null;
@@ -350,6 +387,12 @@ export function AppShell() {
     switch (currentView) {
       case 'guide':
         return <GuideView />;
+      // Neither of these is faction-scoped, so both sit above the
+      // selected-faction guard alongside the guide.
+      case 'support':
+        return <SupportView />;
+      case 'admin-support':
+        return <AdminSupportView />;
       case 'dashboard':
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} /> : null;
       case 'entries':
@@ -523,6 +566,15 @@ export function AppShell() {
                     >
                       <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
                       {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
+                      {!!item.badgeCount && (
+                        <span
+                          className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-[10px] tabular-nums ${
+                            sidebarOpen ? 'px-1.5 py-0.5' : 'absolute translate-x-3 -translate-y-2 px-1'
+                          }`}
+                        >
+                          {item.badgeCount}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

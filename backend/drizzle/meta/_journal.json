@@ -78,6 +78,13 @@
       "when": 1788377433949,
       "tag": "0010_early_secret_warriors",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789244861688,
+      "tag": "0011_abnormal_zuras",
+      "breakpoints": true
     }
   ]
 }

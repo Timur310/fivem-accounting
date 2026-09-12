@@ -28,6 +28,11 @@ import type {
   BulkAddResult,
   BulkDeleteResult,
   CsvImportResult,
+  SupportTicket,
+  SupportTicketAdminRow,
+  SupportTicketKind,
+  SupportTicketStatus,
+  CreateSupportTicketInput,
   Payout,
   CreatePayoutInput,
   UpdatePayoutInput,
@@ -678,6 +683,38 @@ export const bulkApi = {
     api
       .post<ApiSuccessResponse<CsvImportResult>>(`/factions/${factionId}/bulk/entries/import`, { csv })
       .then(unwrap),
+};
+
+// ── Support tickets ──
+//
+// Not faction-scoped: sending one needs an account and nothing else, and only
+// the superadmin can read anybody else's.
+
+export const supportApi = {
+  create: (input: CreateSupportTicketInput) =>
+    api.post<ApiSuccessResponse<SupportTicket>>('/support', input).then(unwrap),
+
+  listMine: () =>
+    api.get<ApiSuccessResponse<SupportTicket[]>>('/support/mine').then(unwrap),
+
+  list: (params?: {
+    status?: SupportTicketStatus;
+    kind?: SupportTicketKind;
+    page?: number;
+    page_size?: number;
+  }) =>
+    api
+      .get<ApiSuccessResponse<SupportTicketAdminRow[]>>('/support', { params })
+      .then((r) => ({ data: r.data.data, meta: r.data.meta })),
+
+  openCount: () =>
+    api.get<ApiSuccessResponse<{ open: number }>>('/support/open-count').then(unwrap),
+
+  update: (ticketId: string, input: { status: 'resolved' | 'declined' | 'cancelled'; resolutionNote?: string }) =>
+    api.patch<ApiSuccessResponse<SupportTicket>>(`/support/${ticketId}`, input).then(unwrap),
+
+  remove: (ticketId: string) =>
+    api.delete<ApiSuccessResponse<{ id: string }>>(`/support/${ticketId}`).then(unwrap),
 };
 
 export { api };

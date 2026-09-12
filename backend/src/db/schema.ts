@@ -410,6 +410,53 @@ export type Quota = typeof quotas.$inferSelect;
 export type NewQuota = typeof quotas.$inferInsert;
 
 // ── audit_logs ─────────────────────────────────────────
+// ── support_tickets ────────────────────────────────────
+// Bug reports and feature requests, sent by anyone with an account to the
+// superadmin who maintains the app. Deliberately not faction-scoped
+// authority: reporting a broken screen is not a faction action, so no rank or
+// permission gates it — the only thing you need is to be signed in.
+//
+// `factionId` records which faction the reporter was looking at when they sent
+// it, purely as context for whoever reads it. It is nullable and survives the
+// faction being deleted: the bug outlives the faction that happened to hit it.
+export const supportTickets = pgTable('support_tickets', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  userId:     uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  factionId:  uuid('faction_id').references(() => factions.id, { onDelete: 'set null' }),
+  kind:       varchar('kind', { length: 20 }).notNull(),
+  subject:    varchar('subject', { length: 120 }).notNull(),
+  message:    text('message').notNull(),
+  status:     varchar('status', { length: 20 }).notNull().default('open'),
+  // Written when the ticket is closed, and shown to the reporter: a declined
+  // ticket with no reason is worse than no answer at all.
+  resolutionNote: text('resolution_note'),
+  resolvedBy: uuid('resolved_by').references(() => users.id),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const supportTicketsRelations = relations(supportTickets, ({ one }) => ({
+  user:     one(users,    { fields: [supportTickets.userId],     references: [users.id] }),
+  faction:  one(factions, { fields: [supportTickets.factionId],  references: [factions.id] }),
+  resolver: one(users,    { fields: [supportTickets.resolvedBy], references: [users.id] }),
+}));
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type NewSupportTicket = typeof supportTickets.$inferInsert;
+
+export const SUPPORT_TICKET_KINDS = ['bug', 'feature'] as const;
+export type SupportTicketKind = (typeof SUPPORT_TICKET_KINDS)[number];
+
+/**
+ * `cancelled` is the reporter withdrawing their own ticket; `declined` is the
+ * maintainer saying no. They are kept apart on purpose — collapsing them would
+ * make "resolved" the only honest-looking outcome and drain the status of
+ * meaning over time.
+ */
+export const SUPPORT_TICKET_STATUSES = ['open', 'resolved', 'declined', 'cancelled'] as const;
+export type SupportTicketStatus = (typeof SUPPORT_TICKET_STATUSES)[number];
+
 export const auditLogs = pgTable('audit_logs', {
   id:         bigserial('id', { mode: 'number' }).primaryKey(),
   userId:     uuid('user_id').notNull().references(() => users.id),

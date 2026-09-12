@@ -1097,3 +1097,46 @@ export interface GrowthData {
   } | null;
   partial: boolean;
 }
+
+// ── Support tickets ──
+
+export const SUPPORT_TICKET_KINDS = ['bug', 'feature'] as const;
+export type SupportTicketKind = (typeof SUPPORT_TICKET_KINDS)[number];
+
+/**
+ * `cancelled` is the reporter withdrawing; `declined` is the maintainer saying
+ * no. Kept apart so "resolved" keeps meaning what it says.
+ */
+export const SUPPORT_TICKET_STATUSES = ['open', 'resolved', 'declined', 'cancelled'] as const;
+export type SupportTicketStatus = (typeof SUPPORT_TICKET_STATUSES)[number];
+
+/** A ticket as its own reporter sees it. */
+export interface SupportTicket {
+  id: string;
+  kind: SupportTicketKind;
+  subject: string;
+  message: string;
+  status: SupportTicketStatus;
+  resolutionNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  factionId: string | null;
+}
+
+/** The same ticket in the maintainer's inbox, with who sent it and from where. */
+export interface SupportTicketAdminRow extends SupportTicket {
+  userId: string;
+  reporterUsername: string;
+  reporterInGameName: string | null;
+  reporterAvatarUrl: string | null;
+  factionName: string | null;
+  resolvedBy: string | null;
+}
+
+export interface CreateSupportTicketInput {
+  kind: SupportTicketKind;
+  subject: string;
+  message: string;
+  factionId?: string;
+}
