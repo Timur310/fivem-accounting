@@ -103,6 +103,10 @@ export const en = {
   'error.fatalTitle': 'Application error',
   'error.fatalBody': 'A critical error occurred and the application cannot continue. Please reload the page.',
   'error.errorId': 'Error ID',
+
+  // ── Footer ──
+  'app.allRightsReserved': 'All rights reserved.',
+  'app.version': 'Version {version}',
   // Shown in place of a list when its request fails. Distinct from the empty
   // state on purpose: "nothing here yet" and "we could not load it" are
   // different facts, and reading one as the other is how a member concludes

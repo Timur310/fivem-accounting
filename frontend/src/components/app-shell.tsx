@@ -1,6 +1,7 @@
 'use client';
 
 import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
+import { APP_COPYRIGHT, APP_VERSION, APP_VERSION_LABEL } from '@/lib/app-meta';
 import { authApi, factionSettingsApi } from '@/lib/api-client';
 import type { FactionPermission } from '@/lib/api-types';
 import { useRouter } from 'next/navigation';
@@ -529,6 +530,26 @@ export function AppShell() {
             );
           })}
         </nav>
+
+        {/* Build and attribution. Collapsed to the version alone in the icon
+            rail, where there is no room for a name — and dropped entirely on
+            mobile, where the sidebar is an overlay over the page. */}
+        <div className="border-t border-white/[0.06] px-3 py-2 hidden lg:block">
+          {sidebarOpen ? (
+            <div className="space-y-0.5 text-[10px] leading-relaxed text-zinc-600">
+              <p className="tabular-nums">{t('app.version', { version: APP_VERSION })}</p>
+              <p>{APP_COPYRIGHT}</p>
+              <p>{t('app.allRightsReserved')}</p>
+            </div>
+          ) : (
+            <p
+              className="text-center text-[10px] tabular-nums text-zinc-600"
+              title={`${APP_VERSION_LABEL} · ${APP_COPYRIGHT} ${t('app.allRightsReserved')}`}
+            >
+              {APP_VERSION_LABEL}
+            </p>
+          )}
+        </div>
 
         {/* Collapse button */}
         <div className="border-t border-white/[0.06] p-1.5 hidden lg:block">

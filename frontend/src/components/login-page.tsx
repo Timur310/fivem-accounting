@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useTranslation } from '@/providers/i18n-provider';
 import { Shield } from 'lucide-react';
+import { APP_COPYRIGHT, APP_VERSION_LABEL } from '@/lib/app-meta';
 
 /**
  * The sign-in screen.
@@ -60,6 +61,14 @@ export function LoginPage() {
 
         <p className="text-center text-[11px] text-zinc-600 mt-3">{t('auth.redirectNotice')}</p>
       </div>
+
+      {/* The one place the attribution is visible without signing in. */}
+      <footer className="absolute bottom-4 inset-x-0 text-center text-[10px] text-zinc-700 space-x-1.5">
+        <span className="tabular-nums">{APP_VERSION_LABEL}</span>
+        <span aria-hidden="true">·</span>
+        <span>{APP_COPYRIGHT}</span>
+        <span>{t('app.allRightsReserved')}</span>
+      </footer>
     </div>
   );
 }
