@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { List, TrendingUp, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock, ChevronDown } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { useCountUp } from '@/hooks/use-count-up';
+import { useMilestones } from '@/hooks/use-milestones';
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
@@ -215,6 +216,24 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
   // so it lives above the isLoading/error early returns below. `data` may
   // not exist yet at this point, hence the optional chaining/fallback.
   const heroBalance = data?.netBalance ?? data?.grandTotal ?? 0;
+
+  // A nod when somebody passes a personal milestone. Reads what is already
+  // fetched for the stats strip, so it costs no request; the hook decides what
+  // is new and refuses to celebrate history on a first run.
+  // Memoised so the hook's effect is not re-entered on every render with a
+  // fresh object that happens to hold identical numbers.
+  const milestoneInput = useMemo(
+    () =>
+      myProfile
+        ? {
+            entryCount: myProfile.contribution.entryCount,
+            currencyContributed: myProfile.contribution.currencyContributed,
+            streakCurrent: myProfile.streak.current,
+          }
+        : null,
+    [myProfile],
+  );
+  useMilestones(factionId, user?.id ?? null, milestoneInput);
 
   // Travels from wherever it was to wherever it now is — see use-count-up.
   const displayBalance = useCountUp(heroBalance);

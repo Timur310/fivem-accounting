@@ -1099,6 +1099,18 @@ export const en = {
   'settings.noRanksYetHint': 'Ranks are what let you delegate without handing over the faction.',
   'admin.noFactionsYetHint': 'Create one and appoint its first admin.',
   'users.noneHint': 'Everyone who has signed in, or been registered by Discord ID, shows up in this list.',
+
+  // ── Milestones ──
+  // Personal, and celebrated once. Tone stays level: this is a nod, not a
+  // fanfare, on a screen people open several times a session.
+  'milestone.firstEntryTitle': 'First entry logged',
+  'milestone.firstEntryBody': 'You are on the board. Everything you bring in from here is counted.',
+  'milestone.entriesTitle': '{value} entries logged',
+  'milestone.entriesBody': 'That is {value} separate times you have brought something in.',
+  'milestone.moneyTitle': '{value} contributed',
+  'milestone.moneyBody': 'Your name is on that much of what the vault has seen.',
+  'milestone.streakTitle': '{value}-day streak',
+  'milestone.streakBody': 'You have logged something every day for {value} days running.',
 };
 
 /** Every key the interface may ask for. */

@@ -1080,4 +1080,14 @@ export const hu: Translations = {
   'settings.noRanksYetHint': 'A rangokkal úgy tudsz feladatot átadni, hogy nem adod át az egész frakciót.',
   'admin.noFactionsYetHint': 'Hozz létre egyet, és jelöld ki az első adminját.',
   'users.noneHint': 'Mindenki, aki belépett, vagy akit Discord-azonosítóval regisztráltak, ebben a listában van.',
+
+  // ── Mérföldkők ──
+  'milestone.firstEntryTitle': 'Első bejegyzés rögzítve',
+  'milestone.firstEntryBody': 'Rajta vagy a tabellán. Mostantól minden számít, amit behozol.',
+  'milestone.entriesTitle': '{value} bejegyzés',
+  'milestone.entriesBody': 'Ennyiszer, {value} alkalommal hoztál be valamit.',
+  'milestone.moneyTitle': '{value} összesen',
+  'milestone.moneyBody': 'Ennyi az, ami a te nevedhez kötődik abból, amit a készlet látott.',
+  'milestone.streakTitle': '{value} napos sorozat',
+  'milestone.streakBody': 'Már {value} napja minden nap rögzítesz valamit.',
 };
