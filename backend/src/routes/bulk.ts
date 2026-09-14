@@ -7,6 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { craftHolding, craftHoldingMessage } from '../lib/crafting.js';
 import { todayDateString } from '../lib/date.js';
 
 const router = Router({ mergeParams: true });
@@ -129,6 +130,15 @@ router.post('/entries/bulk-delete', async (req: Request, res: Response) => {
   const validIds = existingEntries.map((e) => e.id);
   if (validIds.length === 0) {
     error(res, 'BAD_REQUEST', 'No valid entries found to delete');
+    return;
+  }
+
+  // The whole selection is refused rather than the craft rows quietly skipped.
+  // A bulk delete that silently does less than it was asked is worse than one
+  // that says why it did nothing.
+  const heldBy = await craftHolding({ entryIds: validIds });
+  if (heldBy) {
+    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
     return;
   }
 

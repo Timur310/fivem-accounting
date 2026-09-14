@@ -1,8 +1,10 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
 import {
   craftingRecipes,
   craftingRecipeItems,
+  craftMovements,
+  crafts,
   itemTypes,
   type CreditOutputTo,
 } from '../db/schema.js';
@@ -122,15 +124,24 @@ export async function loadRecipe(
 export function maxCraftable(recipe: LoadedRecipe, balances: Map<string, string>): number {
   if (recipe.inputs.length === 0) return 0;
 
-  let limit = Number.MAX_SAFE_INTEGER;
+  // Divided in hundredths like everything else that touches a treasury
+  // figure. This is only a display hint — the real guard runs in the craft
+  // transaction — but a card that says "can make 4" when the answer is 3 sends
+  // somebody to a button that then refuses them, which is the exact experience
+  // this feature exists to remove.
+  let limit: bigint | null = null;
   for (const line of recipe.inputs) {
-    const have = Number(balances.get(line.itemTypeId) ?? '0');
-    const need = Number(line.quantity);
+    const need = toCents(line.quantity);
     // A line costing nothing constrains nothing.
-    if (need <= 0) continue;
-    limit = Math.min(limit, Math.floor(have / need));
+    if (need <= 0n) continue;
+    const have = toCents(balances.get(line.itemTypeId) ?? '0');
+    const possible = have <= 0n ? 0n : have / need;
+    limit = limit === null || possible < limit ? possible : limit;
   }
-  return limit === Number.MAX_SAFE_INTEGER ? 0 : Math.max(0, limit);
+  if (limit === null) return 0;
+  // Clamped: the number is rendered and used as an input max, and a batch
+  // beyond this is refused by the route anyway.
+  return Number(limit > 1000n ? 1000n : limit);
 }
 
 /**
@@ -167,4 +178,52 @@ export function shortfalls(
     }
   }
   return out;
+}
+
+/**
+ * Is any of these rows part of a craft that has not been reverted?
+ *
+ * A craft's movements are ordinary entries and completed payouts — which is
+ * what lets every balance, report and export count them without knowing
+ * crafting exists, and is also what leaves them deletable one at a time.
+ *
+ * That has to be refused, because the halves are not independent. Deleting a
+ * craft's **input** payouts returns the materials while the product stays,
+ * which is free crafting and repeatable. Deleting its **output** entry — which
+ * a crafter can do inside the five-minute undo window when the recipe credits
+ * them — consumes the materials and destroys the product. Editing an amount
+ * does the same damage more quietly.
+ *
+ * Revert exists to undo a craft properly: both sides at once, guarded against
+ * overdrawing the vault, and leaving the craft in history saying so. Callers
+ * point people at it rather than explaining the invariant.
+ *
+ * Returns the recipe name of the first row that is spoken for, or null.
+ */
+export async function craftHolding(
+  rows: { entryIds?: string[]; payoutIds?: string[] },
+  handle: TransactionLike | typeof db = db,
+): Promise<string | null> {
+  const entryIds = rows.entryIds?.filter(Boolean) ?? [];
+  const payoutIds = rows.payoutIds?.filter(Boolean) ?? [];
+  if (entryIds.length === 0 && payoutIds.length === 0) return null;
+
+  const matches = [
+    ...(entryIds.length ? [inArray(craftMovements.entryId, entryIds)] : []),
+    ...(payoutIds.length ? [inArray(craftMovements.payoutId, payoutIds)] : []),
+  ];
+
+  const [held] = await handle
+    .select({ recipeName: crafts.recipeName })
+    .from(craftMovements)
+    .innerJoin(crafts, eq(craftMovements.craftId, crafts.id))
+    .where(and(isNull(crafts.revertedAt), matches.length === 1 ? matches[0] : or(...matches)))
+    .limit(1);
+
+  return held?.recipeName ?? null;
+}
+
+/** The refusal, worded the same way wherever it is raised. */
+export function craftHoldingMessage(recipeName: string): string {
+  return `This is part of the craft "${recipeName}". Revert that craft instead — it puts the materials back and takes the product out together.`;
 }

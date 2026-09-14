@@ -386,3 +386,94 @@ describe('reverting a craft', () => {
     expect(res.body.data.crafts[0].revertedAt).not.toBeNull();
   });
 });
+
+/**
+ * A craft's movements are ordinary entries and completed payouts, which is
+ * what lets the rest of the app count them without knowing crafting exists —
+ * and is also what left them deletable one at a time. Each of these is a way
+ * to get materials or product for free.
+ */
+describe('a craft cannot be picked apart', () => {
+  let recipeId: string;
+  let craftId: string;
+
+  beforeEach(async () => {
+    const created = await createRecipe();
+    recipeId = created.body.data.recipe.id;
+    await fundTreasury(steelId, '100');
+    await fundTreasury(powderId, '100');
+    const craft = await api().post(`${crafting()}/crafts`).set('Cookie', w.admin.cookie)
+      .send({ recipeId, quantity: 2 });
+    expect(craft.status).toBe(201);
+    craftId = craft.body.data.craft.id;
+  });
+
+  /** The payout rows a craft wrote for its materials. */
+  async function inputPayoutIds(): Promise<string[]> {
+    const res = await api().get(`${f()}/payouts?page_size=100`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    return res.body.data
+      .filter((p: { description: string | null }) => p.description?.includes('Pistol'))
+      .map((p: { id: string }) => p.id);
+  }
+
+  /** The entry row a craft wrote for its product. */
+  async function outputEntryId(): Promise<string> {
+    const res = await api().get(`${f()}/entries?page_size=100`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    const row = res.body.data.find((e: { itemTypeName: string }) => e.itemTypeName === 'Pistol');
+    expect(row).toBeDefined();
+    return row.id;
+  }
+
+  // Free crafting: the materials come back and the product stays.
+  it('refuses to delete the payout that took the materials', async () => {
+    const [payoutId] = await inputPayoutIds();
+    const res = await api().delete(`${f()}/payouts/${payoutId}`).set('Cookie', w.admin.cookie);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('Pistol');
+    expect(await balanceOf(steelId)).toBe(80);
+  });
+
+  // Materials consumed, product destroyed.
+  it('refuses to delete the entry that made the product', async () => {
+    const entryId = await outputEntryId();
+    const res = await api().delete(`${f()}/entries/${entryId}`).set('Cookie', w.admin.cookie);
+
+    expect(res.status).toBe(400);
+    expect(await balanceOf(pistolId)).toBe(2);
+  });
+
+  it('refuses to edit the amount of either side', async () => {
+    const entryId = await outputEntryId();
+    const entry = await api().patch(`${f()}/entries/${entryId}`).set('Cookie', w.admin.cookie)
+      .send({ amount: '99' });
+    expect(entry.status).toBe(400);
+
+    const [payoutId] = await inputPayoutIds();
+    const payout = await api().patch(`${f()}/payouts/${payoutId}`).set('Cookie', w.admin.cookie)
+      .send({ amount: '1' });
+    expect(payout.status).toBe(400);
+  });
+
+  it('refuses a bulk delete that includes a craft entry', async () => {
+    const entryId = await outputEntryId();
+    const res = await api().post(`${f()}/bulk/entries/bulk-delete`).set('Cookie', w.admin.cookie)
+      .send({ entryIds: [entryId] });
+
+    expect(res.status).toBe(400);
+    expect(await balanceOf(pistolId)).toBe(2);
+  });
+
+  // Once the craft is reverted its rows are already soft-deleted, so nothing
+  // is holding anything and the guard stops applying.
+  it('stops holding the rows once the craft is reverted', async () => {
+    const before = await outputEntryId();
+    await api().post(`${crafting()}/crafts/${craftId}/revert`).set('Cookie', w.admin.cookie);
+
+    const res = await api().delete(`${f()}/entries/${before}`).set('Cookie', w.admin.cookie);
+    // Already soft-deleted, so it is simply not found — not refused.
+    expect(res.status).toBe(404);
+  });
+});
