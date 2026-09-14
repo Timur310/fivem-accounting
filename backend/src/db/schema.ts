@@ -12,6 +12,7 @@ import {
   jsonb,
   inet,
   uniqueIndex,
+  index,
   primaryKey,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -717,3 +718,72 @@ export const discordChannelRoutesRelations = relations(discordChannelRoutes, ({ 
 
 export type DiscordChannelRoute = typeof discordChannelRoutes.$inferSelect;
 export type NewDiscordChannelRoute = typeof discordChannelRoutes.$inferInsert;
+
+// ── discord_reminders ──────────────────────────────────
+// Scheduled messages a faction sends to its own Discord channels: quota
+// deadlines, meeting times, "pay your rent". As many as they like.
+//
+// Unlike every other Discord message in the app, a reminder is not a reaction
+// to something that happened — it is the first thing in the codebase that
+// needed a **clock**, which is why Phase 8's automated reports sat blocked for
+// so long. See §8.14.
+//
+// Times are server local. `nextRunAt` is the whole scheduling mechanism: the
+// runner claims rows whose moment has arrived, sends them, and writes the next
+// one. A null `nextRunAt` means nothing is pending — a finished one-off, or a
+// schedule with no future occurrence.
+export const discordReminders = pgTable('discord_reminders', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  channelId:   varchar('channel_id', { length: 32 }).notNull(),
+  channelName: varchar('channel_name', { length: 120 }),
+  // What the faction wants said. Free text, not a template: a reminder is
+  // theirs to word, and rendering it through the app's i18n layer would mean
+  // translating sentences the app did not write.
+  message:     text('message').notNull(),
+  // A label for the settings list, so a faction with a dozen reminders can
+  // tell them apart without reading every message.
+  title:       varchar('title', { length: 120 }),
+
+  scheduleType: varchar('schedule_type', { length: 10 }).notNull(),
+  /** `HH:MM`, 24-hour, server local. Null for a one-off. */
+  timeOfDay:    varchar('time_of_day', { length: 5 }),
+  /** 0–6 with Sunday = 0, matching Date.getDay(). Weekly only. */
+  weekdays:     jsonb('weekdays').$type<number[]>(),
+  /** Clamped to the length of the month, so 31 means "the last day". */
+  dayOfMonth:   integer('day_of_month'),
+  /** The single moment a one-off fires. */
+  runAt:        timestamp('run_at', { withTimezone: true }),
+
+  // Who gets pinged. Roles are Discord's own snowflakes; people are *this
+  // app's* user ids, resolved to a Discord id when the message goes out.
+  //
+  // Storing our ids rather than theirs keeps the picker able to show in-game
+  // names, and means a reminder written against a member survives them being
+  // renamed on Discord. A member who leaves the faction simply stops being
+  // resolved — see resolveMentions.
+  mentionRoleIds: jsonb('mention_role_ids').$type<string[]>(),
+  mentionUserIds: jsonb('mention_user_ids').$type<string[]>(),
+
+  isEnabled:   boolean('is_enabled').notNull().default(true),
+  nextRunAt:   timestamp('next_run_at', { withTimezone: true }),
+  lastRunAt:   timestamp('last_run_at', { withTimezone: true }),
+  // Shown beside the reminder, so one that has been failing quietly for a week
+  // says so instead of looking healthy.
+  lastError:   text('last_error'),
+
+  createdBy:   uuid('created_by').notNull().references(() => users.id),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  // The runner's only query is "what is due", across every faction at once.
+  dueIndex: index('discord_reminder_due').on(table.nextRunAt),
+}));
+
+export const discordRemindersRelations = relations(discordReminders, ({ one }) => ({
+  faction: one(factions, { fields: [discordReminders.factionId], references: [factions.id] }),
+  creator: one(users,    { fields: [discordReminders.createdBy], references: [users.id] }),
+}));
+
+export type DiscordReminder = typeof discordReminders.$inferSelect;
+export type NewDiscordReminder = typeof discordReminders.$inferInsert;

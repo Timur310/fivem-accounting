@@ -78,6 +78,9 @@ import type {
   DiscordStatus,
   DiscordChannel,
   DiscordEventType,
+  DiscordReminder,
+  DiscordRole,
+  ReminderInput,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -817,6 +820,11 @@ export const discordApi = {
 
   // `leave` also removes the bot from the guild. Opt-in: the same bot may be
   // doing other work in that server.
+  roles: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ roles: DiscordRole[] }>>(`/factions/${factionId}/discord/roles`)
+      .then((r) => r.data.data.roles),
+
   unlink: (factionId: string, leave = false) =>
     api
       .delete<ApiSuccessResponse<{ unlinked: boolean; left: boolean | null; leaveError?: string }>>(
@@ -841,6 +849,36 @@ export const discordApi = {
       .post<ApiSuccessResponse<{ ok: boolean; error?: string }>>(
         `/factions/${factionId}/discord/test`,
         { channelId },
+      )
+      .then(unwrap),
+};
+
+// ── Discord reminders ──
+
+export const discordRemindersApi = {
+  list: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<DiscordReminder[]>>(`/factions/${factionId}/discord/reminders`)
+      .then(unwrap),
+
+  create: (factionId: string, input: ReminderInput) =>
+    api
+      .post<ApiSuccessResponse<DiscordReminder>>(`/factions/${factionId}/discord/reminders`, input)
+      .then(unwrap),
+
+  update: (factionId: string, id: string, input: Partial<ReminderInput>) =>
+    api
+      .patch<ApiSuccessResponse<DiscordReminder>>(`/factions/${factionId}/discord/reminders/${id}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/discord/reminders/${id}`),
+
+  // The real reminder, on demand — not a test message.
+  sendNow: (factionId: string, id: string) =>
+    api
+      .post<ApiSuccessResponse<{ ok: boolean; error?: string }>>(
+        `/factions/${factionId}/discord/reminders/${id}/send`,
       )
       .then(unwrap),
 };

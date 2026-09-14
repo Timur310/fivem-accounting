@@ -1388,3 +1388,72 @@ export interface DiscordChannel {
   parentName: string | null;
   position: number;
 }
+
+// ── Discord reminders ──────────────────────────────────
+
+export const REMINDER_SCHEDULE_TYPES = ['once', 'daily', 'weekly', 'monthly'] as const;
+export type ReminderScheduleType = (typeof REMINDER_SCHEDULE_TYPES)[number];
+
+export const REMINDER_SCHEDULE_LABEL_KEYS: Record<ReminderScheduleType, TranslationKey> = {
+  once: 'reminder.schedule.once',
+  daily: 'reminder.schedule.daily',
+  weekly: 'reminder.schedule.weekly',
+  monthly: 'reminder.schedule.monthly',
+};
+
+/**
+ * A scheduled message a faction sends to one of its Discord channels.
+ *
+ * Times are server local, the same clock quotas reset on. `nextRunAt` is null
+ * when nothing is pending: switched off, or a one-off that has been sent.
+ */
+export interface DiscordRole {
+  id: string;
+  name: string;
+  /**
+   * Whether anybody can ping it. A role that is not mentionable cannot be
+   * pinged by this bot — it was never given MENTION_EVERYONE — so the picker
+   * has to say so rather than let somebody pick a ping that silently does
+   * nothing.
+   */
+  mentionable: boolean;
+  position: number;
+}
+
+export interface DiscordReminder {
+  id: string;
+  channelId: string;
+  channelName: string | null;
+  title: string | null;
+  message: string;
+  scheduleType: ReminderScheduleType;
+  /** `HH:MM`, 24-hour. Null for a one-off. */
+  timeOfDay: string | null;
+  /** 0-6 with Sunday = 0. Weekly only. */
+  weekdays: number[] | null;
+  dayOfMonth: number | null;
+  runAt: string | null;
+  /** Discord role snowflakes. */
+  mentionRoleIds: string[] | null;
+  /** This app's user ids, resolved to a Discord ping when the message goes. */
+  mentionUserIds: string[] | null;
+  isEnabled: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastError: string | null;
+}
+
+export interface ReminderInput {
+  channelId: string;
+  channelName?: string;
+  title?: string;
+  message: string;
+  scheduleType: ReminderScheduleType;
+  timeOfDay?: string;
+  weekdays?: number[];
+  dayOfMonth?: number;
+  runAt?: string;
+  mentionRoleIds?: string[];
+  mentionUserIds?: string[];
+  isEnabled?: boolean;
+}

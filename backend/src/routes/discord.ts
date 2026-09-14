@@ -17,6 +17,7 @@ import {
   isDiscordConfigured,
   leaveGuild,
   listGuildChannels,
+  listGuildRoles,
   postToChannel,
   recordDeliveryOutcome,
 } from '../lib/discord.js';
@@ -166,6 +167,39 @@ router.get('/channels', async (req: Request, res: Response) => {
       res,
       'DISCORD_UNAVAILABLE',
       'Could not read the channel list. The bot may have been removed from the server.',
+      502,
+    );
+  }
+});
+
+// ── GET /roles — the guild's roles, for reminder pings ─
+router.get('/roles', async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+
+  if (!isDiscordConfigured()) {
+    error(res, 'NOT_CONFIGURED', 'This deployment has no Discord bot configured', 503);
+    return;
+  }
+
+  const [integration] = await db
+    .select({ guildId: discordIntegrations.guildId })
+    .from(discordIntegrations)
+    .where(eq(discordIntegrations.factionId, factionId))
+    .limit(1);
+
+  if (!integration) {
+    error(res, 'NOT_FOUND', 'This faction is not connected to a Discord server', 404);
+    return;
+  }
+
+  try {
+    success(res, { roles: await listGuildRoles(integration.guildId) });
+  } catch (err) {
+    console.error('[DISCORD] role list failed', err);
+    error(
+      res,
+      'DISCORD_UNAVAILABLE',
+      'Could not read the role list. The bot may have been removed from the server.',
       502,
     );
   }

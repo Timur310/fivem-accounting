@@ -1100,6 +1100,143 @@ faction picks one. `discord_integrations.locale` (migration `0016`) and a
 disabled picker on the settings screen exist so adding Hungarian later is a
 translation job rather than a migration.
 
+### 8.14 Discord Reminders
+
+Scheduled messages a faction posts to its own channels: quota deadlines, rent
+night, meeting times. Up to 50 per faction — shared across everyone who holds
+the permission, not per person. Migration `0017`, permission `manage_discord`.
+
+**This is the first thing in the codebase that needed a clock**, which is why
+Phase 8's automated reports sat blocked. Every other Discord message reacts to
+something a request just did; a reminder has to happen when nobody is asking.
+
+#### The scheduler
+
+A `setInterval` ticker every 60 seconds, started in `index.ts` (never in
+`app.ts` — every test imports the app and none should inherit a timer), and
+`unref()`'d so a pending tick never delays a restart. No cron, no queue, no new
+dependency and no second process.
+
+**A tick is skipped while the previous one is still going.** Sending is serial,
+so a batch big enough to outlast the interval would have the next tick start on
+top of it. Nothing double-sends when that happens — the claim below and
+`FOR UPDATE SKIP LOCKED` see to that — but the runs stack, each holding a
+connection, and a slow Discord turns a backlog into a pile-up rather than a
+queue. Reaching it takes roughly 300 reminders due in the same minute across
+every faction; the boolean is cheaper to have than to diagnose. The skipped
+tick loses nothing: whatever was due is still in the table, and the run in
+progress is already working through it. The flag is cleared in a `finally`,
+because a throw that ever escaped `runDueReminders` would otherwise wedge it on
+and silently stop every reminder in the app until the next restart.
+
+The whole mechanism is one column. `next_run_at` holds the moment a reminder is
+next due; the runner claims everything at or before now, sends it, and writes
+the following occurrence back. A null means nothing is pending — switched off,
+or a one-off already sent.
+
+**Claiming is a single statement, and that is the point:**
+
+```sql
+WITH due AS (
+  SELECT id, next_run_at FROM discord_reminders
+  WHERE is_enabled = true AND next_run_at IS NOT NULL AND next_run_at <= $1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE discord_reminders AS r SET next_run_at = NULL
+FROM due WHERE r.id = due.id
+RETURNING r.*, due.next_run_at AS due_at
+```
+
+Selecting first and updating afterwards would send every reminder twice the day
+this runs on two instances; `FOR UPDATE SKIP LOCKED` makes the loser skip the
+row rather than wait for it and re-send it. The CTE is not decoration either:
+`UPDATE ... RETURNING` returns the row *after* the update, and the update is
+what clears `next_run_at`, so without the pre-update snapshot a run delayed by
+an outage would be indistinguishable from one on time.
+
+#### Deliberate behaviours
+
+- **A stale run is skipped, not sent late.** Past a one-hour grace window the
+  run is dropped and the schedule rolls forward. "Quota deadline tonight"
+  arriving the following morning is worse than never arriving, because people
+  act on it.
+- **The next occurrence is measured from when it was *due*, not from now.**
+  Otherwise a 20:00 daily reminder drifts later every time the tick that picked
+  it up ran a few seconds past the minute.
+- **Monthly clamps, never skips.** The 31st fires on the 30th of a 30-day month
+  and the 28th of February. Somebody who picked the last day of the month means
+  the last day of the month.
+- **Disconnecting Discord keeps the reminders.** The row records why nothing
+  arrived and stays scheduled; reconnecting brings them back rather than making
+  a faction retype a dozen of them.
+- **A one-off is switched off after firing, not deleted**, so the faction can
+  see it went out and reuse it.
+- **An edit replaces the whole schedule.** Patching individual fields is how a
+  reminder ends up weekly with a day-of-month and no weekdays.
+
+#### Mentions
+
+A reminder can ping roles and named people. Migration `0018` adds
+`mention_role_ids` (Discord snowflakes) and `mention_user_ids` — **this app's**
+user ids, not Discord's.
+
+Storing our own ids is what lets the picker show in-game names, and it means a
+reminder survives somebody being renamed on Discord. They are resolved to
+Discord ids at send time; anyone no longer resolvable drops out silently, and
+provisional users are skipped because their Discord id is a registration a
+superadmin typed rather than a confirmed account — pinging a mistyped one would
+notify a stranger.
+
+**People come from the roster, not from Discord.** Listing a guild's members
+requires the privileged Server Members intent, which the deployment would have
+to enable in the developer portal. Unnecessary: every member already carries
+the Discord id a ping needs.
+
+**Mentions fire only from a message's `content`.** The same text inside an
+embed renders as a link and pings nobody — the single most common way this
+feature is built wrong — so the pings go above the embed.
+
+**`allowed_mentions` is always sent and always explicit.** `parse: []` refuses
+every mention Discord would otherwise find in the text, and only the chosen ids
+are let through, so an `@everyone` typed into a reminder body cannot ping the
+server. Roles that are not mentionable are disabled in the picker rather than
+offered: the bot never asked for `MENTION_EVERYONE`, so choosing one would be a
+ping that silently does nothing.
+
+Everyone tagged must be a member of the faction, checked on create and on edit.
+Without it, a faction's channel could ping any id at all, including a member of
+some other faction.
+
+`lib/reminderMessage.ts` builds the message, and both the scheduled run and the
+"send now" button go through it — a preview that differs from the real thing is
+worse than no preview. The embed always carries a title (`Reminder` when none
+was given) and writes its date as Discord's `<t:unix:F>` markup, which renders
+in each reader's own timezone and locale: a player in another country sees the
+right wall clock without the app knowing anything about where they are.
+
+#### Cost
+
+Idle, the runner is one indexed query a minute against `discord_reminder_due`,
+returning nothing — 1440 index scans a day, which does not register. Each
+reminder that is actually due costs one integration lookup, one Discord POST
+(100–300ms) and one update, run one after another; the serial loop is also what
+keeps delivery comfortably inside Discord's rate limits with no throttling code
+of its own.
+
+The 60-second tick is granularity, not drift: a 20:00 reminder arrives between
+20:00 and 20:01, and because the next occurrence is measured from the due
+moment it never walks later.
+
+`lib/reminderSchedule.ts` is pure and separate from the runner: month lengths,
+week wrap and the clock going forward are where the bugs live, and they are
+tested without a database or a Discord. Times are **server local**, the same
+clock quotas reset on (§9.2) — one notion of "local" in the app is worth more
+than a second one.
+
+`runDueReminders()` never throws. It runs on a timer with nobody to catch it,
+and one bad reminder must neither stop the batch nor leave its row claimed with
+no way back into the queue.
+
 ---
 
 ## 9. Frontend Architecture
@@ -1595,7 +1732,7 @@ crontab -e
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
 | 1 | Discord bot integration | Outbound activity notifications — **PARTLY BUILT**¹ (§8.13). Bot *commands* remain unplanned² | High |
-| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings — **BLOCKED**³ | High |
+| 2 | Automated Discord reports | Scheduled messages — **UNBLOCKED**³; faction-written reminders ship in §8.14, generated recaps remain to do | High |
 | 3 | Webhook system | Outgoing webhooks on configurable events — **SUPERSEDED**⁴ | Medium |
 | 4 | API tokens | Faction-level API tokens for server-side scripts (FiveM in-game resource tracking) | Medium |
 | 5 | Data backup/restore | Full faction data export (JSON) and import. Superadmin can backup all data | Medium |
@@ -1615,8 +1752,10 @@ connection and a process that stays up, and it means a second way to write to
 the ledger with its own authorisation story. The value over opening the app is
 small; the surface is not.
 
-³ Still blocked, but on one thing rather than two: it wants a scheduler the
-app does not have. The delivery channel now exists (§8.13).
+³ No longer blocked. The scheduler arrived with reminders (§8.14) and the
+delivery channel with the integration (§8.13), so a daily or weekly recap is
+now a matter of composing the message — the machinery it was waiting for is
+both built and in use.
 
 ⁴ A webhook was the cheap way to reach Discord without a bot: a faction admin
 pastes a URL from their own server settings. The bot integration does the same

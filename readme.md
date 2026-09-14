@@ -39,7 +39,8 @@ Discord history.
 - 📣 **Announcements** — a faction bulletin board with priorities, pinning,
   expiry and read tracking, so "quota deadline is Friday" stops getting buried
 - 💬 **Discord** — connect your faction's own Discord server and choose which
-  channel each kind of activity is posted to
+  channel each kind of activity is posted to, plus scheduled reminders for
+  quota deadlines and rent night
 - 🔔 **Notifications** — an in-app bell: your withdrawal was approved, you were
   given a strike, your bug report was answered
 - 🕑 **Activity feed** — one timeline over the whole faction, narrowed to what
