@@ -124,9 +124,15 @@ async function runOne(row: DiscordReminder, dueAt: Date, now: Date): Promise<voi
   // arrives the next morning is worse than one that never arrives, because
   // people act on it. Skip the run; keep the schedule.
   if (isTooLate(dueAt, now)) {
+    // Measured from *now*, not from the missed moment. Rolling forward one
+    // occurrence at a time would take a daily reminder one tick per missed day
+    // to catch up: a week of downtime costs seven minutes of churn, a month
+    // costs half an hour, and every one of those ticks claims the row, decides
+    // it is stale and writes it back. Jumping straight to the next future
+    // occurrence settles it in a single pass.
     await db
       .update(discordReminders)
-      .set({ nextRunAt: following, updatedAt: now })
+      .set({ nextRunAt: schedule ? nextRun(schedule, now) : null, updatedAt: now })
       .where(eq(discordReminders.id, row.id));
     return;
   }
@@ -257,6 +263,18 @@ async function tick(): Promise<void> {
  */
 export function startReminderRunner(): void {
   if (timer || !isDiscordConfigured()) return;
+
+  // Said out loud at boot, because it is the one setting that makes reminders
+  // quietly wrong rather than broken. "20:00" means 20:00 on this machine, and
+  // a VPS defaults to UTC — so a Hungarian faction whose host was never given
+  // a TZ gets every reminder one or two hours late, with nothing anywhere
+  // reporting a fault. Set TZ in the environment to match the players.
+  console.log(
+    `[REMINDERS] Runner started. Times are local to this machine: ` +
+      `${Intl.DateTimeFormat().resolvedOptions().timeZone} ` +
+      `(now ${new Date().toLocaleString()})`,
+  );
+
   timer = setInterval(() => {
     void tick();
   }, TICK_MS);

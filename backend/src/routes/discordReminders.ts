@@ -53,9 +53,14 @@ const reminderSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
 
     if (value.scheduleType === 'once') {
-      if (!value.runAt) need('runAt', 'A one-off reminder needs a date and time');
-      else if (new Date(value.runAt).getTime() <= Date.now()) {
-        need('runAt', 'That moment has already passed');
+      if (!value.runAt) {
+        need('runAt', 'A one-off reminder needs a date and time');
+      } else if (value.isEnabled && new Date(value.runAt).getTime() <= Date.now()) {
+        // Only checked while the reminder is meant to fire. A one-off switches
+        // itself off once it has been sent, and its moment is then in the past
+        // forever — without this, editing or even switching off an already-sent
+        // reminder would be refused for a date the user is not changing.
+        need('runAt', 'That moment has already passed — pick a new date to schedule it again');
       }
       return;
     }
