@@ -14,6 +14,8 @@ const PORT = env.PORT;
 // (src/) and the built (dist/) layouts.
 const MIGRATIONS_FOLDER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'drizzle');
 
+import { startReminderRunner, stopReminderRunner } from './lib/reminderRunner.js';
+
 // ── Graceful shutdown ─────────────────────────────────
 // Dedupe SIGTERM/SIGINT (e.g. when docker sends both). Once we begin
 // shutting down, refuse new connections and let in-flight ones finish.
@@ -36,6 +38,10 @@ function shutdown(signal: string) {
     void pool.end().then(() => process.exit(0));
     return;
   }
+
+  // Stop picking up new reminders. Anything already claimed finishes; anything
+  // still queued is in the table and will be picked up after the restart.
+  stopReminderRunner();
 
   server.close((err) => {
     if (err) {
@@ -72,6 +78,11 @@ async function bootstrap() {
     console.log(`[SERVER] Backend running on port ${PORT}`);
     console.log(`[SERVER] Environment: ${env.NODE_ENV}`);
   });
+
+  // Started here rather than in app.ts: every test imports the app, and none
+  // of them should get a timer that outlives the suite. No-ops when no Discord
+  // bot is configured.
+  startReminderRunner();
 }
 
 bootstrap().catch((err) => {

@@ -26,6 +26,7 @@ import {
   type DiscordEventType,
 } from '@/lib/api-types';
 import { MessageSquare, Link2, Unlink, Send, AlertTriangle } from 'lucide-react';
+import { DiscordRemindersSection } from '@/components/discord-reminders-section';
 
 /** The sentinel a "not routed anywhere" select carries; not a channel id. */
 const OFF = '__off__';
@@ -337,6 +338,10 @@ export function DiscordSettingsSection({ factionId }: Props) {
           </CardContent>
         </Card>
       )}
+
+      {/* Reminders need a channel list too, so they share the one already
+          fetched above rather than asking Discord a second time. */}
+      {linked && <DiscordRemindersSection factionId={factionId} channels={channels} />}
 
       <AlertDialog open={confirmUnlink} onOpenChange={setConfirmUnlink}>
         <AlertDialogContent>
