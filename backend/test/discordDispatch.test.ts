@@ -52,7 +52,10 @@ async function route(eventType: string, isEnabled = true) {
 /** The embed of the single message that was sent. */
 function sentEmbed() {
   expect(postMock).toHaveBeenCalledTimes(1);
-  const [, payload] = postMock.mock.calls[0] as unknown as [string, { embeds: Record<string, string>[] }];
+  const [, payload] = postMock.mock.calls[0] as unknown as [
+    string,
+    { embeds: { title: string; description: string; author?: { name: string }; footer?: { text: string } }[] },
+  ];
   return payload.embeds[0]!;
 }
 
@@ -117,8 +120,8 @@ describe('the message', () => {
       type: 'entry_logged', actorUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '1000',
     });
     const embed = sentEmbed();
-    expect(embed.title).toBe('Entry logged');
-    expect(embed.description).toContain(w.member.username);
+    expect(embed.title).toContain('Entry logged');
+    expect(embed.author?.name).toBe(w.member.username);
   });
 
   // FiveM money runs long and Number() starts lying past 2^53, so the grouping
@@ -139,8 +142,8 @@ describe('the message', () => {
       amount: '500', anonymous: true,
     });
     const embed = sentEmbed();
-    expect(embed.description).toContain('Anonymous');
-    expect(embed.description).not.toContain(w.member.username);
+    expect(embed.author?.name).toBe('Anonymous');
+    expect(JSON.stringify(embed)).not.toContain(w.member.username);
   });
 
   // The placeholder is not a person. Printing its name in a public channel
@@ -156,8 +159,8 @@ describe('the message', () => {
       type: 'entry_logged', actorUserId: placeholder!.id, itemTypeId: w.itemTypeId, amount: '500',
     });
     const embed = sentEmbed();
-    expect(embed.description).toContain('the faction');
-    expect(embed.description).not.toContain('system_placeholder');
+    expect(embed.author?.name).toBe('the faction');
+    expect(JSON.stringify(embed)).not.toContain('system_placeholder');
   });
 
   it('prefers the in-game name over the Discord username', async () => {
@@ -166,7 +169,7 @@ describe('the message', () => {
     await dispatchDiscord(w.faction.id, {
       type: 'entry_logged', actorUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '500',
     });
-    expect(sentEmbed().description).toContain('Tony Cipriani');
+    expect(sentEmbed().author?.name).toBe('Tony Cipriani');
   });
 });
 
@@ -227,7 +230,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(201);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Strike issued');
+    expect(sentEmbed().title).toContain('Strike issued');
   });
 
   it('posts a withdrawal request from a plain member as a request', async () => {
@@ -239,7 +242,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(201);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Withdrawal requested');
+    expect(sentEmbed().title).toContain('Withdrawal requested');
   });
 
   // Someone holding manage_payouts creates an already-settled row, so it is
@@ -253,7 +256,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(201);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Withdrawal paid out');
+    expect(sentEmbed().title).toContain('Withdrawal paid out');
   });
 
   it('posts when someone joins the faction', async () => {
@@ -266,7 +269,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(201);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Member joined');
+    expect(sentEmbed().title).toContain('Member joined');
   });
 
   it('posts when someone is removed from the faction', async () => {
@@ -280,7 +283,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(200);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Member left');
+    expect(sentEmbed().title).toContain('Member left');
   });
 
   it('posts when an expense is recorded', async () => {
@@ -292,7 +295,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(201);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Expense recorded');
+    expect(sentEmbed().title).toContain('Expense recorded');
   });
 
   it('posts when an announcement goes up', async () => {
@@ -323,9 +326,9 @@ describe('through the routes that raise the events', () => {
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
     const embed = sentEmbed();
-    expect(embed.title).toBe('Entry removed');
+    expect(embed.title).toContain('Entry removed');
     // Whose entry it was, not only who struck it out.
-    expect(embed.description).toContain(w.member.username);
+    expect(embed.author?.name).toBe(w.member.username);
   });
 
   // The 5-minute self-undo and a leader striking a row out are different acts.
@@ -354,7 +357,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(200);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Withdrawal request cancelled');
+    expect(sentEmbed().title).toContain('Withdrawal request cancelled');
   });
 
   it('posts when an expense is removed', async () => {
@@ -366,7 +369,7 @@ describe('through the routes that raise the events', () => {
     await api().delete(`${f()}/expenses/${created.body.data.id}`).set('Cookie', w.admin.cookie);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Expense removed');
+    expect(sentEmbed().title).toContain('Expense removed');
   });
 
   it('posts when a strike is revoked', async () => {
@@ -382,7 +385,7 @@ describe('through the routes that raise the events', () => {
     expect(res.status).toBe(200);
 
     await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
-    expect(sentEmbed().title).toBe('Strike revoked');
+    expect(sentEmbed().title).toContain('Strike revoked');
   });
 
   // 'appealed' is a conversation in progress, not news. A channel that reports

@@ -149,7 +149,13 @@ const CATEGORY_ICON: Record<string, string> = {
 
 /** The item's own emoji, or the one its category lends it. */
 function itemGlyph(item: ItemRef): string {
-  return item.icon || CATEGORY_ICON[item.category] || CATEGORY_ICON.other!;
+  if (item.icon) return item.icon;
+  // `category` defaults to 'other' and plenty of factions will never touch it,
+  // so money would end up under a generic label. `isCurrency` is the flag they
+  // do set, because it changes how the app formats every amount — which makes
+  // it the more reliable signal of the two.
+  if (item.isCurrency) return CATEGORY_ICON.cash!;
+  return CATEGORY_ICON[item.category] || CATEGORY_ICON.other!;
 }
 
 interface FactionRef {
