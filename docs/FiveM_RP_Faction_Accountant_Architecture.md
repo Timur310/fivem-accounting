@@ -1174,6 +1174,46 @@ an outage would be indistinguishable from one on time.
 - **An edit replaces the whole schedule.** Patching individual fields is how a
   reminder ends up weekly with a day-of-month and no weekdays.
 
+#### Mentions
+
+A reminder can ping roles and named people. Migration `0018` adds
+`mention_role_ids` (Discord snowflakes) and `mention_user_ids` — **this app's**
+user ids, not Discord's.
+
+Storing our own ids is what lets the picker show in-game names, and it means a
+reminder survives somebody being renamed on Discord. They are resolved to
+Discord ids at send time; anyone no longer resolvable drops out silently, and
+provisional users are skipped because their Discord id is a registration a
+superadmin typed rather than a confirmed account — pinging a mistyped one would
+notify a stranger.
+
+**People come from the roster, not from Discord.** Listing a guild's members
+requires the privileged Server Members intent, which the deployment would have
+to enable in the developer portal. Unnecessary: every member already carries
+the Discord id a ping needs.
+
+**Mentions fire only from a message's `content`.** The same text inside an
+embed renders as a link and pings nobody — the single most common way this
+feature is built wrong — so the pings go above the embed.
+
+**`allowed_mentions` is always sent and always explicit.** `parse: []` refuses
+every mention Discord would otherwise find in the text, and only the chosen ids
+are let through, so an `@everyone` typed into a reminder body cannot ping the
+server. Roles that are not mentionable are disabled in the picker rather than
+offered: the bot never asked for `MENTION_EVERYONE`, so choosing one would be a
+ping that silently does nothing.
+
+Everyone tagged must be a member of the faction, checked on create and on edit.
+Without it, a faction's channel could ping any id at all, including a member of
+some other faction.
+
+`lib/reminderMessage.ts` builds the message, and both the scheduled run and the
+"send now" button go through it — a preview that differs from the real thing is
+worse than no preview. The embed always carries a title (`Reminder` when none
+was given) and writes its date as Discord's `<t:unix:F>` markup, which renders
+in each reader's own timezone and locale: a player in another country sees the
+right wall clock without the app knowing anything about where they are.
+
 #### Cost
 
 Idle, the runner is one indexed query a minute against `discord_reminder_due`,

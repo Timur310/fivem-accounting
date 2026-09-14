@@ -1407,6 +1407,19 @@ export const REMINDER_SCHEDULE_LABEL_KEYS: Record<ReminderScheduleType, Translat
  * Times are server local, the same clock quotas reset on. `nextRunAt` is null
  * when nothing is pending: switched off, or a one-off that has been sent.
  */
+export interface DiscordRole {
+  id: string;
+  name: string;
+  /**
+   * Whether anybody can ping it. A role that is not mentionable cannot be
+   * pinged by this bot — it was never given MENTION_EVERYONE — so the picker
+   * has to say so rather than let somebody pick a ping that silently does
+   * nothing.
+   */
+  mentionable: boolean;
+  position: number;
+}
+
 export interface DiscordReminder {
   id: string;
   channelId: string;
@@ -1420,6 +1433,10 @@ export interface DiscordReminder {
   weekdays: number[] | null;
   dayOfMonth: number | null;
   runAt: string | null;
+  /** Discord role snowflakes. */
+  mentionRoleIds: string[] | null;
+  /** This app's user ids, resolved to a Discord ping when the message goes. */
+  mentionUserIds: string[] | null;
   isEnabled: boolean;
   nextRunAt: string | null;
   lastRunAt: string | null;
@@ -1436,5 +1453,7 @@ export interface ReminderInput {
   weekdays?: number[];
   dayOfMonth?: number;
   runAt?: string;
+  mentionRoleIds?: string[];
+  mentionUserIds?: string[];
   isEnabled?: boolean;
 }

@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { discordReminders, discordIntegrations, type DiscordReminder } from '../db/schema.js';
 import { isDiscordConfigured, postToChannel } from './discord.js';
 import { nextRun, isTooLate, type ReminderSchedule } from './reminderSchedule.js';
+import { buildReminderMessage } from './reminderMessage.js';
 
 /** How often the ticker looks for work. */
 const TICK_MS = 60_000;
@@ -151,16 +152,7 @@ async function runOne(row: DiscordReminder, dueAt: Date, now: Date): Promise<voi
     return;
   }
 
-  const result = await postToChannel(row.channelId, {
-    embeds: [
-      {
-        ...(row.title ? { title: row.title } : {}),
-        description: row.message,
-        color: 0x5865f2,
-        timestamp: now.toISOString(),
-      },
-    ],
-  });
+  const result = await postToChannel(row.channelId, await buildReminderMessage(row, now));
 
   await db
     .update(discordReminders)

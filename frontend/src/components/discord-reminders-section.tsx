@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { discordRemindersApi, apiErrorMessage } from '@/lib/api-client';
+import { discordRemindersApi, discordApi, membersApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -31,7 +31,8 @@ import {
   type ReminderScheduleType,
 } from '@/lib/api-types';
 import type { TranslationKey } from '@/lib/i18n';
-import { AlarmClock, Plus, Pencil, Trash2, Send, AlertTriangle } from 'lucide-react';
+import { AlarmClock, Plus, Pencil, Trash2, Send, AlertTriangle, AtSign } from 'lucide-react';
+import { displayName } from '@/lib/format';
 
 interface Props {
   factionId: string;
@@ -55,6 +56,8 @@ function emptyDraft(): ReminderInput {
     scheduleType: 'daily',
     timeOfDay: '20:00',
     weekdays: [],
+    mentionRoleIds: [],
+    mentionUserIds: [],
     isEnabled: true,
   };
 }
@@ -71,6 +74,8 @@ function draftFrom(reminder: DiscordReminder): ReminderInput {
     dayOfMonth: reminder.dayOfMonth ?? undefined,
     // The input wants `YYYY-MM-DDTHH:MM` in local time; the API speaks ISO.
     runAt: reminder.runAt ?? undefined,
+    mentionRoleIds: reminder.mentionRoleIds ?? [],
+    mentionUserIds: reminder.mentionUserIds ?? [],
     isEnabled: reminder.isEnabled,
   };
 }
@@ -95,6 +100,23 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
   const { data: reminders, isLoading, error } = useQuery({
     queryKey: ['discord-reminders', factionId],
     queryFn: () => discordRemindersApi.list(factionId),
+  });
+
+  // Both only matter while the form is open, so neither is fetched until then.
+  const { data: roles } = useQuery({
+    queryKey: ['discord-roles', factionId],
+    queryFn: () => discordApi.roles(factionId),
+    enabled: !!draft,
+    retry: false,
+  });
+
+  // People come from this app's roster rather than from Discord: listing a
+  // guild's members needs a privileged intent, and every member here already
+  // carries the Discord id the ping resolves to.
+  const { data: members } = useQuery({
+    queryKey: ['members', factionId],
+    queryFn: () => membersApi.list(factionId),
+    enabled: !!draft,
   });
 
   const invalidate = () =>
@@ -208,6 +230,16 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                     {!r.isEnabled && <Badge variant="outline">{t('discord.off')}</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground">{describeSchedule(r)}</p>
+                  {/* Whether a reminder pings people is the thing most worth
+                      knowing about it at a glance. */}
+                  {!!(r.mentionRoleIds?.length || r.mentionUserIds?.length) && (
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <AtSign className="h-3 w-3" />
+                      {t('reminder.tagCount', {
+                        count: (r.mentionRoleIds?.length ?? 0) + (r.mentionUserIds?.length ?? 0),
+                      })}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {r.nextRunAt
                       ? t('reminder.nextRun', { when: new Date(r.nextRunAt).toLocaleString(locale) })
@@ -393,6 +425,69 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                   <p className="text-xs text-muted-foreground">{t('reminder.dayOfMonthHint')}</p>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label>{t('reminder.tag')}</Label>
+                <p className="text-xs text-muted-foreground">{t('reminder.tagHint')}</p>
+
+                {!!roles?.length && (
+                  <div className="flex flex-wrap gap-1">
+                    {roles.map((role) => {
+                      const on = draft.mentionRoleIds?.includes(role.id) ?? false;
+                      return (
+                        <Button
+                          key={role.id}
+                          type="button"
+                          size="sm"
+                          variant={on ? 'default' : 'outline'}
+                          // A role nobody may ping would be a choice that
+                          // silently does nothing, so it is not offered.
+                          disabled={!role.mentionable}
+                          title={role.mentionable ? undefined : t('reminder.roleNotMentionable')}
+                          onClick={() =>
+                            patchDraft({
+                              mentionRoleIds: on
+                                ? (draft.mentionRoleIds ?? []).filter((id) => id !== role.id)
+                                : [...(draft.mentionRoleIds ?? []), role.id],
+                            })
+                          }
+                        >
+                          @{role.name}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!!members?.length && (
+                  <div className="flex flex-wrap gap-1">
+                    {members.map((m) => {
+                      const on = draft.mentionUserIds?.includes(m.userId) ?? false;
+                      return (
+                        <Button
+                          key={m.userId}
+                          type="button"
+                          size="sm"
+                          variant={on ? 'secondary' : 'outline'}
+                          onClick={() =>
+                            patchDraft({
+                              mentionUserIds: on
+                                ? (draft.mentionUserIds ?? []).filter((id) => id !== m.userId)
+                                : [...(draft.mentionUserIds ?? []), m.userId],
+                            })
+                          }
+                        >
+                          {displayName(m)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!roles?.length && !members?.length && (
+                  <p className="text-xs text-muted-foreground">{t('reminder.tagNothing')}</p>
+                )}
+              </div>
 
               <div className="flex items-center justify-between rounded-md border p-3">
                 <Label htmlFor="reminder-enabled">{t('reminder.enabled')}</Label>

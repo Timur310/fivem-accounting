@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { discordReminders, discordIntegrations } from '../db/schema.js';
+import { discordReminders, discordIntegrations, factionMembers } from '../db/schema.js';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { postToChannel, recordDeliveryOutcome } from '../lib/discord.js';
+import { buildReminderMessage } from '../lib/reminderMessage.js';
 import {
   nextRun,
   REMINDER_SCHEDULE_TYPES,
@@ -36,6 +37,11 @@ const reminderSchema = z
     weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
     dayOfMonth: z.number().int().min(1).max(31).optional(),
     runAt: z.string().datetime({ offset: true }).optional(),
+    // Discord role snowflakes, and this app's own user ids. Capped because a
+    // message that pings forty roles is not a reminder, it is an attack on the
+    // channel.
+    mentionRoleIds: z.array(z.string().regex(/^\d{17,20}$/)).max(10).optional(),
+    mentionUserIds: z.array(z.string().uuid()).max(25).optional(),
     isEnabled: z.boolean().optional().default(true),
   })
   // Each schedule type needs a different subset of the fields, and a reminder
@@ -85,6 +91,24 @@ function scheduleFromInput(input: ReminderInput): ReminderSchedule | null {
   }
 }
 
+/**
+ * Everyone named for a ping must be in this faction.
+ *
+ * Without the check, any id at all could be pinged from a faction's channel —
+ * including a member of some other faction, whose Discord this one has no
+ * business notifying.
+ */
+async function mentionableMembers(factionId: string, userIds: string[]): Promise<boolean> {
+  if (userIds.length === 0) return true;
+  const rows = await db
+    .select({ userId: factionMembers.userId })
+    .from(factionMembers)
+    .where(
+      and(eq(factionMembers.factionId, factionId), inArray(factionMembers.userId, userIds)),
+    );
+  return rows.length === new Set(userIds).size;
+}
+
 /** The columns a create or edit writes, schedule fields included. */
 function columnsFor(input: ReminderInput) {
   const schedule = scheduleFromInput(input);
@@ -101,6 +125,10 @@ function columnsFor(input: ReminderInput) {
     weekdays: input.scheduleType === 'weekly' ? input.weekdays ?? null : null,
     dayOfMonth: input.scheduleType === 'monthly' ? input.dayOfMonth ?? null : null,
     runAt: input.scheduleType === 'once' && input.runAt ? new Date(input.runAt) : null,
+    // Empty arrays are stored as null so "nobody is pinged" has one
+    // representation rather than two.
+    mentionRoleIds: input.mentionRoleIds?.length ? input.mentionRoleIds : null,
+    mentionUserIds: input.mentionUserIds?.length ? input.mentionUserIds : null,
     isEnabled: input.isEnabled,
     // A disabled reminder has no pending run at all, which is what keeps it
     // out of the runner's query rather than relying on the flag alone.
@@ -143,6 +171,11 @@ router.post('/', async (req: Request, res: Response) => {
   const parsed = reminderSchema.safeParse(req.body);
   if (!parsed.success) {
     error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  if (!(await mentionableMembers(factionId, parsed.data.mentionUserIds ?? []))) {
+    error(res, 'VALIDATION_ERROR', 'You can only tag members of this faction');
     return;
   }
 
@@ -207,6 +240,11 @@ router.patch('/:reminderId', async (req: Request, res: Response) => {
   });
   if (!parsed.success) {
     error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  if (!(await mentionableMembers(factionId, parsed.data.mentionUserIds ?? []))) {
+    error(res, 'VALIDATION_ERROR', 'You can only tag members of this faction');
     return;
   }
 
@@ -276,16 +314,9 @@ router.post('/:reminderId/send', async (req: Request, res: Response) => {
   }
   if (!(await requireIntegration(factionId, res))) return;
 
-  const result = await postToChannel(reminder.channelId, {
-    embeds: [
-      {
-        ...(reminder.title ? { title: reminder.title } : {}),
-        description: reminder.message,
-        color: 0x5865f2,
-        timestamp: new Date().toISOString(),
-      },
-    ],
-  });
+  // The same builder the scheduled run uses. A preview that differs from the
+  // real thing is worse than no preview.
+  const result = await postToChannel(reminder.channelId, await buildReminderMessage(reminder));
   await recordDeliveryOutcome(factionId, result);
 
   // Deliberately does not touch nextRunAt: sending one by hand is an extra,

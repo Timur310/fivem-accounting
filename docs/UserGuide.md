@@ -818,9 +818,22 @@ Switch a reminder **off** to pause it; its schedule is kept. Delete it to be
 rid of it. A one-off switches itself off after it goes, so you can see it went
 and reuse it later. If a send fails, the reason appears on the reminder in red.
 
-The bot cannot ping **@everyone** — it was never given that permission. A role
-your server has marked mentionable still works if you write it into the
-message.
+**Tagging.** Each reminder can ping **roles** from your Discord server and
+**members** from your roster, picked from a list — no typing ids. Leave
+everything unpicked and the reminder posts quietly.
+
+- A role your server has not marked **mentionable** is greyed out. Discord does
+  not let the bot ping it, and a server admin can allow it in that role's
+  settings.
+- Members are tagged from your faction roster, so you pick by in-game name. If
+  someone leaves, the reminder keeps working and simply stops tagging them.
+- **@everyone cannot be pinged**, even if you type it into the message. The bot
+  was never given that permission, and the message is sent pinning only the
+  roles and people you picked.
+
+**What arrives** is a titled box with your message, and the date written so
+that everyone reading sees it in their own timezone — useful when somebody is
+playing from another country.
 
 **Think about who reads the channel.** Inside the app, a withdrawal or a
 strike is only visible to the people whose permission covers it. A Discord

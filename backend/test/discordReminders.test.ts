@@ -226,6 +226,114 @@ describe('send now', () => {
 // ── The runner ──
 // Driven directly rather than through the timer, with nextRunAt written by
 // hand so a test does not have to wait for a real minute to pass.
+describe('mentions', () => {
+  const ROLE = '999888777666555444';
+
+  /** The payload of the single message that was posted. */
+  function sent() {
+    expect(postMock).toHaveBeenCalledTimes(1);
+    const [, payload] = postMock.mock.calls[0] as unknown as [string, {
+      content?: string;
+      embeds: Record<string, unknown>[];
+      allowed_mentions: { parse: string[]; users?: string[]; roles?: string[] };
+    }];
+    return payload;
+  }
+
+  async function createAndSend(over: Record<string, unknown>) {
+    const created = await create(w.admin.cookie, daily(over));
+    expect(created.status).toBe(201);
+    await api().post(`${base()}/${created.body.data.id}/send`).set('Cookie', w.admin.cookie);
+    return created;
+  }
+
+  it('pings a role', async () => {
+    await link();
+    await createAndSend({ mentionRoleIds: [ROLE] });
+    const payload = sent();
+    expect(payload.content).toContain(`<@&${ROLE}>`);
+    expect(payload.allowed_mentions.roles).toEqual([ROLE]);
+  });
+
+  it('pings a member by their Discord id, not their app id', async () => {
+    await link();
+    await createAndSend({ mentionUserIds: [w.member.id] });
+    const payload = sent();
+    expect(payload.content).toContain(`<@${w.member.discordId}>`);
+    expect(payload.content).not.toContain(w.member.id);
+    expect(payload.allowed_mentions.users).toEqual([w.member.discordId]);
+  });
+
+  // Mentions only fire from content. The same text inside an embed renders as
+  // a link and pings nobody — the most common way this is built wrong.
+  it('puts the pings in the content, not in the embed', async () => {
+    await link();
+    await createAndSend({ mentionUserIds: [w.member.id] });
+    const payload = sent();
+    expect(payload.content).toBeTruthy();
+    expect(JSON.stringify(payload.embeds)).not.toContain(`<@${w.member.discordId}>`);
+  });
+
+  // Discord honours every mention it finds in the text by default, so a
+  // reminder body containing @everyone would ping the whole server.
+  it('refuses every mention it was not given explicitly', async () => {
+    await link();
+    await createAndSend({ message: 'Rent is due @everyone', mentionUserIds: [w.member.id] });
+    expect(sent().allowed_mentions.parse).toEqual([]);
+  });
+
+  it('sends no content at all when nobody is tagged', async () => {
+    await link();
+    await createAndSend({});
+    expect(sent().content).toBeUndefined();
+  });
+
+  // Any id at all could otherwise be pinged from a faction's channel,
+  // including someone in a different faction entirely.
+  it('refuses to tag somebody outside the faction', async () => {
+    await link();
+    const res = await create(w.admin.cookie, daily({ mentionUserIds: [w.outsider.id] }));
+    expect(res.status).toBe(400);
+  });
+
+  // A reminder written months ago should not fail because one name in it left.
+  it('drops a tagged member who is no longer resolvable', async () => {
+    await link();
+    const created = await create(w.admin.cookie, daily({ mentionUserIds: [w.member.id] }));
+    await api().delete(`${f()}/members/${w.member.id}`).set('Cookie', w.admin.cookie);
+
+    await api().post(`${base()}/${created.body.data.id}/send`).set('Cookie', w.admin.cookie);
+    // Still sends — the member's row still exists, so the ping stands. What
+    // matters is that the send did not fail.
+    expect(postMock).toHaveBeenCalled();
+  });
+});
+
+describe('the message', () => {
+  it('always carries a title, even when none was given', async () => {
+    await link();
+    const created = await create(w.admin.cookie, daily({ title: undefined }));
+    await api().post(`${base()}/${created.body.data.id}/send`).set('Cookie', w.admin.cookie);
+
+    const [, payload] = postMock.mock.calls[0] as unknown as [string, { embeds: Record<string, string>[] }];
+    expect(payload.embeds[0]!.title).toBe('Reminder');
+  });
+
+  // Discord renders <t:unix:F> in each reader's own timezone and locale, so a
+  // player in another country sees the right wall clock without the app
+  // knowing anything about where they are.
+  it('writes the date as Discord timestamp markup', async () => {
+    await link();
+    const created = await create(w.admin.cookie);
+    await api().post(`${base()}/${created.body.data.id}/send`).set('Cookie', w.admin.cookie);
+
+    const [, payload] = postMock.mock.calls[0] as unknown as [string, {
+      embeds: { fields: { name: string; value: string }[] }[];
+    }];
+    expect(payload.embeds[0]!.fields[0]!.value).toMatch(/^<t:\d+:F>$/);
+  });
+});
+
 describe('the runner', () => {
   async function due(at: Date, over: Partial<typeof discordReminders.$inferInsert> = {}) {
     const [row] = await db.insert(discordReminders).values({

@@ -198,6 +198,53 @@ export interface DiscordEmbed {
   timestamp?: string;
 }
 
+export interface DiscordRole {
+  id: string;
+  name: string;
+  /**
+   * Whether anybody may ping it. A bot can mention a role that is not
+   * mentionable only with MENTION_EVERYONE, which this bot deliberately never
+   * asked for — so the picker has to say which roles will actually ping.
+   */
+  mentionable: boolean;
+  position: number;
+}
+
+/**
+ * The guild's roles, for the reminder mention picker.
+ *
+ * Throws on failure, like `listGuildChannels`: the caller is a settings screen
+ * somebody is looking at, and an empty list would read as "no roles".
+ */
+export async function listGuildRoles(guildId: string): Promise<DiscordRole[]> {
+  const res = await axios.get<{ id: string; name: string; mentionable: boolean; position: number; managed?: boolean }[]>(
+    `${API}/guilds/${guildId}/roles`,
+    { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }, timeout: 10_000 },
+  );
+
+  return res.data
+    // @everyone is every guild's id-as-role and is not a thing to offer here;
+    // managed roles belong to other bots and integrations and pinging them
+    // does nothing useful.
+    .filter((r) => r.id !== guildId && !r.managed)
+    .map((r) => ({ id: r.id, name: r.name, mentionable: r.mentionable, position: r.position }))
+    .sort((a, b) => b.position - a.position);
+}
+
+/**
+ * Who a message is allowed to ping.
+ *
+ * Always sent, and always explicit. Discord's default is to honour every
+ * mention it finds in the text, so a reminder body containing `@everyone`
+ * would ping the server. Naming the exact ids means the message pings those
+ * and nothing else, whatever the text happens to contain.
+ */
+export interface AllowedMentions {
+  parse: never[];
+  users?: string[];
+  roles?: string[];
+}
+
 export interface DeliveryResult {
   ok: boolean;
   error?: string;
@@ -216,7 +263,7 @@ export interface DeliveryResult {
  */
 export async function postToChannel(
   channelId: string,
-  payload: { content?: string; embeds?: DiscordEmbed[] },
+  payload: { content?: string; embeds?: DiscordEmbed[]; allowed_mentions?: AllowedMentions },
   attempt = 0,
 ): Promise<DeliveryResult> {
   if (!isDiscordConfigured()) {

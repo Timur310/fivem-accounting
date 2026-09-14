@@ -755,6 +755,16 @@ export const discordReminders = pgTable('discord_reminders', {
   /** The single moment a one-off fires. */
   runAt:        timestamp('run_at', { withTimezone: true }),
 
+  // Who gets pinged. Roles are Discord's own snowflakes; people are *this
+  // app's* user ids, resolved to a Discord id when the message goes out.
+  //
+  // Storing our ids rather than theirs keeps the picker able to show in-game
+  // names, and means a reminder written against a member survives them being
+  // renamed on Discord. A member who leaves the faction simply stops being
+  // resolved — see resolveMentions.
+  mentionRoleIds: jsonb('mention_role_ids').$type<string[]>(),
+  mentionUserIds: jsonb('mention_user_ids').$type<string[]>(),
+
   isEnabled:   boolean('is_enabled').notNull().default(true),
   nextRunAt:   timestamp('next_run_at', { withTimezone: true }),
   lastRunAt:   timestamp('last_run_at', { withTimezone: true }),

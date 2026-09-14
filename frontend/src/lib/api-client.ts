@@ -79,6 +79,7 @@ import type {
   DiscordChannel,
   DiscordEventType,
   DiscordReminder,
+  DiscordRole,
   ReminderInput,
 } from './api-types';
 
@@ -819,6 +820,11 @@ export const discordApi = {
 
   // `leave` also removes the bot from the guild. Opt-in: the same bot may be
   // doing other work in that server.
+  roles: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ roles: DiscordRole[] }>>(`/factions/${factionId}/discord/roles`)
+      .then((r) => r.data.data.roles),
+
   unlink: (factionId: string, leave = false) =>
     api
       .delete<ApiSuccessResponse<{ unlinked: boolean; left: boolean | null; leaveError?: string }>>(
