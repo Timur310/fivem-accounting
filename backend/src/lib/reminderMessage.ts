@@ -1,6 +1,6 @@
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, type DiscordReminder } from '../db/schema.js';
+import { factions, users, type DiscordReminder } from '../db/schema.js';
 import type { AllowedMentions, DiscordEmbed } from './discord.js';
 
 /**
@@ -62,10 +62,72 @@ async function resolveMentions(reminder: DiscordReminder): Promise<{
   return { content, users: discordIds, roles };
 }
 
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** `1st`, `2nd`, `23rd` — for the monthly line. */
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  const suffix = ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
+/**
+ * How often this reminder comes round, in a sentence.
+ *
+ * The old embed carried a "When" field holding the moment the message was
+ * sent, which Discord was already printing under it — so the one field on the
+ * reminder said nothing the reader did not have. The useful answer to "when"
+ * on a recurring reminder is the recurrence, and it is the thing nobody in the
+ * channel can look up for themselves.
+ */
+function recurrence(reminder: DiscordReminder): string | null {
+  const time = reminder.timeOfDay;
+
+  switch (reminder.scheduleType) {
+    case 'daily':
+      return time ? `Every day at ${time}` : 'Every day';
+
+    case 'weekly': {
+      const days = (reminder.weekdays ?? [])
+        .filter((d) => d >= 0 && d <= 6)
+        .sort((a, b) => a - b)
+        .map((d) => WEEKDAYS[d]);
+      if (days.length === 0) return null;
+      const list =
+        days.length === 1
+          ? days[0]
+          : `${days.slice(0, -1).join(', ')} and ${days[days.length - 1]}`;
+      return time ? `Every ${list} at ${time}` : `Every ${list}`;
+    }
+
+    case 'monthly': {
+      if (!reminder.dayOfMonth) return null;
+      // 31 is stored as "the last day" and clamped per month, so saying the
+      // 31st in a 30-day month would be a lie the runner does not tell.
+      const day = reminder.dayOfMonth >= 31 ? 'the last day' : `the ${ordinal(reminder.dayOfMonth)}`;
+      return time ? `Monthly on ${day} at ${time}` : `Monthly on ${day}`;
+    }
+
+    // A one-off has no next time worth printing: this is the only one there
+    // was ever going to be.
+    default:
+      return null;
+  }
+}
+
+/** The faction's brand colour as Discord wants it, or blurple. */
+function colorFor(brandColor: string | null): number {
+  if (brandColor && /^#[0-9a-fA-F]{6}$/.test(brandColor.trim())) {
+    return parseInt(brandColor.trim().slice(1), 16);
+  }
+  return 0x5865f2;
+}
+
 /**
  * Build the message.
  *
- * The date is written as Discord's own `<t:unix:F>` markup rather than a
+ * The date is written as Discord's own `<t:unix:…>` markup rather than a
  * formatted string. Discord renders it in each reader's timezone and locale,
  * so a faction with somebody playing from another country sees the right wall
  * clock without the app knowing anything about where they are.
@@ -74,8 +136,28 @@ export async function buildReminderMessage(
   reminder: DiscordReminder,
   sentAt: Date = new Date(),
 ): Promise<ReminderMessage> {
-  const mentions = await resolveMentions(reminder);
+  const [mentions, [faction]] = await Promise.all([
+    resolveMentions(reminder),
+    db
+      .select({ name: factions.name, brandColor: factions.brandColor })
+      .from(factions)
+      .where(eq(factions.id, reminder.factionId))
+      .limit(1),
+  ]);
+
   const unix = Math.floor(sentAt.getTime() / 1000);
+  const every = recurrence(reminder);
+
+  // The title carries the bell and the reminder's own name; the body is the
+  // message itself, given a heading so it is the thing the eye lands on rather
+  // than one grey paragraph among the channel's other grey paragraphs.
+  const title = reminder.title?.trim() || 'Reminder';
+
+  // A short single-line message reads well as a heading. A paragraph does not
+  // — Discord only styles the first line, so the rest would drop to body size
+  // mid-sentence and look broken rather than emphatic.
+  const body = reminder.message;
+  const asHeading = !body.includes('\n') && body.length <= 80;
 
   return {
     ...(mentions.content ? { content: mentions.content } : {}),
@@ -83,10 +165,18 @@ export async function buildReminderMessage(
       {
         // Always titled. An untitled embed is a wall of text with no handle,
         // and "Reminder" is at least honest about what it is.
-        title: reminder.title || 'Reminder',
-        description: reminder.message,
-        color: 0x5865f2,
-        fields: [{ name: 'When', value: `<t:${unix}:F>` }],
+        title: `\u{1F514}  ${title}`,
+        description: asHeading ? `### ${body}` : body,
+        color: colorFor(faction?.brandColor ?? null),
+        fields: [
+          { name: 'Sent', value: `<t:${unix}:f>`, inline: true },
+          ...(every ? [{ name: 'Repeats', value: every, inline: true }] : []),
+        ],
+        footer: {
+          text: faction?.name
+            ? `${faction.name} • reminder`
+            : 'Reminder',
+        },
         timestamp: sentAt.toISOString(),
       },
     ],

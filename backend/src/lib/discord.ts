@@ -207,8 +207,12 @@ export interface DiscordEmbed {
   title?: string;
   description?: string;
   color?: number;
+  /** Shown above the title, small, with an optional avatar beside it. */
+  author?: { name: string; icon_url?: string; url?: string };
   fields?: { name: string; value: string; inline?: boolean }[];
-  footer?: { text: string };
+  /** Square artwork in the top-right corner. Must be an http(s) URL. */
+  thumbnail?: { url: string };
+  footer?: { text: string; icon_url?: string };
   timestamp?: string;
 }
 
