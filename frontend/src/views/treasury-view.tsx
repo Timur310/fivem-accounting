@@ -5,6 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { treasuryApi, expensesApi, itemTypesApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -230,20 +234,25 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
       {/* ══ Balance Cards per Item Type ══ */}
       <Card>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
-          <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
-            <Wallet className="h-4 w-4 text-zinc-400" />
-            {t('treasury.balancesByItemType')}
-          </CardTitle>
+          {/* Title and its collapse belong together: with three loose children
+              under justify-between the toggle drifted into the middle of the
+              row, and wrapped onto its own line before the filters did. */}
+          <div className="flex items-center gap-1">
+            <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
+              <Wallet className="h-4 w-4 text-zinc-400" />
+              {t('treasury.balancesByItemType')}
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-zinc-400"
+              onClick={() => setBalancesOpen((v) => !v)}
+            >
+              {balancesOpen ? t('treasury.hideBalances') : t('treasury.showBalances', { count: balances.length })}
+              <ChevronDown className={`h-3.5 w-3.5 ml-1.5 transition-transform duration-200 ${balancesOpen ? 'rotate-180' : ''}`} />
+            </Button>
+          </div>
           {/* Nothing to search or reorder until there is a list. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-zinc-400"
-            onClick={() => setBalancesOpen((v) => !v)}
-          >
-            {balancesOpen ? t('treasury.hideBalances') : t('treasury.showBalances', { count: balances.length })}
-            <ChevronDown className={`h-3.5 w-3.5 ml-1.5 transition-transform duration-200 ${balancesOpen ? 'rotate-180' : ''}`} />
-          </Button>
           {balancesOpen && balances.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="relative">
@@ -440,6 +449,9 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
   const [formAmount, setFormAmount] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formDate, setFormDate] = useState(todayLocalDateString());
+  // Deleting used to fire straight off the trash icon. An expense is a real
+  // ledger row that moves the vault, and it sits one pixel from Edit.
+  const [confirmDelete, setConfirmDelete] = useState<Expense | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['expenses', factionId],
@@ -472,15 +484,6 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
     staleTime: 0,
   });
   const monthTotals = monthData?.categoryTotals ?? [];
-
-  const budgetRows = budgets
-    ? (Object.entries(budgets) as [ExpenseCategory, number | null][])
-      .filter(([, cap]) => cap !== null && cap !== undefined)
-      .map(([category, cap]) => {
-        const spent = monthTotals.find((ct) => ct.category === category)?.total ?? 0;
-        return { category, cap: cap as number, spent, pct: (cap as number) > 0 ? (spent / (cap as number)) * 100 : 0 };
-      })
-    : [];
 
   const resetForm = () => {
     setEditId(null);
@@ -539,6 +542,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
     mutationFn: (expenseId: string) => expensesApi.remove(factionId, expenseId),
     onSuccess: () => {
       invalidate();
+      setConfirmDelete(null);
       toast({ title: t('expenses.deleted') });
     },
     onError: (err: unknown) => {
@@ -548,6 +552,38 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
 
   const expenses = data?.expenses ?? [];
   const categoryTotals = data?.categoryTotals ?? [];
+
+  /**
+   * One tile per category: what it has cost over the listed period, and how
+   * the month sits against its cap where one is set.
+   *
+   * Every category that has either spending or a budget appears, so a cap
+   * nobody has spent against yet still shows — a budget you cannot see until
+   * you break it is not much of a budget.
+   */
+  const categorySummary = useMemo(() => {
+    const seen = new Set<ExpenseCategory>();
+    for (const ct of categoryTotals) seen.add(ct.category);
+    if (budgets) {
+      for (const [category, cap] of Object.entries(budgets) as [ExpenseCategory, number | null][]) {
+        if (cap !== null && cap !== undefined) seen.add(category);
+      }
+    }
+
+    return EXPENSE_CATEGORIES.filter((c) => seen.has(c)).map((category) => {
+      const total = categoryTotals.find((ct) => ct.category === category)?.total ?? 0;
+      const cap = budgets?.[category] ?? null;
+      const spent = monthTotals.find((ct) => ct.category === category)?.total ?? 0;
+      return {
+        category,
+        label: EXPENSE_CATEGORY_KEYS[category] ? t(EXPENSE_CATEGORY_KEYS[category]) : category,
+        total,
+        cap,
+        spent,
+        pct: cap && cap > 0 ? (spent / cap) * 100 : null,
+      };
+    });
+  }, [categoryTotals, budgets, monthTotals, t]);
 
   const itemTypeOptions: SearchableSelectOption[] = useMemo(
     () => itemTypes.map((it: ItemType) => ({ value: it.id, label: it.name })),
@@ -579,36 +615,49 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
         )}
       </CardHeader>
       <CardContent>
-        {/* Totals per category over the filtered set the list below shows. */}
-        {categoryTotals.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {categoryTotals.map((ct) => (
-              <Badge key={ct.category} variant="outline" className="text-[11px] text-zinc-400">
-                {EXPENSE_CATEGORY_KEYS[ct.category] ? t(EXPENSE_CATEGORY_KEYS[ct.category]) : ct.category}
-                : <span className="tabular-nums text-zinc-200">{formatNumber(ct.total)}</span>
-              </Badge>
-            ))}
-          </div>
-        )}
-        {budgetRows.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2 mb-4">
-            {budgetRows.map((b) => {
-              const over = b.pct >= 100;
-              const near = b.pct >= 80;
+        {/* One strip, not two. The totals were a row of loose badges and the
+            budgets a separate grid below them, so every capped category
+            appeared twice and neither block looked like it belonged to the
+            other. A category is one tile: what it has cost, and how that sits
+            against its cap when it has one. */}
+        {categorySummary.length > 0 && (
+          <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {categorySummary.map((c) => {
+              const over = c.pct !== null && c.pct >= 100;
+              const near = c.pct !== null && c.pct >= 80 && !over;
               return (
-                <div key={b.category} className={`rounded-lg border p-3 space-y-2 ${over ? 'border-red-500/30 bg-red-500/[0.04]' : near ? 'border-amber-500/30 bg-amber-500/[0.04]' : 'border-white/[0.06]'}`}>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-400">{EXPENSE_CATEGORY_KEYS[b.category] ? t(EXPENSE_CATEGORY_KEYS[b.category]) : b.category} · {t('treasury.budgetMonth')}</span>
-                    <span className={`tabular-nums ${over ? 'text-red-400' : near ? 'text-amber-400' : 'text-zinc-300'}`}>
-                      {formatNumber(b.spent)} / {formatNumber(b.cap)} ({b.pct.toFixed(0)}%)
+                <div
+                  key={c.category}
+                  className={`rounded-lg border px-3 py-2.5 ${
+                    over ? 'border-red-500/30 bg-red-500/[0.04]'
+                    : near ? 'border-amber-500/30 bg-amber-500/[0.04]'
+                    : 'border-white/[0.06]'
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-xs text-zinc-500">{c.label}</span>
+                    <span className="shrink-0 text-sm font-medium tabular-nums text-zinc-200">
+                      {formatNumber(c.total)}
                     </span>
                   </div>
-                  <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full energy-bar transition-all duration-500 ${over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                      style={{ width: `${Math.min(b.pct, 100)}%` }}
-                    />
-                  </div>
+                  {c.cap !== null && (
+                    <>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
+                        <div
+                          className={`energy-bar h-full rounded-full transition-all duration-500 ${
+                            over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${Math.min(c.pct ?? 0, 100)}%` }}
+                        />
+                      </div>
+                      <p className={`mt-1 text-[11px] tabular-nums ${
+                        over ? 'text-red-400' : near ? 'text-amber-400' : 'text-zinc-600'
+                      }`}>
+                        {t('treasury.budgetMonth')} · {formatNumber(c.spent)} / {formatNumber(c.cap)}
+                        {' '}({(c.pct ?? 0).toFixed(0)}%)
+                      </p>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -623,30 +672,45 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
         ) : expenses.length === 0 ? (
           <EmptyState icon={Receipt} title={t('expenses.none')} compact />
         ) : (
-          <div className="space-y-1">
+          // Columns, not a sentence. The amount used to sit mid-paragraph
+          // between a badge and the item name, so nothing lined up and the
+          // figures — the only reason to open this tab — could not be scanned
+          // down the page.
+          <div className="divide-y divide-white/[0.04]">
             {expenses.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+              <div
+                key={e.id}
+                className="group -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors duration-100 hover:bg-white/[0.02]"
+              >
                 <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-7 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm">
-                    <Badge variant="outline" className="text-[10px] mr-2 text-zinc-400">
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm text-zinc-200">{e.itemTypeName}</span>
+                    <Badge variant="outline" className="shrink-0 text-[10px] text-zinc-400">
                       {EXPENSE_CATEGORY_KEYS[e.category] ? t(EXPENSE_CATEGORY_KEYS[e.category]) : e.category}
                     </Badge>
-                    <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
-                    <span className="text-zinc-600"> &middot; {e.itemTypeName}</span>
-                  </p>
-                  <p className="text-[11px] text-zinc-600 truncate">
+                  </div>
+                  <p className="truncate text-[11px] text-zinc-600">
                     {e.expenseDate}
-                    {e.description && ` — ${e.description}`}
-                    {e.creatorUsername && ` — ${displayName({ username: e.creatorUsername, inGameName: e.creatorInGameName })}`}
+                    {e.creatorUsername && ` · ${displayName({ username: e.creatorUsername, inGameName: e.creatorInGameName })}`}
+                    {e.description && ` · ${e.description}`}
                   </p>
                 </div>
+
+                <span className="shrink-0 text-sm font-medium tabular-nums text-zinc-200">
+                  {formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}
+                </span>
+
                 {canManage && (
-                  <div className="flex items-center gap-1 shrink-0">
+                  // Reserved width whether or not the buttons are showing, so
+                  // the amount column does not shift as the mouse moves down
+                  // the list.
+                  <div className="flex w-[68px] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-100 group-hover:opacity-100 focus-within:opacity-100">
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(e)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => deleteMutation.mutate(e.id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => setConfirmDelete(e)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -656,6 +720,30 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('expenses.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete && t('expenses.deleteBody', {
+                amount: formatAmount(confirmDelete.amount, confirmDelete.itemUnit, confirmDelete.itemIsCurrency),
+                item: confirmDelete.itemTypeName,
+                date: confirmDelete.expenseDate,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDelete && deleteMutation.mutate(confirmDelete.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) setDialogOpen(false); }}>

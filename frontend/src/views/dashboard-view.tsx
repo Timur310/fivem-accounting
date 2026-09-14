@@ -44,6 +44,12 @@ interface Props {
   isFactionMember?: boolean;
 }
 
+/**
+ * How many item types the dashboard shows before asking. Enough to fill two
+ * rows on a wide screen without the panel becoming the page.
+ */
+const TREASURY_PREVIEW_COUNT = 8;
+
 export function DashboardView({ factionId, canLogEntries = false, isFactionMember = false }: Props) {
   const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
@@ -192,6 +198,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
   // Charts and export are reference material, not the daily glance — folded
   // away by default so the page reads in one screenful.
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [showAllBalances, setShowAllBalances] = useState(false);
 
   // Balance counts up on load: the vault "arrives" instead of popping in.
   // Skipped entirely when the user prefers reduced motion.
@@ -243,6 +250,15 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
   }
 
   const { faction, totalsByType, grandTotal, treasuryBalances, netBalance, memberCount, adminCount, totalEntries, topContributors, recentEntries, inactiveMembers, inactivityThresholdDays } = data;
+
+  // Biggest holdings first, and only the first few. Sorted by size rather than
+  // by whatever order the query returned, so the cut keeps what matters.
+  const sortedTreasuryBalances = [...(treasuryBalances ?? [])]
+    .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+  const visibleTreasuryBalances = showAllBalances
+    ? sortedTreasuryBalances
+    : sortedTreasuryBalances.slice(0, TREASURY_PREVIEW_COUNT);
+  const hiddenBalanceCount = sortedTreasuryBalances.length - visibleTreasuryBalances.length;
   const activeQuotas = (quotasList as import('@/lib/api-types').Quota[]).filter(q => q.isActive && q.periodActive);
   // A quota period that ended short of its target used to vanish when the
   // next one began — this is the only trace that it was missed.
@@ -676,48 +692,59 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             )}
           </CardHeader>
           <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {(treasuryBalances?.length ?? 0) > 0
-                ? treasuryBalances.map((b) => (
+                ? visibleTreasuryBalances.map((b) => (
                   <div
                     key={b.itemTypeId}
-                    className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] px-3 py-2.5 transition-all duration-150 hover:border-white/[0.1]"
+                    // In and out move to the hover title. They are context for
+                    // a number, not a second number, and printing them under
+                    // every tile is what made this panel a scroll.
+                    title={t('dashboard.inOut', { inflow: formatAmount(b.inflow, b.unit, b.isCurrency), outflow: formatAmount(b.outflow, b.unit, b.isCurrency) })}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={b.imageUrl} icon={b.icon} category={b.category} className="size-8" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-300 truncate">{b.itemTypeName}</p>
-                        <p className="text-xs text-zinc-600">{t('dashboard.inOut', { inflow: formatAmount(b.inflow, b.unit, b.isCurrency), outflow: formatAmount(b.outflow, b.unit, b.isCurrency) })}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-medium tabular-nums" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
-                        {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
-                      </p>
-                    </div>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <ItemIcon src={b.imageUrl} icon={b.icon} category={b.category} className="size-7 shrink-0" />
+                      <span className="text-sm text-zinc-300 truncate">{b.itemTypeName}</span>
+                    </span>
+                    <span className="text-sm font-medium tabular-nums shrink-0" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
+                      {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
+                    </span>
                   </div>
                 ))
                 : totalsByType.map((row) => (
                   <div
                     key={row.itemTypeId}
-                    className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3.5 transition-all duration-150 hover:border-white/[0.1]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] px-3 py-2.5 transition-all duration-150 hover:border-white/[0.1]"
+                    title={row.unit}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-zinc-300 truncate">{row.itemTypeName}</p>
-                        <p className="text-xs text-zinc-600">{row.unit}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-medium tabular-nums text-zinc-100">
-                        {formatAmount(row.total, row.unit, row.isCurrency)}
-                      </p>
-                    </div>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-7 shrink-0" />
+                      <span className="text-sm text-zinc-300 truncate">{row.itemTypeName}</span>
+                    </span>
+                    <span className="text-sm font-medium tabular-nums text-zinc-100 shrink-0">
+                      {formatAmount(row.total, row.unit, row.isCurrency)}
+                    </span>
                   </div>
                 ))
               }
             </div>
+            {/* A faction with thirty item types turned the dashboard into a
+                scroll before anything else on it could be read. The ones
+                holding the most are the ones worth seeing without asking. */}
+            {hiddenBalanceCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 w-full text-xs text-zinc-400"
+                onClick={() => setShowAllBalances((v) => !v)}
+              >
+                {showAllBalances
+                  ? t('dashboard.showFewerTypes')
+                  : t('dashboard.showAllTypes', { count: hiddenBalanceCount })}
+                <ChevronDown className={`ml-1.5 h-3.5 w-3.5 transition-transform duration-200 ${showAllBalances ? 'rotate-180' : ''}`} />
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
