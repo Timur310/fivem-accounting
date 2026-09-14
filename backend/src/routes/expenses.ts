@@ -7,6 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { parsePagination } from '../lib/types.js';
 import { toDateString } from '../lib/date.js';
 
@@ -101,6 +102,15 @@ router.post('/', requirePermission('manage_expenses'), async (req: Request, res:
     entityId: created.id,
     details: { itemTypeId, amount: Number(amount), category, expenseDate: date },
     req,
+  });
+
+  void dispatchDiscord(factionId, {
+    type: 'expense_recorded',
+    actorUserId: req.user!.id,
+    itemTypeId: created.itemTypeId,
+    amount: created.amount,
+    category: created.category,
+    description: created.description,
   });
 
   success(res, created, 201);

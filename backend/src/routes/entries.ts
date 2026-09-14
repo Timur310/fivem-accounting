@@ -15,6 +15,7 @@ import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
@@ -263,6 +264,18 @@ router.post('/', async (req: Request, res: Response) => {
     error(res, 'INTERNAL_ERROR', 'Failed to create entry', 500);
     return;
   }
+
+  // Not awaited: a Discord round trip is a couple of hundred milliseconds and
+  // nobody logging an entry should wait for one. dispatchDiscord never
+  // rejects, so there is no unhandled rejection to leak.
+  void dispatchDiscord(factionId, {
+    type: 'entry_logged',
+    actorUserId: entry.userId,
+    itemTypeId: entry.itemTypeId,
+    amount: entry.amount,
+    description: entry.description,
+    anonymous,
+  });
 
   success(res, entry, 201);
 });

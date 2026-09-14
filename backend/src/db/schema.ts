@@ -634,6 +634,14 @@ export const discordIntegrations = pgTable('discord_integrations', {
   // instead of presenting as "connected" while nothing arrives.
   lastError:   text('last_error'),
   lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
+  // The language the bot writes its messages in.
+  //
+  // A Discord message has no viewer: it is one text read by everyone in the
+  // channel, so it cannot follow each member's own language the way the
+  // interface does. The faction picks one. Only 'en' is rendered today — the
+  // column and the (disabled) picker exist so adding Hungarian later is a
+  // translation job and not a migration.
+  locale:      varchar('locale', { length: 5 }).notNull().default('en'),
 });
 
 export const discordIntegrationsRelations = relations(discordIntegrations, ({ one, many }) => ({

@@ -741,6 +741,14 @@ Off: nothing is posted until you decide it should be.
 The **send icon** beside each row posts a test message to that channel, so you
 can confirm it arrives before waiting for something real to happen.
 
+Once a channel is set, the real thing posts by itself: somebody logs an entry,
+the message appears. Nothing is ever sent for an event you left on Off.
+
+**Message language** is English, and the picker is switched off for now. Unlike
+the app, a Discord message has no single reader — everyone in the channel sees
+the same text — so it cannot follow each member's own language. The faction
+will choose one once there is a second language to choose.
+
 **If it stops working.** A red bar appears here with the last failure. Almost
 always it means the bot was removed from the server, or lost access to a
 channel it used to be able to post in. Reconnecting fixes the first; fixing the

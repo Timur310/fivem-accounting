@@ -7,6 +7,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { computeTreasuryBalances } from '../lib/treasury.js';
 import { todayDateString } from '../lib/date.js';
@@ -211,6 +212,15 @@ router.post('/', async (req: Request, res: Response) => {
     error(res, 'INTERNAL_ERROR', 'Failed to record the conversion', 500);
     return;
   }
+
+  void dispatchDiscord(factionId, {
+    type: 'laundering_completed',
+    actorUserId: req.user!.id,
+    fromItemTypeId: from.id,
+    fromAmount: String(amountIn),
+    toItemTypeId: to.id,
+    toAmount: String(amountOut),
+  });
 
   success(
     res,

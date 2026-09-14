@@ -746,9 +746,15 @@ always it means the bot was removed from the server, or lost access to a
 channel it used to be able to post in. Reconnecting fixes the first; fixing the
 channel's permissions in Discord fixes the second.
 
-**Disconnecting** stops the posting and forgets your channel choices. The bot
-itself stays in your Discord server until you remove it there — only a Discord
-admin can do that, and we would not want the ability.
+**Disconnecting** stops the posting and forgets your channel choices. The
+dialog offers one extra, switched off: **also remove the bot from the server**.
+
+Leave it off if that same bot does anything else in your Discord — a
+whitelist, roles, anything at all — because removing it stops that too. Off
+means the bot simply stays where it is, silent and harmless, and any Discord
+admin can kick it by hand later (Server Settings → Integrations, or right-click
+→ Kick). Turn it on and the bot removes itself as it disconnects. If Discord
+refuses, you are told so rather than left assuming it is gone.
 
 **If the whole section says there is no bot set up**, that is the app, not your
 faction: Discord delivery is switched off for this installation. Send a feature

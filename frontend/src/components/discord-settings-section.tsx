@@ -212,6 +212,25 @@ export function DiscordSettingsSection({ factionId }: Props) {
                 </div>
               </div>
 
+              {/* Disabled, and honest about why. A Discord message is one text
+                  read by everyone in the channel, so it cannot follow each
+                  member's own language the way the interface does — the
+                  faction will pick one, once there is a second to pick. */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+                <div className="space-y-1">
+                  <span className="text-sm font-medium">{t('discord.language')}</span>
+                  <p className="text-xs text-muted-foreground">{t('discord.languageHint')}</p>
+                </div>
+                <SearchableSelect
+                  value={status.integration!.locale}
+                  onValueChange={() => {}}
+                  options={[{ value: 'en', label: t('discord.languageEnglish') }]}
+                  disabled
+                  className="w-56"
+                  aria-label={t('discord.language')}
+                />
+              </div>
+
               {/* A link that quietly stopped working still reads as connected
                   everywhere else, so the last failure is surfaced here. */}
               {status.integration!.lastError && (

@@ -1331,6 +1331,12 @@ export interface DiscordIntegration {
   guildName: string | null;
   linkedAt: string;
   linkedByName: string;
+  /**
+   * The language the bot writes in. Only 'en' is rendered today — a Discord
+   * message has no viewer to follow, so the faction picks one for everybody
+   * and the picker stays disabled until a second language exists.
+   */
+  locale: string;
   /** The last delivery failure, so a link that quietly broke says so. */
   lastError: string | null;
   lastErrorAt: string | null;
