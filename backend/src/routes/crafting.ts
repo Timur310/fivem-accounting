@@ -21,15 +21,14 @@ import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { todayDateString } from '../lib/date.js';
 import {
-  balancesFor,
   compareQuantity,
   loadRecipe,
-  lockItemTypes,
   maxCraftable,
   scaleQuantity,
   shortfalls,
   type LoadedRecipe,
 } from '../lib/crafting.js';
+import { balancesFor, lockItemTypes } from '../lib/treasury.js';
 
 /**
  * The crafting bench.

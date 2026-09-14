@@ -9,7 +9,8 @@ import { requireFactionMember, requirePermission } from '../middleware/factionAc
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
-import { computeTreasuryBalances } from '../lib/treasury.js';
+import { balancesFor, computeTreasuryBalances, lockItemTypes } from '../lib/treasury.js';
+import { compareQuantity } from '../lib/crafting.js';
 import { todayDateString } from '../lib/date.js';
 
 /**
@@ -120,27 +121,17 @@ router.post('/', async (req: Request, res: Response) => {
     result = await db.transaction(async (tx: TransactionLike) => {
       const anonymousUserId = await resolveAnonymousUserId(tx);
 
-      // The vault has to hold what is being washed. Computed inside the
-      // transaction so two conversions cannot both spend the same balance.
-      const [row] = await tx
-        .select({
-          balance: sql<string>`
-            COALESCE((
-              SELECT SUM(CAST(amount AS NUMERIC)) FROM entries
-              WHERE faction_id = ${factionId} AND item_type_id = ${fromItemTypeId} AND is_deleted = false
-            ), 0)
-            - COALESCE((
-              SELECT SUM(CAST(amount AS NUMERIC)) FROM payouts
-              WHERE faction_id = ${factionId} AND item_type_id = ${fromItemTypeId}
-                AND is_deleted = false AND status = 'completed'
-            ), 0)`,
-        })
-        .from(itemTypes)
-        .where(eq(itemTypes.id, fromItemTypeId))
-        .for('update');
-
-      const available = Number(row?.balance ?? 0);
-      if (available < Number(amountIn)) {
+      // The vault has to hold what is being washed. Locked and read inside
+      // the transaction so two conversions cannot both spend the same balance.
+      //
+      // This used to be a hand-rolled copy of the balance query that left
+      // **expenses** out, so the desk would green-light a wash the treasury
+      // screen said the faction could not afford. It is the shared query now,
+      // which is the same one the treasury screen and crafting use.
+      await lockItemTypes(tx, [fromItemTypeId, toItemTypeId]);
+      const balances = await balancesFor(factionId, [fromItemTypeId], tx);
+      const available = balances.get(fromItemTypeId) ?? '0';
+      if (compareQuantity(available, amountIn) < 0) {
         throw new InsufficientBalanceError(available);
       }
 
@@ -237,7 +228,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 /** Thrown inside the transaction so the catch can answer 400, not 500. */
 class InsufficientBalanceError extends Error {
-  constructor(public available: number) {
+  constructor(public available: string) {
     super('Insufficient treasury balance');
   }
 }
