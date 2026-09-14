@@ -97,8 +97,8 @@ button collapses it.
 - **Play** — Dashboard, Entries, Withdrawals, Announcements, Activity,
   Leaderboard, Support and the User Guide. The ones you open daily, and all
   open to every member whatever their rank.
-- **Manage** — Members, Strikes, Treasury, Laundering, Reports, Audit logs,
-  Settings. Visible only if your rank grants them (§4).
+- **Manage** — Members, Strikes, Treasury, Laundering, Crafting, Reports,
+  Audit logs, Settings. Visible only if your rank grants them (§4).
 - **Server** — superadmin only: faction administration and the Support Inbox.
 
 Each group collapses on its own, so a plain member's sidebar stays short even
@@ -176,6 +176,8 @@ sidebar shows exactly what your rank gives you:
 | `manage_expenses` | Recording the faction's running costs |
 | `manage_discord` | Connecting a Discord server and choosing what gets posted there (§8.6) |
 | `manage_laundering` | The laundering desk |
+| `manage_crafting` | Writing and retiring recipes, and reverting a craft (§6.7) |
+| `craft` | Running a saved recipe (§6.7). Safe to hand out widely — it spends materials, it does not define what they cost |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
@@ -611,7 +613,62 @@ currency into another** — dirty in, clean back.
 - Currencies only — converting counted goods would be inventory correction
   wearing a laundering costume.
 
-### 6.7 Strikes (`manage_strikes`)
+### 6.7 Crafting (`manage_crafting`, `craft`)
+
+Factions make things. Before this screen existed, recording that meant a
+withdrawal for every component and an entry for the result — by hand, every
+time, and one of them eventually wrong.
+
+A **recipe** says it once. Running it writes every movement in a single go, or
+none of them.
+
+**Two permissions, on purpose.** `manage_crafting` writes the recipes;
+`craft` runs them. What a craft costs the faction is a leadership decision;
+pressing the button is the shop floor. Give `craft` out widely — somebody who
+holds it can spend materials, but cannot change what they are worth.
+
+**Writing a recipe.** Name it, then list what goes in and what comes out.
+Several of each is fine: a recipe can take three materials and produce a
+product plus scrap. An item type may appear on both sides — burning 10 crates
+to make 6 better ones is a real thing and the app does not forbid it.
+
+**Who the output counts for** is the one choice worth thinking about:
+
+- **Nobody** (the default) — the vault moves and no leaderboard does. Right
+  for anything the faction already owned, and the same treatment laundering
+  gets.
+- **The crafter** — counts toward their quota and their leaderboard position.
+  Only for recipes whose materials are genuinely hard to come by. A recipe
+  that credits the crafter and takes cheap inputs can be run in a loop to farm
+  a quota, and the app will not stop somebody doing that.
+
+**Running one.** The bench shows each recipe as a card: every material as
+*needed / held*, the short ones in red, and how many the vault can currently
+make. Ask for more than one and every number on the card scales with it. If
+the materials are not there the button is simply off — the screen refuses
+before you fill anything in, which is the whole point of it.
+
+**What actually happens.** Each material leaves the vault as a completed
+withdrawal booked against the faction, and each product arrives as an entry.
+Nothing is a special kind of record, so every balance, report and export
+counts a craft correctly. Two people crafting from the same materials at the
+same moment queue up rather than both spending the same stock.
+
+**Reverting.** History lists every craft, with what it consumed and what it
+produced. `manage_crafting` can revert one: the materials go back, the product
+comes out, both together. The craft stays in history marked reverted, and it
+can only be done once.
+
+A revert is refused if the product has already been spent — putting it back
+would drive that balance below zero, and a correction should not be the thing
+that does that.
+
+**A craft cannot be taken apart by hand.** Its entries and withdrawals refuse
+to be edited or deleted individually, and point you at Revert instead. Undoing
+one half and not the other would either hand the faction free materials or
+destroy the product it paid for.
+
+### 6.8 Strikes (`manage_strikes`)
 
 Formal warnings. Issue from a member's profile or the Strikes view.
 
@@ -637,7 +694,7 @@ Formal warnings. Issue from a member's profile or the Strikes view.
 name, the severity and the reason into that channel. Everyone who can read the
 channel reads it. Pick a leadership-only channel, or leave strikes unrouted.
 
-### 6.8 Audit logs (`view_audit_logs`)
+### 6.9 Audit logs (`view_audit_logs`)
 
 The app's memory of who did what: actor, action, entity, timestamp, and
 before/after values for changes. Filterable and paginated. It is
@@ -768,6 +825,7 @@ quiet log channel, strikes somewhere only leadership reads.
 | Announcement posted | title and author |
 | Member joined / left | roster changes |
 | Laundering completed | one currency converted into another |
+| Something was crafted | the recipe, what it used and what it made |
 
 **Corrections and removals**, listed separately underneath:
 
@@ -778,6 +836,7 @@ quiet log channel, strikes somewhere only leadership reads.
 | Expense removed | |
 | Strike revoked | it no longer counts against the member |
 | Announcement removed | |
+| A craft was reverted | the materials went back and the product came out |
 
 These have their own channels for a reason. A log that only shows things going
 *in* can be worked: log it, take the credit, quietly remove it later. Routing
@@ -953,6 +1012,9 @@ action, the entity, when it happened, and before/after values for changes.
   drift, and pending/approved withdrawals haven't left the vault yet.
 - **Nothing is truly deleted.** Removed entries, withdrawals and expenses are
   marked deleted — they vanish from the numbers but stay in the audit trail.
+- **A craft is all of its parts or none of them.** The rows a craft wrote
+  cannot be edited or removed one at a time; reverting the craft undoes both
+  sides together, or nothing happens.
 - **The ledger doesn't record the future.** Entry, payout, expense and check
   dates can't be ahead of today.
 - **Anonymous entries belong to the faction.** They count toward the vault
@@ -993,7 +1055,16 @@ send it to your faction admin.
 Top-right menu → change your in-game name. Your admin can also fix it for
 you, and the fix reaches every faction you're in.
 
-**Why can't I see Members / Strikes / Laundering?**
+**I crafted the wrong thing.**
+Crafting → History → Revert. Materials back, product out, in one move.
+Anyone with `manage_crafting` can do it. Deleting the rows by hand is
+refused on purpose — it would undo one half and not the other.
+
+**The craft button is greyed out.**
+The vault is short of a material. The card shows each one as needed / held
+with the missing ones in red. Lower the count, or log what is missing.
+
+**Why can't I see Members / Strikes / Laundering / Crafting?**
 Your rank doesn't grant it. Ask your leadership, or have them check the
 rank's permissions in Settings → Faction settings.
 

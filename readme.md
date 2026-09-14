@@ -36,6 +36,11 @@ Discord history.
   GitHub-style contribution heatmap per member
 - ⚖️ **Discipline** — strikes with severity, expiry and appeal tracking;
   private admin notes members never see
+- 🔨 **Crafting** — write a recipe once (10 steel + 2 powder → 1 pistol) and
+  run it in one click; the materials leave the vault and the product arrives,
+  in batches, with a one-click revert if it was a mistake
+- 🧼 **Laundering** — convert one of the faction's currencies into another,
+  booked against the faction so nobody's score moves
 - 📣 **Announcements** — a faction bulletin board with priorities, pinning,
   expiry and read tracking, so "quota deadline is Friday" stops getting buried
 - 💬 **Discord** — connect your faction's own Discord server and choose which
@@ -79,19 +84,19 @@ docker compose up -d
 
 Then open the app, sign in with Discord, and the first superadmin bootstrap
 script creates the initial faction. Full deployment steps (VPS sizing, TLS,
-backups) live in [`docs/Architecture.md`](docs/Architecture.md).
+backups) live in [`docs/FiveM_RP_Faction_Accountant_Architecture.md`](docs/FiveM_RP_Faction_Accountant_Architecture.md).
 
 ## Documentation
 
 - 📘 [`docs/UserGuide.md`](docs/UserGuide.md) — the complete player/leader/
   superadmin manual (also served in-app)
-- 🏗️ [`docs/Architecture.md`](docs/Architecture.md) — system design, data
+- 🏗️ [`docs/FiveM_RP_Faction_Accountant_Architecture.md`](docs/FiveM_RP_Faction_Accountant_Architecture.md) — system design, data
   model, API, and the full development roadmap
 
 ## Roadmap
 
-Actively developed. Discord bot commands, automated reports, webhooks and
-faction templates are next up — see the roadmap in the architecture doc for
+Actively developed. Crafting shipped most recently; Discord bot commands,
+automated reports, webhooks and faction templates are next up — see the roadmap in the architecture doc for
 the full phase-by-phase plan and what's already shipped.
 
 ## Contributing

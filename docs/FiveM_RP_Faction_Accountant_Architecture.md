@@ -198,7 +198,7 @@ FactionMember 1---* MemberNote
 
 ### 5.2 Tables As Built
 
-Twelve tables. Every id is a `uuid` with `defaultRandom()` unless noted.
+Sixteen tables. Every id is a `uuid` with `defaultRandom()` unless noted.
 
 **`users`** — one row per Discord account, and per person registered before they
 ever signed in.
@@ -266,6 +266,28 @@ not pinned to one person), `is_active`.
 
 **`audit_logs`** — `user_id`, `faction_id`, `action`, `entity_type`,
 `entity_id`, `details` (jsonb, before/after), `ip_address`, `created_at`.
+
+**`crafting_recipes`** — `faction_id`, `name` (unique per faction),
+`description`, `credit_output_to` (`nobody` / `crafter`), `is_active`,
+`created_by`. A definition, never a movement: saving one changes no balance.
+Edited in place rather than versioned — a craft snapshots what it needs, so
+the recipe only has to answer what it means *today*.
+
+**`crafting_recipe_items`** — `recipe_id`, `item_type_id`, `role`
+(`input` / `output`), `quantity` per single craft. Unique on
+(recipe, item type, role), so an item type may legitimately appear on both
+sides — refining 10 crates into 6 better ones is a real recipe.
+
+**`crafts`** — one run. `faction_id`, `recipe_id` (nullable, `SET NULL`),
+`recipe_name` (snapshot, so history survives a rename or delete), `quantity`
+(the batch multiplier), `crafted_by`, `craft_date`, `notes`, `reverted_at`,
+`reverted_by`.
+
+**`craft_movements`** — `craft_id`, `role`, `item_type_id`, the scaled
+`quantity`, and `entry_id` / `payout_id` (each nullable — a movement is one
+or the other). This is what makes a revert exact, and what lets entries and
+payouts refuse to be edited individually. The link lives here rather than as
+a `craft_id` column so the two busiest tables in the app stay untouched.
 
 **Removed:** `factions.payout_approval_required` (migration `0007`). It decided
 where a payout started rather than who could settle it, and once the four-eyes
@@ -451,6 +473,7 @@ Prefix: `/factions/:id`.
 | `/treasury` | derived balances, pending totals, outflow trend |
 | `/expenses` | faction running costs. Read for any member, `manage_expenses` writes |
 | `/laundering` | convert one currency into another |
+| `/crafting` | recipes, running them, history and revert — see §8.15 |
 | `/item-types`, `/quotas`, `/settings` | faction configuration |
 | `/discord` | connect a Discord server and route activity to its channels, `manage_discord` — see §8.13 |
 | `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
@@ -520,6 +543,8 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Record and read vault verification counts | Yes | Yes | `manage_payouts` | No |
 | Issue and settle strikes | Yes | Yes | `manage_strikes` | No |
 | Launder currency | Yes | Yes | `manage_laundering` | No |
+| Write / retire / delete a recipe, revert a craft | Yes | Yes | `manage_crafting` | No |
+| Run a saved recipe | Yes | Yes | `craft` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
@@ -1270,6 +1295,82 @@ no way back into the queue.
 
 ---
 
+### 8.15 Crafting
+
+Factions convert materials into things constantly. Before this, recording that
+meant a withdrawal per component plus an entry for the result, entered by hand
+every time — which is both tedious and a reliable source of a wrong number.
+
+**A craft is not a new kind of record.** Each input leaves the vault as a
+completed payout against the anonymous placeholder; each output arrives as an
+entry. That is exactly what the laundering desk does (§8.4), and it is the
+whole reason crafting needed no changes to `computeTreasuryBalances`, the
+reports, the exports or the feed. They already count it.
+
+`crafts` + `craft_movements` sit alongside those rows rather than replacing
+them. They add nothing to any balance; they make the movements legible as one
+act afterwards, and they are what a revert reverses.
+
+**Two permissions.** `manage_crafting` writes recipes and reverts crafts;
+`craft` runs them. What a craft costs the faction is a leadership decision and
+pressing the button is not, so the second is safe to grant widely.
+
+**`credit_output_to`, per recipe.** `nobody` books the output against the
+placeholder — the vault moves, no leaderboard does. `crafter` books it to
+whoever ran it, which counts toward their quota and ranking. Both answers are
+right for different recipes and wrong for the other, hence the column. The
+default is `nobody`, deliberately: a recipe crediting the crafter with cheap
+inputs can be looped to farm a quota, and nothing in the app prevents that.
+
+**Batching.** `crafts.quantity` multiplies every line. The arithmetic runs in
+BigInt hundredths, never a float — `Number('0.1') * 3` is
+`0.30000000000000004`, and the same class of error on a treasury figure is how
+a faction ends up short by a cent nobody can account for. `maxCraftable` on the
+read side divides the same way; it is only a display hint, but a card saying
+"can make 4" when the answer is 3 sends somebody to a button that refuses them.
+
+**Concurrency.** The craft transaction locks the `item_types` rows it is about
+to touch, in id order. Balances are derived and so have no row of their own to
+lock; the item type stands in for one. Ordering prevents two overlapping
+recipes from taking the locks in opposite directions and deadlocking.
+
+**The balance query.** `balancesFor()` in `lib/treasury.ts` — entries, minus
+completed payouts, **minus expenses**, narrowed to named item types and able to
+run inside a caller's transaction. It lives there rather than beside crafting
+because the laundering desk had hand-rolled its own copy that omitted expenses,
+and so would green-light a conversion the treasury screen said the faction
+could not afford. One definition of "available", used by both.
+
+Worth recording: the first version of that query used correlated subqueries and
+silently returned zero for everything. Drizzle renders a column embedded in a
+`sql` template unqualified, so the inner `item_type_id = id` matched the
+subquery's own `id` column. No error — just zeroes, and every craft refused for
+lack of materials. It is three grouped aggregates now, the shape
+`computeTreasuryBalances` already uses, which cannot express the mistake.
+
+**Revert.** Soft-deletes exactly the rows in `craft_movements` and stamps
+`reverted_at`, which is also the guard against doing it twice. It is refused
+when the product has already been spent: putting it back would drive that
+balance negative, which is a state the app permits but not one a correction
+should cause silently.
+
+**A craft cannot be taken apart.** Its movements are ordinary rows, which is
+what makes the rest of the app work and also what left them individually
+deletable. That was exploitable — delete the input payouts and the materials
+return while the product stays (free crafting, repeatable, needs only
+`manage_payouts`); delete the output entry inside the five-minute undo window
+and the materials are consumed along with the product; editing an amount does
+the same damage more quietly. `craftHolding()` guards entry PATCH/DELETE,
+payout PATCH/DELETE and bulk delete, and points at revert. Bulk delete refuses
+the whole selection rather than skipping the craft rows silently.
+
+**Discord.** `craft_completed` and `craft_reverted`, routed like any other
+event (§8.13). The completed embed leads with what was made and lists the
+materials underneath — "what it cost" is the second question every time and
+never the first.
+
+---
+
 ## 9. Frontend Architecture
 
 ### 9.1 Shape
@@ -1316,7 +1417,7 @@ the page never diverge).
 ### 9.2 Views
 
 `views/` holds one component per screen: dashboard, entries, payouts, treasury,
-laundering, members, member-profile, strikes, leaderboard, reports, settings,
+laundering, crafting, members, member-profile, strikes, leaderboard, reports, settings,
 audit-logs, admin-factions, admin-faction-detail, users-panel.
 
 `support` and `admin-support` are the two halves of §8.9: the form plus your
@@ -1343,6 +1444,12 @@ reading anything.
 
 Expenses are not a view of their own: they render as a section inside the
 treasury view, because the balance cards above them already carry their effect.
+
+The crafting view is tabbed rather than split into two screens — bench,
+recipes, history. Two audiences use it: most people open it to run a recipe
+and leave, while the ones who write recipes do that rarely and should not have
+that work in the way the rest of the time. The recipes tab only exists for
+`manage_crafting`.
 The Settings tabs for item types, quotas and ranks each carry CSV export/import
 buttons (§8.8).
 
@@ -1815,6 +1922,23 @@ Worth reviving only for non-Discord destinations.
 | 15 | Rank sigils + "IN THE RED" stamp | Boss/Underboss roster emblem; stamped mark on a negative balance — **DONE** | Low |
 
 See §9.4 for the narrative writeup, guardrails, and what's left.
+
+### Phase 10: Crafting (Week 27) — COMPLETE
+
+Unplanned, and asked for by the people using the app: factions convert
+materials into things constantly, and recording that by hand was a withdrawal
+per component plus an entry for the result, every time.
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Recipes | Named, many inputs and many outputs, per-recipe credit policy, retire without deleting — **DONE** | High |
+| 2 | The bench | Run a recipe in batches; each card shows needed / held per material and disables itself when the vault is short — **DONE** | High |
+| 3 | Two permissions | `manage_crafting` writes recipes, `craft` runs them — **DONE** | High |
+| 4 | History and revert | Every run recorded with what it consumed and produced; one-click revert of both sides together — **DONE** | High |
+| 5 | Integrity guard | A craft's entries and payouts refuse to be edited or deleted individually — **DONE** | High |
+| 6 | Discord events | `craft_completed` and `craft_reverted`, routed like any other — **DONE** | Medium |
+
+See §8.15 for the design and the two bugs it surfaced.
 
 ---
 
