@@ -81,6 +81,10 @@ import type {
   DiscordReminder,
   DiscordRole,
   ReminderInput,
+  CraftingRecipe,
+  CraftRecord,
+  RecipeInput,
+  CraftInput,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -574,6 +578,43 @@ export const launderingApi = {
   launder: (factionId: string, input: LaunderInput) =>
     api
       .post<ApiSuccessResponse<LaunderResult>>(`/factions/${factionId}/laundering`, input)
+      .then(unwrap),
+};
+
+// ── Crafting ──
+
+export const craftingApi = {
+  recipes: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ recipes: CraftingRecipe[] }>>(`/factions/${factionId}/crafting/recipes`)
+      .then(unwrap),
+
+  createRecipe: (factionId: string, input: RecipeInput) =>
+    api
+      .post<ApiSuccessResponse<{ recipe: CraftingRecipe }>>(`/factions/${factionId}/crafting/recipes`, input)
+      .then(unwrap),
+
+  updateRecipe: (factionId: string, recipeId: string, input: RecipeInput) =>
+    api
+      .patch<ApiSuccessResponse<{ recipe: CraftingRecipe }>>(`/factions/${factionId}/crafting/recipes/${recipeId}`, input)
+      .then(unwrap),
+
+  deleteRecipe: (factionId: string, recipeId: string) =>
+    api.delete(`/factions/${factionId}/crafting/recipes/${recipeId}`),
+
+  craft: (factionId: string, input: CraftInput) =>
+    api
+      .post<ApiSuccessResponse<unknown>>(`/factions/${factionId}/crafting/crafts`, input)
+      .then(unwrap),
+
+  history: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ crafts: CraftRecord[] }>>(`/factions/${factionId}/crafting/crafts`)
+      .then(unwrap),
+
+  revert: (factionId: string, craftId: string) =>
+    api
+      .post<ApiSuccessResponse<unknown>>(`/factions/${factionId}/crafting/crafts/${craftId}/revert`)
       .then(unwrap),
 };
 
