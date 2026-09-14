@@ -12,6 +12,9 @@ import { DateRangePresets, type DatePreset } from '@/components/ui/date-range-pr
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -328,18 +331,68 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
       {/* Filters + CTA */}
       <Card className="sticky top-14 z-20 backdrop-blur-md bg-background/85">
         <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3 items-start lg:items-end">
-            <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-              <Label className="text-xs text-zinc-500">{t('common.search')}</Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600" />
-                <Input placeholder={t('entries.searchPlaceholder')} value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-9" />
+          {/* Two rows on purpose. Seven controls sharing one wrapping flex
+              meant the buttons folded under the filters at almost every width,
+              and a label above each field made them all twice as tall as they
+              needed to be. What you came to do goes on top; how you narrow the
+              list goes underneath. */}
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[180px] flex-1">
+                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <Input
+                  placeholder={t('entries.searchPlaceholder')}
+                  aria-label={t('common.search')}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="pl-9"
+                />
               </div>
+
+              {/* Two export buttons took as much room as the action people
+                  actually came for, and neither is pressed daily. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="shrink-0">
+                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                    {t('common.export')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const url = exportApi.entriesUrl(factionId, {
+                        date_from: dateFrom || undefined,
+                        date_to: dateTo || undefined,
+                        item_type_id: itemTypeIdFilter === 'all' ? undefined : itemTypeIdFilter,
+                      });
+                      window.open(url, '_blank');
+                    }}
+                  >
+                    {t('entries.csv')}
+                  </DropdownMenuItem>
+                  {user && (
+                    <DropdownMenuItem
+                      onClick={() => window.open(exportApi.entriesUrl(factionId, { user_id: user.id }), '_blank')}
+                    >
+                      {t('entries.exportMine')}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {canLogEntries && (
+                <Button onClick={openCreate} className="shrink-0">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  {t('entries.logEntry')}
+                </Button>
+              )}
             </div>
-            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-              <Label className="text-xs text-zinc-500">{t('entries.itemType')}</Label>
+
+            <div className="flex flex-wrap items-center gap-2">
               <SearchableSelect
-                className="w-full lg:w-[160px]"
+                className="w-full sm:w-[160px]"
+                triggerClassName="h-9"
                 aria-label={t('itemTypes.filterBy')}
                 value={itemTypeIdFilter}
                 onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}
@@ -348,52 +401,36 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 searchPlaceholder={t('itemTypes.search')}
                 emptyMessage={t('itemTypes.noneMatch')}
               />
-            </div>
-            {/* Phone-first presets: "did I log yesterday?" is two taps. */}
-            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-              <Label className="text-xs text-zinc-500">{t('entries.quickRange')}</Label>
-              <div className="flex flex-wrap gap-1">
-                <DateRangePresets
-                  active={activePreset}
-                  onApply={(preset, range) => {
-                    setDateFrom(range.from);
-                    setDateTo(range.to);
-                    setActivePreset(preset);
-                    setPage(1);
-                  }}
-                  onClear={() => { setDateFrom(''); setDateTo(''); setActivePreset(null); setPage(1); }}
+
+              {/* Phone-first presets: "did I log yesterday?" is two taps. */}
+              <DateRangePresets
+                active={activePreset}
+                onApply={(preset, range) => {
+                  setDateFrom(range.from);
+                  setDateTo(range.to);
+                  setActivePreset(preset);
+                  setPage(1);
+                }}
+                onClear={() => { setDateFrom(''); setDateTo(''); setActivePreset(null); setPage(1); }}
+              />
+
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="date"
+                  aria-label={t('common.from')}
+                  value={dateFrom}
+                  onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }}
+                  className="h-9 w-[140px]"
+                />
+                <span className="text-xs text-zinc-600">&ndash;</span>
+                <Input
+                  type="date"
+                  aria-label={t('common.to')}
+                  value={dateTo}
+                  onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }}
+                  className="h-9 w-[140px]"
                 />
               </div>
-            </div>
-            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }} className="w-full sm:w-[140px]" />
-            </div>
-            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-full sm:w-[140px]" />
-            </div>
-            <div className="flex gap-2 flex-wrap lg:ml-auto">
-            {user && (
-              <Button
-                variant="outline"
-                size="sm"
-                title={t('entries.exportMine')}
-                onClick={() => window.open(exportApi.entriesUrl(factionId, { user_id: user.id }), '_blank')}
-              >
-                <Download className="mr-1.5 h-3.5 w-3.5" />{t('entries.exportMine')}
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => {
-              const url = exportApi.entriesUrl(factionId, { date_from: dateFrom || undefined, date_to: dateTo || undefined, item_type_id: itemTypeIdFilter === 'all' ? undefined : itemTypeIdFilter });
-              window.open(url, '_blank');
-            }}>
-              <Download className="mr-1.5 h-3.5 w-3.5" />{t('entries.csv')}
-            </Button>
-            {canLogEntries && (
-              <Button onClick={openCreate}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                {t('entries.logEntry')}
-              </Button>
-            )}
             </div>
           </div>
         </CardContent>
