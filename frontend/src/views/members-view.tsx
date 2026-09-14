@@ -24,8 +24,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { RankBadge } from '@/components/rank-badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard, Crown, Star } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import { displayName, formatDate } from '@/lib/format';
@@ -93,13 +94,6 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
    *
    * Decorative: the rank's name is right beside it.
    */
-  const rankSigil = (rank: string) => {
-    const index = sortedRanks.findIndex((r) => r.name === rank);
-    if (index === 0) return Crown;
-    if (index === 1) return Star;
-    return null;
-  };
-
   // Roster order: admins always on top, then by rank level (a lower level is
   // higher in the hierarchy), rankless members last, join date breaking ties.
   const rankLevel = useMemo(() => {
@@ -320,13 +314,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {m.rank ? (
-                          <Badge variant="outline" className="text-meta gap-1 text-brand" style={{ borderColor: 'var(--brand-color-medium)' }}>
-                            {(() => {
-                              const Sigil = rankSigil(m.rank);
-                              return Sigil ? <Sigil className="h-3 w-3" aria-hidden="true" /> : null;
-                            })()}
-                            {m.rank}
-                          </Badge>
+                          <RankBadge rank={m.rank} ranks={sortedRanks} />
                         ) : (
                           <span className="text-xs text-zinc-700">—</span>
                         )}

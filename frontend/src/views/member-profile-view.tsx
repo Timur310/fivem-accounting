@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  membersApi, notesApi, memberStrikesApi,
-} from '@/lib/api-client';
+  membersApi, notesApi, memberStrikesApi, factionSettingsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { RankBadge } from '@/components/rank-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -101,6 +101,19 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+
+  // The hierarchy, only so the rank badge knows where this rank sits in it.
+  // Same query key the treasury and roster use, so it is usually already
+  // cached rather than a request per profile opened.
+  const { data: factionSettings } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const factionRanks = useMemo(
+    () => [...(factionSettings?.ranks ?? [])].sort((a, b) => a.level - b.level),
+    [factionSettings?.ranks],
+  );
 
   const [tab, setTab] = useState<ProfileTab>('overview');
 
@@ -263,7 +276,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <h3 className="text-lg font-medium text-zinc-100">{displayName(member)}</h3>
             {member.rank && (
               <span className="flex items-center gap-1.5">
-                <Badge variant="outline" className="text-meta text-brand" style={{ borderColor: 'var(--brand-color-medium)' }}>{member.rank}</Badge>
+                <RankBadge rank={member.rank} ranks={factionRanks} />
                 {member.daysInRank !== null && (
                   <span
                     className="text-micro text-zinc-500"

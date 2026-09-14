@@ -183,29 +183,81 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                 should look like one. Skipped on the global board and when a
                 filter narrows the field to fewer than three. */}
             {!showGlobal && rankings.length >= 3 && (
-              <div className="grid grid-cols-3 gap-2 p-3 border-b border-[var(--line-1)]">
+              <div className="grid grid-cols-3 items-end gap-2 border-b border-[var(--line-1)] p-3 pt-5">
+                {/* Second, first, third — the order a podium is stood on, and
+                    the order a photograph of one is read.
+
+                    It was three identical cards before, which is a top-three
+                    list rather than a podium: nothing about it said one of
+                    them had won. The difference is height and metal, not
+                    decoration — this is still a ledger, and the number under
+                    each name is the point. */}
                 {[1, 0, 2].map((idx) => {
                   const r = rankings[idx];
                   if (!r) return null;
                   const isMe = 'isMe' in r && r.isMe;
-                  const sigil = r.rank === 1
-                    ? <Crown className="h-4 w-4 text-[var(--medal-gold)]" />
-                    : r.rank === 2
-                    ? <Medal className="h-4 w-4 text-[var(--medal-silver)]" />
-                    : <Medal className="h-4 w-4 text-[var(--medal-bronze)]" />;
+                  const first = r.rank === 1;
+
+                  const metal =
+                    r.rank === 1 ? 'var(--medal-gold)'
+                    : r.rank === 2 ? 'var(--medal-silver)'
+                    : 'var(--medal-bronze)';
+
                   return (
                     <button
                       key={r.userId}
                       onClick={() => handleOpenProfile?.(r.userId)}
-                      className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-colors ${r.rank === 1 ? 'border-[var(--line-3)] bg-[var(--fill-2)]' : 'border-[var(--line-1)]'} ${isMe ? 'ring-1 ring-[var(--brand-color,#6366f1)]' : ''}`}
+                      className={`group relative flex flex-col items-center gap-1.5 rounded-lg border pb-3 transition-colors ${
+                        first ? 'pt-5' : 'pt-3'
+                      } ${isMe ? 'ring-1 ring-[var(--brand-color,#6366f1)]' : ''}`}
+                      style={{
+                        // A wash of the metal rather than a block of it. Gold
+                        // has to be legible as first place without the tile
+                        // turning into a button that outshines the figures.
+                        borderColor: first ? metal : 'var(--line-1)',
+                        background: first
+                          ? `linear-gradient(to bottom, color-mix(in srgb, ${metal} 12%, transparent), transparent 70%)`
+                          : undefined,
+                      }}
+                      title={displayName(r)}
                     >
-                      {sigil}
-                      <Avatar className={r.rank === 1 ? 'h-11 w-11' : 'h-9 w-9'}>
+                      {/* The medal sits on the tile's edge, so the three read
+                          as one object rather than three separate cards. */}
+                      <span
+                        className="absolute -top-2.5 flex size-5 items-center justify-center rounded-full border bg-[var(--card)]"
+                        style={{ borderColor: metal, color: metal }}
+                      >
+                        {first ? <Crown className="h-3 w-3" /> : <Medal className="h-3 w-3" />}
+                      </span>
+
+                      <Avatar
+                        className={`${first ? 'h-14 w-14' : 'h-10 w-10'} border`}
+                        style={{ borderColor: metal }}
+                      >
                         <AvatarImage src={r.avatarUrl ?? undefined} />
-                        <AvatarFallback className="text-xs">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className={first ? 'text-sm' : 'text-xs'}>
+                          {displayName(r).slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
                       </Avatar>
-                      <p className="text-xs text-zinc-300 truncate max-w-full">{displayName(r)}</p>
-                      <p className={`font-medium tabular-nums ${r.rank === 1 ? 'text-sm text-zinc-100' : 'text-xs text-zinc-300'}`}>{formatNumber(r.total)}</p>
+
+                      <p className={`max-w-full truncate px-1 ${first ? 'text-sm text-zinc-100' : 'text-xs text-zinc-300'}`}>
+                        {displayName(r)}
+                      </p>
+
+                      <p className={`font-medium tabular-nums ${first ? 'text-base text-zinc-100' : 'text-sm text-zinc-300'}`}>
+                        {formatNumber(r.total)}
+                      </p>
+
+                      {/* The plinth. Its height is the whole point of the
+                          component: first stands taller than second, second
+                          taller than third, before a single number is read. */}
+                      <span
+                        aria-hidden
+                        className={`mt-1 w-full rounded-t-sm ${
+                          first ? 'h-4' : r.rank === 2 ? 'h-2.5' : 'h-1.5'
+                        }`}
+                        style={{ backgroundColor: `color-mix(in srgb, ${metal} 28%, transparent)` }}
+                      />
                     </button>
                   );
                 })}
