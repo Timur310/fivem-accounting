@@ -981,7 +981,7 @@ export const hu: Translations = {
   'discord.routingRemovals': 'Javítások és törlések',
   'discord.routingRemovalsHint': 'Amikor valaki visszavesz valamit a nyilvántartásból. Külön irányítható, hogy oda menjen, ahol a vezetőség olvassa, még ha a fenti események egy forgalmas csatornára mennek is.',
   'reminder.title': 'Eml\u00e9keztet\u0151k',
-  'reminder.subtitle': '\u00dctemezett \u00fczenetek, amelyeket a bot kiposztol a csatorn\u00e1itokra. Annyi, amennyit akartok.',
+  'reminder.subtitle': '\u00dctemezett \u00fczenetek, amelyeket a bot kiposztol a csatorn\u00e1itokra. Frakciónként legfeljebb {max}.',
   'reminder.none': 'M\u00e9g nincs eml\u00e9keztet\u0151',
   'reminder.noneHint': 'Kv\u00f3tahat\u00e1rid\u0151, gy\u0171l\u00e9s id\u0151pontja, b\u00e9rleti d\u00edj \u2014 amit a frakci\u00f3 folyton elfelejt.',
   'reminder.new': '\u00daj eml\u00e9keztet\u0151',

@@ -1000,7 +1000,7 @@ export const en = {
   'discord.routingRemovals': 'Corrections and removals',
   'discord.routingRemovalsHint': 'Somebody taking something back out of the ledger. Routed separately so you can send these where leadership reads, even if the activity above goes to a busy channel.',
   'reminder.title': 'Reminders',
-  'reminder.subtitle': 'Scheduled messages the bot posts to your channels. As many as you like.',
+  'reminder.subtitle': 'Scheduled messages the bot posts to your channels. Up to {max} per faction.',
   'reminder.none': 'No reminders yet',
   'reminder.noneHint': 'Quota deadlines, meeting times, rent night \u2014 anything the faction keeps forgetting.',
   'reminder.new': 'New reminder',

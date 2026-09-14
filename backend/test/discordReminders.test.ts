@@ -10,7 +10,7 @@ vi.mock('../src/lib/discord.js', async (importOriginal) => ({
   postToChannel: postMock,
 }));
 
-const { runDueReminders } = await import('../src/lib/reminderRunner.js');
+const { runDueReminders, _testing } = await import('../src/lib/reminderRunner.js');
 
 let w: BasicWorld;
 const f = () => `/api/v1/factions/${w.faction.id}`;
@@ -346,6 +346,45 @@ describe('the runner', () => {
       .where(eq(discordReminders.id, row.id));
     expect(after!.lastError).toMatch(/not connected/i);
     expect(after!.nextRunAt).not.toBeNull();
+  });
+
+  // Sending is serial, so a big enough batch can outlast the 60-second tick.
+  // Overlapping runs never double-send — the claim sees to that — but they
+  // stack, each holding a connection, and a slow Discord becomes a pile-up.
+  it('skips a tick while the previous one is still going', async () => {
+    await link();
+    await due(new Date(Date.now() - 1000));
+
+    // Hold the first send open so the second tick lands mid-run.
+    let release: () => void = () => {};
+    postMock.mockImplementationOnce(
+      () => new Promise((resolve) => { release = () => resolve({ ok: true }); }) as never,
+    );
+
+    const first = _testing.tick();
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+
+    // Second tick, while the first is still waiting on Discord.
+    await _testing.tick();
+    expect(postMock).toHaveBeenCalledTimes(1);
+
+    release();
+    await first;
+    expect(_testing.isRunning()).toBe(false);
+  });
+
+  it('picks up again on the next tick once the previous run finishes', async () => {
+    await link();
+    await due(new Date(Date.now() - 1000));
+
+    await _testing.tick();
+    expect(postMock).toHaveBeenCalledTimes(1);
+
+    // The flag must not stay stuck on, or every reminder in the app stops
+    // until the next restart.
+    await due(new Date(Date.now() - 1000), { message: 'second' });
+    await _testing.tick();
+    expect(postMock).toHaveBeenCalledTimes(2);
   });
 
   it('one broken reminder does not stop the others', async () => {

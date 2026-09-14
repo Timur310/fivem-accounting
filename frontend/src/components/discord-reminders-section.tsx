@@ -39,6 +39,13 @@ interface Props {
   channels: DiscordChannel[] | undefined;
 }
 
+/**
+ * Matches MAX_REMINDERS on the server, which is the one that actually refuses.
+ * Shown so the limit is known before somebody hits it, rather than discovered
+ * as a validation error on the fiftieth one.
+ */
+const MAX_REMINDERS = 50;
+
 /** A blank form. Daily at 20:00 is the shape most of these take. */
 function emptyDraft(): ReminderInput {
   return {
@@ -175,7 +182,9 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
             <AlarmClock className="h-5 w-5" />
             {t('reminder.title')}
           </CardTitle>
-          <p className="text-sm text-muted-foreground">{t('reminder.subtitle')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('reminder.subtitle', { max: MAX_REMINDERS })}
+          </p>
         </div>
         <Button onClick={openNew} disabled={!channels?.length}>
           <Plus className="mr-2 h-4 w-4" />

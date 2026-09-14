@@ -795,6 +795,32 @@ the app, a Discord message has no single reader — everyone in the channel sees
 the same text — so it cannot follow each member's own language. The faction
 will choose one once there is a second language to choose.
 
+**Reminders.** Underneath the channel list, **Reminders** are messages the bot
+posts on a schedule — quota deadlines, rent night, meeting times. Keep as many
+as you like.
+
+Each one takes a channel, a label for this list, the message itself, and when:
+
+- **Once** — a date and time.
+- **Every day** — a time.
+- **Every week** — a time and the days.
+- **Every month** — a time and the day. Pick 31 for the last day; short months
+  are clamped to their last day, never skipped.
+
+Times are **server time**, the same clock quotas reset on. The list shows when
+each one next goes out, and the **send icon** posts it right now without
+disturbing that schedule — useful for the one that should have gone out an
+hour ago, and the only way to see what it looks like without waiting for
+Friday.
+
+Switch a reminder **off** to pause it; its schedule is kept. Delete it to be
+rid of it. A one-off switches itself off after it goes, so you can see it went
+and reuse it later. If a send fails, the reason appears on the reminder in red.
+
+The bot cannot ping **@everyone** — it was never given that permission. A role
+your server has marked mentionable still works if you write it into the
+message.
+
 **Think about who reads the channel.** Inside the app, a withdrawal or a
 strike is only visible to the people whose permission covers it. A Discord
 channel has no such thing: everybody who can read the channel reads the

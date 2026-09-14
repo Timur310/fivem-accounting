@@ -221,6 +221,37 @@ export async function runDueReminders(now: Date = new Date()): Promise<number> {
 }
 
 let timer: NodeJS.Timeout | null = null;
+let running = false;
+
+/**
+ * One tick, skipped if the previous one is still going.
+ *
+ * Sending is serial, so a batch big enough to outlast the 60-second interval
+ * would have the next tick start on top of it. Nothing double-sends if that
+ * happens — the claim and `FOR UPDATE SKIP LOCKED` see to that — but the runs
+ * stack, each one holding a connection, and a slow Discord turns a backlog
+ * into a pile-up rather than a queue.
+ *
+ * Reaching it needs roughly 300 reminders due in the same minute across every
+ * faction. Far off at current scale, and one boolean cheaper to have than to
+ * diagnose: the skipped tick loses nothing, because whatever was due is still
+ * in the table and the run in progress is already working through it.
+ */
+async function tick(): Promise<void> {
+  if (running) {
+    console.warn('[REMINDERS] previous run still going; skipping this tick');
+    return;
+  }
+  running = true;
+  try {
+    await runDueReminders();
+  } finally {
+    // `finally`, not after the await: runDueReminders swallows its own errors,
+    // but a throw that ever escaped it would otherwise wedge the flag on and
+    // silently stop every reminder in the app until the next restart.
+    running = false;
+  }
+}
 
 /**
  * Start the ticker.
@@ -235,7 +266,7 @@ let timer: NodeJS.Timeout | null = null;
 export function startReminderRunner(): void {
   if (timer || !isDiscordConfigured()) return;
   timer = setInterval(() => {
-    void runDueReminders();
+    void tick();
   }, TICK_MS);
   timer.unref();
 }
@@ -245,7 +276,13 @@ export function stopReminderRunner(): void {
     clearInterval(timer);
     timer = null;
   }
+  // A run already in flight finishes on its own; clearing the flag keeps a
+  // restarted runner from finding it stuck on from the previous life.
+  running = false;
 }
+
+/** Exposed for the test that proves a tick cannot overlap the previous one. */
+export const _testing = { tick, isRunning: () => running };
 
 // Used by the routes to keep `nextRunAt` honest after a change.
 export { nextRun };

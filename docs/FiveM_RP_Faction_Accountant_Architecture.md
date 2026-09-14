@@ -1103,8 +1103,8 @@ translation job rather than a migration.
 ### 8.14 Discord Reminders
 
 Scheduled messages a faction posts to its own channels: quota deadlines, rent
-night, meeting times. As many as they like, capped at 50. Migration `0017`,
-permission `manage_discord`.
+night, meeting times. Up to 50 per faction — shared across everyone who holds
+the permission, not per person. Migration `0017`, permission `manage_discord`.
 
 **This is the first thing in the codebase that needed a clock**, which is why
 Phase 8's automated reports sat blocked. Every other Discord message reacts to
@@ -1116,6 +1116,18 @@ A `setInterval` ticker every 60 seconds, started in `index.ts` (never in
 `app.ts` — every test imports the app and none should inherit a timer), and
 `unref()`'d so a pending tick never delays a restart. No cron, no queue, no new
 dependency and no second process.
+
+**A tick is skipped while the previous one is still going.** Sending is serial,
+so a batch big enough to outlast the interval would have the next tick start on
+top of it. Nothing double-sends when that happens — the claim below and
+`FOR UPDATE SKIP LOCKED` see to that — but the runs stack, each holding a
+connection, and a slow Discord turns a backlog into a pile-up rather than a
+queue. Reaching it takes roughly 300 reminders due in the same minute across
+every faction; the boolean is cheaper to have than to diagnose. The skipped
+tick loses nothing: whatever was due is still in the table, and the run in
+progress is already working through it. The flag is cleared in a `finally`,
+because a throw that ever escaped `runDueReminders` would otherwise wedge it on
+and silently stop every reminder in the app until the next restart.
 
 The whole mechanism is one column. `next_run_at` holds the moment a reminder is
 next due; the runner claims everything at or before now, sends it, and writes
@@ -1161,6 +1173,19 @@ an outage would be indistinguishable from one on time.
   see it went out and reuse it.
 - **An edit replaces the whole schedule.** Patching individual fields is how a
   reminder ends up weekly with a day-of-month and no weekdays.
+
+#### Cost
+
+Idle, the runner is one indexed query a minute against `discord_reminder_due`,
+returning nothing — 1440 index scans a day, which does not register. Each
+reminder that is actually due costs one integration lookup, one Discord POST
+(100–300ms) and one update, run one after another; the serial loop is also what
+keeps delivery comfortably inside Discord's rate limits with no throttling code
+of its own.
+
+The 60-second tick is granularity, not drift: a 20:00 reminder arrives between
+20:00 and 20:01, and because the next occurrence is measured from the due
+moment it never walks later.
 
 `lib/reminderSchedule.ts` is pure and separate from the runner: month lengths,
 week wrap and the clock going forward are where the bugs live, and they are

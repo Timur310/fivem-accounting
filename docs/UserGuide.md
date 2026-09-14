@@ -796,8 +796,8 @@ the same text — so it cannot follow each member's own language. The faction
 will choose one once there is a second language to choose.
 
 **Reminders.** Underneath the channel list, **Reminders** are messages the bot
-posts on a schedule — quota deadlines, rent night, meeting times. Keep as many
-as you like.
+posts on a schedule — quota deadlines, rent night, meeting times. Up to 50 per
+faction, shared by everyone who can manage Discord rather than 50 each.
 
 Each one takes a channel, a label for this list, the message itself, and when:
 
@@ -807,8 +807,9 @@ Each one takes a channel, a label for this list, the message itself, and when:
 - **Every month** — a time and the day. Pick 31 for the last day; short months
   are clamped to their last day, never skipped.
 
-Times are **server time**, the same clock quotas reset on. The list shows when
-each one next goes out, and the **send icon** posts it right now without
+Times are **server time**, the same clock quotas reset on. A reminder set for
+20:00 arrives within a minute of it — the app checks once a minute rather than
+watching the clock continuously. The list shows when each one next goes out, and the **send icon** posts it right now without
 disturbing that schedule — useful for the one that should have gone out an
 hour ago, and the only way to see what it looks like without waiting for
 Friday.
