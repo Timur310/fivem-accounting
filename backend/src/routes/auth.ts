@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import axios from 'axios';
 import { db } from '../db/index.js';
-import { users, factionMembers, factions, FACTION_PERMISSIONS } from '../db/schema.js';
+import { users, factionMembers, factions, discordIntegrations, FACTION_PERMISSIONS } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { env } from '../lib/env.js';
@@ -17,6 +17,8 @@ import {
   COOKIE_OPTIONS,
 } from '../auth/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { resolveFactionAccess } from '../middleware/factionAccess.js';
+import { exchangeBotCode, verifyBotLinkState } from '../lib/discord.js';
 import { createAuditLog } from '../lib/audit.js';
 
 const router = Router();
@@ -106,6 +108,11 @@ router.get('/discord', async (_req: Request, res: Response) => {
 
 // ── GET /auth/callback — handle OAuth callback ─────────
 const callbackSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
+
+const botCallbackSchema = z.object({
   code: z.string().min(1),
   state: z.string().min(1),
 });
@@ -204,6 +211,106 @@ router.get('/callback', async (req: Request, res: Response) => {
       res.redirect(redirect.toString());
     }
   }
+});
+
+// ── GET /auth/discord/bot-callback ─────────────────────
+// Where Discord returns a faction leader after they add the bot to a server.
+//
+// It lives here, rather than under the faction's own Discord routes, because
+// Discord matches redirect URIs exactly — there is no way to carry a faction
+// id in the path. The faction comes from the signed `state` instead, and every
+// check the faction-scoped router would have applied is applied here by hand.
+//
+// This handler always ends in a redirect back to the app, never in a JSON
+// error: the person reading it is looking at a browser tab, not a client.
+router.get('/discord/bot-callback', requireAuth, async (req: Request, res: Response) => {
+  const backToSettings = (status: string) => {
+    const redirect = new URL(env.FRONTEND_URL);
+    redirect.searchParams.set('discord', status);
+    return redirect.toString();
+  };
+
+  const parsed = botCallbackSchema.safeParse(req.query);
+  if (!parsed.success) {
+    // Discord sends the leader here with ?error=access_denied when they back
+    // out of the invite dialog. That is a decision, not a fault.
+    res.redirect(backToSettings(req.query.error ? 'cancelled' : 'invalid'));
+    return;
+  }
+
+  const state = verifyBotLinkState(parsed.data.state);
+  if (!state) {
+    res.redirect(backToSettings('expired'));
+    return;
+  }
+
+  // The session must be the same person who started the invite. Without this,
+  // a state token captured from a URL could be replayed by whoever holds it.
+  if (state.userId !== req.user!.id) {
+    res.redirect(backToSettings('mismatch'));
+    return;
+  }
+
+  // Re-check the permission now, rather than trusting that it still holds from
+  // when the invite URL was issued. Ten minutes is long enough to be demoted.
+  const access = await resolveFactionAccess(state.factionId, req.user!);
+  if (!access || !access.permissions.includes('manage_discord')) {
+    res.redirect(backToSettings('forbidden'));
+    return;
+  }
+
+  const authorization = await exchangeBotCode(parsed.data.code);
+  if (!authorization) {
+    res.redirect(backToSettings('error'));
+    return;
+  }
+
+  // A Discord server belongs to one faction. Without this check, a leader
+  // could point their faction at a server another faction already uses and
+  // start receiving — or, with the routes below, aiming — its traffic.
+  const [claimed] = await db
+    .select({ factionId: discordIntegrations.factionId })
+    .from(discordIntegrations)
+    .where(eq(discordIntegrations.guildId, authorization.guildId))
+    .limit(1);
+
+  if (claimed && claimed.factionId !== state.factionId) {
+    res.redirect(backToSettings('guild_taken'));
+    return;
+  }
+
+  await db
+    .insert(discordIntegrations)
+    .values({
+      factionId: state.factionId,
+      guildId: authorization.guildId,
+      guildName: authorization.guildName,
+      linkedBy: req.user!.id,
+    })
+    .onConflictDoUpdate({
+      // Re-running the invite for a faction that is already connected moves it
+      // to the newly chosen server and clears any stale failure.
+      target: discordIntegrations.factionId,
+      set: {
+        guildId: authorization.guildId,
+        guildName: authorization.guildName,
+        linkedBy: req.user!.id,
+        linkedAt: new Date(),
+        lastError: null,
+        lastErrorAt: null,
+      },
+    });
+
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId: state.factionId,
+    action: 'discord_linked',
+    entityType: 'discord_integration',
+    details: { guildId: authorization.guildId, guildName: authorization.guildName },
+    req,
+  });
+
+  res.redirect(backToSettings('linked'));
 });
 
 // ── POST /auth/logout ──────────────────────────────────

@@ -127,6 +127,7 @@ export const FACTION_PERMISSIONS = [
   'view_reports',
   'manage_laundering',
   'manage_expenses',
+  'manage_discord',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -144,6 +145,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   view_reports: 'View Reports',
   manage_laundering: 'Launder Money',
   manage_expenses: 'Manage Expenses',
+  manage_discord: 'Manage Discord',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -605,3 +607,92 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+// ── discord_integrations ───────────────────────────────
+// Which Discord server a faction has connected, one row per faction.
+//
+// There is a single bot, living on the same Discord application the app
+// already uses to sign people in. A faction leader invites that one bot into
+// their own server; the operator never has to host anything per faction. The
+// bot is push-only — it opens no gateway connection and reads no messages —
+// so "connected" means nothing more than: we know a channel we may post to.
+//
+// `guildId` is unique across the whole table, not just per faction. Without
+// that, two factions could both claim the same Discord server and each would
+// be able to aim the other's notifications at it.
+export const discordIntegrations = pgTable('discord_integrations', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().unique().references(() => factions.id, { onDelete: 'cascade' }),
+  // Discord snowflakes are 64-bit and arrive as strings; they must stay
+  // strings. Parsing one into a JS number silently loses the low bits.
+  guildId:   varchar('guild_id', { length: 32 }).notNull().unique(),
+  guildName: varchar('guild_name', { length: 120 }),
+  linkedBy:  uuid('linked_by').notNull().references(() => users.id),
+  linkedAt:  timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  // The last delivery failure, kept so a link that quietly broke — the bot was
+  // kicked, the channel was deleted — is visible on the settings screen
+  // instead of presenting as "connected" while nothing arrives.
+  lastError:   text('last_error'),
+  lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
+});
+
+export const discordIntegrationsRelations = relations(discordIntegrations, ({ one, many }) => ({
+  faction: one(factions, { fields: [discordIntegrations.factionId], references: [factions.id] }),
+  linker:  one(users,    { fields: [discordIntegrations.linkedBy],  references: [users.id] }),
+  routes:  many(discordChannelRoutes),
+}));
+
+export type DiscordIntegration = typeof discordIntegrations.$inferSelect;
+export type NewDiscordIntegration = typeof discordIntegrations.$inferInsert;
+
+/**
+ * The faction activity a Discord channel can be subscribed to.
+ *
+ * Deliberately the same vocabulary the activity feed already speaks, so a
+ * faction routing events to Discord is choosing from a list they have already
+ * seen in the app rather than learning a second set of names.
+ */
+export const DISCORD_EVENT_TYPES = [
+  'entry_logged',
+  'payout_requested',
+  'payout_approved',
+  'payout_rejected',
+  'payout_completed',
+  'expense_recorded',
+  'strike_issued',
+  'announcement_posted',
+  'member_joined',
+  'member_left',
+  'laundering_completed',
+] as const;
+export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
+
+// ── discord_channel_routes ─────────────────────────────
+// Where each kind of activity goes. One channel per event type per faction:
+// the unique constraint is the feature, not a limitation — it is what makes
+// the settings screen a plain list of choices instead of a rule engine.
+//
+// An event with no row here simply is not sent. That makes "off" the default
+// for everything, including any event type added after a faction connected.
+export const discordChannelRoutes = pgTable('discord_channel_routes', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  eventType:   varchar('event_type', { length: 40 }).notNull(),
+  channelId:   varchar('channel_id', { length: 32 }).notNull(),
+  // Denormalised for display: rendering the settings screen should not need a
+  // round trip to Discord, and a channel that has since been deleted still
+  // wants a name to show next to the error.
+  channelName: varchar('channel_name', { length: 120 }),
+  isEnabled:   boolean('is_enabled').notNull().default(true),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueFactionEvent: uniqueIndex('discord_route_unique').on(table.factionId, table.eventType),
+}));
+
+export const discordChannelRoutesRelations = relations(discordChannelRoutes, ({ one }) => ({
+  faction: one(factions, { fields: [discordChannelRoutes.factionId], references: [factions.id] }),
+}));
+
+export type DiscordChannelRoute = typeof discordChannelRoutes.$inferSelect;
+export type NewDiscordChannelRoute = typeof discordChannelRoutes.$inferInsert;
