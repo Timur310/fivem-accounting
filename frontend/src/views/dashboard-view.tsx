@@ -22,6 +22,7 @@ import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
+import { cn } from '@/lib/utils';
 import type { TranslationKey } from '@/lib/i18n';
 
 /** Quota period names as the API spells them. */
@@ -274,14 +275,14 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
     <div className="space-y-6">
       {/* Faction Header — the faction's own masthead: display type, its accent
           as a rule under the name, and a faint accent wash behind it. */}
-      <div className="relative rounded-lg border border-white/[0.06] overflow-hidden">
+      <div className="relative rounded-lg border border-[var(--line-1)] overflow-hidden">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{ background: `linear-gradient(120deg, ${brandColor}0f, transparent 55%)` }}
         />
         <div className="relative px-5 py-4">
           <h2 className="text-2xl font-medium tracking-tight text-zinc-100">{faction.name}</h2>
-          <div className="h-0.5 w-10 rounded-full mt-2" style={{ backgroundColor: brandColor }} />
+          <div className="h-0.5 w-10 rounded-full mt-2 bg-brand" />
           {faction.description && (
             <p className="text-zinc-500 mt-2 text-sm">{faction.description}</p>
           )}
@@ -295,7 +296,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
               <LogIn className="h-4 w-4 text-zinc-400" />
               {t('dashboard.quickLog')}
-              {quickDefaults && <span className="text-[11px] text-zinc-600 font-normal">· {t('dashboard.quickLogPrefilled')}</span>}
+              {quickDefaults && <span className="text-meta text-zinc-600 font-normal">· {t('dashboard.quickLogPrefilled')}</span>}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -306,7 +307,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                     key={it.itemTypeId}
                     type="button"
                     onClick={() => { setQuickTypeId(it.itemTypeId); setQuickAmount(it.amount); }}
-                    className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.itemTypeId ? 'border-primary text-primary bg-primary/10' : 'border-white/[0.08] text-zinc-300 hover:text-zinc-100 hover:border-white/[0.2]'}`}
+                    className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-lg border text-sm transition-colors ${quickTypeId === it.itemTypeId ? 'border-primary text-primary bg-primary/10' : 'border-[var(--line-2)] text-zinc-300 hover:text-zinc-100 hover:border-[var(--line-3)]'}`}
                   >
                     <ItemIcon src={it.itemImageUrl} icon={it.itemIcon} category={it.itemCategory} className="size-4" />
                     {it.itemTypeName}
@@ -357,7 +358,9 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 type="submit"
                 size="touch"
                 disabled={!canQuickLog}
-                style={quickJustLogged ? undefined : { backgroundColor: brandColor }}
+                // The default variant already fills with the faction accent;
+                // the confirmation state is the one that steps away from it.
+                variant={quickJustLogged ? 'secondary' : 'default'}
               >
                 {quickJustLogged ? (
                   <><Check className="h-4 w-4 mr-1.5" />{t('dashboard.quickLogDone')}</>
@@ -421,7 +424,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                     {c.label}
                   </div>
                   <p className="text-lg font-medium tabular-nums text-zinc-200 mt-1 truncate">{c.value}</p>
-                  {c.hint && <p className="text-[11px] text-zinc-600">{c.hint}</p>}
+                  {c.hint && <p className="text-meta text-zinc-600">{c.hint}</p>}
                 </CardContent>
               </Card>
             ));
@@ -451,7 +454,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                   {/* Neutral unless the figure is actually negative: a faction
                       whose accent is green or red would otherwise colour an
                       ordinary balance as if it meant something. */}
-                  <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: bal < 0 ? '#ef4444' : '#e4e4e7' }}>
+                  <div className={cn("text-3xl font-medium tabular-nums tracking-tight", bal < 0 ? "text-negative" : "text-zinc-200")}>
                     {fmt(displayBalance)}
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">
@@ -518,13 +521,13 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 const pct = q.percentage ?? 0;
                 const met = pct >= 100;
                 return (
-                  <div key={q.id} className="rounded-lg border border-white/[0.06] p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1]">
+                  <div key={q.id} className="rounded-lg border border-[var(--line-1)] p-4 space-y-3 transition-all duration-150 hover:border-[var(--line-3)]">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-zinc-200 truncate">{q.itemTypeName}</p>
-                          <p className="text-[11px] text-zinc-500">{QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</p>
+                          <p className="text-meta text-zinc-500">{QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</p>
                         </div>
                       </div>
                       {/* Only "met" earns a colour. The percentage used to wear
@@ -535,7 +538,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       </Badge>
                     </div>
                     {/* Energy bar */}
-                    <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
+                    <div className="h-2 bg-[var(--fill-2)] rounded-full overflow-hidden">
                       {/* Met is green, everything short of it is neutral. The
                           unmet bar used to wear the faction accent, which made
                           the two states indistinguishable for a faction whose
@@ -547,7 +550,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
-                    <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
+                    <div className="flex justify-between text-meta text-zinc-500 tabular-nums">
                       <span>{formatAmount(q.currentAmount ?? 0, q.itemUnit, q.itemIsCurrency)}</span>
                       {met
                         ? <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.itemUnit, q.itemIsCurrency) })}</span>
@@ -575,14 +578,14 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               {missedQuotas.map((q) => {
                 const prev = q.previousPeriod!;
                 return (
-                  <div key={q.id} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                  <div key={q.id} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                     <ItemIcon src={q.itemImageUrl} icon={q.itemIcon} category={q.itemCategory} className="size-5" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-300 truncate">
                         {q.itemTypeName}
                         <span className="text-zinc-600"> &middot; {QUOTA_PERIOD_KEYS[q.periodType] ? t(QUOTA_PERIOD_KEYS[q.periodType]) : q.periodType}</span>
                       </p>
-                      <p className="text-[11px] text-zinc-600 tabular-nums">{prev.periodStart} – {prev.periodEnd}</p>
+                      <p className="text-meta text-zinc-600 tabular-nums">{prev.periodStart} – {prev.periodEnd}</p>
                     </div>
                     <span className="text-xs text-amber-400 tabular-nums">
                       {t('quota.lastPeriodNotMet', {
@@ -614,15 +617,15 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             ) : (
               <div className="space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
-                  <div key={c.userId} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                  <div key={c.userId} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">{i + 1}</span>
                     <Avatar className="h-7 w-7">
                       <AvatarImage src={c.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{displayName(c).slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-micro">{displayName(c).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-300 truncate">{displayName(c)}</p>
-                      <p className="text-[11px] text-zinc-600">{t('entries.count', { count: c.entryCount })}</p>
+                      <p className="text-meta text-zinc-600">{t('entries.count', { count: c.entryCount })}</p>
                     </div>
                     <span className="text-sm font-medium tabular-nums text-zinc-200">{fmt(c.totalContributed)}</span>
                   </div>
@@ -642,8 +645,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               </span>
               <Button
                 onClick={() => setCurrentView('entries')}
-                className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
-                style={{ color: brandColor }}
+                className="text-meta font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80 text-brand"
               >
                 {t('dashboard.viewAll')} <ArrowUpRight className="h-3 w-3" />
               </Button>
@@ -655,10 +657,10 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             ) : (
               <div className="space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (
-                  <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                  <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <Avatar className="h-7 w-7 shrink-0">
                       <AvatarImage src={e.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{displayName(e).slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-micro">{displayName(e).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
@@ -666,7 +668,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                         <span className="text-zinc-600"> {t('dashboard.logged')} </span>
                         <span className="font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
                       </p>
-                      <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                      <p className="text-meta text-zinc-600 flex items-center gap-1.5">
                         <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-4" />
                         <span className="truncate">
                           {e.itemTypeName} &middot; {e.entryDate}
@@ -690,8 +692,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             {(treasuryBalances?.length ?? 0) > 0 && (
               <Button
                 onClick={() => setCurrentView('treasury')}
-                className="text-[11px] font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80"
-                style={{ color: brandColor }}
+                className="text-meta font-medium flex items-center gap-1 transition-colors duration-100 hover:opacity-80 text-brand"
               >
                 {t('dashboard.fullView')} <ArrowUpRight className="h-3 w-3" />
               </Button>
@@ -703,7 +704,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 ? visibleTreasuryBalances.map((b) => (
                   <div
                     key={b.itemTypeId}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] px-3 py-2.5 transition-all duration-150 hover:border-white/[0.1]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line-1)] px-3 py-2.5 transition-all duration-150 hover:border-[var(--line-3)]"
                     // In and out move to the hover title. They are context for
                     // a number, not a second number, and printing them under
                     // every tile is what made this panel a scroll.
@@ -713,7 +714,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       <ItemIcon src={b.imageUrl} icon={b.icon} category={b.category} className="size-7 shrink-0" />
                       <span className="text-sm text-zinc-300 truncate">{b.itemTypeName}</span>
                     </span>
-                    <span className="text-sm font-medium tabular-nums shrink-0" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
+                    <span className={cn("text-sm font-medium tabular-nums shrink-0", b.balance < 0 ? "text-negative" : "text-zinc-200")}>
                       {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
                     </span>
                   </div>
@@ -721,7 +722,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 : totalsByType.map((row) => (
                   <div
                     key={row.itemTypeId}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] px-3 py-2.5 transition-all duration-150 hover:border-white/[0.1]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--line-1)] px-3 py-2.5 transition-all duration-150 hover:border-[var(--line-3)]"
                     title={row.unit}
                   >
                     <span className="flex items-center gap-2 min-w-0">
@@ -764,7 +765,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 <Clock className="h-4 w-4 text-amber-400" />
                 {t('dashboard.inactiveMembers')}
               </span>
-              <Badge variant="outline" className="text-[11px] border-amber-500/20 text-amber-400 bg-amber-500/5">
+              <Badge variant="outline" className="text-meta border-amber-500/20 text-amber-400 bg-amber-500/5">
                 {t('dashboard.inactiveThreshold', { count: inactiveMembers.length, days: inactivityThresholdDays ?? 7 })}
               </Badge>
             </CardTitle>
@@ -772,7 +773,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
           <CardContent>
             <div className="space-y-1">
               {inactiveMembers.slice(0, 5).map((m) => (
-                <div key={m.userId} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                <div key={m.userId} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={m.avatarUrl ?? undefined} />
                     <AvatarFallback className="text-[9px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -782,7 +783,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 </div>
               ))}
               {inactiveMembers.length > 5 && (
-                <p className="text-[11px] text-zinc-600 text-center pt-1">{t('common.andMore', { count: inactiveMembers.length - 5 })}</p>
+                <p className="text-meta text-zinc-600 text-center pt-1">{t('common.andMore', { count: inactiveMembers.length - 5 })}</p>
               )}
             </div>
           </CardContent>
@@ -806,7 +807,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
         {analyticsOpen && (
           <CardContent className="space-y-6">
             <DashboardCharts factionId={factionId} brandColor={brandColor} />
-            <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06]">
+            <div className="flex items-center gap-3 pt-2 border-t border-[var(--line-1)]">
               <Download className="h-4 w-4 text-zinc-500" />
               <span className="text-sm text-zinc-400">{t('common.export')}</span>
               <div className="flex gap-2 ml-auto">

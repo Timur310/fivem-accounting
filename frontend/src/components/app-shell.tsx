@@ -250,7 +250,7 @@ export function AppShell() {
           icon: swatch(rowColor),
           badge: f.role === 'admin' ? (
             <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+              className="shrink-0 rounded px-1.5 py-0.5 text-micro font-medium"
               style={{ backgroundColor: `${rowColor}15`, color: rowColor }}
             >
               {t('role.admin')}
@@ -263,7 +263,7 @@ export function AppShell() {
         label: b.name,
         icon: swatch(b.brandColor ?? DEFAULT_BRAND_COLOR),
         badge: (
-          <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+          <span className="shrink-0 rounded bg-[var(--fill-3)] px-1.5 py-0.5 text-micro font-medium text-zinc-400">
             {t('faction.browse')}
           </span>
         ),
@@ -527,18 +527,18 @@ export function AppShell() {
     <div className="min-h-screen flex bg-background dot-grid" style={brandStyle}>
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/[0.06] bg-[#09090b] transition-all duration-300 lg:sticky lg:top-0 lg:h-screen lg:z-auto ${sidebarOpen ? 'w-60' : 'w-0 lg:w-[52px]'}`}>
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--line-1)] bg-[#09090b] transition-all duration-300 lg:sticky lg:top-0 lg:h-screen lg:z-auto ${sidebarOpen ? 'w-60' : 'w-0 lg:w-[52px]'}`}>
         {/* Nav scrolls inside the sidebar; the rail itself stays pinned, so the
             collapse button is reachable on pages of any length. */}
         {/* Sidebar Header */}
-        <div className="flex h-14 items-center gap-2.5 border-b border-white/[0.06] px-3">
+        <div className="flex h-14 items-center gap-2.5 border-b border-[var(--line-1)] px-3">
           {sidebarOpen && (
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-lg"
                 style={{ backgroundColor: `${brandColor}18` }}
               >
-                <Coins className="h-4 w-4" style={{ color: brandColor }} />
+                <Coins className="h-4 w-4 text-brand" />
               </div>
               <span className="font-medium text-sm tracking-tight truncate text-zinc-200">
                 {t('app.name')}
@@ -552,14 +552,14 @@ export function AppShell() {
               title={t('nav.expandSidebar')}
               aria-label={t('nav.expandSidebar')}
             >
-              <Coins className="h-4.5 w-4.5" style={{ color: brandColor }} />
+              <Coins className="h-4.5 w-4.5 text-brand" />
             </button>
           )}
         </div>
 
         {/* Faction Selector */}
         {showFactionSelector && (
-          <div className="px-2.5 py-2.5 border-b border-white/[0.06]">
+          <div className="px-2.5 py-2.5 border-b border-[var(--line-1)]">
             {sidebarOpen ? (
               <SearchableSelect
                 aria-label={t('faction.select')}
@@ -597,9 +597,9 @@ export function AppShell() {
             return (
               <div key={group} className="mb-1">
                 {sidebarOpen && (
-                  <p className="px-2.5 pt-2 pb-1 text-[10px] uppercase tracking-wider text-zinc-600">{groupLabel}</p>
+                  <p className="px-2.5 pt-2 pb-1 text-micro uppercase tracking-wider text-zinc-600">{groupLabel}</p>
                 )}
-                {!sidebarOpen && <div className="mx-2 my-2 border-t border-white/[0.06]" />}
+                {!sidebarOpen && <div className="mx-2 my-2 border-t border-[var(--line-1)]" />}
                 {items.map((item) => {
                   const active = currentView === item.view;
                   return (
@@ -610,7 +610,7 @@ export function AppShell() {
                       className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
                         active
                           ? 'text-white font-medium'
-                          : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]'
+                          : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--fill-2)]'
                       } ${!sidebarOpen ? 'justify-center' : ''}`}
                       style={active ? {
                         backgroundColor: `${brandColor}12`,
@@ -623,7 +623,7 @@ export function AppShell() {
                       {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
                       {!!item.badgeCount && (
                         <span
-                          className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-[10px] tabular-nums ${
+                          className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-micro tabular-nums ${
                             sidebarOpen ? 'px-1.5 py-0.5' : 'absolute translate-x-3 -translate-y-2 px-1'
                           }`}
                         >
@@ -641,16 +641,16 @@ export function AppShell() {
         {/* Build and attribution. Collapsed to the version alone in the icon
             rail, where there is no room for a name — and dropped entirely on
             mobile, where the sidebar is an overlay over the page. */}
-        <div className="border-t border-white/[0.06] px-3 py-2 hidden lg:block">
+        <div className="border-t border-[var(--line-1)] px-3 py-2 hidden lg:block">
           {sidebarOpen ? (
-            <div className="space-y-0.5 text-[10px] leading-relaxed text-zinc-600">
+            <div className="space-y-0.5 text-micro leading-relaxed text-zinc-600">
               <p className="tabular-nums">{t('app.version', { version: APP_VERSION })}</p>
               <p>{APP_COPYRIGHT}</p>
               <p>{t('app.allRightsReserved')}</p>
             </div>
           ) : (
             <p
-              className="text-center text-[10px] tabular-nums text-zinc-600"
+              className="text-center text-micro tabular-nums text-zinc-600"
               title={`${APP_VERSION_LABEL} · ${APP_COPYRIGHT} ${t('app.allRightsReserved')}`}
             >
               {APP_VERSION_LABEL}
@@ -659,7 +659,7 @@ export function AppShell() {
         </div>
 
         {/* Collapse button */}
-        <div className="border-t border-white/[0.06] p-1.5 hidden lg:block">
+        <div className="border-t border-[var(--line-1)] p-1.5 hidden lg:block">
           <Button
             variant="ghost"
             size="sm"
@@ -689,7 +689,7 @@ export function AppShell() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-14 border-b border-white/[0.06] bg-background/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0 sticky top-0 z-30">
+        <header className="h-14 border-b border-[var(--line-1)] bg-background/80 backdrop-blur-md flex items-center justify-between px-4 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -711,13 +711,13 @@ export function AppShell() {
           <Button
             variant="ghost"
             size="sm"
-            className="hidden md:flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 border border-white/[0.06] rounded-md px-2 h-7"
+            className="hidden md:flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 border border-[var(--line-1)] rounded-md px-2 h-7"
             onClick={() => setPaletteOpen(true)}
             aria-label={t('palette.placeholder')}
           >
             <Search className="h-3.5 w-3.5" />
             {t('palette.search')}
-            <kbd className="text-[10px] text-zinc-600 border border-white/[0.08] rounded px-1">Ctrl K</kbd>
+            <kbd className="text-micro text-zinc-600 border border-[var(--line-2)] rounded px-1">Ctrl K</kbd>
           </Button>
           {/* Left of the language switcher and the avatar: the bell is a thing
               that changes on its own, so it sits where the eye already goes
@@ -727,10 +727,10 @@ export function AppShell() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 hover:bg-white/[0.04]">
+              <Button variant="ghost" className="flex items-center gap-2 hover:bg-[var(--fill-2)]">
                 <Avatar className="h-7 w-7">
                   <AvatarImage src={user?.avatarUrl ?? undefined} />
-                  <AvatarFallback className="text-[10px]">
+                  <AvatarFallback className="text-micro">
                     {(user ? displayName(user) : 'U').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>

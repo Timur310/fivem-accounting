@@ -244,7 +244,6 @@ export function LaunderingView({ factionId }: Props) {
               <Button
                 type="submit"
                 disabled={!canSubmit}
-                style={{ backgroundColor: brandColor }}
               >
                 {launderMutation.isPending ? t('laundering.washing') : t('laundering.launder')}
               </Button>

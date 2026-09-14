@@ -108,7 +108,7 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
             </Button>
           ))}
         </div>
-        <span className="text-[11px] text-zinc-600 ml-auto tabular-nums">
+        <span className="text-meta text-zinc-600 ml-auto tabular-nums">
           {data.range.from} → {data.range.to}
         </span>
       </div>

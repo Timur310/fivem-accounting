@@ -149,12 +149,12 @@ export function NotificationBell() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-[min(360px,calc(100vw-2rem))] p-0">
-        <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+        <div className="flex items-center justify-between border-b border-[var(--line-1)] px-3 py-2">
           <span className="text-xs font-medium text-zinc-300">{t('notification.title')}</span>
           <div className="flex gap-1">
             {unread > 0 && (
               <Button
-                variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-zinc-500 hover:text-zinc-200"
+                variant="ghost" size="sm" className="h-6 px-1.5 text-meta text-zinc-500 hover:text-zinc-200"
                 onClick={() => markAllRead.mutate()}
               >
                 <Check className="mr-1 h-3 w-3" />
@@ -163,7 +163,7 @@ export function NotificationBell() {
             )}
             {items.length > 0 && (
               <Button
-                variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-zinc-500 hover:text-zinc-200"
+                variant="ghost" size="sm" className="h-6 px-1.5 text-meta text-zinc-500 hover:text-zinc-200"
                 onClick={() => clearAll.mutate()}
               >
                 <Trash2 className="mr-1 h-3 w-3" />
@@ -177,7 +177,7 @@ export function NotificationBell() {
           {isLoading ? (
             <div className="space-y-2 p-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-10 w-full animate-pulse rounded-md bg-white/[0.04]" />
+                <div key={i} className="h-10 w-full animate-pulse rounded-md bg-[var(--fill-2)]" />
               ))}
             </div>
           ) : items.length === 0 ? (
@@ -188,19 +188,19 @@ export function NotificationBell() {
                 key={n.id}
                 type="button"
                 onClick={() => handleClick(n)}
-                className={`flex w-full items-start gap-2.5 border-b border-white/[0.03] px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-white/[0.03] ${
+                className={`flex w-full items-start gap-2.5 border-b border-[var(--line-1)] px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-[var(--fill-2)] ${
                   n.readAt ? 'opacity-60' : ''
                 }`}
               >
                 <span
-                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${TONE[n.type] ?? 'bg-white/[0.06] text-zinc-300'}`}
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${TONE[n.type] ?? 'bg-[var(--fill-3)] text-zinc-300'}`}
                   aria-hidden="true"
                 >
                   <Bell className="h-2.5 w-2.5" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs text-zinc-200 break-words">{describe(n)}</span>
-                  <span className="mt-0.5 block text-[10px] text-zinc-600 tabular-nums">
+                  <span className="mt-0.5 block text-micro text-zinc-600 tabular-nums">
                     {n.factionName ? `${n.factionName} · ` : ''}
                     {formatDateTime(n.createdAt)}
                   </span>

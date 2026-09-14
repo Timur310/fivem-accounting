@@ -14,11 +14,11 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white shadow-none hover:brightness-110",
         outline:
-          "border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.12]",
+          "border border-[var(--line-2)] bg-[var(--fill-2)] hover:bg-[var(--fill-3)] hover:border-[var(--line-3)]",
         secondary:
-          "bg-white/[0.06] text-foreground hover:bg-white/[0.09]",
+          "bg-[var(--fill-3)] text-foreground hover:bg-[var(--fill-4)]",
         ghost:
-          "hover:bg-white/[0.06] hover:text-foreground",
+          "hover:bg-[var(--fill-3)] hover:text-foreground",
         link: "text-[var(--brand-color,#6366f1)] underline-offset-4 hover:underline",
       },
       // Shares its names and heights with Input and SearchableSelect — see

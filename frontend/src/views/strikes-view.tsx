@@ -223,12 +223,12 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
                       </TableCell>
                     )}
                     <TableCell>
-                      <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
+                      <Badge className={`text-micro border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
                     </TableCell>
                     <TableCell>
                       <span className={`text-xs font-medium ${STATUS_COLORS[s.effectiveStatus] || 'text-zinc-400'}`}>{STATUS_KEYS[s.effectiveStatus] ? t(STATUS_KEYS[s.effectiveStatus]) : s.effectiveStatus}</span>
                       {s.expiresAt && s.effectiveStatus === 'active' && (
-                        <p className="text-[10px] text-zinc-600">{t('strikes.expiresOn', { date: formatDate(s.expiresAt) })}</p>
+                        <p className="text-micro text-zinc-600">{t('strikes.expiresOn', { date: formatDate(s.expiresAt) })}</p>
                       )}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">

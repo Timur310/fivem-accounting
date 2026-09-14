@@ -309,7 +309,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               i < activeIdx ? 'bg-emerald-500/70'
               : i === activeIdx
                 ? status === 'rejected' ? 'bg-red-500' : status === 'pending' ? 'bg-amber-400' : 'bg-blue-400'
-                : 'bg-white/[0.07]'
+                : 'bg-[var(--fill-2)]'
             }`}
           />
         ))}
@@ -406,7 +406,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               {t('payouts.evenSplit')}
             </Button>
           )}
-          <Button size="sm" onClick={() => setCreateOpen(true)} style={{ backgroundColor: brandColor }}>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
             {canManagePayouts ? t('payouts.new') : t('payouts.request')}
           </Button>
@@ -466,7 +466,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/[0.06] hover:bg-transparent">
+              <TableRow className="border-[var(--line-1)] hover:bg-transparent">
                 <SortableHeader field="recipient" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
                   {t('payouts.recipient')}
                 </SortableHeader>
@@ -492,12 +492,12 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
                 return (
-                  <TableRow key={p.id} className="border-white/[0.04]">
+                  <TableRow key={p.id} className="border-[var(--line-1)]">
                     <TableCell>
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7">
                           <AvatarImage src={p.recipientAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">
+                          <AvatarFallback className="text-micro">
                             {displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
@@ -522,7 +522,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {statusPipeline(p.status)}
-                        <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-[11px]`}>
+                        <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-meta`}>
                           {t(sc.label)}
                         </Badge>
                       </div>
@@ -700,7 +700,6 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button
               type="submit"
               disabled={!canCreatePayout}
-              style={{ backgroundColor: brandColor }}
             >
               {createMutation.isPending ? t('common.creating') : (canManagePayouts ? t('payouts.create') : t('payouts.request'))}
             </Button>
@@ -761,7 +760,6 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button
               disabled={updateMutation.isPending || Number(editAmount) <= 0}
               type="submit"
-              style={{ backgroundColor: brandColor }}
             >
               {updateMutation.isPending ? t('common.saving') : t('common.save')}
             </Button>
@@ -807,9 +805,9 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 </Button>
               </div>
               {splitMode === 'pick' && (
-                <div className="max-h-[180px] overflow-y-auto rounded-lg border border-white/[0.06] p-2 space-y-1">
+                <div className="max-h-[180px] overflow-y-auto rounded-lg border border-[var(--line-1)] p-2 space-y-1">
                   {members.map((m: Member) => (
-                    <label key={m.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-white/[0.03] cursor-pointer text-sm text-zinc-300">
+                    <label key={m.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-[var(--fill-2)] cursor-pointer text-sm text-zinc-300">
                       <input
                         type="checkbox"
                         className="accent-zinc-400"
@@ -819,7 +817,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         }}
                       />
                       <span className="truncate">{displayName({ username: m.username, inGameName: m.inGameName })}</span>
-                      {m.isProvisional && <span className="text-[10px] text-zinc-600">{t('members.provisional')}</span>}
+                      {m.isProvisional && <span className="text-micro text-zinc-600">{t('members.provisional')}</span>}
                     </label>
                   ))}
                 </div>
@@ -885,7 +883,6 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button
               type="submit"
               disabled={!canEvenSplit}
-              style={{ backgroundColor: brandColor }}
             >
               {evenSplitMutation.isPending
                 ? t('payouts.distributing')

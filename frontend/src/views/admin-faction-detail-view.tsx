@@ -56,10 +56,10 @@ export function AdminFactionDetailView() {
           <h2 className="text-xl font-medium tracking-tight text-zinc-100">{data.name}</h2>
           {data.description && (<p className="text-zinc-500 mt-1 text-sm">{data.description}</p>)}
           <div className="flex items-center gap-2 mt-2">
-            <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${data.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/[0.04] text-zinc-500 border-white/[0.06]'}`}>
+            <span className={`text-meta px-2 py-0.5 rounded-md font-medium border ${data.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-[var(--fill-2)] text-zinc-500 border-[var(--line-1)]'}`}>
               {data.isActive ? t('common.active') : t('common.inactive')}
             </span>
-            <span className="text-[11px] text-zinc-600 tabular-nums">{t('common.createdOn', { date: formatDate(data.createdAt) })}</span>
+            <span className="text-meta text-zinc-600 tabular-nums">{t('common.createdOn', { date: formatDate(data.createdAt) })}</span>
           </div>
         </div>
       </div>
@@ -83,10 +83,10 @@ export function AdminFactionDetailView() {
             {data.members.length === 0 ? (<EmptyState icon={Users} title={t('members.none')} compact />) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.members.map((m: Member) => (
-                  <div key={m.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
-                    <Avatar className="h-7 w-7"><AvatarImage src={m.avatarUrl ?? undefined} /><AvatarFallback className="text-[10px]">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
-                    <div className="flex-1 min-w-0"><p className="text-sm text-zinc-300 truncate">{displayName(m)}</p><p className="text-[11px] text-zinc-600 font-mono tabular-nums">{m.discordId}</p></div>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${m.role === 'admin' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-white/[0.04] text-zinc-500 border-white/[0.06]'}`}>{m.role === 'admin' ? t('role.admin') : t('role.member')}</span>
+                  <div key={m.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
+                    <Avatar className="h-7 w-7"><AvatarImage src={m.avatarUrl ?? undefined} /><AvatarFallback className="text-micro">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                    <div className="flex-1 min-w-0"><p className="text-sm text-zinc-300 truncate">{displayName(m)}</p><p className="text-meta text-zinc-600 font-mono tabular-nums">{m.discordId}</p></div>
+                    <span className={`text-meta px-2 py-0.5 rounded-md font-medium border ${m.role === 'admin' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-[var(--fill-2)] text-zinc-500 border-[var(--line-1)]'}`}>{m.role === 'admin' ? t('role.admin') : t('role.member')}</span>
                   </div>
                 ))}
               </div>
@@ -100,9 +100,9 @@ export function AdminFactionDetailView() {
             {data.itemTypes.length === 0 ? (<EmptyState icon={Package} title={t('itemTypes.none')} compact />) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.itemTypes.map((item: ItemType) => (
-                  <div key={item.id} className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
-                    <div><p className="text-sm text-zinc-300">{item.name}</p><p className="text-[11px] text-zinc-600">{t('itemTypes.unitLabel')}: {item.unit}</p></div>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${item.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/[0.04] text-zinc-500 border-white/[0.06]'}`}>{item.isActive ? t('common.active') : t('common.disabled')}</span>
+                  <div key={item.id} className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
+                    <div><p className="text-sm text-zinc-300">{item.name}</p><p className="text-meta text-zinc-600">{t('itemTypes.unitLabel')}: {item.unit}</p></div>
+                    <span className={`text-meta px-2 py-0.5 rounded-md font-medium border ${item.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-[var(--fill-2)] text-zinc-500 border-[var(--line-1)]'}`}>{item.isActive ? t('common.active') : t('common.disabled')}</span>
                   </div>
                 ))}
               </div>

@@ -482,7 +482,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="inline-flex items-center gap-1.5 text-xs bg-white/[0.04] border border-white/[0.06] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
+                          <span className="inline-flex items-center gap-1.5 text-xs bg-[var(--fill-2)] border border-[var(--line-1)] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
                             <ItemIcon src={entry.itemImageUrl} icon={entry.itemIcon} category={entry.itemCategory} className="size-4" />
                             {entry.itemTypeName}
                           </span>
@@ -498,7 +498,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                             {entry.customValues && Object.keys(entry.customValues).length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {Object.entries(entry.customValues).map(([k, v]) => (
-                                  <span key={k} className="text-[11px] bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded text-zinc-400" title={`${k}: ${v}`}>
+                                  <span key={k} className="text-meta bg-[var(--fill-2)] border border-[var(--line-1)] px-1.5 py-0.5 rounded text-zinc-400" title={`${k}: ${v}`}>
                                     {v.length > 15 ? v.slice(0, 15) + '...' : v}
                                   </span>
                                 ))}
@@ -535,7 +535,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               </div>
 
               {meta && totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--line-1)]">
                   <p className="text-xs text-zinc-500 tabular-nums">
                     {t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}
                   </p>
@@ -577,7 +577,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                       key={it.id}
                       type="button"
                       onClick={() => setNewItemTypeId(it.id)}
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-[var(--line-2)] text-zinc-400 hover:text-zinc-200'}`}
                     >
                       <ItemIcon src={it.imageUrl} icon={it.icon} category={it.category} className="size-3.5" />
                       {it.name}

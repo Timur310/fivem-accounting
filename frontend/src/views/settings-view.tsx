@@ -833,11 +833,11 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                       </TableCell>
                       <TableCell>
                         {q.targetUserId ? (
-                          <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
+                          <Badge variant="outline" className="text-micro border-blue-500/30 text-blue-400 bg-blue-500/10">
                             {scopeLabel(q)}
                           </Badge>
                         ) : q.scope === 'everyone' ? (
-                          <Badge variant="outline" className="text-[10px] border-violet-500/30 text-violet-400 bg-violet-500/10">
+                          <Badge variant="outline" className="text-micro border-violet-500/30 text-violet-400 bg-violet-500/10">
                             {t('quota.scope.everyone')}
                           </Badge>
                         ) : (
@@ -880,7 +880,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                             {q.isActive ? (met ? t('quota.met') : t('common.active')) : t('common.disabled')}
                           </Badge>
                           {q.isActive && q.previousPeriod && !q.previousPeriod.met && (
-                            <p className="text-[11px] text-amber-500 tabular-nums">
+                            <p className="text-meta text-amber-500 tabular-nums">
                               {t('quota.lastPeriodNotMet', {
                                 current: formatAmount(q.previousPeriod.currentAmount, q.itemUnit, q.itemIsCurrency),
                                 target: formatAmount(q.previousPeriod.targetAmount, q.itemUnit, q.itemIsCurrency),
@@ -939,7 +939,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                   total: historyData?.summary.total ?? 0,
                 })}
               </p>
-              <div className="max-h-[300px] overflow-y-auto rounded-lg border border-white/[0.06]">
+              <div className="max-h-[300px] overflow-y-auto rounded-lg border border-[var(--line-1)]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1439,7 +1439,7 @@ function FactionSettingsSection({
                 // to the right rank even after we re-sort for display.
                 const idx = ranks.findIndex((rr) => rr === r);
                 return (
-                  <div key={idx} className="rounded-lg border border-white/[0.06] p-3 space-y-2">
+                  <div key={idx} className="rounded-lg border border-[var(--line-1)] p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-zinc-600 w-6 text-center tabular-nums">{t('settings.levelShort', { level: r.level })}</span>
                       <Input
@@ -1466,10 +1466,10 @@ function FactionSettingsSection({
                         : FACTION_PERMISSIONS.filter((perm) => r.permissions.includes(perm))
                       ).map((perm) => {
                         const active = r.permissions.includes(perm);
-                        const chipClass = `text-[10px] px-2 py-1 rounded-md border transition-colors ${
+                        const chipClass = `text-micro px-2 py-1 rounded-md border transition-colors ${
                           active
                             ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
-                            : 'bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300'
+                            : 'bg-[var(--fill-1)] border-[var(--line-1)] text-zinc-500 hover:text-zinc-300'
                         }`;
                         const chipStyle = active
                           ? { borderColor: `${brandColor}40`, backgroundColor: `${brandColor}15`, color: brandColor }
@@ -1479,10 +1479,10 @@ function FactionSettingsSection({
                           return (
                             <span
                               key={perm}
-                              className={`text-[10px] px-2 py-1 rounded-md border ${
+                              className={`text-micro px-2 py-1 rounded-md border ${
                                 active
                                   ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
-                                  : 'bg-white/[0.02] border-white/[0.06] text-zinc-500'
+                                  : 'bg-[var(--fill-1)] border-[var(--line-1)] text-zinc-500'
                               }`}
                               style={chipStyle}
                               title={`${t(PERMISSION_LABEL_KEYS[perm])} — ${t('settings.rankPermissionsAdminOnly')}`}
@@ -1506,7 +1506,7 @@ function FactionSettingsSection({
                         );
                       })}
                       {!isFactionAdmin && r.permissions.length === 0 && (
-                        <span className="text-[10px] text-zinc-600">{t('settings.noPermissions')}</span>
+                        <span className="text-micro text-zinc-600">{t('settings.noPermissions')}</span>
                       )}
                     </div>
                   </div>

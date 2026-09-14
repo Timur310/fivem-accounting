@@ -98,17 +98,17 @@ export function GuideView() {
               },
               h4: ({ children }) => <h4 className="guide-h3">{children}</h4>,
               table: ({ children }) => (
-                <div className="overflow-x-auto my-4 rounded-lg border border-white/[0.06]">
+                <div className="overflow-x-auto my-4 rounded-lg border border-[var(--line-1)]">
                   <table className="w-full text-sm">{children}</table>
                 </div>
               ),
               th: ({ children }) => (
-                <th className="text-left text-xs uppercase tracking-wider text-zinc-500 px-3 py-2 border-b border-white/[0.06] bg-white/[0.02] whitespace-nowrap">
+                <th className="text-left text-xs uppercase tracking-wider text-zinc-500 px-3 py-2 border-b border-[var(--line-1)] bg-[var(--fill-1)] whitespace-nowrap">
                   {children}
                 </th>
               ),
               td: ({ children }) => (
-                <td className="px-3 py-2 border-b border-white/[0.04] align-top text-zinc-300">
+                <td className="px-3 py-2 border-b border-[var(--line-1)] align-top text-zinc-300">
                   {children}
                 </td>
               ),

@@ -103,10 +103,10 @@ export function AdminFactionsView() {
 
       {analytics && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-highlight"><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><Shield className="h-3.5 w-3.5" />{t('admin.factions')}</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalFactions}</p><p className="text-[11px] text-zinc-500">{t('admin.activeCount', { count: analytics.overview.activeFactions })}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><Users className="h-3.5 w-3.5" />{t('admin.users')}</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalUsers}</p><p className="text-[11px] text-zinc-500">{t('admin.membershipCount', { count: analytics.overview.totalMemberships })}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><List className="h-3.5 w-3.5" />{t('admin.totalEntries')}</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{formatCount(analytics.overview.totalEntries)}</p><p className="text-[11px] text-zinc-500">{t('admin.entriesLast7d', { count: analytics.overview.entriesLast7d })} &middot; {t('admin.entriesLast30d', { count: analytics.overview.entriesLast30d })}</p></CardContent></Card>
-          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider"><BarChart3 className="h-3.5 w-3.5" />{t('admin.topFaction')}</div>{analytics.topFactionsByAmount.length > 0 ? (<><p className="text-sm font-medium mt-1 truncate text-zinc-200">{analytics.topFactionsByAmount[0].name}</p><p className="text-[11px] text-zinc-500">{t('admin.totalAmount', { amount: '$' + formatNumber(analytics.topFactionsByAmount[0].totalAmount) })}</p></>) : (<p className="text-sm text-zinc-600 mt-1">{t('common.noDataYet')}</p>)}</CardContent></Card>
+          <Card className="border-highlight"><CardContent className="p-4"><div className="flex items-center gap-2 text-meta text-zinc-500 uppercase tracking-wider"><Shield className="h-3.5 w-3.5" />{t('admin.factions')}</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalFactions}</p><p className="text-meta text-zinc-500">{t('admin.activeCount', { count: analytics.overview.activeFactions })}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-meta text-zinc-500 uppercase tracking-wider"><Users className="h-3.5 w-3.5" />{t('admin.users')}</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{analytics.overview.totalUsers}</p><p className="text-meta text-zinc-500">{t('admin.membershipCount', { count: analytics.overview.totalMemberships })}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-meta text-zinc-500 uppercase tracking-wider"><List className="h-3.5 w-3.5" />{t('admin.totalEntries')}</div><p className="text-2xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{formatCount(analytics.overview.totalEntries)}</p><p className="text-meta text-zinc-500">{t('admin.entriesLast7d', { count: analytics.overview.entriesLast7d })} &middot; {t('admin.entriesLast30d', { count: analytics.overview.entriesLast30d })}</p></CardContent></Card>
+          <Card><CardContent className="p-4"><div className="flex items-center gap-2 text-meta text-zinc-500 uppercase tracking-wider"><BarChart3 className="h-3.5 w-3.5" />{t('admin.topFaction')}</div>{analytics.topFactionsByAmount.length > 0 ? (<><p className="text-sm font-medium mt-1 truncate text-zinc-200">{analytics.topFactionsByAmount[0].name}</p><p className="text-meta text-zinc-500">{t('admin.totalAmount', { amount: '$' + formatNumber(analytics.topFactionsByAmount[0].totalAmount) })}</p></>) : (<p className="text-sm text-zinc-600 mt-1">{t('common.noDataYet')}</p>)}</CardContent></Card>
         </div>
       )}
 
@@ -128,18 +128,18 @@ export function AdminFactionsView() {
                 <TableBody>
                   {factions.map((f) => (
                     <TableRow key={f.id} className={!f.isActive ? 'opacity-40' : ''}>
-                      <TableCell><div><p className="text-sm font-medium text-zinc-300">{f.name}</p>{f.description && (<p className="text-[11px] text-zinc-600 truncate max-w-[200px]">{f.description}</p>)}</div></TableCell>
+                      <TableCell><div><p className="text-sm font-medium text-zinc-300">{f.name}</p>{f.description && (<p className="text-meta text-zinc-600 truncate max-w-[200px]">{f.description}</p>)}</div></TableCell>
                       <TableCell className="text-sm text-zinc-400 tabular-nums">{f.memberCount}</TableCell>
                       <TableCell className="text-sm text-zinc-400 tabular-nums">{f.entryCount}</TableCell>
-                      <TableCell><span className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${f.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/[0.04] text-zinc-500 border-white/[0.06]'}`}>{f.isActive ? t('common.active') : t('common.inactive')}</span></TableCell>
-                      <TableCell className="text-[11px] text-zinc-600 tabular-nums">{formatDate(f.createdAt)}</TableCell>
+                      <TableCell><span className={`text-meta px-2 py-0.5 rounded-md font-medium border ${f.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-[var(--fill-2)] text-zinc-500 border-[var(--line-1)]'}`}>{f.isActive ? t('common.active') : t('common.inactive')}</span></TableCell>
+                      <TableCell className="text-meta text-zinc-600 tabular-nums">{formatDate(f.createdAt)}</TableCell>
                       <TableCell><div className="flex items-center gap-0.5"><Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => viewFaction(f)}><Eye className="h-3 w-3" /></Button><Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button><Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setDeleteTarget(f)} disabled={!f.isActive}><Trash2 className="h-3 w-3" /></Button></div></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
               {meta && totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--line-1)]">
                   <p className="text-xs text-zinc-500 tabular-nums">{t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}</p>
                   <div className="flex items-center gap-1.5">
                     <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
@@ -160,7 +160,7 @@ export function AdminFactionsView() {
           <div className="space-y-4">
             <div className="space-y-2"><Label>{t('admin.factionName')}</Label><Input placeholder={t('admin.factionNamePlaceholder')} value={newName} onChange={(e) => setNewName(e.target.value)} /></div>
             <div className="space-y-2"><Label>{t('admin.descriptionOptional')}</Label><Textarea placeholder={t('admin.descriptionPlaceholder')} value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={2} /></div>
-            <div className="space-y-2"><Label>{t('admin.initialAdminDiscordId')}</Label><Input placeholder={t('admin.initialAdminPlaceholder')} value={newAdminDiscordId} onChange={(e) => setNewAdminDiscordId(e.target.value)} /><p className="text-[11px] text-zinc-600">{t('admin.initialAdminHint')}</p></div>
+            <div className="space-y-2"><Label>{t('admin.initialAdminDiscordId')}</Label><Input placeholder={t('admin.initialAdminPlaceholder')} value={newAdminDiscordId} onChange={(e) => setNewAdminDiscordId(e.target.value)} /><p className="text-meta text-zinc-600">{t('admin.initialAdminHint')}</p></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button><Button onClick={() => createMutation.mutate()} disabled={!newName.trim() || !newAdminDiscordId.trim() || createMutation.isPending}>{createMutation.isPending ? t('common.creating') : t('admin.createFaction')}</Button></DialogFooter>
         </DialogContent>
@@ -172,9 +172,9 @@ export function AdminFactionsView() {
           <div className="space-y-4">
             <div className="space-y-2"><Label>{t('common.name')}</Label><Input value={editName} onChange={(e) => setEditName(e.target.value)} /></div>
             <div className="space-y-2"><Label>{t('common.description')}</Label><Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} /></div>
-            <div className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3">
-              <div><p className="text-sm font-medium text-zinc-200">{t('common.active')}</p><p className="text-[11px] text-zinc-500">{t('admin.inactiveFactionHint')}</p></div>
-              <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="h-4 w-4 rounded border-white/[0.08]" />
+            <div className="flex items-center justify-between rounded-lg border border-[var(--line-1)] p-3">
+              <div><p className="text-sm font-medium text-zinc-200">{t('common.active')}</p><p className="text-meta text-zinc-500">{t('admin.inactiveFactionHint')}</p></div>
+              <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} className="h-4 w-4 rounded border-[var(--line-2)]" />
             </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button><Button onClick={() => updateMutation.mutate()} disabled={!editName.trim() || updateMutation.isPending}>{updateMutation.isPending ? t('common.saving') : t('common.saveChanges')}</Button></DialogFooter>

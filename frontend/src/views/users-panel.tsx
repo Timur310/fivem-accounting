@@ -149,7 +149,7 @@ export function UsersPanel() {
               <UserCog className="h-4 w-4 text-zinc-400" />
               {t('users.title')}
             </CardTitle>
-            <p className="text-[11px] text-zinc-500 mt-1">{t('users.description')}</p>
+            <p className="text-meta text-zinc-500 mt-1">{t('users.description')}</p>
           </div>
           <div className="flex items-center gap-2">
             {allUsers.length > 0 && (
@@ -199,7 +199,7 @@ export function UsersPanel() {
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7">
                           <AvatarImage src={u.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{displayName(u).slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-micro">{displayName(u).slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <span className="text-sm text-zinc-200">{displayName(u)}</span>
@@ -209,7 +209,7 @@ export function UsersPanel() {
                           {/* The one thing that separates these rows from the
                               rest: nobody is behind them yet. */}
                           {u.isProvisional && (
-                            <Badge variant="outline" className="ml-2 text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
+                            <Badge variant="outline" className="ml-2 text-micro border-amber-500/20 text-amber-400 bg-amber-500/5">
                               {t('users.awaitingFirstLogin')}
                             </Badge>
                           )}
