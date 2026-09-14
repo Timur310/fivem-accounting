@@ -258,7 +258,8 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
                 <Input
-                  className="h-8 w-[170px] pl-8 text-xs"
+                  size="sm"
+                  className="w-[170px] pl-8"
                   placeholder={t('itemTypes.search')}
                   aria-label={t('itemTypes.search')}
                   value={nameFilter}
@@ -267,7 +268,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
               </div>
               <SearchableSelect
                 className="w-[120px]"
-                triggerClassName="h-8 text-xs"
+                size="sm"
                 aria-label={t('treasury.sortBy')}
                 value={sortField}
                 onValueChange={(v) => setSortField(v as SortField)}
@@ -275,8 +276,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
               />
               <Button
                 variant="outline"
-                size="icon"
-                className="h-8 w-8 shrink-0"
+                size="icon-sm" className="shrink-0"
                 onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
                 title={t('treasury.toggleSortDirection')}
                 aria-label={t('treasury.toggleSortDirection')}
@@ -707,10 +707,10 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                   // the amount column does not shift as the mouse moves down
                   // the list.
                   <div className="flex w-[68px] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-100 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(e)}>
+                    <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(e)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => setConfirmDelete(e)}>
+                    <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => setConfirmDelete(e)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>

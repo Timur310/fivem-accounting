@@ -222,8 +222,7 @@ export function AdminSupportView() {
                       <>
                         <Button
                           variant="outline"
-                          size="sm"
-                          className="h-7 text-xs text-emerald-300 hover:text-emerald-200"
+                          size="xs" className="text-emerald-300 hover:text-emerald-200"
                           onClick={() => openClose(ticket, 'resolved')}
                         >
                           <Check className="h-3.5 w-3.5 mr-1" />
@@ -231,8 +230,7 @@ export function AdminSupportView() {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
-                          className="h-7 text-xs text-red-300 hover:text-red-200"
+                          size="xs" className="text-red-300 hover:text-red-200"
                           onClick={() => openClose(ticket, 'declined')}
                         >
                           <X className="h-3.5 w-3.5 mr-1" />
@@ -242,8 +240,7 @@ export function AdminSupportView() {
                     )}
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-zinc-500 hover:text-red-300 ml-auto"
+                      size="xs" className="text-zinc-500 hover:text-red-300 ml-auto"
                       onClick={() => setDeleteTarget(ticket)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -262,14 +259,14 @@ export function AdminSupportView() {
               </span>
               <div className="flex gap-1">
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >

@@ -236,8 +236,7 @@ export function SupportView() {
                   {ticket.status === 'open' && (
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                      size="xs" className="px-2 text-zinc-400 hover:text-zinc-200"
                       onClick={() => setCancelTarget(ticket)}
                     >
                       <Undo2 className="h-3.5 w-3.5 mr-1" />

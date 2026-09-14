@@ -161,7 +161,7 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
       <div className="flex items-center gap-2">
         <SearchableSelect
           className="w-[140px]"
-          triggerClassName="h-8 text-xs"
+          size="sm"
           aria-label={t('strikes.filterByStatus')}
           value={statusFilter}
           onValueChange={(v) => { setStatusFilter(v); setPage(1); }}
@@ -170,7 +170,7 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
         />
         <SearchableSelect
           className="w-[140px]"
-          triggerClassName="h-8 text-xs"
+          size="sm"
           aria-label={t('strikes.filterBySeverity')}
           value={severityFilter}
           onValueChange={(v) => { setSeverityFilter(v); setPage(1); }}
@@ -238,20 +238,20 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
                     <TableCell>
                       {canManageStrikes && s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <MessageSquare className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title={t('strikes.revoke')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-300" title={t('strikes.revoke')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>
                       )}
                       {canManageStrikes && s.effectiveStatus === 'appealed' && s.targetUserId && (
                         <div className="flex gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
                             <RotateCcw className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-300" title={t('strikes.revoke')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-300" title={t('strikes.revoke')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'revoked' })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>

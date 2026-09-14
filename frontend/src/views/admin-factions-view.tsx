@@ -133,7 +133,7 @@ export function AdminFactionsView() {
                       <TableCell className="text-sm text-zinc-400 tabular-nums">{f.entryCount}</TableCell>
                       <TableCell><span className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${f.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/[0.04] text-zinc-500 border-white/[0.06]'}`}>{f.isActive ? t('common.active') : t('common.inactive')}</span></TableCell>
                       <TableCell className="text-[11px] text-zinc-600 tabular-nums">{formatDate(f.createdAt)}</TableCell>
-                      <TableCell><div className="flex items-center gap-0.5"><Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => viewFaction(f)}><Eye className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setDeleteTarget(f)} disabled={!f.isActive}><Trash2 className="h-3 w-3" /></Button></div></TableCell>
+                      <TableCell><div className="flex items-center gap-0.5"><Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => viewFaction(f)}><Eye className="h-3 w-3" /></Button><Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button><Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setDeleteTarget(f)} disabled={!f.isActive}><Trash2 className="h-3 w-3" /></Button></div></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -142,8 +142,8 @@ export function AdminFactionsView() {
                 <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
                   <p className="text-xs text-zinc-500 tabular-nums">{t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}</p>
                   <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="xs" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               )}

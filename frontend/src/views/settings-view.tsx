@@ -428,13 +428,12 @@ function ItemTypesSection({ factionId, canManage = false }: { factionId: string;
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(item)}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(item)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive"
+                          size="icon-sm" className="text-destructive"
                           onClick={() => setDeleteTarget(item)}
                           disabled={!item.isActive}
                         >
@@ -894,20 +893,18 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="icon-sm"
                             title={t('quota.history')}
                             onClick={() => setHistoryTarget(q)}
                           >
                             <History className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(q)}>
+                          <Button variant="ghost" size="icon-sm" onClick={() => openEdit(q)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
+                            size="icon-sm" className="text-destructive"
                             onClick={() => setDeleteTarget(q)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1292,7 +1289,7 @@ function CustomizationSection({ factionId }: { factionId: string }) {
                     />
                     {t('common.required')}
                   </label>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeField(idx)}>
+                  <Button variant="ghost" size="icon-xs" className="text-destructive" onClick={() => removeField(idx)}>
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -1458,7 +1455,7 @@ function FactionSettingsSection({
                         value={r.level}
                         onChange={(e) => updateRank(idx, 'level', Number(e.target.value))}
                       />
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon-sm" className="text-zinc-500 hover:text-red-400" onClick={() => removeRank(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                     {/* Permissions. Read-only unless the caller runs the faction:
                         granting them is how someone would hand themselves the rest,

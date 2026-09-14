@@ -142,7 +142,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           {!showGlobal && (
             <SearchableSelect
               className="w-[140px]"
-              triggerClassName="h-8 text-xs"
+              size="sm"
               aria-label={t('itemTypes.filterBy')}
               value={itemTypeId}
               onValueChange={setItemTypeId}

@@ -326,6 +326,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                   value={quickTypeId}
                   onValueChange={setQuickTypeId}
                   options={quickTypeOptions}
+                  size="touch"
                   placeholder={t('itemTypes.select')}
                   aria-label={t('entries.itemType')}
                 />
@@ -333,23 +334,28 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               <div className="space-y-1.5">
                 <Label className="text-xs text-zinc-500">{t('common.amount')}{quickType ? ` (${quickType.unit})` : ''}</Label>
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" title={t('entries.decrease')} onClick={() => quickBump(-1)}>−</Button>
+                  {/* One size for the whole row. These steppers used to be a
+                      hand-written h-11 next to an h-9 field, because there was
+                      no size that meant "thumb target" — now there is, and the
+                      select above takes it too. */}
+                  <Button type="button" variant="outline" size="icon-touch" className="shrink-0" title={t('entries.decrease')} onClick={() => quickBump(-1)}>−</Button>
                   <Input
                     type="number"
                     step="0.01"
                     min="0.01"
+                    size="touch"
                     placeholder="0.00"
                     value={quickAmount}
                     onChange={(e) => setQuickAmount(e.target.value)}
                     className="tabular-nums w-32"
                   />
-                  <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
+                  <Button type="button" variant="outline" size="icon-touch" className="shrink-0" title={t('entries.increase')} onClick={() => quickBump(1)}>+</Button>
                 </div>
                 <AmountPreview value={quickAmount} unit={quickType?.unit} isCurrency={quickType?.isCurrency} />
               </div>
               <Button
                 type="submit"
-                className="h-11 px-6 text-sm"
+                size="touch"
                 disabled={!canQuickLog}
                 style={quickJustLogged ? undefined : { backgroundColor: brandColor }}
               >

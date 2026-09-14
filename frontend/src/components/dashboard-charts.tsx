@@ -101,8 +101,7 @@ export function DashboardCharts({ factionId, brandColor }: Props) {
             <Button
               key={opt.value}
               variant={range === opt.value ? 'default' : 'outline'}
-              size="sm"
-              className="h-7 px-2.5 text-xs"
+              size="xs" className="px-2.5"
               onClick={() => setRange(opt.value)}
             >
               {t(opt.label)}

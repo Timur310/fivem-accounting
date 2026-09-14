@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp, Printer } from 'lucide-react';
@@ -31,8 +32,17 @@ const PERIOD_KEYS: Record<string, TranslationKey> = {
 /** The two periods the comparison tab lets you set against each other. */
 const COMPARISON_PERIODS = ['this_week', 'last_week', 'this_month', 'last_month'] as const;
 
+/** Built once from the same list the comparison uses, so the two cannot drift. */
+function usePeriodOptions(t: (key: TranslationKey) => string): SearchableSelectOption[] {
+  return useMemo(
+    () => COMPARISON_PERIODS.map((value) => ({ value, label: t(PERIOD_KEYS[value]) })),
+    [t],
+  );
+}
+
 export function ReportsView({ factionId }: Props) {
   const { t } = useTranslation();
+  const periodOptions = usePeriodOptions(t);
   const [tab, setTab] = useState<Tab>('summary');
   const [period, setPeriod] = useState('this_month');
   const [periodA, setPeriodA] = useState('this_month');
@@ -85,8 +95,7 @@ export function ReportsView({ factionId }: Props) {
               <Button
                 key={value}
                 variant={period === value ? 'default' : 'outline'}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
+                size="xs" className="px-2.5"
                 onClick={() => setPeriod(value)}
               >
                 {t(key)}
@@ -201,18 +210,27 @@ export function ReportsView({ factionId }: Props) {
         <>
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-zinc-500">{t('reports.periodA')}</span>
-            <select className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-300 px-2 text-sm" value={periodA} onChange={(e) => setPeriodA(e.target.value)} aria-label={t('reports.periodA')}>
-              {COMPARISON_PERIODS.map((value) => (
-                <option key={value} value={value}>{t(PERIOD_KEYS[value])}</option>
-              ))}
-            </select>
+            {/* The only two native selects left in the app. They rendered the
+                browser's own dropdown next to our styled ones, which is the
+                one control that never matched anything around it. */}
+            <SearchableSelect
+              size="sm"
+              className="w-[150px]"
+              value={periodA}
+              onValueChange={setPeriodA}
+              options={periodOptions}
+              aria-label={t('reports.periodA')}
+            />
             <span className="text-xs text-zinc-600">{t('reports.vs')}</span>
             <span className="text-xs text-zinc-500">{t('reports.periodB')}</span>
-            <select className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-300 px-2 text-sm" value={periodB} onChange={(e) => setPeriodB(e.target.value)} aria-label={t('reports.periodB')}>
-              {COMPARISON_PERIODS.map((value) => (
-                <option key={value} value={value}>{t(PERIOD_KEYS[value])}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              size="sm"
+              className="w-[150px]"
+              value={periodB}
+              onValueChange={setPeriodB}
+              options={periodOptions}
+              aria-label={t('reports.periodB')}
+            />
           </div>
 
           {compLoading ? (

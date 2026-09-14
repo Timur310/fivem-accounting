@@ -156,7 +156,8 @@ export function UsersPanel() {
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
                 <Input
-                  className="h-8 w-[200px] pl-8 text-xs"
+                  size="sm"
+                  className="w-[200px] pl-8"
                   placeholder={t('users.search')}
                   aria-label={t('users.search')}
                   value={search}
@@ -229,10 +230,10 @@ export function UsersPanel() {
                           refuses both for anyone else, so the buttons go. */}
                       {u.isProvisional && (
                         <div className="flex justify-end gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(u)}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(u)}>
                             <Pencil className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.remove')} onClick={() => setDeleteTarget(u)}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" title={t('common.remove')} onClick={() => setDeleteTarget(u)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>

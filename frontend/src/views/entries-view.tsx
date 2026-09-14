@@ -392,8 +392,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <div className="flex flex-wrap items-center gap-2">
               <SearchableSelect
                 className="w-full sm:w-[160px]"
-                triggerClassName="h-9"
-                aria-label={t('itemTypes.filterBy')}
+                                aria-label={t('itemTypes.filterBy')}
                 value={itemTypeIdFilter}
                 onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}
                 options={itemTypeFilterOptions}
@@ -420,7 +419,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   aria-label={t('common.from')}
                   value={dateFrom}
                   onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }}
-                  className="h-9 w-[140px]"
+                  size="sm"
+                  className="w-[140px]"
                 />
                 <span className="text-xs text-zinc-600">&ndash;</span>
                 <Input
@@ -428,7 +428,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   aria-label={t('common.to')}
                   value={dateTo}
                   onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }}
-                  className="h-9 w-[140px]"
+                  size="sm"
+                  className="w-[140px]"
                 />
               </div>
             </div>
@@ -510,15 +511,14 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                           <TableCell>
                             <div className="flex items-center gap-0.5">
                               {isAdmin && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => openEditDialog(entry)}>
+                                <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => openEditDialog(entry)}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                               )}
                               {/* Admins delete anything; a member gets a five-minute undo on their own rows. */}
                               {(isAdmin || isUndoable(entry)) && (
                                 <Button
-                                  variant="ghost" size="icon"
-                                  className="h-7 w-7 text-zinc-500 hover:text-red-400"
+                                  variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400"
                                   title={isAdmin ? undefined : t('entries.undo')}
                                   onClick={() => { setDeleteEntryId(entry.id); setDeleteOpen(true); }}
                                 >
@@ -540,10 +540,10 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                     {t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}
                   </p>
                   <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                       <ChevronLeft className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                    <Button variant="ghost" size="xs" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
                       <ChevronRight className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -605,11 +605,11 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 };
                 return (
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.decrease')} onClick={() => bump(-1)}>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0" title={t('entries.decrease')} onClick={() => bump(-1)}>
                       −
                     </Button>
                     <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="tabular-nums" />
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.increase')} onClick={() => bump(1)}>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0" title={t('entries.increase')} onClick={() => bump(1)}>
                       +
                     </Button>
                   </div>

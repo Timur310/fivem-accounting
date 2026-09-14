@@ -204,14 +204,14 @@ export function FeedView({ factionId }: { factionId: string }) {
               </span>
               <div className="flex gap-1">
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >

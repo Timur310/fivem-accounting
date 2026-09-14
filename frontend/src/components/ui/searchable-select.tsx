@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { controlClasses, type ControlSize } from '@/components/ui/control-size';
 import { useTranslation } from '@/providers/i18n-provider';
 
 /**
@@ -45,6 +46,11 @@ interface SearchableSelectProps {
    * item-type lists — the ones that outgrow a screen — get one.
    */
   searchThreshold?: number;
+  /**
+   * Height, shared with Button and Input so a row of mixed controls lines up.
+   * See control-size.ts.
+   */
+  size?: ControlSize;
   /** Sizing for the wrapper — the trigger fills it. */
   className?: string;
   triggerClassName?: string;
@@ -61,6 +67,7 @@ export function SearchableSelect({
   emptyMessage,
   disabled,
   searchThreshold = 8,
+  size = 'default',
   className,
   triggerClassName,
   contentClassName,
@@ -194,7 +201,8 @@ export function SearchableSelect({
         onClick={() => (open ? close() : openPanel())}
         className={cn(
           'border-white/[0.08] focus-visible:border-[var(--brand-color,#6366f1)]/40 focus-visible:ring-[var(--brand-color,#6366f1)]/20',
-          'flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-white/[0.03] px-3 py-2 text-sm',
+          'flex w-full items-center justify-between gap-2 rounded-md border bg-white/[0.03] py-2',
+          controlClasses(size),
           'whitespace-nowrap shadow-none outline-none transition-[color,border-color] focus-visible:ring-[2px]',
           'disabled:cursor-not-allowed disabled:opacity-50',
           triggerClassName,

@@ -420,7 +420,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Filter className="h-4 w-4 text-zinc-500 shrink-0" />
             <SearchableSelect
               className="w-[140px]"
-              triggerClassName="h-8 text-xs"
+              size="sm"
               aria-label={t('payouts.filterByStatus')}
               value={filterStatus}
               onValueChange={(v) => { setFilterStatus(v); setPage(1); }}
@@ -431,7 +431,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             />
             <SearchableSelect
               className="w-[150px]"
-              triggerClassName="h-8 text-xs"
+              size="sm"
               aria-label={t('itemTypes.filterBy')}
               value={filterItemTypeId}
               onValueChange={(v) => { setFilterItemTypeId(v); setPage(1); }}
@@ -440,8 +440,8 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               searchPlaceholder={t('itemTypes.search')}
               emptyMessage={t('itemTypes.noneMatch')}
             />
-            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
-            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setActivePreset(null); setPage(1); }} size="sm" className="w-[140px]" />
+            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setActivePreset(null); setPage(1); }} size="sm" className="w-[140px]" />
             <DateRangePresets
               active={activePreset}
               onApply={(preset, range) => {
@@ -453,7 +453,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               onClear={() => { setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}
             />
             {(filterStatus || filterItemTypeId || filterDateFrom || filterDateTo) && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}>
                 {t('common.clear')}
               </Button>
             )}
@@ -538,8 +538,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                             {canApprove(p) && (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                                size="icon-xs" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
                                 title={t('payouts.approve')}
                                 onClick={() => handleStatusChange(p, 'approved')}
                               >
@@ -549,8 +548,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                             {canTransition(p, 'completed') && (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                                size="icon-xs" className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                                 title={t('payouts.complete')}
                                 onClick={() => handleStatusChange(p, 'completed')}
                               >
@@ -560,8 +558,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                             {canTransition(p, 'rejected') && (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                size="icon-xs" className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                                 title={t('payouts.reject')}
                                 onClick={() => handleStatusChange(p, 'rejected')}
                               >
@@ -572,7 +569,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         )}
                         {/* Edit (non-terminal) */}
                         {canManagePayouts && !isTerminal && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-200" onClick={() => openEdit(p)}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-400 hover:text-zinc-200" onClick={() => openEdit(p)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
@@ -589,8 +586,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         {canManagePayouts && (
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-red-300"
+                            size="icon-xs" className="text-destructive hover:text-red-300"
                             title={t('common.delete')}
                             onClick={() => { setDeleteIsSelfCancel(false); setDeleteId(p.id); }}
                           >
@@ -603,8 +599,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         {canCancelOwn(p) && (
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                            size="xs" className="px-2 text-zinc-400 hover:text-zinc-200"
                             onClick={() => { setDeleteIsSelfCancel(true); setDeleteId(p.id); }}
                           >
                             <Undo2 className="h-3.5 w-3.5 mr-1" />

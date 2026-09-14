@@ -251,7 +251,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-200" onClick={() => setCurrentView('members')}>
+        <Button variant="ghost" size="icon-sm" className="text-zinc-500 hover:text-zinc-200" onClick={() => setCurrentView('members')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Avatar className="h-10 w-10">
@@ -629,8 +629,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                         <p className="text-sm text-zinc-300 whitespace-pre-wrap">{n.content}</p>
                       </div>
                       <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => { setEditingNoteId(n.id); setNoteContent(n.content); setNoteCategory(n.category); setNoteFlagged(n.isFlagged); setNoteOpen(true); }}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setDeleteNoteId(n.id)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => { setEditingNoteId(n.id); setNoteContent(n.content); setNoteCategory(n.category); setNoteFlagged(n.isFlagged); setNoteOpen(true); }}><Pencil className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setDeleteNoteId(n.id)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     </div>
                   </CardContent>

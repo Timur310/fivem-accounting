@@ -114,14 +114,16 @@ export function AuditLogsView({ factionId }: Props) {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => { setDateFrom(e.target.value); setActivePreset(null); setPage(1); }}
-                  className="w-[140px] h-9 text-xs"
+                  size="sm"
+                  className="w-[140px]"
                   aria-label={t('entries.from')}
                 />
                 <Input
                   type="date"
                   value={dateTo}
                   onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }}
-                  className="w-[140px] h-9 text-xs"
+                  size="sm"
+                  className="w-[140px]"
                   aria-label={t('entries.to')}
                 />
                 <DateRangePresets
@@ -193,8 +195,8 @@ export function AuditLogsView({ factionId }: Props) {
                 <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
                   <p className="text-xs text-zinc-500 tabular-nums">{t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}</p>
                   <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="xs" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               )}

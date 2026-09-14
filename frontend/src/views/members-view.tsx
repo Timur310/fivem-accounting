@@ -367,11 +367,11 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title={t('members.viewProfile')}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title={t('members.viewProfile')}>
                             <Eye className="h-3 w-3" />
                           </Button>
                           {isFactionAdmin && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
+                            <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => {
                               setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
                               // Start on the role they hold, so the highlighted
                               // button always says what is true right now.
@@ -383,8 +383,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                           )}
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-zinc-500 hover:text-zinc-200 disabled:opacity-30"
+                            size="icon-xs" className="text-zinc-500 hover:text-zinc-200 disabled:opacity-30"
                             disabled={sortedRanks.length === 0}
                             title={sortedRanks.length === 0 ? t('members.noRanksDefined') : t('members.changeRank')}
                             onClick={() => {
@@ -398,8 +397,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                           {canManageMembers && (
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-zinc-500 hover:text-zinc-200"
+                              size="icon-xs" className="text-zinc-500 hover:text-zinc-200"
                               title={t('members.editInGameName')}
                               onClick={() => {
                                 setNameTarget({ userId: m.userId, username: m.username, inGameName: m.inGameName });
@@ -409,7 +407,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                               <IdCard className="h-3 w-3" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title={t('common.remove')}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title={t('common.remove')}>
                             <UserMinus className="h-3 w-3" />
                           </Button>
                         </div>
