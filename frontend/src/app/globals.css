@@ -262,6 +262,41 @@
     position: relative;
     overflow: hidden;
   }
+  /* ── Quota meter ──────────────────────────────────────────────
+     A quota bar answered one question — how full is it — and left the
+     interesting one unanswered: how far to the next notch. Quarter marks on
+     the track turn a smear of colour into a distance you can read at a
+     glance, which is the difference between a progress bar and a meter.
+
+     Drawn on the track rather than the fill, so they stay put as the fill
+     grows past them. */
+  .meter-track {
+    position: relative;
+  }
+  .meter-track::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(25% - 1px),
+      var(--line-3) calc(25% - 1px),
+      var(--line-3) 25%
+    );
+    pointer-events: none;
+  }
+
+  /* Met. A soft steady glow, not a pulse: hitting quota is worth marking, and
+     something that keeps flashing on a screen people leave open is worth
+     switching off.
+
+     It belongs on the track, not on the fill. The fill sits inside an
+     overflow-hidden parent, which clips an outer shadow to nothing. */
+  .meter-met {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--positive) 50%, transparent);
+  }
+
   .energy-bar::after {
     content: '';
     position: absolute;

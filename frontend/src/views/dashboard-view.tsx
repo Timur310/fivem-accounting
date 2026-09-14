@@ -538,7 +538,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       </Badge>
                     </div>
                     {/* Energy bar */}
-                    <div className="h-2 bg-[var(--fill-2)] rounded-full overflow-hidden">
+                    <div className={`meter-track h-2 bg-[var(--fill-2)] rounded-full overflow-hidden ${met ? 'meter-met' : ''}`}>
                       {/* Met is green, everything short of it is neutral. The
                           unmet bar used to wear the faction accent, which made
                           the two states indistinguishable for a faction whose

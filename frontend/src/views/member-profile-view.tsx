@@ -448,7 +448,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             </span>
                             <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-zinc-400'}`}>{q.percentage.toFixed(1)}%</span>
                           </div>
-                          <div className="h-1.5 bg-[var(--fill-2)] rounded-full overflow-hidden">
+                          <div className={`meter-track h-1.5 bg-[var(--fill-2)] rounded-full overflow-hidden ${met ? 'meter-met' : ''}`}>
                             {/* Neutral until met, like the same bar on the
                                 dashboard — the faction accent must not stand in
                                 for "done". */}
