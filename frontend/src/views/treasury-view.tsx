@@ -29,6 +29,7 @@ import { formatAmount, displayName, formatNumber, todayLocalDateString } from '@
 import { getIntlLocale } from '@/lib/i18n';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
+import { useCountUp } from '@/hooks/use-count-up';
 import { cn } from '@/lib/utils';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { AmountPreview } from '@/components/ui/amount-preview';
@@ -97,6 +98,11 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
 
   const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
 
+  // The headline figure travels to its new value rather than jumping, so a
+  // withdrawal completing is something you watch happen rather than something
+  // you notice afterwards. Magnitude only — the sign is rendered separately.
+  const displayNetBalance = useCountUp(Math.abs(netBalance));
+
   // Filtering and ordering are a reading aid over a list the API already sent
   // whole, so both happen here rather than as query parameters: no refetch, and
   // the totals above go on covering every type regardless of what is hidden.
@@ -148,7 +154,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                 on the per-item balances below. */}
             <div className="flex flex-wrap items-center gap-3">
               <div className={cn("text-3xl font-medium tabular-nums tracking-tight", netBalance < 0 ? "text-negative" : "text-zinc-200")}>
-                {netBalance < 0 ? '-' : ''}{fmt(Math.abs(netBalance))}
+                {netBalance < 0 ? '-' : ''}{fmt(displayNetBalance)}
               </div>
               {/* Decorative: the figure is already red and the line below says
                   the same thing in words, so this is hidden from readers. */}

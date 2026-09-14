@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { List, TrendingUp, Target, Download, BarChart3, ArrowUpRight, AlertTriangle, Clock, ChevronDown } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { useCountUp } from '@/hooks/use-count-up';
 import { DashboardCharts } from '@/components/dashboard-charts';
 import { formatAmount, displayName, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
@@ -56,7 +57,6 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
 
-  const [displayBalance, setDisplayBalance] = useState(0);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard', factionId],
@@ -153,6 +153,10 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
   // repeat deliberate rather than accidental, and gives the card the
   // confirmation it never had.
   const [quickJustLogged, setQuickJustLogged] = useState(false);
+  // What just landed, held for the length of the confirmation so the card can
+  // say it. Cleared with the flash — a stale "+2,500" sitting on the card an
+  // hour later would read as the current state of something.
+  const [quickLandedAmount, setQuickLandedAmount] = useState<string | null>(null);
   const quickFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (quickFlashTimer.current) clearTimeout(quickFlashTimer.current); }, []);
 
@@ -171,10 +175,14 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       queryClient.invalidateQueries({ queryKey: ['treasury', factionId] });
       toast({ title: t('entries.logged') });
+      setQuickLandedAmount(quickAmount);
       setQuickAmount('');
       setQuickJustLogged(true);
       if (quickFlashTimer.current) clearTimeout(quickFlashTimer.current);
-      quickFlashTimer.current = setTimeout(() => setQuickJustLogged(false), 1200);
+      quickFlashTimer.current = setTimeout(() => {
+        setQuickJustLogged(false);
+        setQuickLandedAmount(null);
+      }, 1800);
     },
     onError: (err: unknown) => {
       toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
@@ -208,24 +216,8 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
   // not exist yet at this point, hence the optional chaining/fallback.
   const heroBalance = data?.netBalance ?? data?.grandTotal ?? 0;
 
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDisplayBalance(heroBalance);
-      return;
-    }
-    const start = performance.now();
-    const from = 0;
-    const dur = 600;
-    let raf = 0;
-    const tick = (now: number) => {
-      const t = Math.min((now - start) / dur, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setDisplayBalance(from + (heroBalance - from) * eased);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [heroBalance]);
+  // Travels from wherever it was to wherever it now is — see use-count-up.
+  const displayBalance = useCountUp(heroBalance);
 
   if (isLoading) {
     return (
@@ -354,6 +346,18 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                 </div>
                 <AmountPreview value={quickAmount} unit={quickType?.unit} isCurrency={quickType?.isCurrency} />
               </div>
+              {/* What just landed, rising off the button and fading. The card
+                  already flashed and the toast already said "logged"; neither
+                  of them said how much, which is the part worth confirming
+                  when the amount was typed on a phone. */}
+              {quickLandedAmount && (
+                <span
+                  aria-hidden
+                  className="quick-landed pointer-events-none self-center text-sm font-medium tabular-nums text-emerald-400"
+                >
+                  +{formatAmount(quickLandedAmount, quickType?.unit ?? '', quickType?.isCurrency ?? false)}
+                </span>
+              )}
               <Button
                 type="submit"
                 size="touch"
