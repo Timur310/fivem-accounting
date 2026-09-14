@@ -24,8 +24,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { RankBadge } from '@/components/rank-badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard, Crown, Star } from 'lucide-react';
+import { UserPlus, Shield, UserMinus, Pencil, Eye, Clock, AlertTriangle, ChevronsUp, Search, X, IdCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
 import { displayName, formatDate } from '@/lib/format';
@@ -93,13 +94,6 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
    *
    * Decorative: the rank's name is right beside it.
    */
-  const rankSigil = (rank: string) => {
-    const index = sortedRanks.findIndex((r) => r.name === rank);
-    if (index === 0) return Crown;
-    if (index === 1) return Star;
-    return null;
-  };
-
   // Roster order: admins always on top, then by rank level (a lower level is
   // higher in the hierarchy), rankless members last, join date breaking ties.
   const rankLevel = useMemo(() => {
@@ -258,7 +252,8 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : members.length === 0 ? (
-            <EmptyState icon={UserPlus} title={t('members.noneYet')} />
+            <EmptyState icon={UserPlus} title={t('members.noneYet')}
+              hint={t('members.noneYetHint')} />
           ) : (
             <Table>
               <TableHeader>
@@ -282,7 +277,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                         <div className="flex items-center gap-2.5">
                           <Avatar className="h-7 w-7">
                             <AvatarImage src={m.avatarUrl ?? undefined} />
-                            <AvatarFallback className="text-[10px]">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
+                            <AvatarFallback className="text-micro">{displayName(m).slice(0, 2).toUpperCase()}</AvatarFallback>
                           </Avatar>
                           <div>
                             <button
@@ -303,7 +298,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                       <TableCell>
                         {m.role === 'admin' ? (
                           <span
-                            className="text-[11px] px-2 py-0.5 rounded-md font-medium border"
+                            className="text-meta px-2 py-0.5 rounded-md font-medium border"
                             style={{
                               backgroundColor: `${brandColor}10`,
                               borderColor: `${brandColor}25`,
@@ -313,20 +308,14 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                             {t('role.admin')}
                           </span>
                         ) : (
-                          <span className="text-[11px] px-2 py-0.5 rounded-md font-medium border border-white/[0.06] bg-white/[0.03] text-zinc-500">
+                          <span className="text-meta px-2 py-0.5 rounded-md font-medium border border-[var(--line-1)] bg-[var(--fill-2)] text-zinc-500">
                             {t('role.member')}
                           </span>
                         )}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {m.rank ? (
-                          <Badge variant="outline" className="text-[11px] gap-1" style={{ borderColor: `${brandColor}30`, color: brandColor }}>
-                            {(() => {
-                              const Sigil = rankSigil(m.rank);
-                              return Sigil ? <Sigil className="h-3 w-3" aria-hidden="true" /> : null;
-                            })()}
-                            {m.rank}
-                          </Badge>
+                          <RankBadge rank={m.rank} ranks={sortedRanks} />
                         ) : (
                           <span className="text-xs text-zinc-700">—</span>
                         )}
@@ -335,30 +324,30 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1.5">
                           {m.isProvisional && (
-                            <Badge variant="outline" className="text-[10px] border-white/[0.08] text-zinc-500">
+                            <Badge variant="outline" className="text-micro border-[var(--line-2)] text-zinc-500">
                               {t('members.provisional')}
                             </Badge>
                           )}
                           {isInactive && (
-                            <Badge variant="outline" className="text-[10px] border-amber-500/20 text-amber-400 bg-amber-500/5">
+                            <Badge variant="outline" className="text-micro border-amber-500/20 text-amber-400 bg-amber-500/5">
                               <Clock className="h-2.5 w-2.5 mr-0.5" />
                               {t('dashboard.daysShort', { days: m.daysInactive ?? 0 })}
                             </Badge>
                           )}
                           {isEscalated(m) && (
-                            <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-300 bg-red-500/10 font-medium">
+                            <Badge variant="outline" className="text-micro border-red-500/40 text-red-300 bg-red-500/10 font-medium">
                               <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
                               {t('members.kickSuggestion')}
                             </Badge>
                           )}
                           {(m.activeStrikeCount ?? 0) > 0 && (
-                            <Badge variant="outline" className="text-[10px] border-red-500/20 text-red-400 bg-red-500/5">
+                            <Badge variant="outline" className="text-micro border-red-500/20 text-red-400 bg-red-500/5">
                               <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
                               {(m.activeStrikeCount ?? 0)}
                             </Badge>
                           )}
                           {!isInactive && (m.activeStrikeCount ?? 0) === 0 && m.daysInactive !== null && m.daysInactive === 0 && (
-                            <span className="text-[10px] text-emerald-500">{t('members.activeToday')}</span>
+                            <span className="text-micro text-emerald-500">{t('members.activeToday')}</span>
                           )}
                         </div>
                       </TableCell>
@@ -367,11 +356,11 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-0.5">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title={t('members.viewProfile')}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => handleOpenProfile(m.userId)} title={t('members.viewProfile')}>
                             <Eye className="h-3 w-3" />
                           </Button>
                           {isFactionAdmin && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => {
+                            <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => {
                               setRoleTarget({ userId: m.userId, currentRole: m.role, username: m.username });
                               // Start on the role they hold, so the highlighted
                               // button always says what is true right now.
@@ -383,8 +372,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                           )}
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-zinc-500 hover:text-zinc-200 disabled:opacity-30"
+                            size="icon-xs" className="text-zinc-500 hover:text-zinc-200 disabled:opacity-30"
                             disabled={sortedRanks.length === 0}
                             title={sortedRanks.length === 0 ? t('members.noRanksDefined') : t('members.changeRank')}
                             onClick={() => {
@@ -398,8 +386,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                           {canManageMembers && (
                             <Button
                               variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-zinc-500 hover:text-zinc-200"
+                              size="icon-xs" className="text-zinc-500 hover:text-zinc-200"
                               title={t('members.editInGameName')}
                               onClick={() => {
                                 setNameTarget({ userId: m.userId, username: m.username, inGameName: m.inGameName });
@@ -409,7 +396,7 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                               <IdCard className="h-3 w-3" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title={t('common.remove')}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setRemoveTarget({ userId: m.userId, username: m.username })} title={t('common.remove')}>
                             <UserMinus className="h-3 w-3" />
                           </Button>
                         </div>
@@ -456,15 +443,15 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
               </div>
               {/* Selected user chip */}
               {selectedUser ? (
-                <div className="flex items-center justify-between gap-2 rounded-md border border-white/[0.08] p-2.5">
+                <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--line-2)] p-2.5">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Avatar className="h-7 w-7">
                       <AvatarImage src={selectedUser.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{displayName(selectedUser).slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-micro">{displayName(selectedUser).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
                       <p className="text-sm text-zinc-200 truncate">{displayName(selectedUser)}</p>
-                      <p className="text-[11px] text-zinc-600 font-mono tabular-nums truncate">{selectedUser.discordId}</p>
+                      <p className="text-meta text-zinc-600 font-mono tabular-nums truncate">{selectedUser.discordId}</p>
                     </div>
                   </div>
                   <button
@@ -478,21 +465,21 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
                 </div>
               ) : (
                 searchResults.length > 0 && (
-                  <div className="max-h-56 overflow-y-auto rounded-md border border-white/[0.08]">
+                  <div className="max-h-56 overflow-y-auto rounded-md border border-[var(--line-2)]">
                     {searchResults.map((u) => (
                       <button
                         key={u.id}
                         type="button"
                         onClick={() => { setSelectedUser(u); setSearchQuery(''); setSearchResults([]); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/[0.04] transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[var(--fill-2)] transition-colors"
                       >
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={u.avatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">{displayName(u).slice(0, 2).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="text-micro">{displayName(u).slice(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
                           <p className="text-sm text-zinc-200 truncate">{displayName(u)}</p>
-                          <p className="text-[11px] text-zinc-600 font-mono tabular-nums truncate">{u.discordId}</p>
+                          <p className="text-meta text-zinc-600 font-mono tabular-nums truncate">{u.discordId}</p>
                         </div>
                       </button>
                     ))}

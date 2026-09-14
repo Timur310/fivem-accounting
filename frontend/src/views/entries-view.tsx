@@ -392,8 +392,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
             <div className="flex flex-wrap items-center gap-2">
               <SearchableSelect
                 className="w-full sm:w-[160px]"
-                triggerClassName="h-9"
-                aria-label={t('itemTypes.filterBy')}
+                                aria-label={t('itemTypes.filterBy')}
                 value={itemTypeIdFilter}
                 onValueChange={(v) => { setItemTypeIdFilter(v); setPage(1); }}
                 options={itemTypeFilterOptions}
@@ -420,7 +419,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   aria-label={t('common.from')}
                   value={dateFrom}
                   onChange={(e) => { setDateFrom(e.target.value); setDateTo(''); setPage(1); }}
-                  className="h-9 w-[140px]"
+                  size="sm"
+                  className="w-[140px]"
                 />
                 <span className="text-xs text-zinc-600">&ndash;</span>
                 <Input
@@ -428,7 +428,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                   aria-label={t('common.to')}
                   value={dateTo}
                   onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }}
-                  className="h-9 w-[140px]"
+                  size="sm"
+                  className="w-[140px]"
                 />
               </div>
             </div>
@@ -444,7 +445,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
           ) : isError ? (
             <ErrorState error={entriesError} onRetry={() => refetchEntries()} />
           ) : entries.length === 0 ? (
-            <EmptyState icon={Search} title={t('entries.noneFound')} />
+            <EmptyState icon={Search} title={t('entries.noneFound')}
+              hint={t('entries.noneFoundHint')} />
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -481,7 +483,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                           </div>
                         </TableCell>
                         <TableCell>
-                          <span className="inline-flex items-center gap-1.5 text-xs bg-white/[0.04] border border-white/[0.06] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
+                          <span className="inline-flex items-center gap-1.5 text-xs bg-[var(--fill-2)] border border-[var(--line-1)] pl-1 pr-2 py-0.5 rounded-md text-zinc-400">
                             <ItemIcon src={entry.itemImageUrl} icon={entry.itemIcon} category={entry.itemCategory} className="size-4" />
                             {entry.itemTypeName}
                           </span>
@@ -497,7 +499,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                             {entry.customValues && Object.keys(entry.customValues).length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {Object.entries(entry.customValues).map(([k, v]) => (
-                                  <span key={k} className="text-[11px] bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded text-zinc-400" title={`${k}: ${v}`}>
+                                  <span key={k} className="text-meta bg-[var(--fill-2)] border border-[var(--line-1)] px-1.5 py-0.5 rounded text-zinc-400" title={`${k}: ${v}`}>
                                     {v.length > 15 ? v.slice(0, 15) + '...' : v}
                                   </span>
                                 ))}
@@ -510,15 +512,14 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                           <TableCell>
                             <div className="flex items-center gap-0.5">
                               {isAdmin && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => openEditDialog(entry)}>
+                                <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => openEditDialog(entry)}>
                                   <Pencil className="h-3 w-3" />
                                 </Button>
                               )}
                               {/* Admins delete anything; a member gets a five-minute undo on their own rows. */}
                               {(isAdmin || isUndoable(entry)) && (
                                 <Button
-                                  variant="ghost" size="icon"
-                                  className="h-7 w-7 text-zinc-500 hover:text-red-400"
+                                  variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400"
                                   title={isAdmin ? undefined : t('entries.undo')}
                                   onClick={() => { setDeleteEntryId(entry.id); setDeleteOpen(true); }}
                                 >
@@ -535,15 +536,15 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
               </div>
 
               {meta && totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--line-1)]">
                   <p className="text-xs text-zinc-500 tabular-nums">
                     {t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}
                   </p>
                   <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                    <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                       <ChevronLeft className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                    <Button variant="ghost" size="xs" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
                       <ChevronRight className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -577,7 +578,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                       key={it.id}
                       type="button"
                       onClick={() => setNewItemTypeId(it.id)}
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'}`}
+                      className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${newItemTypeId === it.id ? 'border-primary text-primary' : 'border-[var(--line-2)] text-zinc-400 hover:text-zinc-200'}`}
                     >
                       <ItemIcon src={it.imageUrl} icon={it.icon} category={it.category} className="size-3.5" />
                       {it.name}
@@ -605,11 +606,11 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                 };
                 return (
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.decrease')} onClick={() => bump(-1)}>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0" title={t('entries.decrease')} onClick={() => bump(-1)}>
                       −
                     </Button>
                     <Input type="number" step="0.01" min="0.01" placeholder="0.00" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="tabular-nums" />
-                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" title={t('entries.increase')} onClick={() => bump(1)}>
+                    <Button type="button" variant="outline" size="icon" className="shrink-0" title={t('entries.increase')} onClick={() => bump(1)}>
                       +
                     </Button>
                   </div>

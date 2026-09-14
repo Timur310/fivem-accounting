@@ -90,6 +90,35 @@
   --warning: #f59e0b;
   --info: #3b82f6;
 
+  /* ── Lines and fills ──────────────────────────────────────────
+     Every border and raised surface in the app was a hand-picked white
+     alpha: eight different values across the views, chosen one screen at a
+     time. Three lines and four fills is the whole vocabulary the design
+     actually uses — naming them is what stops a ninth appearing.
+
+     Lines separate. Fills sit on top of the background. */
+  --line-1: rgb(255 255 255 / 0.06);   /* card and panel edges */
+  --line-2: rgb(255 255 255 / 0.08);   /* field edges — one step louder */
+  --line-3: rgb(255 255 255 / 0.12);   /* hover and focus edges */
+
+  --fill-1: rgb(255 255 255 / 0.02);   /* row hover, barely there */
+  --fill-2: rgb(255 255 255 / 0.04);   /* tracks, skeletons, wells */
+  --fill-3: rgb(255 255 255 / 0.06);   /* secondary buttons, chips */
+  --fill-4: rgb(255 255 255 / 0.09);   /* their hover state */
+
+  /* ── Type scale ───────────────────────────────────────────────
+     `text-[11px]` appeared 96 times and `text-[10px]` 49 — more often than
+     text-lg, text-xl and text-2xl combined, and neither is on any scale. Two
+     names for the two sizes below `text-xs`, so "secondary" and "incidental"
+     are decisions rather than whichever pixel value was typed that day. */
+
+  /* Podium. Named because step 3 builds a real top-three treatment on the
+     leaderboard, and three medal colours scattered as literals across a view
+     is exactly how the white alphas started. */
+  --medal-gold: #eab308;
+  --medal-silver: #9ca3af;
+  --medal-bronze: #d97706;
+
   /* Chart colors — muted but distinguishable */
   --chart-1: #6366f1;
   --chart-2: #22c55e;
@@ -153,6 +182,30 @@
    ══════════════════════════════════════════════════════════════ */
 
 @layer utilities {
+  /* Metadata under a value: timestamps, "in / out", who recorded it. */
+  .text-meta {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  /* Incidental labels inside a chip or an avatar fallback. Anything smaller
+     than this is decoration the interface should not be relying on. */
+  .text-micro {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  /* ── Brand ────────────────────────────────────────────────────
+     The faction's accent was applied as an inline style in 19 places, which
+     is why it could never do a hover or a focus ring: an inline style has no
+     variants. As classes it can. */
+  .text-brand { color: var(--brand-color, #6366f1); }
+  .bg-brand { background-color: var(--brand-color, #6366f1); }
+  .border-brand { border-color: var(--brand-color, #6366f1); }
+  .hover\:text-brand:hover { color: var(--brand-color, #6366f1); }
+  .hover\:bg-brand:hover { background-color: var(--brand-color, #6366f1); }
+  .hover\:border-brand:hover { border-color: var(--brand-color, #6366f1); }
+
   /* Dot grid background — tactical/command center feel */
   .dot-grid {
     background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
@@ -209,6 +262,57 @@
     position: relative;
     overflow: hidden;
   }
+  /* The amount that just landed, rising away from the quick-log button.
+     Decorative and aria-hidden: the toast already announces the entry, and a
+     screen reader should not be told the same thing twice. */
+  @keyframes quick-landed {
+    0%   { opacity: 0; transform: translateY(6px); }
+    20%  { opacity: 1; transform: translateY(0); }
+    70%  { opacity: 1; transform: translateY(-2px); }
+    100% { opacity: 0; transform: translateY(-10px); }
+  }
+  .quick-landed {
+    animation: quick-landed 1.8s ease-out forwards;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .quick-landed { animation: none; opacity: 1; }
+  }
+
+  /* ── Quota meter ──────────────────────────────────────────────
+     A quota bar answered one question — how full is it — and left the
+     interesting one unanswered: how far to the next notch. Quarter marks on
+     the track turn a smear of colour into a distance you can read at a
+     glance, which is the difference between a progress bar and a meter.
+
+     Drawn on the track rather than the fill, so they stay put as the fill
+     grows past them. */
+  .meter-track {
+    position: relative;
+  }
+  .meter-track::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(25% - 1px),
+      var(--line-3) calc(25% - 1px),
+      var(--line-3) 25%
+    );
+    pointer-events: none;
+  }
+
+  /* Met. A soft steady glow, not a pulse: hitting quota is worth marking, and
+     something that keeps flashing on a screen people leave open is worth
+     switching off.
+
+     It belongs on the track, not on the fill. The fill sits inside an
+     overflow-hidden parent, which clips an outer shadow to nothing. */
+  .meter-met {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--positive) 50%, transparent);
+  }
+
   .energy-bar::after {
     content: '';
     position: absolute;

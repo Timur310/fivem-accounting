@@ -36,7 +36,7 @@ export function AmountPreview({
       // Polite rather than assertive: it should reach a screen reader after
       // the keystroke settles, not interrupt every character.
       aria-live="polite"
-      className={`text-[11px] tabular-nums text-zinc-500 ${className ?? ''}`}
+      className={`text-meta tabular-nums text-zinc-500 ${className ?? ''}`}
     >
       {formatAmount(n, unit ?? '', isCurrency)}
     </p>

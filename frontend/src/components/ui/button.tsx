@@ -14,18 +14,33 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white shadow-none hover:brightness-110",
         outline:
-          "border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.12]",
+          "border border-[var(--line-2)] bg-[var(--fill-2)] hover:bg-[var(--fill-3)] hover:border-[var(--line-3)]",
         secondary:
-          "bg-white/[0.06] text-foreground hover:bg-white/[0.09]",
+          "bg-[var(--fill-3)] text-foreground hover:bg-[var(--fill-4)]",
         ghost:
-          "hover:bg-white/[0.06] hover:text-foreground",
+          "hover:bg-[var(--fill-3)] hover:text-foreground",
         link: "text-[var(--brand-color,#6366f1)] underline-offset-4 hover:underline",
       },
+      // Shares its names and heights with Input and SearchableSelect — see
+      // control-size.ts. A row picks one size and every control on it agrees,
+      // instead of each call site patching a height by hand.
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        // 28px. Inline actions inside a row that is already dense: pagination
+        // arrows, the resolve/decline pair on a support ticket. It existed as
+        // `size="sm" className="h-7"` in a dozen places before it had a name.
+        xs: "h-7 rounded-md gap-1 px-2 text-xs has-[>svg]:px-1.5",
         sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        lg: "h-10 rounded-md px-5 has-[>svg]:px-4",
+        touch: "h-11 rounded-md px-6 has-[>svg]:px-5",
+        // Square, and matched to the heights above so an icon button never
+        // disagrees with the field it sits next to.
+        // 28px, for the edit/delete affordances inside dense table rows.
+        "icon-xs": "size-7",
+        "icon-sm": "size-8",
         icon: "size-9",
+        "icon-lg": "size-10",
+        "icon-touch": "size-11",
       },
     },
     defaultVariants: {

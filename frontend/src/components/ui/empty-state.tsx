@@ -44,7 +44,7 @@ export function ListSkeleton({ rows = 5, height = 'h-12' }: { rows?: number; hei
   return (
     <div className="p-6 space-y-3" aria-busy="true">
       {[...Array(rows)].map((_, i) => (
-        <div key={i} className={`${height} w-full rounded-md bg-white/[0.04] animate-pulse`} />
+        <div key={i} className={`${height} w-full rounded-md bg-[var(--fill-2)] animate-pulse`} />
       ))}
     </div>
   );

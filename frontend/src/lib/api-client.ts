@@ -820,10 +820,15 @@ export const discordApi = {
 
   // `leave` also removes the bot from the guild. Opt-in: the same bot may be
   // doing other work in that server.
+  // Returns the capability alongside the list: a faction that connected before
+  // the bot asked for MENTION_EVERYONE can only ping roles marked mentionable,
+  // and the picker has to say so rather than grey everything out in silence.
   roles: (factionId: string) =>
     api
-      .get<ApiSuccessResponse<{ roles: DiscordRole[] }>>(`/factions/${factionId}/discord/roles`)
-      .then((r) => r.data.data.roles),
+      .get<ApiSuccessResponse<{ roles: DiscordRole[]; canMentionAnyRole: boolean }>>(
+        `/factions/${factionId}/discord/roles`,
+      )
+      .then(unwrap),
 
   unlink: (factionId: string, leave = false) =>
     api

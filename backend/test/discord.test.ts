@@ -128,8 +128,27 @@ describe('GET /discord/invite-url', () => {
 
   it('asks for the narrowest permissions that can do the job, not admin', async () => {
     const url = new URL(buildBotInviteUrl(w.faction.id, w.admin.id));
-    // VIEW_CHANNEL | SEND_MESSAGES | EMBED_LINKS
-    expect(url.searchParams.get('permissions')).toBe(String((1 << 10) | (1 << 11) | (1 << 14)));
+    // VIEW_CHANNEL | SEND_MESSAGES | EMBED_LINKS | MENTION_EVERYONE
+    expect(url.searchParams.get('permissions'))
+      .toBe(String((1 << 10) | (1 << 11) | (1 << 14) | (1 << 17)));
+  });
+
+  // MENTION_EVERYONE is what lets the bot ping a *role*, which is the reason
+  // it is asked for. Discord creates roles with @mention switched off, so
+  // without it nearly every role in a normal server is unpingable.
+  it('asks for MENTION_EVERYONE, because role pings need it', async () => {
+    const url = new URL(buildBotInviteUrl(w.faction.id, w.admin.id));
+    expect(BigInt(url.searchParams.get('permissions')!) & (1n << 17n)).not.toBe(0n);
+  });
+
+  // Everything else stays out. Administrator would be one fewer thing to think
+  // about and a very good reason for a leader to refuse the invite.
+  it('does not ask for administrator or message management', async () => {
+    const granted = BigInt(new URL(buildBotInviteUrl(w.faction.id, w.admin.id))
+      .searchParams.get('permissions')!);
+    expect(granted & (1n << 3n)).toBe(0n);   // ADMINISTRATOR
+    expect(granted & (1n << 13n)).toBe(0n);  // MANAGE_MESSAGES
+    expect(granted & (1n << 28n)).toBe(0n);  // MANAGE_ROLES
   });
 });
 

@@ -126,14 +126,14 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
             </Button>
           )}
           {/* Segmented period control — a race you can flip with a tap. */}
-          <div className="flex rounded-lg border border-white/[0.08] p-0.5" role="tablist" aria-label={t('leaderboard.period')}>
+          <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('leaderboard.period')}>
             {(Object.keys(PERIOD_KEYS) as string[]).map((value) => (
               <button
                 key={value}
                 role="tab"
                 aria-selected={period === value}
                 onClick={() => setPeriod(value)}
-                className={`h-7 px-3 rounded-md text-xs font-medium transition-colors ${period === value ? 'bg-white/[0.09] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`h-7 px-3 rounded-md text-xs font-medium transition-colors ${period === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
                 {t(PERIOD_KEYS[value])}
               </button>
@@ -142,7 +142,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           {!showGlobal && (
             <SearchableSelect
               className="w-[140px]"
-              triggerClassName="h-8 text-xs"
+              size="sm"
               aria-label={t('itemTypes.filterBy')}
               value={itemTypeId}
               onValueChange={setItemTypeId}
@@ -157,10 +157,10 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
 
       {/* My Rank Banner */}
       {myRank && (
-        <Card className="border-highlight" style={{ borderColor: `${brandColor}20` }}>
+        <Card className="border-highlight" style={{ borderColor: 'var(--brand-color-light)' }}>
           <CardContent className="py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Trophy className="h-4 w-4" style={{ color: brandColor }} />
+              <Trophy className="h-4 w-4 text-brand" />
               <span className="text-sm text-zinc-300">{t('leaderboard.yourRank')}</span>
             </div>
             <span className="text-xl font-medium tabular-nums text-zinc-100">#{myRank}</span>
@@ -176,47 +176,101 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           ) : isError ? (
             <ErrorState error={loadError} onRetry={() => retry()} />
           ) : rankings.length === 0 ? (
-            <EmptyState icon={Trophy} title={t('leaderboard.noEntriesForPeriod')} />
+            <EmptyState icon={Trophy} title={t('leaderboard.noEntriesForPeriod')}
+              hint={t('leaderboard.noEntriesForPeriodHint')} />
           ) : (
             <div>
             {/* Podium: the top three get an emphasized header row — the race
                 should look like one. Skipped on the global board and when a
                 filter narrows the field to fewer than three. */}
             {!showGlobal && rankings.length >= 3 && (
-              <div className="grid grid-cols-3 gap-2 p-3 border-b border-white/[0.06]">
+              <div className="grid grid-cols-3 items-end gap-2 border-b border-[var(--line-1)] p-3 pt-5">
+                {/* Second, first, third — the order a podium is stood on, and
+                    the order a photograph of one is read.
+
+                    It was three identical cards before, which is a top-three
+                    list rather than a podium: nothing about it said one of
+                    them had won. The difference is height and metal, not
+                    decoration — this is still a ledger, and the number under
+                    each name is the point. */}
                 {[1, 0, 2].map((idx) => {
                   const r = rankings[idx];
                   if (!r) return null;
                   const isMe = 'isMe' in r && r.isMe;
-                  const sigil = r.rank === 1 ? <Crown className="h-4 w-4" style={{ color: '#eab308' }} />
-                    : r.rank === 2 ? <Medal className="h-4 w-4 text-zinc-300" />
-                    : <Medal className="h-4 w-4" style={{ color: '#d97706' }} />;
+                  const first = r.rank === 1;
+
+                  const metal =
+                    r.rank === 1 ? 'var(--medal-gold)'
+                    : r.rank === 2 ? 'var(--medal-silver)'
+                    : 'var(--medal-bronze)';
+
                   return (
                     <button
                       key={r.userId}
                       onClick={() => handleOpenProfile?.(r.userId)}
-                      className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-colors ${r.rank === 1 ? 'border-white/[0.14] bg-white/[0.04]' : 'border-white/[0.06]'} ${isMe ? 'ring-1' : ''}`}
-                      style={isMe ? { borderColor: brandColor } : undefined}
+                      className={`group relative flex flex-col items-center gap-1.5 rounded-lg border pb-3 transition-colors ${
+                        first ? 'pt-5' : 'pt-3'
+                      } ${isMe ? 'ring-1 ring-[var(--brand-color,#6366f1)]' : ''}`}
+                      style={{
+                        // A wash of the metal rather than a block of it. Gold
+                        // has to be legible as first place without the tile
+                        // turning into a button that outshines the figures.
+                        borderColor: first ? metal : 'var(--line-1)',
+                        background: first
+                          ? `linear-gradient(to bottom, color-mix(in srgb, ${metal} 12%, transparent), transparent 70%)`
+                          : undefined,
+                      }}
+                      title={displayName(r)}
                     >
-                      {sigil}
-                      <Avatar className={r.rank === 1 ? 'h-11 w-11' : 'h-9 w-9'}>
+                      {/* The medal sits on the tile's edge, so the three read
+                          as one object rather than three separate cards. */}
+                      <span
+                        className="absolute -top-2.5 flex size-5 items-center justify-center rounded-full border bg-[var(--card)]"
+                        style={{ borderColor: metal, color: metal }}
+                      >
+                        {first ? <Crown className="h-3 w-3" /> : <Medal className="h-3 w-3" />}
+                      </span>
+
+                      <Avatar
+                        className={`${first ? 'h-14 w-14' : 'h-10 w-10'} border`}
+                        style={{ borderColor: metal }}
+                      >
                         <AvatarImage src={r.avatarUrl ?? undefined} />
-                        <AvatarFallback className="text-xs">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className={first ? 'text-sm' : 'text-xs'}>
+                          {displayName(r).slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
                       </Avatar>
-                      <p className="text-xs text-zinc-300 truncate max-w-full">{displayName(r)}</p>
-                      <p className={`font-medium tabular-nums ${r.rank === 1 ? 'text-sm text-zinc-100' : 'text-xs text-zinc-300'}`}>{formatNumber(r.total)}</p>
+
+                      <p className={`max-w-full truncate px-1 ${first ? 'text-sm text-zinc-100' : 'text-xs text-zinc-300'}`}>
+                        {displayName(r)}
+                      </p>
+
+                      <p className={`font-medium tabular-nums ${first ? 'text-base text-zinc-100' : 'text-sm text-zinc-300'}`}>
+                        {formatNumber(r.total)}
+                      </p>
+
+                      {/* The plinth. Its height is the whole point of the
+                          component: first stands taller than second, second
+                          taller than third, before a single number is read. */}
+                      <span
+                        aria-hidden
+                        className={`mt-1 w-full rounded-t-sm ${
+                          first ? 'h-4' : r.rank === 2 ? 'h-2.5' : 'h-1.5'
+                        }`}
+                        style={{ backgroundColor: `color-mix(in srgb, ${metal} 28%, transparent)` }}
+                      />
                     </button>
                   );
                 })}
               </div>
             )}
-            <div className="divide-y divide-white/[0.04]">
+            <div className="divide-y divide-[var(--line-1)]">
               {rankings.map((r) => {
                 const isMe = 'isMe' in r && r.isMe;
                 return (
                   <div
                     key={`${showGlobal && 'factionId' in r ? r.factionId : ''}-${r.userId}`}
-                    className={`flex items-center gap-4 px-4 py-3 transition-colors duration-100 ${isMe ? 'bg-white/[0.03]' : 'hover:bg-white/[0.02]'}`}
+                    className={`flex items-center gap-4 px-4 py-3 transition-colors duration-100 ${isMe ? 'bg-[var(--fill-2)]' : 'hover:bg-[var(--fill-1)]'}`}
                     style={isMe ? { borderLeft: `3px solid ${brandColor}` } : { borderLeft: '3px solid transparent' }}
                   >
                     {/* Rank + movement vs. the previous period */}
@@ -235,24 +289,24 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     {/* Avatar + Name */}
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarImage src={r.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback className="text-micro">{displayName(r).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${isMe ? '' : 'text-zinc-300'}`} style={isMe ? { color: brandColor } : undefined}>
+                      <p className={`text-sm font-medium truncate ${isMe ? 'text-brand' : 'text-zinc-300'}`}>
                         {displayName(r)}
                         {/* A streak only earns colour when it is alive today. */}
                         {'streakCurrent' in r && (r.streakCurrent ?? 0) >= 3 && (
                           <span
-                            className={`inline-flex items-center ml-1.5 text-[10px] ${r.streakActiveToday ? 'text-amber-400' : 'text-zinc-500'}`}
+                            className={`inline-flex items-center ml-1.5 text-micro ${r.streakActiveToday ? 'text-amber-400' : 'text-zinc-500'}`}
                             title={t('leaderboard.streak', { count: r.streakCurrent ?? 0 })}
                           >
                             <Flame className="h-3 w-3 mr-0.5" />{r.streakCurrent}
                           </span>
                         )}
-                        {isMe && <span className="text-[10px] text-zinc-500 ml-1">{t('leaderboard.you')}</span>}
+                        {isMe && <span className="text-micro text-zinc-500 ml-1">{t('leaderboard.you')}</span>}
                       </p>
                       {'factionName' in r && (
-                        <p className="text-[11px] text-zinc-600">{r.factionName}</p>
+                        <p className="text-meta text-zinc-600">{r.factionName}</p>
                       )}
                     </div>
 
@@ -260,7 +314,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     {!showGlobal && 'itemBreakdown' in r && Object.keys(r.itemBreakdown).length > 0 && (
                       <div className="hidden lg:flex items-center gap-2">
                         {Object.entries(r.itemBreakdown).slice(0, 3).map(([name, val]) => (
-                          <Badge key={name} variant="outline" className="text-[10px] text-zinc-500 border-white/[0.06]">
+                          <Badge key={name} variant="outline" className="text-micro text-zinc-500 border-[var(--line-1)]">
                             {name}: {fmt(val)}
                           </Badge>
                         ))}
@@ -270,7 +324,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                     {/* Stats */}
                     <div className="text-right shrink-0">
                       <p className="text-sm font-medium tabular-nums text-zinc-100">{fmt(r.total)}</p>
-                      <p className="text-[10px] text-zinc-600">{t('entries.count', { count: r.entryCount })}</p>
+                      <p className="text-micro text-zinc-600">{t('entries.count', { count: r.entryCount })}</p>
                     </div>
                   </div>
                 );

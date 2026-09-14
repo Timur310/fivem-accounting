@@ -822,9 +822,11 @@ and reuse it later. If a send fails, the reason appears on the reminder in red.
 **members** from your roster, picked from a list — no typing ids. Leave
 everything unpicked and the reminder posts quietly.
 
-- A role your server has not marked **mentionable** is greyed out. Discord does
-  not let the bot ping it, and a server admin can allow it in that role's
-  settings.
+- If some roles are greyed out with a warning about reconnecting, your server
+  was connected before the bot asked for permission to ping roles. Press
+  **Connect a different server** and pick the same one again — Discord does not
+  widen an existing bot's permissions on its own. (Switching the role's own
+  *"allow anyone to @mention this role"* on in Discord also works.)
 - Members are tagged from your faction roster, so you pick by in-game name. If
   someone leaves, the reminder keeps working and simply stops tagging them.
 - **@everyone cannot be pinged**, even if you type it into the message. The bot

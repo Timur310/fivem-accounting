@@ -100,7 +100,7 @@ export function PendingApprovalScreen({ onRecheck }: PendingApprovalScreenProps)
 
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--fill-2)]">
             <Hourglass className="h-7 w-7 text-zinc-400" />
           </div>
           <CardTitle className="text-xl">{t('pending.title')}</CardTitle>
@@ -110,23 +110,23 @@ export function PendingApprovalScreen({ onRecheck }: PendingApprovalScreenProps)
         <CardContent className="space-y-4">
           {/* Which account they are waiting on — they may well have more than
               one Discord, and an admin invited exactly one of them. */}
-          <div className="flex items-center gap-3 rounded-lg border border-white/[0.06] p-3">
+          <div className="flex items-center gap-3 rounded-lg border border-[var(--line-1)] p-3">
             <Avatar className="h-9 w-9">
               <AvatarImage src={user.avatarUrl ?? undefined} />
-              <AvatarFallback className="text-[11px]">
+              <AvatarFallback className="text-meta">
                 {displayName(user).slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] text-zinc-500">{t('pending.signedInAs')}</p>
+              <p className="text-meta text-zinc-500">{t('pending.signedInAs')}</p>
               <p className="truncate text-sm text-zinc-200">{displayName(user)}</p>
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-[11px] text-zinc-500">{t('members.discordId')}</p>
+            <p className="text-meta text-zinc-500">{t('members.discordId')}</p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 select-all truncate rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-2 font-mono text-sm tabular-nums text-zinc-300">
+              <code className="flex-1 select-all truncate rounded-md border border-[var(--line-1)] bg-[var(--fill-1)] px-2.5 py-2 font-mono text-sm tabular-nums text-zinc-300">
                 {user.discordId}
               </code>
               <Button

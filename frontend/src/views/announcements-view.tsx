@@ -39,8 +39,8 @@ import type { TranslationKey } from '@/lib/i18n';
  * if every notice wears a badge, the badge stops meaning anything.
  */
 const PRIORITY_STYLE: Record<AnnouncementPriority, { rule: string; badge: string | null }> = {
-  low: { rule: 'border-l-white/[0.06]', badge: null },
-  normal: { rule: 'border-l-white/[0.06]', badge: null },
+  low: { rule: 'border-l-[var(--line-1)]', badge: null },
+  normal: { rule: 'border-l-[var(--line-1)]', badge: null },
   high: { rule: 'border-l-amber-500/50', badge: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
   urgent: { rule: 'border-l-red-500/60', badge: 'border-red-500/30 bg-red-500/10 text-red-300' },
 };
@@ -194,7 +194,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
             {t('announcements.showExpired')}
           </Button>
           {canManage && (
-            <Button size="sm" onClick={openCompose} style={{ backgroundColor: brandColor }}>
+            <Button size="sm" onClick={openCompose}>
               <Plus className="h-4 w-4 mr-1.5" />
               {t('announcements.new')}
             </Button>
@@ -224,22 +224,22 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
                     {a.isPinned && <Pin className="h-3.5 w-3.5 mt-1 shrink-0 text-zinc-400" aria-label={t('announcements.pinned')} />}
                     <h3 className="text-sm font-medium text-zinc-100 min-w-0 break-words flex-1">{a.title}</h3>
                     {style.badge && (
-                      <Badge variant="outline" className={`text-[10px] border ${style.badge}`}>
+                      <Badge variant="outline" className={`text-micro border ${style.badge}`}>
                         {t(PRIORITY_LABELS[a.priority])}
                       </Badge>
                     )}
                     {expired && (
-                      <Badge variant="outline" className="text-[10px] border-white/[0.08] text-zinc-500">
+                      <Badge variant="outline" className="text-micro border-[var(--line-2)] text-zinc-500">
                         {t('announcements.expired')}
                       </Badge>
                     )}
                   </div>
 
-                  <div className="prose-invert max-w-none text-sm text-zinc-300 [&_a]:text-primary [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_strong]:text-zinc-100 [&_code]:rounded [&_code]:bg-white/[0.06] [&_code]:px-1">
+                  <div className="prose-invert max-w-none text-sm text-zinc-300 [&_a]:text-primary [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_strong]:text-zinc-100 [&_code]:rounded [&_code]:bg-[var(--fill-3)] [&_code]:px-1">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{a.body}</ReactMarkdown>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
+                  <div className="flex flex-wrap items-center gap-2 text-meta text-zinc-600">
                     <Avatar className="h-5 w-5">
                       <AvatarImage src={a.authorAvatarUrl ?? undefined} />
                       <AvatarFallback className="text-[8px]">
@@ -256,7 +256,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
                       {canManage && (
                         <Button
                           variant="ghost" size="sm"
-                          className="h-6 px-1.5 text-[11px] text-zinc-500 hover:text-zinc-200"
+                          className="h-6 px-1.5 text-meta text-zinc-500 hover:text-zinc-200"
                           onClick={() => setReadsFor(a)}
                         >
                           <Eye className="mr-1 h-3 w-3" />
@@ -309,7 +309,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
               <div className="space-y-1.5">
                 <Label className="text-xs text-zinc-500">{t('announcements.body')}</Label>
                 <Textarea value={body} rows={8} maxLength={10000} onChange={(e) => setBody(e.target.value)} />
-                <p className="text-[11px] text-zinc-600">{t('announcements.markdownHint')}</p>
+                <p className="text-meta text-zinc-600">{t('announcements.markdownHint')}</p>
               </div>
 
               <div className="space-y-1.5">
@@ -331,7 +331,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3">
+              <div className="flex items-center justify-between rounded-lg border border-[var(--line-1)] p-3">
                 <div className="pr-3">
                   <p className="text-sm">{t('announcements.pin')}</p>
                   <p className="text-xs text-zinc-500">{t('announcements.pinHint')}</p>
@@ -342,14 +342,14 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
               <div className="space-y-1.5">
                 <Label className="text-xs text-zinc-500">{t('announcements.expiry')}</Label>
                 <Input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
-                <p className="text-[11px] text-zinc-600">{t('announcements.expiryHint')}</p>
+                <p className="text-meta text-zinc-600">{t('announcements.expiryHint')}</p>
               </div>
             </div>
             <DialogFooter className="mt-4">
               <Button variant="outline" onClick={() => { setComposeOpen(false); resetForm(); }}>
                 {t('common.cancel')}
               </Button>
-              <Button type="submit" disabled={!canSave} style={{ backgroundColor: brandColor }}>
+              <Button type="submit" disabled={!canSave}>
                 {saveMutation.isPending ? t('common.saving') : editing ? t('common.save') : t('announcements.post')}
               </Button>
             </DialogFooter>
@@ -378,12 +378,12 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
                     {fullDisplayName({ username: r.username, inGameName: r.inGameName })}
                   </span>
                   {r.readAt ? (
-                    <span className="flex items-center gap-1 text-[11px] tabular-nums text-emerald-400">
+                    <span className="flex items-center gap-1 text-meta tabular-nums text-emerald-400">
                       <Check className="h-3 w-3" />
                       {formatDateTime(r.readAt)}
                     </span>
                   ) : (
-                    <span className="text-[11px] text-zinc-600">{t('announcements.unread')}</span>
+                    <span className="text-meta text-zinc-600">{t('announcements.unread')}</span>
                   )}
                 </div>
               ))}

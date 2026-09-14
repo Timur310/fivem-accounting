@@ -148,10 +148,10 @@ export function FeedView({ factionId }: { factionId: string }) {
           ) : items.length === 0 ? (
             <EmptyState icon={Activity} title={t('feed.none')} hint={t('feed.noneHint')} />
           ) : (
-            <ol className="divide-y divide-white/[0.04]">
+            <ol className="divide-y divide-[var(--line-1)]">
               {items.map((item) => {
                 const Icon = TYPE_ICON[item.type] ?? Activity;
-                const tint = TYPE_TINT[item.type] ?? 'bg-white/[0.05] text-zinc-400';
+                const tint = TYPE_TINT[item.type] ?? 'bg-[var(--fill-2)] text-zinc-400';
                 const isMe = !item.actorIsSystem && item.actorId === user?.id;
                 return (
                   <li key={`${item.type}-${item.id}`} className="flex items-start gap-3 px-4 py-2.5">
@@ -177,7 +177,7 @@ export function FeedView({ factionId }: { factionId: string }) {
                       <span className={`block text-sm break-words ${isMe ? 'text-zinc-100' : 'text-zinc-300'}`}>
                         {describe(item)}
                       </span>
-                      <span className="mt-0.5 block text-[10px] tabular-nums text-zinc-600">
+                      <span className="mt-0.5 block text-micro tabular-nums text-zinc-600">
                         {formatDateTime(item.createdAt)}
                       </span>
                     </span>
@@ -198,20 +198,20 @@ export function FeedView({ factionId }: { factionId: string }) {
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3">
-              <span className="text-[11px] tabular-nums text-zinc-600">
+            <div className="flex items-center justify-between border-t border-[var(--line-1)] px-4 py-3">
+              <span className="text-meta tabular-nums text-zinc-600">
                 {t('common.pageOf', { page, pages: totalPages })}
               </span>
               <div className="flex gap-1">
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >

@@ -134,13 +134,13 @@ export function SupportView() {
                   className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
                     active
                       ? 'border-primary bg-primary/10'
-                      : 'border-white/[0.08] hover:border-white/[0.2]'
+                      : 'border-[var(--line-2)] hover:border-[var(--line-3)]'
                   }`}
                 >
                   <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${active ? 'text-primary' : 'text-zinc-400'}`} />
                   <span className="min-w-0">
                     <span className={`block text-sm ${active ? 'text-zinc-100' : 'text-zinc-300'}`}>{opt.label}</span>
-                    <span className="block text-[11px] text-zinc-500 mt-0.5">{opt.hint}</span>
+                    <span className="block text-meta text-zinc-500 mt-0.5">{opt.hint}</span>
                   </span>
                 </button>
               );
@@ -160,7 +160,7 @@ export function SupportView() {
           <div className="space-y-1.5">
             <div className="flex items-baseline justify-between">
               <Label className="text-xs text-zinc-500">{t('support.message')}</Label>
-              <span className="text-[10px] tabular-nums text-zinc-600">
+              <span className="text-micro tabular-nums text-zinc-600">
                 {trimmedMessage.length}/{MESSAGE_MAX}
               </span>
             </div>
@@ -171,7 +171,7 @@ export function SupportView() {
               onChange={(e) => setMessage(e.target.value)}
               placeholder={kind === 'bug' ? t('support.messagePlaceholderBug') : t('support.messagePlaceholderFeature')}
             />
-            <p className="text-[11px] text-zinc-600">
+            <p className="text-meta text-zinc-600">
               {kind === 'bug' ? t('support.messageHintBug') : t('support.messageHintFeature')}
             </p>
           </div>
@@ -202,7 +202,7 @@ export function SupportView() {
           ) : tickets.length === 0 ? (
             <EmptyState icon={LifeBuoy} title={t('support.noneYet')} hint={t('support.noneYetHint')} />
           ) : (
-            <div className="divide-y divide-white/[0.04]">
+            <div className="divide-y divide-[var(--line-1)]">
               {tickets.map((ticket) => (
                 <article key={ticket.id} className="p-4 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -212,10 +212,10 @@ export function SupportView() {
                       <Lightbulb className="h-3.5 w-3.5 shrink-0 text-zinc-500" aria-hidden="true" />
                     )}
                     <h3 className="text-sm text-zinc-200 min-w-0 break-words">{ticket.subject}</h3>
-                    <Badge variant="outline" className={`text-[10px] border ${STATUS_STYLES[ticket.status]}`}>
+                    <Badge variant="outline" className={`text-micro border ${STATUS_STYLES[ticket.status]}`}>
                       {t(STATUS_LABELS[ticket.status])}
                     </Badge>
-                    <span className="text-[11px] text-zinc-600 ml-auto tabular-nums">
+                    <span className="text-meta text-zinc-600 ml-auto tabular-nums">
                       {formatDateTime(ticket.createdAt)}
                     </span>
                   </div>
@@ -225,8 +225,8 @@ export function SupportView() {
                   {/* The answer, where there is one. This is why the status is
                       worth showing at all. */}
                   {ticket.resolutionNote && (
-                    <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">
+                    <div className="rounded-md border border-[var(--line-1)] bg-[var(--fill-1)] p-2.5">
+                      <p className="text-micro uppercase tracking-wider text-zinc-600 mb-1">
                         {t('support.replyFromMaintainer')}
                       </p>
                       <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">{ticket.resolutionNote}</p>
@@ -236,8 +236,7 @@ export function SupportView() {
                   {ticket.status === 'open' && (
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                      size="xs" className="px-2 text-zinc-400 hover:text-zinc-200"
                       onClick={() => setCancelTarget(ticket)}
                     >
                       <Undo2 className="h-3.5 w-3.5 mr-1" />

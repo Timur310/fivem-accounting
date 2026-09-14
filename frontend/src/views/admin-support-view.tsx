@@ -126,7 +126,7 @@ export function AdminSupportView() {
       <Card>
         <CardContent className="py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-wider text-zinc-600 mr-1">{t('common.status')}</span>
+            <span className="text-meta uppercase tracking-wider text-zinc-600 mr-1">{t('common.status')}</span>
             {statusTabs.map((tab) => (
               <button
                 key={tab.value}
@@ -136,7 +136,7 @@ export function AdminSupportView() {
                 className={`h-7 rounded-md border px-2.5 text-xs transition-colors ${
                   statusFilter === tab.value
                     ? 'border-primary text-primary bg-primary/10'
-                    : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                    : 'border-[var(--line-2)] text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 {tab.label}
@@ -144,7 +144,7 @@ export function AdminSupportView() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-wider text-zinc-600 mr-1">{t('support.kind')}</span>
+            <span className="text-meta uppercase tracking-wider text-zinc-600 mr-1">{t('support.kind')}</span>
             {kindTabs.map((tab) => (
               <button
                 key={tab.value}
@@ -154,7 +154,7 @@ export function AdminSupportView() {
                 className={`h-7 rounded-md border px-2.5 text-xs transition-colors ${
                   kindFilter === tab.value
                     ? 'border-primary text-primary bg-primary/10'
-                    : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200'
+                    : 'border-[var(--line-2)] text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 {tab.label}
@@ -171,9 +171,10 @@ export function AdminSupportView() {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : tickets.length === 0 ? (
-            <EmptyState icon={LifeBuoy} title={t('support.inboxEmpty')} />
+            <EmptyState icon={LifeBuoy} title={t('support.inboxEmpty')}
+              hint={t('support.inboxEmptyHint')} />
           ) : (
-            <div className="divide-y divide-white/[0.04]">
+            <div className="divide-y divide-[var(--line-1)]">
               {tickets.map((ticket) => (
                 <article key={ticket.id} className="p-4 space-y-2.5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -183,12 +184,12 @@ export function AdminSupportView() {
                       <Lightbulb className="h-3.5 w-3.5 shrink-0 text-zinc-500" aria-hidden="true" />
                     )}
                     <h3 className="text-sm text-zinc-200 min-w-0 break-words">{ticket.subject}</h3>
-                    <Badge variant="outline" className={`text-[10px] border ${STATUS_STYLES[ticket.status]}`}>
+                    <Badge variant="outline" className={`text-micro border ${STATUS_STYLES[ticket.status]}`}>
                       {t(STATUS_LABELS[ticket.status])}
                     </Badge>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
+                  <div className="flex flex-wrap items-center gap-2 text-meta text-zinc-600">
                     <Avatar className="h-5 w-5">
                       <AvatarImage src={ticket.reporterAvatarUrl ?? undefined} />
                       <AvatarFallback className="text-[8px]">
@@ -206,8 +207,8 @@ export function AdminSupportView() {
                   <p className="text-xs text-zinc-400 whitespace-pre-wrap break-words">{ticket.message}</p>
 
                   {ticket.resolutionNote && (
-                    <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                      <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">
+                    <div className="rounded-md border border-[var(--line-1)] bg-[var(--fill-1)] p-2.5">
+                      <p className="text-micro uppercase tracking-wider text-zinc-600 mb-1">
                         {t('support.yourReply')}
                       </p>
                       <p className="text-xs text-zinc-300 whitespace-pre-wrap break-words">{ticket.resolutionNote}</p>
@@ -222,8 +223,7 @@ export function AdminSupportView() {
                       <>
                         <Button
                           variant="outline"
-                          size="sm"
-                          className="h-7 text-xs text-emerald-300 hover:text-emerald-200"
+                          size="xs" className="text-emerald-300 hover:text-emerald-200"
                           onClick={() => openClose(ticket, 'resolved')}
                         >
                           <Check className="h-3.5 w-3.5 mr-1" />
@@ -231,8 +231,7 @@ export function AdminSupportView() {
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
-                          className="h-7 text-xs text-red-300 hover:text-red-200"
+                          size="xs" className="text-red-300 hover:text-red-200"
                           onClick={() => openClose(ticket, 'declined')}
                         >
                           <X className="h-3.5 w-3.5 mr-1" />
@@ -242,8 +241,7 @@ export function AdminSupportView() {
                     )}
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-zinc-500 hover:text-red-300 ml-auto"
+                      size="xs" className="text-zinc-500 hover:text-red-300 ml-auto"
                       onClick={() => setDeleteTarget(ticket)}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -256,20 +254,20 @@ export function AdminSupportView() {
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3">
-              <span className="text-[11px] text-zinc-600 tabular-nums">
+            <div className="flex items-center justify-between border-t border-[var(--line-1)] px-4 py-3">
+              <span className="text-meta text-zinc-600 tabular-nums">
                 {t('common.pageOf', { page, pages: totalPages })}
               </span>
               <div className="flex gap-1">
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  variant="outline" size="sm" className="h-7 w-7 p-0"
+                  variant="outline" size="xs" className="w-7 p-0"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >

@@ -28,7 +28,7 @@ const ACTION_STYLES: Record<string, string> = {
   update: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   delete: 'bg-red-500/10 text-red-400 border-red-500/20',
   login: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  logout: 'bg-white/[0.04] text-zinc-500 border-white/[0.06]',
+  logout: 'bg-[var(--fill-2)] text-zinc-500 border-[var(--line-1)]',
 };
 
 /**
@@ -114,14 +114,16 @@ export function AuditLogsView({ factionId }: Props) {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => { setDateFrom(e.target.value); setActivePreset(null); setPage(1); }}
-                  className="w-[140px] h-9 text-xs"
+                  size="sm"
+                  className="w-[140px]"
                   aria-label={t('entries.from')}
                 />
                 <Input
                   type="date"
                   value={dateTo}
                   onChange={(e) => { setDateTo(e.target.value); setActivePreset(null); setPage(1); }}
-                  className="w-[140px] h-9 text-xs"
+                  size="sm"
+                  className="w-[140px]"
                   aria-label={t('entries.to')}
                 />
                 <DateRangePresets
@@ -147,7 +149,8 @@ export function AuditLogsView({ factionId }: Props) {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : logs.length === 0 ? (
-            <EmptyState icon={ScrollText} title={t('audit.none')} />
+            <EmptyState icon={ScrollText} title={t('audit.none')}
+              hint={t('audit.noneHint')} />
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -166,35 +169,35 @@ export function AuditLogsView({ factionId }: Props) {
                     {logs.map((log: AuditLog) => (
                       <TableRow key={log.id}>
                         <TableCell>
-                          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${ACTION_STYLES[log.action] ?? ''}`}>
+                          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-meta font-medium ${ACTION_STYLES[log.action] ?? ''}`}>
                             {ACTION_KEYS[log.action] ? t(ACTION_KEYS[log.action]) : log.action}
                           </span>
                         </TableCell>
                         <TableCell>
-                          <span className="text-xs bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-md text-zinc-400">
+                          <span className="text-xs bg-[var(--fill-2)] border border-[var(--line-1)] px-2 py-0.5 rounded-md text-zinc-400">
                             {ENTITY_KEYS[log.entityType] ? t(ENTITY_KEYS[log.entityType]) : log.entityType}
                           </span>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-zinc-300">{log.actorUsername}</div>
-                          <div className="text-[11px] text-zinc-600 font-mono tabular-nums">{log.actorDiscordId}</div>
+                          <div className="text-meta text-zinc-600 font-mono tabular-nums">{log.actorDiscordId}</div>
                         </TableCell>
                         <TableCell className="max-w-[200px]">
-                          <pre className="text-[11px] text-zinc-500 whitespace-pre-wrap break-all font-mono">{log.details ? JSON.stringify(log.details, null, 2) : '—'}</pre>
+                          <pre className="text-meta text-zinc-500 whitespace-pre-wrap break-all font-mono">{log.details ? JSON.stringify(log.details, null, 2) : '—'}</pre>
                         </TableCell>
-                        <TableCell className="text-[11px] text-zinc-600 font-mono tabular-nums">{log.ipAddress || '—'}</TableCell>
-                        <TableCell className="text-[11px] text-zinc-500 tabular-nums whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
+                        <TableCell className="text-meta text-zinc-600 font-mono tabular-nums">{log.ipAddress || '—'}</TableCell>
+                        <TableCell className="text-meta text-zinc-500 tabular-nums whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
               {meta && totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--line-1)]">
                   <p className="text-xs text-zinc-500 tabular-nums">{t('common.pagination', { page: meta.page, pages: totalPages, total: meta.total_count })}</p>
                   <div className="flex items-center gap-1.5">
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="sm" className="h-7" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="xs" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="xs" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               )}

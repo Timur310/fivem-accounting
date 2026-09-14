@@ -29,6 +29,8 @@ import { formatAmount, displayName, formatNumber, todayLocalDateString } from '@
 import { getIntlLocale } from '@/lib/i18n';
 import { ItemIcon } from '@/components/item-icon';
 import { useTranslation } from '@/providers/i18n-provider';
+import { useCountUp } from '@/hooks/use-count-up';
+import { cn } from '@/lib/utils';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { AmountPreview } from '@/components/ui/amount-preview';
 import { useToast } from '@/hooks/use-toast';
@@ -96,6 +98,11 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
 
   const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
 
+  // The headline figure travels to its new value rather than jumping, so a
+  // withdrawal completing is something you watch happen rather than something
+  // you notice afterwards. Magnitude only — the sign is rendered separately.
+  const displayNetBalance = useCountUp(Math.abs(netBalance));
+
   // Filtering and ordering are a reading aid over a list the API already sent
   // whole, so both happen here rather than as query parameters: no refetch, and
   // the totals above go on covering every type regardless of what is hidden.
@@ -146,15 +153,15 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
             {/* Neutral unless the figure is actually negative — see the note
                 on the per-item balances below. */}
             <div className="flex flex-wrap items-center gap-3">
-              <div className="text-3xl font-medium tabular-nums tracking-tight" style={{ color: netBalance < 0 ? '#ef4444' : '#e4e4e7' }}>
-                {netBalance < 0 ? '-' : ''}{fmt(Math.abs(netBalance))}
+              <div className={cn("text-3xl font-medium tabular-nums tracking-tight", netBalance < 0 ? "text-negative" : "text-zinc-200")}>
+                {netBalance < 0 ? '-' : ''}{fmt(displayNetBalance)}
               </div>
               {/* Decorative: the figure is already red and the line below says
                   the same thing in words, so this is hidden from readers. */}
               {netBalance < 0 && (
                 <span
                   aria-hidden="true"
-                  className="stamp px-2 py-0.5 text-[10px] font-semibold uppercase text-red-500"
+                  className="stamp px-2 py-0.5 text-micro font-semibold uppercase text-red-500"
                 >
                   {t('treasury.inTheRed')}
                 </span>
@@ -258,7 +265,8 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
                 <Input
-                  className="h-8 w-[170px] pl-8 text-xs"
+                  size="sm"
+                  className="w-[170px] pl-8"
                   placeholder={t('itemTypes.search')}
                   aria-label={t('itemTypes.search')}
                   value={nameFilter}
@@ -267,7 +275,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
               </div>
               <SearchableSelect
                 className="w-[120px]"
-                triggerClassName="h-8 text-xs"
+                size="sm"
                 aria-label={t('treasury.sortBy')}
                 value={sortField}
                 onValueChange={(v) => setSortField(v as SortField)}
@@ -275,8 +283,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
               />
               <Button
                 variant="outline"
-                size="icon"
-                className="h-8 w-8 shrink-0"
+                size="icon-sm" className="shrink-0"
                 onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
                 title={t('treasury.toggleSortDirection')}
                 aria-label={t('treasury.toggleSortDirection')}
@@ -291,16 +298,17 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         {balancesOpen && (
         <CardContent>
           {balances.length === 0 ? (
-            <EmptyState icon={Wallet} title={t('treasury.noBalances')} compact />
+            <EmptyState icon={Wallet} title={t('treasury.noBalances')}
+              hint={t('treasury.noBalancesHint')} compact />
           ) : visibleBalances.length === 0 ? (
-            <EmptyState icon={Search} title={t('itemTypes.noneMatch')} compact />
+            <EmptyState icon={Search} title={t('itemTypes.noneMatch')} hint={t('itemTypes.noneMatchHint')} compact />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleBalances.map((b) => (
                 <div
                   key={b.itemTypeId}
-                  className={`rounded-lg border p-4 space-y-3 transition-all duration-150 hover:border-white/[0.1] ${
-                    b.balance < 0 ? 'border-red-500/20 bg-red-500/[0.02]' : 'border-white/[0.06]'
+                  className={`rounded-lg border p-4 space-y-3 transition-all duration-150 hover:border-[var(--line-3)] ${
+                    b.balance < 0 ? 'border-red-500/20 bg-red-500/[0.02]' : 'border-[var(--line-1)]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -310,7 +318,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                     </span>
                     <Badge
                       variant="outline"
-                      className={`text-[11px] ${
+                      className={`text-meta ${
                         b.balance < 0
                           ? 'border-red-500/30 text-red-400 bg-red-500/10'
                           : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
@@ -324,10 +332,10 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                       a healthy balance in the faction accent said the same
                       thing in reverse whenever that accent was green — and the
                       opposite whenever it was red. */}
-                  <div className="text-2xl font-medium tabular-nums tracking-tight" style={{ color: b.balance < 0 ? '#ef4444' : '#e4e4e7' }}>
+                  <div className={cn("text-2xl font-medium tabular-nums tracking-tight", b.balance < 0 ? "text-negative" : "text-zinc-200")}>
                     {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
                   </div>
-                  <div className="flex justify-between text-[11px] text-zinc-500 tabular-nums">
+                  <div className="flex justify-between text-meta text-zinc-500 tabular-nums">
                     <span className="text-emerald-500/80">{t('treasury.inflowRow', { amount: formatAmount(b.inflow, b.unit, b.isCurrency) })}</span>
                     <span className="text-red-500/80">{t('treasury.outflowRow', { amount: formatAmount(b.outflow, b.unit, b.isCurrency) })}</span>
                   </div>
@@ -399,14 +407,15 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         </CardHeader>
         <CardContent>
           {recentPayouts.length === 0 ? (
-            <EmptyState icon={ArrowDownToLine} title={t('treasury.noCompletedWithdrawals')} compact />
+            <EmptyState icon={ArrowDownToLine} title={t('treasury.noCompletedWithdrawals')}
+              hint={t('treasury.noCompletedWithdrawalsHint')} compact />
           ) : (
             <div className="space-y-1">
               {recentPayouts.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                <div key={p.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                   <Avatar className="h-7 w-7 shrink-0">
                     <AvatarImage src={p.recipientAvatarUrl ?? undefined} />
-                    <AvatarFallback className="text-[10px]">{displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}</AvatarFallback>
+                    <AvatarFallback className="text-micro">{displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm">
@@ -414,7 +423,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                       <span className="text-zinc-600"> {t('treasury.received')} </span>
                       <span className="font-medium tabular-nums text-zinc-200">{formatAmount(p.amount, p.itemUnit, p.itemIsCurrency)}</span>
                     </p>
-                    <p className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                    <p className="text-meta text-zinc-600 flex items-center gap-1.5">
                       <ItemIcon src={p.itemImageUrl} icon={p.itemIcon} category={p.itemCategory} className="size-4" />
                       <span className="truncate">
                         {p.itemTypeName} &middot; {p.payoutDate}
@@ -631,7 +640,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                   className={`rounded-lg border px-3 py-2.5 ${
                     over ? 'border-red-500/30 bg-red-500/[0.04]'
                     : near ? 'border-amber-500/30 bg-amber-500/[0.04]'
-                    : 'border-white/[0.06]'
+                    : 'border-[var(--line-1)]'
                   }`}
                 >
                   <div className="flex items-baseline justify-between gap-2">
@@ -642,7 +651,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                   </div>
                   {c.cap !== null && (
                     <>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.04]">
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--fill-2)]">
                         <div
                           className={`energy-bar h-full rounded-full transition-all duration-500 ${
                             over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'
@@ -650,7 +659,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                           style={{ width: `${Math.min(c.pct ?? 0, 100)}%` }}
                         />
                       </div>
-                      <p className={`mt-1 text-[11px] tabular-nums ${
+                      <p className={`mt-1 text-meta tabular-nums ${
                         over ? 'text-red-400' : near ? 'text-amber-400' : 'text-zinc-600'
                       }`}>
                         {t('treasury.budgetMonth')} · {formatNumber(c.spent)} / {formatNumber(c.cap)}
@@ -670,28 +679,29 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
         ) : isError ? (
           <ErrorState error={error} onRetry={() => refetch()} compact />
         ) : expenses.length === 0 ? (
-          <EmptyState icon={Receipt} title={t('expenses.none')} compact />
+          <EmptyState icon={Receipt} title={t('expenses.none')}
+              hint={t('expenses.noneHint')} compact />
         ) : (
           // Columns, not a sentence. The amount used to sit mid-paragraph
           // between a badge and the item name, so nothing lined up and the
           // figures — the only reason to open this tab — could not be scanned
           // down the page.
-          <div className="divide-y divide-white/[0.04]">
+          <div className="divide-y divide-[var(--line-1)]">
             {expenses.map((e) => (
               <div
                 key={e.id}
-                className="group -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors duration-100 hover:bg-white/[0.02]"
+                className="group -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5 transition-colors duration-100 hover:bg-[var(--fill-1)]"
               >
                 <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-7 shrink-0" />
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm text-zinc-200">{e.itemTypeName}</span>
-                    <Badge variant="outline" className="shrink-0 text-[10px] text-zinc-400">
+                    <Badge variant="outline" className="shrink-0 text-micro text-zinc-400">
                       {EXPENSE_CATEGORY_KEYS[e.category] ? t(EXPENSE_CATEGORY_KEYS[e.category]) : e.category}
                     </Badge>
                   </div>
-                  <p className="truncate text-[11px] text-zinc-600">
+                  <p className="truncate text-meta text-zinc-600">
                     {e.expenseDate}
                     {e.creatorUsername && ` · ${displayName({ username: e.creatorUsername, inGameName: e.creatorInGameName })}`}
                     {e.description && ` · ${e.description}`}
@@ -707,10 +717,10 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                   // the amount column does not shift as the mouse moves down
                   // the list.
                   <div className="flex w-[68px] shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity duration-100 group-hover:opacity-100 focus-within:opacity-100">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(e)}>
+                    <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" title={t('common.edit')} onClick={() => openEdit(e)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => setConfirmDelete(e)}>
+                    <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" title={t('common.delete')} onClick={() => setConfirmDelete(e)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -947,20 +957,21 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
         ) : isError ? (
           <ErrorState error={error} onRetry={() => refetch()} compact />
         ) : checks.length === 0 ? (
-          <EmptyState icon={ClipboardCheck} title={t('treasury.noChecks')} compact />
+          <EmptyState icon={ClipboardCheck} title={t('treasury.noChecks')}
+              hint={t('treasury.noChecksHint')} compact />
         ) : (
           <div className="space-y-1">
             {checks.map((c) => {
               const matches = Math.abs(c.variance) < 0.005;
               return (
-                <div key={c.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                <div key={c.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                   <ItemIcon src={null} className="size-0 hidden" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm">
                       <span className="text-zinc-300 font-medium">{c.itemTypeName}</span>
                       <span className="text-zinc-600"> · {c.checkDate}</span>
                     </p>
-                    <p className="text-[11px] text-zinc-600 truncate">
+                    <p className="text-meta text-zinc-600 truncate">
                       {t('treasury.checkRecorded', { amount: formatAmount(c.recordedBalance, c.itemUnit, c.itemIsCurrency) })}
                       {c.creatorUsername && ` — ${displayName({ username: c.creatorUsername, inGameName: c.creatorInGameName })}`}
                       {c.note && ` — ${c.note}`}
@@ -970,7 +981,7 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
                     <p className="text-sm font-medium tabular-nums text-zinc-200">
                       {formatAmount(c.countedAmount, c.itemUnit, c.itemIsCurrency)}
                     </p>
-                    <p className={`text-[11px] tabular-nums ${matches ? 'text-emerald-500' : 'text-red-400'}`}>
+                    <p className={`text-meta tabular-nums ${matches ? 'text-emerald-500' : 'text-red-400'}`}>
                       {matches
                         ? t('treasury.checkMatch')
                         : t('treasury.checkVariance', { variance: formatAmount(Math.abs(c.variance), c.itemUnit, c.itemIsCurrency) })}

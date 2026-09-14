@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/searchable-select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FileBarChart, ArrowUpRight, ArrowDownRight, Minus, Users, TrendingUp, Printer } from 'lucide-react';
@@ -31,8 +32,17 @@ const PERIOD_KEYS: Record<string, TranslationKey> = {
 /** The two periods the comparison tab lets you set against each other. */
 const COMPARISON_PERIODS = ['this_week', 'last_week', 'this_month', 'last_month'] as const;
 
+/** Built once from the same list the comparison uses, so the two cannot drift. */
+function usePeriodOptions(t: (key: TranslationKey) => string): SearchableSelectOption[] {
+  return useMemo(
+    () => COMPARISON_PERIODS.map((value) => ({ value, label: t(PERIOD_KEYS[value]) })),
+    [t],
+  );
+}
+
 export function ReportsView({ factionId }: Props) {
   const { t } = useTranslation();
+  const periodOptions = usePeriodOptions(t);
   const [tab, setTab] = useState<Tab>('summary');
   const [period, setPeriod] = useState('this_month');
   const [periodA, setPeriodA] = useState('this_month');
@@ -85,8 +95,7 @@ export function ReportsView({ factionId }: Props) {
               <Button
                 key={value}
                 variant={period === value ? 'default' : 'outline'}
-                size="sm"
-                className="h-7 px-2.5 text-xs"
+                size="xs" className="px-2.5"
                 onClick={() => setPeriod(value)}
               >
                 {t(key)}
@@ -103,32 +112,32 @@ export function ReportsView({ factionId }: Props) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card className="border-highlight">
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.currencyTotal')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.currencyTotal')}</p>
                     <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.currencyTotal)}</p>
-                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">
+                    <p className="text-meta text-zinc-600 mt-1 tabular-nums">
                       {t('entries.count', { count: summary.overview.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(summary.overview.avgPerCurrencyEntry) })}
                     </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.itemTotal')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.itemTotal')}</p>
                     <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmtItems(summary.overview.itemTotal)}</p>
-                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">
+                    <p className="text-meta text-zinc-600 mt-1 tabular-nums">
                       {t('entries.count', { count: summary.overview.itemEntryCount })} &middot; {t('reports.avg', { amount: fmtItems(summary.overview.avgPerItemEntry) })}
                     </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</p>
                     <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.entryCount}</p>
-                    <p className="text-[11px] text-zinc-600 mt-1 tabular-nums">{summary.from} → {summary.to}</p>
+                    <p className="text-meta text-zinc-600 mt-1 tabular-nums">{summary.from} → {summary.to}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.uniqueMembers')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.uniqueMembers')}</p>
                     <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.uniqueMembers}</p>
                   </CardContent>
                 </Card>
@@ -143,12 +152,12 @@ export function ReportsView({ factionId }: Props) {
                     ) : (
                       <div className="space-y-2">
                         {summary.byType.map((row) => (
-                          <div key={row.itemTypeName} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3 transition-all duration-150 hover:border-white/[0.1]">
+                          <div key={row.itemTypeName} className="flex items-center justify-between rounded-lg border border-[var(--line-1)] p-3 transition-all duration-150 hover:border-[var(--line-3)]">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-zinc-300 truncate">{row.itemTypeName}</p>
-                                <p className="text-[11px] text-zinc-600">{t('entries.count', { count: row.count })} &middot; {t('reports.avg', { amount: fmt(row.avg) })} &middot; {t('reports.max', { amount: fmt(row.max) })}</p>
+                                <p className="text-meta text-zinc-600">{t('entries.count', { count: row.count })} &middot; {t('reports.avg', { amount: fmt(row.avg) })} &middot; {t('reports.max', { amount: fmt(row.max) })}</p>
                               </div>
                             </div>
                             <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(row.total, row.unit, row.isCurrency)}</span>
@@ -167,7 +176,7 @@ export function ReportsView({ factionId }: Props) {
                     ) : (
                       <div className="space-y-1 max-h-[400px] overflow-y-auto">
                         {summary.memberRanking.map((m, i) => (
-                          <div key={m.username} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02] transition-colors duration-100">
+                          <div key={m.username} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                             <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">#{i + 1}</span>
                             <Avatar className="h-6 w-6">
                               <AvatarImage src={m.avatarUrl ?? undefined} />
@@ -175,7 +184,7 @@ export function ReportsView({ factionId }: Props) {
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-zinc-300 truncate">{displayName({ username: m.username, inGameName: m.inGameName })}</p>
-                              <p className="text-[11px] text-zinc-600">{t('entries.count', { count: m.count })}</p>
+                              <p className="text-meta text-zinc-600">{t('entries.count', { count: m.count })}</p>
                             </div>
                             <span className="text-sm font-medium tabular-nums text-zinc-200">
                               {fmt(m.currencyTotal)}
@@ -201,18 +210,27 @@ export function ReportsView({ factionId }: Props) {
         <>
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-zinc-500">{t('reports.periodA')}</span>
-            <select className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-300 px-2 text-sm" value={periodA} onChange={(e) => setPeriodA(e.target.value)} aria-label={t('reports.periodA')}>
-              {COMPARISON_PERIODS.map((value) => (
-                <option key={value} value={value}>{t(PERIOD_KEYS[value])}</option>
-              ))}
-            </select>
+            {/* The only two native selects left in the app. They rendered the
+                browser's own dropdown next to our styled ones, which is the
+                one control that never matched anything around it. */}
+            <SearchableSelect
+              size="sm"
+              className="w-[150px]"
+              value={periodA}
+              onValueChange={setPeriodA}
+              options={periodOptions}
+              aria-label={t('reports.periodA')}
+            />
             <span className="text-xs text-zinc-600">{t('reports.vs')}</span>
             <span className="text-xs text-zinc-500">{t('reports.periodB')}</span>
-            <select className="h-8 rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-300 px-2 text-sm" value={periodB} onChange={(e) => setPeriodB(e.target.value)} aria-label={t('reports.periodB')}>
-              {COMPARISON_PERIODS.map((value) => (
-                <option key={value} value={value}>{t(PERIOD_KEYS[value])}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              size="sm"
+              className="w-[150px]"
+              value={periodB}
+              onValueChange={setPeriodB}
+              options={periodOptions}
+              aria-label={t('reports.periodB')}
+            />
           </div>
 
           {compLoading ? (
@@ -222,27 +240,27 @@ export function ReportsView({ factionId }: Props) {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.currencyChange')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.currencyChange')}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.currencyTotal))}</p>
                       {comparison.deltas.currencyTotal > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.currencyTotal < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
                     </div>
-                    <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.currencyTotalPercent)}</p>
+                    <p className="text-meta text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.currencyTotalPercent)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.itemChange')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.itemChange')}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{fmt(Math.abs(comparison.deltas.itemTotal))}</p>
                       {comparison.deltas.itemTotal > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.itemTotal < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
                     </div>
-                    <p className="text-[11px] text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.itemTotalPercent)}</p>
+                    <p className="text-meta text-zinc-500 mt-1 tabular-nums">{pctLabel(comparison.deltas.itemTotalPercent)}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.entryCount')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.entryCount')}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{comparison.deltas.entryCount >= 0 ? '+' : ''}{comparison.deltas.entryCount}</p>
                       {comparison.deltas.entryCount > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.entryCount < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
@@ -251,7 +269,7 @@ export function ReportsView({ factionId }: Props) {
                 </Card>
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-[11px] text-zinc-500 uppercase tracking-wider">{t('reports.memberActivity')}</p>
+                    <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.memberActivity')}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xl font-medium tabular-nums tracking-tight text-zinc-100">{comparison.deltas.memberActivity >= 0 ? '+' : ''}{comparison.deltas.memberActivity}</p>
                       {comparison.deltas.memberActivity > 0 ? <ArrowUpRight className="h-4 w-4 text-emerald-400" /> : comparison.deltas.memberActivity < 0 ? <ArrowDownRight className="h-4 w-4 text-red-400" /> : <Minus className="h-4 w-4 text-zinc-600" />}
@@ -265,7 +283,7 @@ export function ReportsView({ factionId }: Props) {
                   <Card key={idx}>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm text-zinc-200">
-                        <span className="text-[11px] bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-md text-zinc-400 mr-2">{PERIOD_KEYS[p.label] ? t(PERIOD_KEYS[p.label]) : p.label.replace('_', ' ')}</span>
+                        <span className="text-meta bg-[var(--fill-2)] border border-[var(--line-1)] px-2 py-0.5 rounded-md text-zinc-400 mr-2">{PERIOD_KEYS[p.label] ? t(PERIOD_KEYS[p.label]) : p.label.replace('_', ' ')}</span>
                         <span className="text-zinc-500 tabular-nums text-xs">{p.from} → {p.to}</span>
                       </CardTitle>
                     </CardHeader>
@@ -275,7 +293,7 @@ export function ReportsView({ factionId }: Props) {
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">{t('nav.entries')}</span><span className="font-medium tabular-nums text-zinc-200">{p.count}</span></div>
                       <div className="flex justify-between text-sm"><span className="text-zinc-500">{t('reports.activeMembers')}</span><span className="font-medium tabular-nums text-zinc-200">{p.members}</span></div>
                       {p.byType.map((row) => (
-                        <div key={row.itemTypeName} className="flex justify-between text-sm border-t border-white/[0.06] pt-2">
+                        <div key={row.itemTypeName} className="flex justify-between text-sm border-t border-[var(--line-1)] pt-2">
                           <span className="text-zinc-500 flex items-center gap-1.5">
                             <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-4" />
                             {row.itemTypeName}

@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  membersApi, notesApi, memberStrikesApi,
-} from '@/lib/api-client';
+  membersApi, notesApi, memberStrikesApi, factionSettingsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { RankBadge } from '@/components/rank-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -101,6 +101,19 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+
+  // The hierarchy, only so the rank badge knows where this rank sits in it.
+  // Same query key the treasury and roster use, so it is usually already
+  // cached rather than a request per profile opened.
+  const { data: factionSettings } = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
+    staleTime: 5 * 60 * 1000,
+  });
+  const factionRanks = useMemo(
+    () => [...(factionSettings?.ranks ?? [])].sort((a, b) => a.level - b.level),
+    [factionSettings?.ranks],
+  );
 
   const [tab, setTab] = useState<ProfileTab>('overview');
 
@@ -251,7 +264,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-200" onClick={() => setCurrentView('members')}>
+        <Button variant="ghost" size="icon-sm" className="text-zinc-500 hover:text-zinc-200" onClick={() => setCurrentView('members')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Avatar className="h-10 w-10">
@@ -263,10 +276,10 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <h3 className="text-lg font-medium text-zinc-100">{displayName(member)}</h3>
             {member.rank && (
               <span className="flex items-center gap-1.5">
-                <Badge variant="outline" className="text-[11px]" style={{ borderColor: `${brandColor}30`, color: brandColor }}>{member.rank}</Badge>
+                <RankBadge rank={member.rank} ranks={factionRanks} />
                 {member.daysInRank !== null && (
                   <span
-                    className="text-[10px] text-zinc-500"
+                    className="text-micro text-zinc-500"
                     title={member.rankSince ? t('profile.rankSince', { date: formatDate(member.rankSince) }) : undefined}
                   >
                     {member.daysInRank === 0
@@ -277,7 +290,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </span>
             )}
             {member.role === 'admin' && (
-              <Badge className="text-[11px]" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}>{t('role.admin')}</Badge>
+              <Badge className="text-meta text-brand" style={{ backgroundColor: 'var(--brand-color-light)' }}>{t('role.admin')}</Badge>
             )}
           </div>
           <p className="text-xs text-zinc-500">
@@ -298,13 +311,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       {/* Notes and history are your own file, or anyone's with
           `manage_members` — the API decides, these flags report it. */}
       {visibleTabs.length > 1 && (
-        <div className="flex gap-1 border-b border-white/[0.06] pb-px">
+        <div className="flex gap-1 border-b border-[var(--line-1)] pb-px">
           {visibleTabs.map((tabKey) => (
             <button
               key={tabKey}
               onClick={() => setTab(tabKey)}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${activeTab === tabKey ? 'border-b-2 border-[var(--brand-color)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-              style={activeTab === tabKey ? { borderColor: brandColor, color: brandColor } : undefined}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${activeTab === tabKey ? 'border-b-2 border-brand text-brand' : 'text-zinc-500 hover:text-zinc-300'}`}
             >
               {tabKey === 'notes' && notes.length > 0
                 ? `${t(TAB_KEYS.notes)} (${notes.length})`
@@ -329,7 +341,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 {/* Neutral like the three stat cards beside it: a score is
                     not a verdict the faction accent gets to colour. */}
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">{performance.score}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">{t('profile.outOf100')}</p>
+                <p className="text-meta text-zinc-600 mt-1">{t('profile.outOf100')}</p>
               </CardContent>
             </Card>
 
@@ -344,7 +356,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">
                   {streak.current}<span className="text-sm text-zinc-500">/{streak.best}</span>
                 </div>
-                <p className="text-[11px] text-zinc-600 mt-1">
+                <p className="text-meta text-zinc-600 mt-1">
                   {streak.activeToday
                     ? t('members.activeToday')
                     : streak.lastEntryDate
@@ -363,11 +375,11 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.currencyContributed)}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">
+                <p className="text-meta text-zinc-600 mt-1">
                   {t('entries.count', { count: contribution.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(contribution.avgPerCurrencyEntry) })}
                 </p>
                 {contribution.itemEntryCount > 0 && (
-                  <p className="text-[11px] text-zinc-600 mt-0.5">
+                  <p className="text-meta text-zinc-600 mt-0.5">
                     + {fmtItems(contribution.itemContributed)} ({t('entries.count', { count: contribution.itemEntryCount })})
                   </p>
                 )}
@@ -383,9 +395,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">{t('payouts.count', { count: payoutStats.payoutCount })}</p>
+                <p className="text-meta text-zinc-600 mt-1">{t('payouts.count', { count: payoutStats.payoutCount })}</p>
                 {payoutStats.itemReceived > 0 && (
-                  <p className="text-[11px] text-zinc-600 mt-0.5">+ {fmtItems(payoutStats.itemReceived)}</p>
+                  <p className="text-meta text-zinc-600 mt-0.5">+ {fmtItems(payoutStats.itemReceived)}</p>
                 )}
               </CardContent>
             </Card>
@@ -401,8 +413,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 {Object.entries(performance.breakdown).map(([key, val]) => (
                   <div key={key} className="text-center">
                     <div className="text-xs text-zinc-500 mb-1">{PERFORMANCE_KEYS[key] ? t(PERFORMANCE_KEYS[key]) : key}</div>
-                    <div className="relative h-2 bg-white/[0.04] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.round(val * 100)}%`, backgroundColor: brandColor }} />
+                    <div className="relative h-2 bg-[var(--fill-2)] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500 bg-brand" style={{ width: `${Math.round(val * 100)}%` }} />
                     </div>
                     <div className="text-xs text-zinc-400 mt-1 tabular-nums">{Math.round(val * 100)}%</div>
                   </div>
@@ -422,7 +434,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {quotaProgress.length === 0 ? (
-                  <EmptyState icon={Target} title={t('quota.noneActive')} compact />
+                  <EmptyState icon={Target} title={t('quota.noneActive')}
+              hint={t('quota.noneActiveHint')} compact />
                 ) : (
                   <div className="space-y-3">
                     {quotaProgress.map((q) => {
@@ -436,13 +449,13 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             </span>
                             <span className={`text-xs font-medium ${met ? 'text-emerald-400' : 'text-zinc-400'}`}>{q.percentage.toFixed(1)}%</span>
                           </div>
-                          <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                          <div className={`meter-track h-1.5 bg-[var(--fill-2)] rounded-full overflow-hidden ${met ? 'meter-met' : ''}`}>
                             {/* Neutral until met, like the same bar on the
                                 dashboard — the faction accent must not stand in
                                 for "done". */}
                             <div className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
                           </div>
-                          <div className="flex justify-between text-[10px] text-zinc-600 mt-0.5">
+                          <div className="flex justify-between text-micro text-zinc-600 mt-0.5">
                             <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>
                             <span>{t('quota.ofTarget', { amount: formatAmount(q.targetAmount, q.unit, q.isCurrency) })}</span>
                           </div>
@@ -461,29 +474,30 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   <AlertTriangle className={`h-3.5 w-3.5 ${profile.activeStrikeCount > 0 ? 'text-amber-400' : 'text-zinc-500'}`} />
                   {t('nav.strikes')}
                   {profile.activeStrikeCount > 0 && (
-                    <Badge className="ml-auto bg-amber-500/15 text-amber-400 border-amber-500/20 text-[11px]" variant="outline">{t('strikes.activeCount', { count: profile.activeStrikeCount })}</Badge>
+                    <Badge className="ml-auto bg-amber-500/15 text-amber-400 border-amber-500/20 text-meta" variant="outline">{t('strikes.activeCount', { count: profile.activeStrikeCount })}</Badge>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {strikes.length === 0 ? (
-                  <EmptyState icon={AlertTriangle} title={t('strikes.none')} compact />
+                  <EmptyState icon={AlertTriangle} title={t('strikes.none')}
+              hint={t('strikes.noneHint')} compact />
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
                     {strikes.slice(0, 5).map((s) => (
-                      <div key={s.id} className="rounded-lg border border-white/[0.06] p-3 space-y-1.5">
+                      <div key={s.id} className="rounded-lg border border-[var(--line-1)] p-3 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Badge className={`text-[10px] border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
+                            <Badge className={`text-micro border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
                             <span className={`text-xs font-medium ${EFFECTIVE_STATUS_COLORS[s.effectiveStatus]}`}>{STRIKE_STATUS_KEYS[s.effectiveStatus] ? t(STRIKE_STATUS_KEYS[s.effectiveStatus]) : s.effectiveStatus}</span>
                           </div>
-                          <span className="text-[10px] text-zinc-600">{formatDate(s.createdAt)}</span>
+                          <span className="text-micro text-zinc-600">{formatDate(s.createdAt)}</span>
                         </div>
                         <p className="text-xs text-zinc-400 line-clamp-2">{s.reason}</p>
                         {canManageStrikes && s.effectiveStatus === 'active' && (
                           <div className="flex gap-1 pt-1">
-                            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-blue-400 hover:text-blue-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'appealed' })}>{t('strikes.appeal')}</Button>
-                            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-zinc-500 hover:text-zinc-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'revoked' })}>{t('strikes.revoke')}</Button>
+                            <Button variant="ghost" size="sm" className="h-6 text-meta text-blue-400 hover:text-blue-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'appealed' })}>{t('strikes.appeal')}</Button>
+                            <Button variant="ghost" size="sm" className="h-6 text-meta text-zinc-500 hover:text-zinc-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'revoked' })}>{t('strikes.revoke')}</Button>
                           </div>
                         )}
                       </div>
@@ -505,17 +519,17 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   {contribution.byItemType.map((row) => {
                     const isTop = contribution.mostActiveItemType?.itemTypeName === row.itemTypeName;
                     return (
-                      <div key={row.itemTypeId} className="flex items-center justify-between rounded-lg border border-white/[0.06] p-3" style={isTop ? { borderColor: `${brandColor}25`, backgroundColor: `${brandColor}08` } : undefined}>
+                      <div key={row.itemTypeId} className="flex items-center justify-between rounded-lg border border-[var(--line-1)] p-3" style={isTop ? { borderColor: `${brandColor}25`, backgroundColor: `${brandColor}08` } : undefined}>
                         <div className="flex items-center gap-2.5 min-w-0">
                           <ItemIcon src={row.imageUrl} icon={row.icon} category={row.category} className="size-8" />
                           <div className="min-w-0">
                             <p className="text-sm text-zinc-300 truncate">{row.itemTypeName}</p>
-                            <p className="text-[11px] text-zinc-600">{t('entries.count', { count: row.count })}</p>
+                            <p className="text-meta text-zinc-600">{t('entries.count', { count: row.count })}</p>
                           </div>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(row.total, row.unit, row.isCurrency)}</p>
-                          {isTop && <p className="text-[10px]" style={{ color: brandColor }}>{t('profile.mostActive')}</p>}
+                          {isTop && <p className="text-micro text-brand">{t('profile.mostActive')}</p>}
                         </div>
                       </div>
                     );
@@ -536,7 +550,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                     {(() => {
                       const best = heatmap.data.reduce((a, b) => (b.count > (a?.count ?? -1) ? b : a), heatmap.data[0]);
                       return best && best.count > 0 ? (
-                        <span className="text-[10px] text-zinc-500 font-normal ml-2">· {t('profile.bestDay', { count: best.count, date: best.date })}</span>
+                        <span className="text-micro text-zinc-500 font-normal ml-2">· {t('profile.bestDay', { count: best.count, date: best.date })}</span>
                       ) : null;
                     })()}
                   </CardTitle>
@@ -563,11 +577,11 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   })}
                 </div>
                 <div className="flex items-center justify-end gap-1.5 mt-3">
-                  <span className="text-[10px] text-zinc-600">{t('profile.less')}</span>
+                  <span className="text-micro text-zinc-600">{t('profile.less')}</span>
                   {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
                     <div key={i} className="w-[11px] h-[11px] rounded-[2px]" style={{ backgroundColor: `${brandColor}${v === 0 ? '10' : Math.round((0.2 + v * 0.8) * 255).toString(16).padStart(2, '0')}` }} />
                   ))}
-                  <span className="text-[10px] text-zinc-600">{t('profile.more')}</span>
+                  <span className="text-micro text-zinc-600">{t('profile.more')}</span>
                 </div>
               </CardContent>
             </Card>
@@ -584,7 +598,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <CardContent>
                 <div className="space-y-1 max-h-[240px] overflow-y-auto">
                   {recentEntries.map((e) => (
-                    <div key={e.id} className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                    <div key={e.id} className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                       <div className="flex items-center gap-2 min-w-0">
                         <ItemIcon src={e.itemImageUrl} icon={e.itemIcon} category={e.itemCategory} className="size-5" />
                         <span className="text-sm font-medium tabular-nums text-zinc-200">{formatAmount(e.amount, e.itemUnit, e.itemIsCurrency)}</span>
@@ -592,7 +606,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-zinc-500 tabular-nums">{e.entryDate}</div>
-                        {e.description && <div className="text-[11px] text-zinc-600 truncate max-w-[200px]">{e.description}</div>}
+                        {e.description && <div className="text-meta text-zinc-600 truncate max-w-[200px]">{e.description}</div>}
                       </div>
                     </div>
                   ))}
@@ -613,7 +627,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notesIsError ? (
             <Card><CardContent className="p-0"><ErrorState error={notesError} onRetry={() => notesRefetch()} compact /></CardContent></Card>
           ) : notes.length === 0 ? (
-            <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')} compact /></CardContent></Card>
+            <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')}
+              hint={t('notes.noneHint')} compact /></CardContent></Card>
           ) : (
             <div className="space-y-2">
               {notes.map((n) => (
@@ -622,15 +637,15 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-[10px]">{t(NOTE_CATEGORY_KEYS[n.category])}</Badge>
+                          <Badge variant="outline" className="text-micro">{t(NOTE_CATEGORY_KEYS[n.category])}</Badge>
                           {n.isFlagged && <Flag className="h-3 w-3 text-amber-400" />}
-                          <span className="text-[10px] text-zinc-600">{t('notes.byAuthor', { name: n.authorInGameName?.trim() || n.authorUsername })} &middot; {formatDate(n.createdAt)}</span>
+                          <span className="text-micro text-zinc-600">{t('notes.byAuthor', { name: n.authorInGameName?.trim() || n.authorUsername })} &middot; {formatDate(n.createdAt)}</span>
                         </div>
                         <p className="text-sm text-zinc-300 whitespace-pre-wrap">{n.content}</p>
                       </div>
                       <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-zinc-200" onClick={() => { setEditingNoteId(n.id); setNoteContent(n.content); setNoteCategory(n.category); setNoteFlagged(n.isFlagged); setNoteOpen(true); }}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-500 hover:text-red-400" onClick={() => setDeleteNoteId(n.id)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => { setEditingNoteId(n.id); setNoteContent(n.content); setNoteCategory(n.category); setNoteFlagged(n.isFlagged); setNoteOpen(true); }}><Pencil className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setDeleteNoteId(n.id)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     </div>
                   </CardContent>
@@ -649,17 +664,18 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </CardHeader>
           <CardContent>
             {!historyData?.data?.length ? (
-              <EmptyState icon={Clock} title={t('profile.noHistory')} compact />
+              <EmptyState icon={Clock} title={t('profile.noHistory')}
+              hint={t('profile.noHistoryHint')} compact />
             ) : (
               <div className="space-y-2">
                 {historyData.data.map((h) => (
-                  <div key={h.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-white/[0.02]">
+                  <div key={h.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                     <Avatar className="h-6 w-6"><AvatarImage src={h.actorAvatarUrl ?? undefined} /><AvatarFallback className="text-[8px]">{(h.actorInGameName?.trim() || h.actorUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-zinc-300"><span className="font-medium">{h.actorInGameName?.trim() || h.actorUsername}</span> <span className="text-zinc-500">{t('profile.historyAction', { action: h.action })}</span></p>
-                      {h.details && <p className="text-[11px] text-zinc-600 truncate">{JSON.stringify(h.details)}</p>}
+                      {h.details && <p className="text-meta text-zinc-600 truncate">{JSON.stringify(h.details)}</p>}
                     </div>
-                    <span className="text-[10px] text-zinc-600 tabular-nums shrink-0">{formatDate(h.createdAt)}</span>
+                    <span className="text-micro text-zinc-600 tabular-nums shrink-0">{formatDate(h.createdAt)}</span>
                   </div>
                 ))}
               </div>

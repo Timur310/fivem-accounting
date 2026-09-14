@@ -309,7 +309,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               i < activeIdx ? 'bg-emerald-500/70'
               : i === activeIdx
                 ? status === 'rejected' ? 'bg-red-500' : status === 'pending' ? 'bg-amber-400' : 'bg-blue-400'
-                : 'bg-white/[0.07]'
+                : 'bg-[var(--fill-2)]'
             }`}
           />
         ))}
@@ -406,7 +406,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               {t('payouts.evenSplit')}
             </Button>
           )}
-          <Button size="sm" onClick={() => setCreateOpen(true)} style={{ backgroundColor: brandColor }}>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
             {canManagePayouts ? t('payouts.new') : t('payouts.request')}
           </Button>
@@ -420,7 +420,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Filter className="h-4 w-4 text-zinc-500 shrink-0" />
             <SearchableSelect
               className="w-[140px]"
-              triggerClassName="h-8 text-xs"
+              size="sm"
               aria-label={t('payouts.filterByStatus')}
               value={filterStatus}
               onValueChange={(v) => { setFilterStatus(v); setPage(1); }}
@@ -431,7 +431,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             />
             <SearchableSelect
               className="w-[150px]"
-              triggerClassName="h-8 text-xs"
+              size="sm"
               aria-label={t('itemTypes.filterBy')}
               value={filterItemTypeId}
               onValueChange={(v) => { setFilterItemTypeId(v); setPage(1); }}
@@ -440,8 +440,8 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               searchPlaceholder={t('itemTypes.search')}
               emptyMessage={t('itemTypes.noneMatch')}
             />
-            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
-            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setActivePreset(null); setPage(1); }} className="w-[140px] h-8 text-xs" />
+            <Input type="date" value={filterDateFrom} onChange={(e) => { setFilterDateFrom(e.target.value); setActivePreset(null); setPage(1); }} size="sm" className="w-[140px]" />
+            <Input type="date" value={filterDateTo} onChange={(e) => { setFilterDateTo(e.target.value); setActivePreset(null); setPage(1); }} size="sm" className="w-[140px]" />
             <DateRangePresets
               active={activePreset}
               onApply={(preset, range) => {
@@ -453,7 +453,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
               onClear={() => { setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}
             />
             {(filterStatus || filterItemTypeId || filterDateFrom || filterDateTo) && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setFilterStatus(''); setFilterItemTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); setActivePreset(null); setPage(1); }}>
                 {t('common.clear')}
               </Button>
             )}
@@ -466,7 +466,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/[0.06] hover:bg-transparent">
+              <TableRow className="border-[var(--line-1)] hover:bg-transparent">
                 <SortableHeader field="recipient" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
                   {t('payouts.recipient')}
                 </SortableHeader>
@@ -492,12 +492,12 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 const sc = STATUS_CONFIG[p.status];
                 const isTerminal = TERMINAL_STATUSES.includes(p.status);
                 return (
-                  <TableRow key={p.id} className="border-white/[0.04]">
+                  <TableRow key={p.id} className="border-[var(--line-1)]">
                     <TableCell>
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-7 w-7">
                           <AvatarImage src={p.recipientAvatarUrl ?? undefined} />
-                          <AvatarFallback className="text-[10px]">
+                          <AvatarFallback className="text-micro">
                             {displayName({ username: p.recipientUsername, inGameName: p.recipientInGameName }).slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
@@ -522,7 +522,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {statusPipeline(p.status)}
-                        <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-[11px]`}>
+                        <Badge variant="outline" className={`${sc.bg} ${sc.color} border text-meta`}>
                           {t(sc.label)}
                         </Badge>
                       </div>
@@ -538,8 +538,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                             {canApprove(p) && (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                                size="icon-xs" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
                                 title={t('payouts.approve')}
                                 onClick={() => handleStatusChange(p, 'approved')}
                               >
@@ -549,8 +548,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                             {canTransition(p, 'completed') && (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                                size="icon-xs" className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                                 title={t('payouts.complete')}
                                 onClick={() => handleStatusChange(p, 'completed')}
                               >
@@ -560,8 +558,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                             {canTransition(p, 'rejected') && (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                size="icon-xs" className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
                                 title={t('payouts.reject')}
                                 onClick={() => handleStatusChange(p, 'rejected')}
                               >
@@ -572,7 +569,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         )}
                         {/* Edit (non-terminal) */}
                         {canManagePayouts && !isTerminal && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-200" onClick={() => openEdit(p)}>
+                          <Button variant="ghost" size="icon-xs" className="text-zinc-400 hover:text-zinc-200" onClick={() => openEdit(p)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         )}
@@ -589,8 +586,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         {canManagePayouts && (
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-red-300"
+                            size="icon-xs" className="text-destructive hover:text-red-300"
                             title={t('common.delete')}
                             onClick={() => { setDeleteIsSelfCancel(false); setDeleteId(p.id); }}
                           >
@@ -603,8 +599,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         {canCancelOwn(p) && (
                           <Button
                             variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-200"
+                            size="xs" className="px-2 text-zinc-400 hover:text-zinc-200"
                             onClick={() => { setDeleteIsSelfCancel(true); setDeleteId(p.id); }}
                           >
                             <Undo2 className="h-3.5 w-3.5 mr-1" />
@@ -705,7 +700,6 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button
               type="submit"
               disabled={!canCreatePayout}
-              style={{ backgroundColor: brandColor }}
             >
               {createMutation.isPending ? t('common.creating') : (canManagePayouts ? t('payouts.create') : t('payouts.request'))}
             </Button>
@@ -766,7 +760,6 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button
               disabled={updateMutation.isPending || Number(editAmount) <= 0}
               type="submit"
-              style={{ backgroundColor: brandColor }}
             >
               {updateMutation.isPending ? t('common.saving') : t('common.save')}
             </Button>
@@ -812,9 +805,9 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                 </Button>
               </div>
               {splitMode === 'pick' && (
-                <div className="max-h-[180px] overflow-y-auto rounded-lg border border-white/[0.06] p-2 space-y-1">
+                <div className="max-h-[180px] overflow-y-auto rounded-lg border border-[var(--line-1)] p-2 space-y-1">
                   {members.map((m: Member) => (
-                    <label key={m.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-white/[0.03] cursor-pointer text-sm text-zinc-300">
+                    <label key={m.id} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-[var(--fill-2)] cursor-pointer text-sm text-zinc-300">
                       <input
                         type="checkbox"
                         className="accent-zinc-400"
@@ -824,7 +817,7 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
                         }}
                       />
                       <span className="truncate">{displayName({ username: m.username, inGameName: m.inGameName })}</span>
-                      {m.isProvisional && <span className="text-[10px] text-zinc-600">{t('members.provisional')}</span>}
+                      {m.isProvisional && <span className="text-micro text-zinc-600">{t('members.provisional')}</span>}
                     </label>
                   ))}
                 </div>
@@ -890,7 +883,6 @@ export function PayoutsView({ factionId, canManagePayouts = false }: Props) {
             <Button
               type="submit"
               disabled={!canEvenSplit}
-              style={{ backgroundColor: brandColor }}
             >
               {evenSplitMutation.isPending
                 ? t('payouts.distributing')

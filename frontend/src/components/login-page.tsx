@@ -59,11 +59,11 @@ export function LoginPage() {
           {loading ? t('auth.redirecting') : t('auth.continueWithDiscord')}
         </Button>
 
-        <p className="text-center text-[11px] text-zinc-600 mt-3">{t('auth.redirectNotice')}</p>
+        <p className="text-center text-meta text-zinc-600 mt-3">{t('auth.redirectNotice')}</p>
       </div>
 
       {/* The one place the attribution is visible without signing in. */}
-      <footer className="absolute bottom-4 inset-x-0 text-center text-[10px] text-zinc-700 space-x-1.5">
+      <footer className="absolute bottom-4 inset-x-0 text-center text-micro text-zinc-700 space-x-1.5">
         <span className="tabular-nums">{APP_VERSION_LABEL}</span>
         <span aria-hidden="true">·</span>
         <span>{APP_COPYRIGHT}</span>

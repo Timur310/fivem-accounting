@@ -44,7 +44,7 @@ export function IconCategoryPicker({
                 'h-7 rounded-md border px-2.5 text-xs transition-colors',
                 category === c
                   ? `border-transparent ${CATEGORY_TILE[c]}`
-                  : 'border-white/[0.08] text-zinc-400 hover:text-zinc-200',
+                  : 'border-[var(--line-2)] text-zinc-400 hover:text-zinc-200',
               )}
             >
               {t(CATEGORY_LABELS[c])}
@@ -60,17 +60,17 @@ export function IconCategoryPicker({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-1.5 text-[11px] text-zinc-500 hover:text-zinc-200"
+              className="h-6 px-1.5 text-meta text-zinc-500 hover:text-zinc-200"
               onClick={() => onIconChange('')}
             >
               {t('itemTypes.iconNone')}
             </Button>
           )}
         </div>
-        <div className="space-y-2 rounded-md border border-white/[0.06] p-2">
+        <div className="space-y-2 rounded-md border border-[var(--line-1)] p-2">
           {ICON_CHOICES.map((group) => (
             <div key={group.group}>
-              <p className="mb-1 text-[10px] uppercase tracking-wider text-zinc-600">{t(group.group)}</p>
+              <p className="mb-1 text-micro uppercase tracking-wider text-zinc-600">{t(group.group)}</p>
               <div className="flex flex-wrap gap-1">
                 {group.icons.map((glyph) => (
                   <button
@@ -83,7 +83,7 @@ export function IconCategoryPicker({
                       'flex h-8 w-8 items-center justify-center rounded-md border text-base leading-none transition-colors',
                       icon === glyph
                         ? 'border-primary bg-primary/10'
-                        : 'border-transparent hover:bg-white/[0.05]',
+                        : 'border-transparent hover:bg-[var(--fill-2)]',
                     )}
                   >
                     {glyph}
@@ -93,7 +93,7 @@ export function IconCategoryPicker({
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-zinc-600">{t('itemTypes.iconHint')}</p>
+        <p className="text-meta text-zinc-600">{t('itemTypes.iconHint')}</p>
       </div>
     </div>
   );
