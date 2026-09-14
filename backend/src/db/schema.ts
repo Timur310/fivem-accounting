@@ -672,6 +672,19 @@ export const DISCORD_EVENT_TYPES = [
   'member_joined',
   'member_left',
   'laundering_completed',
+  // ── Things being taken back ──
+  // A channel that only ever reports additions is a channel that can be
+  // gamed: log, get credit, quietly undo. These are separately routable, so a
+  // faction can send removals somewhere leadership reads even when the
+  // additions go to a busy public log.
+  //
+  // A strike is never deleted — it is revoked — and that is the same act from
+  // the member's side, so it belongs in this group rather than missing.
+  'entry_deleted',
+  'payout_deleted',
+  'expense_deleted',
+  'strike_revoked',
+  'announcement_removed',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 

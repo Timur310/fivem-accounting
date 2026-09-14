@@ -342,6 +342,12 @@ router.delete('/:announcementId', async (req: Request, res: Response) => {
     req,
   });
 
+  void dispatchDiscord(factionId, {
+    type: 'announcement_removed',
+    actorUserId: req.user!.id,
+    title: existing.title,
+  });
+
   success(res, { id: announcementId, deleted: true });
 });
 

@@ -1057,13 +1057,32 @@ milliseconds and nobody logging an entry should wait for one. Each site calls
 unhandled rejection to leak. A test pins the consequence that matters: logging
 an entry answers 201 with Discord refusing every connection.
 
-Eleven events, wired into the routes that raise them: entries, the four payout
-states, expenses, strikes, announcements, member joins and departures, and
-laundering. Two details worth keeping:
+Sixteen events, in two groups.
+
+**Additions** — entries, the four payout states, expenses, strikes,
+announcements, member joins and departures, laundering.
+
+**Removals** — `entry_deleted`, `payout_deleted`, `expense_deleted`,
+`strike_revoked`, `announcement_removed`. A channel that only ever reports
+additions can be gamed: log it, take the credit, quietly undo it. These are
+routed **separately** from the additions, so a faction can put the ledger in a
+busy public log and "somebody took that back" somewhere leadership reads.
+
+A strike is never deleted — it is **revoked** — which is the same act from the
+member's side, so it belongs in this group rather than missing from it. Only
+revocation is announced: `appealed` is a conversation in progress and `active`
+is the normal state, and a channel that reports every click on a strike stops
+being read.
+
+Two details worth keeping:
 
 - A payout created by someone holding `manage_payouts` is already settled, so
   it raises `payout_completed`, not `payout_requested` — it is money that left
   the vault, not a request waiting on somebody.
+- A removal says **whose** row it was, not only who struck it out, and
+  distinguishes the two ways it happens: the 5-minute member self-undo and a
+  leader removing the row are different acts, as are a cancelled request and a
+  deleted payout.
 - Settlements are announced even when the person settled their own request.
   The channel is the faction's record, not a personal inbox, so the "never tell
   someone what they just did" rule that governs the bell (§8.10) does not apply.

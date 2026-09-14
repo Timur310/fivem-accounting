@@ -289,6 +289,14 @@ router.delete('/:expenseId', requirePermission('manage_expenses'), async (req: R
     req,
   });
 
+  void dispatchDiscord(factionId, {
+    type: 'expense_deleted',
+    actorUserId: req.user!.id,
+    itemTypeId: existing.itemTypeId,
+    amount: existing.amount,
+    category: existing.category,
+  });
+
   success(res, { id: expenseId, deleted: true });
 });
 

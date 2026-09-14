@@ -307,6 +307,125 @@ describe('through the routes that raise the events', () => {
     expect(sentEmbed().description).toContain('Quota deadline Friday');
   });
 
+  // A channel that only reports additions can be gamed: log it, take the
+  // credit, quietly undo it. Removals are the half that closes that.
+  it('posts when an entry is removed', async () => {
+    await link();
+    await route('entry_deleted');
+
+    const created = await api().post(`${f()}/entries`).set('Cookie', w.admin.cookie)
+      .send({ userId: w.member.id, itemTypeId: w.itemTypeId, amount: '5000' });
+    expect(created.status).toBe(201);
+
+    const res = await api().delete(`${f()}/entries/${created.body.data.id}`)
+      .set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    const embed = sentEmbed();
+    expect(embed.title).toBe('Entry removed');
+    // Whose entry it was, not only who struck it out.
+    expect(embed.description).toContain(w.member.username);
+  });
+
+  // The 5-minute self-undo and a leader striking a row out are different acts.
+  it('says when the member undid their own entry', async () => {
+    await link();
+    await route('entry_deleted');
+
+    const created = await api().post(`${f()}/entries`).set('Cookie', w.member.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '100' });
+    await api().delete(`${f()}/entries/${created.body.data.id}`).set('Cookie', w.member.cookie);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().footer!.text).toMatch(/within 5 minutes/);
+  });
+
+  it('posts a member cancelling their own withdrawal request as a cancellation', async () => {
+    await link();
+    await route('payout_deleted');
+
+    const created = await api().post(`${f()}/payouts`).set('Cookie', w.member.cookie)
+      .send({ recipientUserId: w.member.id, itemTypeId: w.itemTypeId, amount: '300' });
+    expect(created.status).toBe(201);
+
+    const res = await api().delete(`${f()}/payouts/${created.body.data.id}`)
+      .set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toBe('Withdrawal request cancelled');
+  });
+
+  it('posts when an expense is removed', async () => {
+    await link();
+    await route('expense_deleted');
+
+    const created = await api().post(`${f()}/expenses`).set('Cookie', w.admin.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '400', category: 'supplies' });
+    await api().delete(`${f()}/expenses/${created.body.data.id}`).set('Cookie', w.admin.cookie);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toBe('Expense removed');
+  });
+
+  it('posts when a strike is revoked', async () => {
+    await link();
+    await route('strike_revoked');
+
+    const created = await api().post(`${f()}/members/${w.member.id}/strikes`)
+      .set('Cookie', w.admin.cookie).send({ reason: 'Wrong call', severity: 'minor' });
+    expect(created.status).toBe(201);
+
+    const res = await api().patch(`${f()}/members/${w.member.id}/strikes/${created.body.data.id}`)
+      .set('Cookie', w.admin.cookie).send({ status: 'revoked' });
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toBe('Strike revoked');
+  });
+
+  // 'appealed' is a conversation in progress, not news. A channel that reports
+  // every click on a strike stops being read.
+  it('does not post for any other strike status change', async () => {
+    await link();
+    await route('strike_revoked');
+
+    const created = await api().post(`${f()}/members/${w.member.id}/strikes`)
+      .set('Cookie', w.admin.cookie).send({ reason: 'Late', severity: 'minor' });
+    await api().patch(`${f()}/members/${w.member.id}/strikes/${created.body.data.id}`)
+      .set('Cookie', w.admin.cookie).send({ status: 'appealed' });
+
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
+  it('posts when an announcement is removed', async () => {
+    await link();
+    await route('announcement_removed');
+
+    const created = await api().post(`${f()}/announcements`).set('Cookie', w.admin.cookie)
+      .send({ title: 'Cancelled meeting', body: 'Never mind.' });
+    await api().delete(`${f()}/announcements/${created.body.data.id}`)
+      .set('Cookie', w.admin.cookie);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().description).toContain('Cancelled meeting');
+  });
+
+  // Routing additions must not silently start posting removals too.
+  it('does not post a removal when only the addition is routed', async () => {
+    await link();
+    await route('entry_logged');
+
+    const created = await api().post(`${f()}/entries`).set('Cookie', w.member.cookie)
+      .send({ itemTypeId: w.itemTypeId, amount: '100' });
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+
+    await api().delete(`${f()}/entries/${created.body.data.id}`).set('Cookie', w.member.cookie);
+    // Still one: the creation. Nothing for the removal.
+    expect(postMock).toHaveBeenCalledTimes(1);
+  });
+
   // The request must answer whatever Discord does. This is the whole reason
   // the dispatch is fire-and-forget and never throws.
   it('still answers 201 when Discord is down', async () => {

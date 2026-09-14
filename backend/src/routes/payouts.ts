@@ -665,6 +665,16 @@ router.delete('/:payoutId', async (req: Request, res: Response) => {
     return;
   }
 
+  void dispatchDiscord(factionId, {
+    type: 'payout_deleted',
+    actorUserId: req.user!.id,
+    recipientUserId: existing.recipientUserId,
+    itemTypeId: existing.itemTypeId,
+    amount: existing.amount,
+    status: existing.status,
+    selfCancelled: selfCancel,
+  });
+
   success(res, { id: payoutId, deleted: true });
 });
 

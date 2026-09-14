@@ -28,7 +28,12 @@ export type DiscordEvent =
   | { type: 'announcement_posted'; actorUserId: string; title: string; priority: string }
   | { type: 'member_joined'; actorUserId: string; targetUserId: string }
   | { type: 'member_left'; actorUserId: string; targetUserId: string }
-  | { type: 'laundering_completed'; actorUserId: string; fromItemTypeId: string; fromAmount: string; toItemTypeId: string; toAmount: string };
+  | { type: 'laundering_completed'; actorUserId: string; fromItemTypeId: string; fromAmount: string; toItemTypeId: string; toAmount: string }
+  | { type: 'entry_deleted'; actorUserId: string; ownerUserId: string; itemTypeId: string; amount: string; selfUndone?: boolean }
+  | { type: 'payout_deleted'; actorUserId: string; recipientUserId: string; itemTypeId: string; amount: string; status: string; selfCancelled?: boolean }
+  | { type: 'expense_deleted'; actorUserId: string; itemTypeId: string; amount: string; category: string }
+  | { type: 'strike_revoked'; actorUserId: string; targetUserId: string; severity: string }
+  | { type: 'announcement_removed'; actorUserId: string; title: string };
 
 /** Discord's own blurple, plus a green/red/amber for direction and trouble. */
 const COLOR = {
@@ -36,6 +41,9 @@ const COLOR = {
   out: 0xef4444,
   trouble: 0xf59e0b,
   info: 0x5865f2,
+  // Grey, deliberately not red: a removal is a correction, not an alarm, and
+  // red already means money leaving the vault on these embeds.
+  removed: 0x6b7280,
 } as const;
 
 /**
@@ -198,6 +206,48 @@ function render(event: DiscordEvent, names: Names): DiscordEmbed {
         timestamp: stamp,
       };
 
+    case 'entry_deleted':
+      return removal(
+        'Entry removed',
+        `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** logged by **${names.user(event.ownerUserId)}**`,
+        // The 5-minute self-undo and a leader striking a row out are different
+        // acts and the channel should not blur them.
+        event.selfUndone ? 'Undone by the member within 5 minutes' : `Removed by ${names.user(event.actorUserId)}`,
+        stamp,
+      );
+
+    case 'payout_deleted':
+      return removal(
+        event.selfCancelled ? 'Withdrawal request cancelled' : 'Withdrawal removed',
+        `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** for **${names.user(event.recipientUserId)}** (was ${event.status})`,
+        event.selfCancelled ? 'Cancelled by the requester' : `Removed by ${names.user(event.actorUserId)}`,
+        stamp,
+      );
+
+    case 'expense_deleted':
+      return removal(
+        'Expense removed',
+        `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** — ${event.category}`,
+        `Removed by ${names.user(event.actorUserId)}`,
+        stamp,
+      );
+
+    case 'strike_revoked':
+      return removal(
+        'Strike revoked',
+        `**${names.user(event.targetUserId)}** — ${event.severity} no longer counts against them`,
+        `Revoked by ${names.user(event.actorUserId)}`,
+        stamp,
+      );
+
+    case 'announcement_removed':
+      return removal(
+        'Announcement removed',
+        `**${event.title}**`,
+        `Removed by ${names.user(event.actorUserId)}`,
+        stamp,
+      );
+
     case 'laundering_completed':
       return {
         title: 'Laundering completed',
@@ -211,6 +261,17 @@ function render(event: DiscordEvent, names: Names): DiscordEmbed {
   }
 }
 
+/**
+ * A removal, said plainly.
+ *
+ * Worth its own colour and a consistent shape: somebody reading the channel
+ * later needs to see at a glance that value came back *out* of the ledger,
+ * without reading the sentence twice.
+ */
+function removal(title: string, description: string, footer: string, stamp: string): DiscordEmbed {
+  return { title, description, color: COLOR.removed, footer: { text: footer }, timestamp: stamp };
+}
+
 /** The ids each event mentions, so they can be looked up in one go. */
 function referencedIds(event: DiscordEvent): { userIds: string[]; itemTypeIds: string[] } {
   const userIds = [event.actorUserId];
@@ -218,6 +279,7 @@ function referencedIds(event: DiscordEvent): { userIds: string[]; itemTypeIds: s
 
   if ('recipientUserId' in event) userIds.push(event.recipientUserId);
   if ('targetUserId' in event) userIds.push(event.targetUserId);
+  if ('ownerUserId' in event) userIds.push(event.ownerUserId);
   if ('itemTypeId' in event) itemTypeIds.push(event.itemTypeId);
   if ('fromItemTypeId' in event) itemTypeIds.push(event.fromItemTypeId, event.toItemTypeId);
 
