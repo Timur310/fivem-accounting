@@ -123,8 +123,8 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('crafting.title')}</h1>
-          <p className="text-meta mt-1 max-w-xl">{t('crafting.subtitle')}</p>
+          <h1 className="text-xl font-medium tracking-tight text-zinc-100">{t('crafting.title')}</h1>
+          <p className="text-meta text-zinc-500 mt-1 max-w-xl">{t('crafting.subtitle')}</p>
         </div>
         {canManageRecipes && (
           <Button onClick={() => setEditing('new')} className="shrink-0">
@@ -134,7 +134,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
         )}
       </div>
 
-      <div className="flex gap-1 border-b border-zinc-200">
+      <div className="flex gap-1 border-b border-[var(--line-2)]">
         {tabs.map((item) => (
           <button
             key={item.id}
@@ -143,7 +143,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
               'px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors',
               tab === item.id
                 ? 'border-[var(--brand-color,#6366f1)] text-brand'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800',
+                : 'border-transparent text-zinc-500 hover:text-zinc-200',
             )}
           >
             {item.label}
@@ -200,7 +200,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
                       )}
                     </div>
                     <Formula recipe={recipe} />
-                    {recipe.description && <p className="text-meta">{recipe.description}</p>}
+                    {recipe.description && <p className="text-meta text-zinc-500">{recipe.description}</p>}
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <Button variant="outline" size="sm" onClick={() => setEditing(recipe)}>
@@ -236,7 +236,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
                         <Badge variant="outline" className="text-micro">{t('crafting.reverted')}</Badge>
                       )}
                     </div>
-                    <p className="text-meta">
+                    <p className="text-meta text-zinc-500">
                       {t('crafting.craftedBy', { name: craft.crafterName })} · {formatDateTime(craft.createdAt)}
                     </p>
                     <div className="flex items-center gap-2 flex-wrap text-micro text-zinc-500">
@@ -310,7 +310,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
 function Formula({ recipe }: { recipe: CraftingRecipe }) {
   return (
     <div className="flex items-center gap-2 flex-wrap text-sm">
-      <span className="text-zinc-600">{recipe.inputs.map(lineLabel).join(' + ')}</span>
+      <span className="text-zinc-400">{recipe.inputs.map(lineLabel).join(' + ')}</span>
       <ArrowRight className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
       <span className="font-medium">{recipe.outputs.map(lineLabel).join(' + ')}</span>
     </div>
@@ -376,7 +376,7 @@ function BenchCard({
           </Badge>
         </div>
 
-        {recipe.description && <p className="text-meta">{recipe.description}</p>}
+        {recipe.description && <p className="text-meta text-zinc-500">{recipe.description}</p>}
 
         <div className="space-y-1">
           {recipe.inputs.map((line) => {
@@ -385,10 +385,10 @@ function BenchCard({
             const short = have < needed;
             return (
               <div key={line.itemTypeId} className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="text-zinc-600 truncate">
+                <span className="text-zinc-400 truncate">
                   {line.icon ? `${line.icon} ` : ''}{line.itemTypeName}
                 </span>
-                <span className={cn('text-micro tabular-nums shrink-0', short ? 'text-red-600' : 'text-zinc-500')}>
+                <span className={cn('text-micro tabular-nums shrink-0', short ? 'text-red-400' : 'text-zinc-500')}>
                   {formatAmount(String(needed), line.unit, line.isCurrency)}
                   {' / '}
                   {formatAmount(line.available ?? '0', line.unit, line.isCurrency)}
@@ -398,13 +398,13 @@ function BenchCard({
           })}
         </div>
 
-        <div className="border-t border-zinc-100 pt-3 space-y-1">
+        <div className="border-t border-[var(--line-1)] pt-3 space-y-1">
           {recipe.outputs.map((line) => (
             <div key={line.itemTypeId} className="flex items-baseline justify-between gap-2 text-sm">
               <span className="truncate">
                 {line.icon ? `${line.icon} ` : ''}{line.itemTypeName}
               </span>
-              <span className="text-micro tabular-nums text-emerald-600 shrink-0">
+              <span className="text-micro tabular-nums text-emerald-400 shrink-0">
                 +{formatAmount(String(Number(line.quantity) * wanted), line.unit, line.isCurrency)}
               </span>
             </div>
@@ -583,14 +583,14 @@ function RecipeEditor({
                   className={cn(
                     'text-left rounded-lg border p-3 transition-colors',
                     creditOutputTo === value
-                      ? 'border-[var(--brand-color,#6366f1)] bg-zinc-50'
-                      : 'border-zinc-200 hover:border-zinc-300',
+                      ? 'border-[var(--brand-color,#6366f1)] bg-[var(--fill-3)] text-zinc-100'
+                      : 'border-[var(--line-2)] text-zinc-300 hover:border-[var(--line-3)] hover:bg-[var(--fill-1)]',
                   )}
                 >
                   <div className="text-sm font-medium">
                     {value === 'nobody' ? t('crafting.creditNobody') : t('crafting.creditCrafter')}
                   </div>
-                  <p className="text-micro text-zinc-500 mt-1">
+                  <p className="text-micro text-zinc-400 mt-1">
                     {value === 'nobody' ? t('crafting.creditNobodyHint') : t('crafting.creditCrafterHint')}
                   </p>
                 </button>
