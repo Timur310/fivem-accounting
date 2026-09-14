@@ -127,6 +127,29 @@ interface ItemRef {
   imageUrl: string | null;
   unit: string;
   isCurrency: boolean;
+  category: string;
+}
+
+/**
+ * A glyph for an item type that has none of its own.
+ *
+ * `image_url` is for factions with real artwork and most will never set it;
+ * `icon` is the cheap version and plenty of item types will not have that
+ * either. Falling back on the category means every amount in the channel gets
+ * a glyph, which matters more than the glyph being exactly right: an embed
+ * where some lines have a picture and some do not looks broken, where one
+ * whose pictures are merely generic just looks plain.
+ */
+const CATEGORY_ICON: Record<string, string> = {
+  cash: '\u{1F4B5}',        // banknotes
+  goods: '\u{1F4E6}',       // package
+  contraband: '\u{2697}\u{FE0F}', // alembic
+  other: '\u{1F3F7}\u{FE0F}',     // label
+};
+
+/** The item's own emoji, or the one its category lends it. */
+function itemGlyph(item: ItemRef): string {
+  return item.icon || CATEGORY_ICON[item.category] || CATEGORY_ICON.other!;
 }
 
 interface FactionRef {
@@ -161,6 +184,7 @@ async function resolveNames(userIds: string[], itemTypeIds: string[]) {
             imageUrl: itemTypes.imageUrl,
             unit: itemTypes.unit,
             isCurrency: itemTypes.isCurrency,
+            category: itemTypes.category,
           })
           .from(itemTypes)
           .where(inArray(itemTypes.id, wantedItems))
@@ -186,6 +210,7 @@ async function resolveNames(userIds: string[], itemTypeIds: string[]) {
       imageUrl: i.imageUrl,
       unit: i.unit,
       isCurrency: i.isCurrency,
+      category: i.category,
     });
   }
 
@@ -219,10 +244,13 @@ function brandInt(faction: FactionRef): number | null {
  * that you have to parse word by word.
  */
 function headline(sign: '+' | '-' | '', amount: string, item: ItemRef | null): string {
-  const figure = `### ${sign}${formatQuantity(amount, item)}`;
-  if (!item) return figure;
-  const icon = item.icon ? `${item.icon} ` : '';
-  return `${figure}\n${icon}${item.name}`;
+  const figure = `${sign}${formatQuantity(amount, item)}`;
+  if (!item) return `### ${figure}`;
+  // The glyph goes *in* the heading rather than beside the name below it.
+  // Emoji scale with the heading, so this is the one way to get something
+  // picture-sized into an embed that has no artwork — which, since almost no
+  // faction sets an image URL, is nearly every embed.
+  return `### ${itemGlyph(item)}  ${figure}\n${item.name}`;
 }
 
 /** What the switch below decides; the chrome around it is applied once, in `render`. */
@@ -378,8 +406,8 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         subject: names.actor(event.actorUserId),
         item: to,
         fields: [
-          { name: 'In', value: `${from?.icon ? `${from.icon} ` : ''}${names.item(event.fromItemTypeId)}`, inline: true },
-          { name: 'Out', value: `${to?.icon ? `${to.icon} ` : ''}${names.item(event.toItemTypeId)}`, inline: true },
+          { name: 'In', value: from ? `${itemGlyph(from)} ${from.name}` : names.item(event.fromItemTypeId), inline: true },
+          { name: 'Out', value: to ? `${itemGlyph(to)} ${to.name}` : names.item(event.toItemTypeId), inline: true },
         ],
       };
     }
