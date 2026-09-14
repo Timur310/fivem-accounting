@@ -15,6 +15,7 @@ import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { craftHolding, craftHoldingMessage } from '../lib/crafting.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { buildWhere } from '../lib/query.js';
@@ -372,6 +373,13 @@ router.patch('/:entryId', requirePermission('manage_entries'), async (req: Reque
     return;
   }
 
+  // A craft's movements are not independently editable; see craftHolding.
+  const heldBy = await craftHolding({ entryIds: [entryId] });
+  if (heldBy) {
+    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
+    return;
+  }
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
@@ -457,6 +465,13 @@ router.delete('/:entryId', async (req: Request, res: Response) => {
     .limit(1);
   if (!existing) {
     error(res, 'NOT_FOUND', 'Entry not found', 404);
+    return;
+  }
+
+  // A craft's movements are not independently editable; see craftHolding.
+  const heldBy = await craftHolding({ entryIds: [entryId] });
+  if (heldBy) {
+    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
     return;
   }
 

@@ -111,6 +111,22 @@ describe('laundering', () => {
     expect(await balanceOf(dirtyId)).toBe(500);
   });
 
+  // The desk used to run its own copy of the balance query, and that copy
+  // left expenses out — so money already spent on rent still looked washable.
+  it('counts expenses against what is washable', async () => {
+    await fundTreasury(dirtyId, '500');
+    const spent = await api().post(`${f()}/expenses`).set('Cookie', w.admin.cookie)
+      .send({ itemTypeId: dirtyId, amount: '400', category: 'other' });
+    expect(spent.status).toBe(201);
+
+    const res = await api().post(laundering()).set('Cookie', w.admin.cookie)
+      .send({ fromItemTypeId: dirtyId, amountIn: '300', toItemTypeId: cleanId, amountOut: '200' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/not enough/i);
+    expect(await balanceOf(dirtyId)).toBe(100);
+  });
+
   it('refuses a conversion into the same currency', async () => {
     await fundTreasury(dirtyId, '500');
     const res = await api().post(laundering()).set('Cookie', w.admin.cookie)

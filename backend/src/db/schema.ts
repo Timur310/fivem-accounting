@@ -129,6 +129,13 @@ export const FACTION_PERMISSIONS = [
   'manage_laundering',
   'manage_expenses',
   'manage_discord',
+  // Writing recipes and running them are separate on purpose. A recipe says
+  // what the faction's materials are worth converting into, which is a
+  // leadership decision; running one is the shop floor. Handing both to the
+  // same rank would mean anybody who crafts can also rewrite what a craft
+  // costs.
+  'manage_crafting',
+  'craft',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -147,6 +154,8 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_laundering: 'Launder Money',
   manage_expenses: 'Manage Expenses',
   manage_discord: 'Manage Discord',
+  manage_crafting: 'Manage Recipes',
+  craft: 'Craft Items',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -673,6 +682,7 @@ export const DISCORD_EVENT_TYPES = [
   'member_joined',
   'member_left',
   'laundering_completed',
+  'craft_completed',
   // ── Things being taken back ──
   // A channel that only ever reports additions is a channel that can be
   // gamed: log, get credit, quietly undo. These are separately routable, so a
@@ -686,6 +696,7 @@ export const DISCORD_EVENT_TYPES = [
   'expense_deleted',
   'strike_revoked',
   'announcement_removed',
+  'craft_reverted',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -787,3 +798,163 @@ export const discordRemindersRelations = relations(discordReminders, ({ one }) =
 
 export type DiscordReminder = typeof discordReminders.$inferSelect;
 export type NewDiscordReminder = typeof discordReminders.$inferInsert;
+
+// ── crafting_recipes ───────────────────────────────────
+// What the faction knows how to make.
+//
+// A recipe is a *definition*, never a movement: saving one changes no balance.
+// It exists because the alternative is what factions do today — logging a
+// withdrawal for every component and an entry for the result, by hand, every
+// time, and getting one of them wrong eventually.
+//
+// Recipes are edited in place rather than versioned. A craft snapshots the
+// name and writes real entries and payouts, so history stays truthful even
+// after a recipe is renamed, re-costed or deleted; what a recipe means today
+// is the only question the recipe table has to answer.
+export const craftingRecipes = pgTable('crafting_recipes', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  name:        varchar('name', { length: 100 }).notNull(),
+  description: text('description'),
+
+  /**
+   * Whose contribution the output counts as: `nobody` or `crafter`.
+   *
+   * `nobody` writes the output against the anonymous placeholder, exactly as
+   * laundering does — the treasury moves and no leaderboard does. `crafter`
+   * credits whoever ran it, which is what a faction wants for a recipe that
+   * represents real work.
+   *
+   * It is per recipe because both answers are right for different recipes and
+   * wrong for the other. Worth knowing before switching it on: a recipe that
+   * credits the crafter can be run in a loop against the faction's own
+   * materials to farm a quota, so it belongs on recipes whose inputs are
+   * genuinely scarce.
+   */
+  creditOutputTo: varchar('credit_output_to', { length: 10 }).notNull().default('nobody'),
+
+  // Retired rather than deleted, where the faction wants the history without
+  // the recipe showing up in the craft picker.
+  isActive:    boolean('is_active').notNull().default(true),
+
+  createdBy:   uuid('created_by').notNull().references(() => users.id),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('crafting_recipe_faction').on(table.factionId),
+  // Two recipes with the same name in one faction is a mistake every time —
+  // the craft picker is a list of names.
+  uniqueName: uniqueIndex('crafting_recipe_unique_name').on(table.factionId, table.name),
+}));
+
+export const CREDIT_OUTPUT_TO = ['nobody', 'crafter'] as const;
+export type CreditOutputTo = (typeof CREDIT_OUTPUT_TO)[number];
+
+// ── crafting_recipe_items ──────────────────────────────
+// The lines of a recipe: what goes in, what comes out, how much of each.
+//
+// Inputs and outputs share a table because they are the same shape and the
+// craft transaction walks them together. `role` keeps them apart, and the
+// unique index is per role so a recipe may legitimately consume and produce
+// the same item type — a refining step that burns 10 crates to make 6 better
+// ones is a real thing, and nothing here needs to forbid it.
+export const craftingRecipeItems = pgTable('crafting_recipe_items', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  recipeId:   uuid('recipe_id').notNull().references(() => craftingRecipes.id, { onDelete: 'cascade' }),
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  role:       varchar('role', { length: 6 }).notNull(),
+  // Per single craft. A batch multiplies this; see `crafts.quantity`.
+  quantity:   decimal('quantity', { precision: 15, scale: 2 }).notNull(),
+}, (table) => ({
+  recipeIndex: index('crafting_recipe_item_recipe').on(table.recipeId),
+  uniqueLine: uniqueIndex('crafting_recipe_item_unique').on(table.recipeId, table.itemTypeId, table.role),
+}));
+
+export const RECIPE_ITEM_ROLES = ['input', 'output'] as const;
+export type RecipeItemRole = (typeof RECIPE_ITEM_ROLES)[number];
+
+// ── crafts ─────────────────────────────────────────────
+// One run of a recipe.
+//
+// The movements it creates are ordinary entries and completed payouts, because
+// the treasury already knows how to count those and a craft must not need
+// special-casing in every balance query in the app. This row is what makes
+// those movements legible as *one act* afterwards: which recipe, how many, who
+// ran it — and it is what a revert reverses.
+//
+// `recipeName` is a snapshot. A craft from six weeks ago should still say what
+// it made after the recipe has been renamed or removed.
+export const crafts = pgTable('crafts', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  // Kept nullable and set null on delete: losing the link is acceptable,
+  // losing the craft is not.
+  recipeId:   uuid('recipe_id').references(() => craftingRecipes.id, { onDelete: 'set null' }),
+  recipeName: varchar('recipe_name', { length: 100 }).notNull(),
+  /** The batch multiplier. Every input and output line is scaled by it. */
+  quantity:   integer('quantity').notNull().default(1),
+  craftedBy:  uuid('crafted_by').notNull().references(() => users.id),
+  craftDate:  date('craft_date').notNull(),
+  notes:      text('notes'),
+
+  // A craft is reverted once or not at all; the timestamp is the guard.
+  revertedAt: timestamp('reverted_at', { withTimezone: true }),
+  revertedBy: uuid('reverted_by').references(() => users.id),
+
+  createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('craft_faction').on(table.factionId, table.createdAt),
+}));
+
+// ── craft_movements ────────────────────────────────────
+// The rows a craft created, so a revert can undo exactly those and nothing
+// else.
+//
+// An input is a completed payout and an output is an entry, which is why the
+// two id columns are each nullable — a movement is one or the other. Storing
+// the link here rather than as a `craft_id` column on entries and payouts
+// keeps the two busiest tables in the app untouched.
+export const craftMovements = pgTable('craft_movements', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  craftId:    uuid('craft_id').notNull().references(() => crafts.id, { onDelete: 'cascade' }),
+  role:       varchar('role', { length: 6 }).notNull(),
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  /** The scaled amount actually moved, not the per-craft line. */
+  quantity:   decimal('quantity', { precision: 15, scale: 2 }).notNull(),
+  entryId:    uuid('entry_id').references(() => entries.id, { onDelete: 'set null' }),
+  payoutId:   uuid('payout_id').references(() => payouts.id, { onDelete: 'set null' }),
+}, (table) => ({
+  craftIndex: index('craft_movement_craft').on(table.craftId),
+}));
+
+export const craftingRecipesRelations = relations(craftingRecipes, ({ one, many }) => ({
+  faction: one(factions, { fields: [craftingRecipes.factionId], references: [factions.id] }),
+  creator: one(users,    { fields: [craftingRecipes.createdBy], references: [users.id] }),
+  items:   many(craftingRecipeItems),
+  crafts:  many(crafts),
+}));
+
+export const craftingRecipeItemsRelations = relations(craftingRecipeItems, ({ one }) => ({
+  recipe:   one(craftingRecipes, { fields: [craftingRecipeItems.recipeId], references: [craftingRecipes.id] }),
+  itemType: one(itemTypes,       { fields: [craftingRecipeItems.itemTypeId], references: [itemTypes.id] }),
+}));
+
+export const craftsRelations = relations(crafts, ({ one, many }) => ({
+  faction:   one(factions,        { fields: [crafts.factionId], references: [factions.id] }),
+  recipe:    one(craftingRecipes, { fields: [crafts.recipeId], references: [craftingRecipes.id] }),
+  crafter:   one(users,           { fields: [crafts.craftedBy], references: [users.id] }),
+  movements: many(craftMovements),
+}));
+
+export const craftMovementsRelations = relations(craftMovements, ({ one }) => ({
+  craft:    one(crafts,     { fields: [craftMovements.craftId], references: [crafts.id] }),
+  itemType: one(itemTypes,  { fields: [craftMovements.itemTypeId], references: [itemTypes.id] }),
+  entry:    one(entries,    { fields: [craftMovements.entryId], references: [entries.id] }),
+  payout:   one(payouts,    { fields: [craftMovements.payoutId], references: [payouts.id] }),
+}));
+
+export type CraftingRecipe = typeof craftingRecipes.$inferSelect;
+export type NewCraftingRecipe = typeof craftingRecipes.$inferInsert;
+export type CraftingRecipeItem = typeof craftingRecipeItems.$inferSelect;
+export type Craft = typeof crafts.$inferSelect;
+export type CraftMovement = typeof craftMovements.$inferSelect;
