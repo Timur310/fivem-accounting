@@ -171,6 +171,7 @@ sidebar shows exactly what your rank gives you:
 | `manage_entries` | Log entries for others or the faction, edit/delete any entry |
 | `manage_payouts` | Withdrawals for others, even split, settling requests, vault verification |
 | `manage_expenses` | Recording the faction's running costs |
+| `manage_discord` | Connecting a Discord server and choosing what gets posted there (§8.6) |
 | `manage_laundering` | The laundering desk |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
@@ -718,6 +719,40 @@ The item types, quotas and ranks tabs each have **Export CSV / Import CSV**.
 
 Practical use: **clone one faction's setup into another** — export, tweak
 names, import.
+
+### 8.6 Discord (`manage_discord`)
+
+Post what happens in the faction straight into your own Discord server.
+
+**Connecting.** Press **Connect a Discord server**. Discord asks which server
+and shows what the bot is asking for — seeing channels, sending messages, and
+showing embedded boxes. Nothing else: it cannot read your conversations, and
+it has no access to anything outside the channels you point it at. You need
+**Manage Server** on the Discord side to add a bot; if the button does not
+appear there, ask whoever runs your Discord.
+
+You come back to this screen and it says which server you are connected to.
+
+**Choosing channels.** Each kind of activity — an entry logged, a withdrawal
+approved, a strike issued — gets its own dropdown. Pick a channel and it saves
+straight away. Anything left on **Off** is not sent, and everything starts on
+Off: nothing is posted until you decide it should be.
+
+The **send icon** beside each row posts a test message to that channel, so you
+can confirm it arrives before waiting for something real to happen.
+
+**If it stops working.** A red bar appears here with the last failure. Almost
+always it means the bot was removed from the server, or lost access to a
+channel it used to be able to post in. Reconnecting fixes the first; fixing the
+channel's permissions in Discord fixes the second.
+
+**Disconnecting** stops the posting and forgets your channel choices. The bot
+itself stays in your Discord server until you remove it there — only a Discord
+admin can do that, and we would not want the ability.
+
+**If the whole section says there is no bot set up**, that is the app, not your
+faction: Discord delivery is switched off for this installation. Send a feature
+request through Support (§5.8) if you would like it turned on.
 
 ---
 

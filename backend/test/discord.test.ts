@@ -1,10 +1,23 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
 import { api, resetDatabase, seedBasicWorld, createFaction, type BasicWorld } from './helpers.js';
 import { db } from '../src/db/index.js';
 import { discordIntegrations, discordChannelRoutes } from '../src/db/schema.js';
 import { signBotLinkState, verifyBotLinkState, buildBotInviteUrl } from '../src/lib/discord.js';
+
+/**
+ * The one thing in this suite that would otherwise reach Discord.
+ *
+ * Only `leaveGuild` is replaced — `importOriginal` keeps the rest of the
+ * module real, so the state-signing tests below still exercise the actual
+ * implementation rather than a stub.
+ */
+const leaveGuildMock = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+vi.mock('../src/lib/discord.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/lib/discord.js')>()),
+  leaveGuild: leaveGuildMock,
+}));
 
 let w: BasicWorld;
 const f = () => `/api/v1/factions/${w.faction.id}`;
@@ -19,6 +32,8 @@ const GUILD = '555000111222333444';
 beforeEach(async () => {
   await resetDatabase();
   w = await seedBasicWorld();
+  leaveGuildMock.mockClear();
+  leaveGuildMock.mockResolvedValue({ ok: true });
 });
 
 /** Define a rank with the given permissions and put the plain member on it. */
@@ -251,6 +266,43 @@ describe('DELETE /discord', () => {
 
   it('404s when there was nothing connected', async () => {
     expect((await api().delete(base()).set('Cookie', w.admin.cookie)).status).toBe(404);
+  });
+
+  // The bot may be doing other jobs in that server — a whitelist, roles — for
+  // a faction that connected their main community Discord. Kicking it out on
+  // every disconnect would break those silently.
+  it('leaves the bot in the server unless asked', async () => {
+    await linkGuild();
+    const res = await api().delete(base()).set('Cookie', w.admin.cookie);
+    expect(res.body.data.left).toBeNull();
+    expect(leaveGuildMock).not.toHaveBeenCalled();
+  });
+
+  it('removes the bot from the server when asked', async () => {
+    await linkGuild();
+    const res = await api().delete(`${base()}?leave=true`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.left).toBe(true);
+    expect(leaveGuildMock).toHaveBeenCalledWith(GUILD);
+  });
+
+  // Disconnecting is the part they asked for and the part we can guarantee.
+  // Failing to also leave must not leave them still connected.
+  it('still disconnects when Discord refuses to let the bot leave', async () => {
+    await linkGuild();
+    leaveGuildMock.mockResolvedValue({ ok: false, error: 'Discord returned 500' });
+
+    const res = await api().delete(`${base()}?leave=true`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.unlinked).toBe(true);
+    expect(res.body.data.left).toBe(false);
+    expect(res.body.data.leaveError).toBe('Discord returned 500');
+
+    const rows = await db
+      .select()
+      .from(discordIntegrations)
+      .where(eq(discordIntegrations.factionId, w.faction.id));
+    expect(rows).toHaveLength(0);
   });
 });
 

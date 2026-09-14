@@ -255,6 +255,47 @@ export async function postToChannel(
 }
 
 /**
+ * Make the bot leave a guild.
+ *
+ * A bot can remove itself — it needs no permission beyond already being there
+ * — which is what lets "disconnect" be one action instead of a settings screen
+ * and a homework assignment in Discord.
+ *
+ * Offered rather than implied, and never the default. One Discord application
+ * can carry a bot that does several jobs, so the server a faction connected
+ * may be the same one where that bot already runs a whitelist or hands out
+ * roles. Leaving on every disconnect would silently break the other job. The
+ * caller decides; this function only does as it is told.
+ *
+ * **Never throws.** Disconnecting is a local decision that has already been
+ * made; failing to also leave the guild must not undo it.
+ */
+export async function leaveGuild(guildId: string): Promise<DeliveryResult> {
+  if (!isDiscordConfigured()) {
+    return { ok: false, error: 'Discord bot token is not configured' };
+  }
+
+  try {
+    await axios.delete(`${API}/users/@me/guilds/${guildId}`, {
+      headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
+      timeout: 10_000,
+    });
+    return { ok: true };
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      const status = err.response?.status;
+      // Already gone is the outcome the caller wanted, not a failure: somebody
+      // kicked the bot by hand before pressing the button.
+      if (status === 404) return { ok: true };
+      console.error('[DISCORD] leave guild failed', guildId, status);
+      return { ok: false, error: `Discord returned ${status ?? 'no response'}` };
+    }
+    console.error('[DISCORD] leave guild failed', guildId, err);
+    return { ok: false, error: 'Could not reach Discord' };
+  }
+}
+
+/**
  * Remember the last thing that went wrong for a faction, or clear it once a
  * delivery succeeds. Best-effort by design: failing to record a failure is not
  * worth surfacing a second one.

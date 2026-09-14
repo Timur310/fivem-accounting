@@ -1014,6 +1014,17 @@ added after a faction connected. Disconnecting deletes the routes, because
 keeping them would silently aim a later connection at channel ids from a
 server the faction no longer uses.
 
+**Disconnecting can also remove the bot**, via `DELETE /users/@me/guilds/:id` —
+a bot may leave a guild on its own, needing no permission beyond being in it.
+It is `?leave=true`, opt-in, and never the default: one Discord application can
+carry a bot doing several jobs, and the server a faction connected may be the
+same one where that bot already runs their whitelist. Leaving on every
+disconnect would break that silently. The unlink happens first and stands
+whatever Discord answers — disconnecting is what was asked for and what we can
+guarantee; leaving is a favour on top. The response distinguishes *not asked*
+(`left: null`) from *asked and refused* (`left: false`), because in the second
+case the bot is still sitting in their server and they need to know.
+
 The event vocabulary is deliberately the one the activity feed (§8.12) already
 speaks, so a leader is choosing from a list they have seen rather than
 learning a second set of names.
