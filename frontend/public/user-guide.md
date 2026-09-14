@@ -755,8 +755,9 @@ straight away. Anything left on **Off** is not sent, and everything starts on
 Off: nothing is posted until you decide it should be.
 
 You can route them all to one channel, or split them up — the ledger to a
-quiet log channel, strikes somewhere only leadership reads. The eleven kinds
-are:
+quiet log channel, strikes somewhere only leadership reads.
+
+**Activity:**
 
 | | |
 |---|---|
@@ -767,6 +768,21 @@ are:
 | Announcement posted | title and author |
 | Member joined / left | roster changes |
 | Laundering completed | one currency converted into another |
+
+**Corrections and removals**, listed separately underneath:
+
+| | |
+|---|---|
+| Entry removed | including a member undoing their own within 5 minutes |
+| Withdrawal removed or cancelled | a leader removing one, or the requester taking their own back |
+| Expense removed | |
+| Strike revoked | it no longer counts against the member |
+| Announcement removed | |
+
+These have their own channels for a reason. A log that only shows things going
+*in* can be worked: log it, take the credit, quietly remove it later. Routing
+the removals — even to a channel only leadership reads — closes that. The
+message says whose row it was, not just who removed it.
 
 The **send icon** beside each row posts a test message to that channel, so you
 can confirm it arrives before waiting for something real to happen.
