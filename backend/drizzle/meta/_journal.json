@@ -134,6 +134,13 @@
       "when": 1789385627016,
       "tag": "0018_eminent_mandroid",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789408748692,
+      "tag": "0019_open_alice",
+      "breakpoints": true
     }
   ]
 }

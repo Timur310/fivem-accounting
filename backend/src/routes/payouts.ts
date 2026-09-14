@@ -9,6 +9,7 @@ import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { craftHolding, craftHoldingMessage } from '../lib/crafting.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
@@ -458,6 +459,13 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
     return;
   }
 
+  // A craft's movements are not independently editable; see craftHolding.
+  const heldBy = await craftHolding({ payoutIds: [payoutId] });
+  if (heldBy) {
+    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
+    return;
+  }
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
 
   // Amount, description and date can only change while the payout is still
@@ -621,6 +629,13 @@ router.delete('/:payoutId', async (req: Request, res: Response) => {
     .limit(1);
   if (!existing) {
     error(res, 'NOT_FOUND', 'Payout not found', 404);
+    return;
+  }
+
+  // A craft's movements are not independently editable; see craftHolding.
+  const heldBy = await craftHolding({ payoutIds: [payoutId] });
+  if (heldBy) {
+    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
     return;
   }
 

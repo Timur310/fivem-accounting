@@ -924,7 +924,7 @@ export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
-  'manage_discord',
+  'manage_discord', 'manage_crafting', 'craft',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -940,6 +940,8 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_laundering: 'permission.manageLaundering',
   manage_expenses: 'permission.manageExpenses',
   manage_discord: 'permission.manageDiscord',
+  manage_crafting: 'permission.manageCrafting',
+  craft: 'permission.craft',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1309,11 +1311,13 @@ export const DISCORD_EVENT_TYPES = [
   'member_joined',
   'member_left',
   'laundering_completed',
+  'craft_completed',
   'entry_deleted',
   'payout_deleted',
   'expense_deleted',
   'strike_revoked',
   'announcement_removed',
+  'craft_reverted',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1330,6 +1334,7 @@ export const DISCORD_REMOVAL_EVENTS: readonly DiscordEventType[] = [
   'expense_deleted',
   'strike_revoked',
   'announcement_removed',
+  'craft_reverted',
 ];
 
 export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> = {
@@ -1344,11 +1349,13 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   member_joined: 'discord.event.memberJoined',
   member_left: 'discord.event.memberLeft',
   laundering_completed: 'discord.event.launderingCompleted',
+  craft_completed: 'discord.event.craftCompleted',
   entry_deleted: 'discord.event.entryDeleted',
   payout_deleted: 'discord.event.payoutDeleted',
   expense_deleted: 'discord.event.expenseDeleted',
   strike_revoked: 'discord.event.strikeRevoked',
   announcement_removed: 'discord.event.announcementRemoved',
+  craft_reverted: 'discord.event.craftReverted',
 };
 
 export interface DiscordIntegration {
@@ -1456,4 +1463,83 @@ export interface ReminderInput {
   mentionRoleIds?: string[];
   mentionUserIds?: string[];
   isEnabled?: boolean;
+}
+
+// ── Crafting ───────────────────────────────────────────
+
+/** Whose contribution a recipe's output counts as. */
+export type CreditOutputTo = 'nobody' | 'crafter';
+
+/** One line of a recipe. `available` is present on inputs only. */
+export interface RecipeLine {
+  itemTypeId: string;
+  itemTypeName: string;
+  unit: string;
+  isCurrency: boolean;
+  icon: string | null;
+  isActive: boolean;
+  /** Per single craft. A batch multiplies it. */
+  quantity: string;
+  /** What the vault holds of this material right now. Inputs only. */
+  available?: string;
+}
+
+export interface CraftingRecipe {
+  id: string;
+  name: string;
+  description: string | null;
+  creditOutputTo: CreditOutputTo;
+  isActive: boolean;
+  inputs: RecipeLine[];
+  outputs: RecipeLine[];
+  /** How many times this can be run against the current treasury. */
+  maxCraftable: number;
+}
+
+export interface CraftMovementRow {
+  craftId: string;
+  role: 'input' | 'output';
+  itemTypeId: string;
+  quantity: string;
+  itemTypeName: string;
+  unit: string;
+  isCurrency: boolean;
+  icon: string | null;
+}
+
+export interface CraftRecord {
+  id: string;
+  recipeId: string | null;
+  /** Snapshotted, so it survives the recipe being renamed or deleted. */
+  recipeName: string;
+  quantity: number;
+  craftDate: string;
+  notes: string | null;
+  createdAt: string;
+  revertedAt: string | null;
+  craftedBy: string;
+  crafterName: string;
+  inputs: CraftMovementRow[];
+  outputs: CraftMovementRow[];
+}
+
+export interface RecipeLineInput {
+  itemTypeId: string;
+  quantity: string;
+}
+
+export interface RecipeInput {
+  name: string;
+  description?: string;
+  creditOutputTo?: CreditOutputTo;
+  isActive?: boolean;
+  inputs?: RecipeLineInput[];
+  outputs?: RecipeLineInput[];
+}
+
+export interface CraftInput {
+  recipeId: string;
+  quantity: number;
+  notes?: string;
+  date?: string;
 }

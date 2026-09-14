@@ -40,6 +40,7 @@ import {
   Trophy,
   AlertTriangle,
   WashingMachine,
+  Hammer,
   BookOpen,
   Search,
 } from 'lucide-react';
@@ -59,6 +60,7 @@ import { AdminFactionDetailView } from '@/views/admin-faction-detail-view';
 import { MemberProfileView } from '@/views/member-profile-view';
 import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
+import { CraftingView } from '@/views/crafting-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
 import { AnnouncementsView } from '@/views/announcements-view';
@@ -293,6 +295,15 @@ export function AppShell() {
       icon: WashingMachine,
       anyPermission: ['manage_laundering'],
     },
+    {
+      group: 'manage',
+      view: 'crafting',
+      label: 'nav.crafting',
+      icon: Hammer,
+      // Either permission gets you the screen: running a recipe and writing
+      // one are different jobs, and the bench is the same page for both.
+      anyPermission: ['manage_crafting', 'craft'],
+    },
     { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
     { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
     // Everyone reads the board; posting is gated inside the view.
@@ -455,6 +466,12 @@ export function AppShell() {
         return selectedFactionId ? <PayoutsView factionId={selectedFactionId} canManagePayouts={hasPermission('manage_payouts')} /> : null;
       case 'laundering':
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
+      case 'crafting':
+        return selectedFactionId ? <CraftingView
+            factionId={selectedFactionId}
+            canManageRecipes={hasPermission('manage_crafting')}
+            canCraft={hasPermission('craft') || hasPermission('manage_crafting')}
+          /> : null;
       case 'treasury':
         return selectedFactionId ? <TreasuryView factionId={selectedFactionId} canManageExpenses={hasPermission('manage_expenses')} canManageChecks={hasPermission('manage_payouts')} /> : null;
       case 'members':
