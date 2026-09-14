@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import {
   discordIntegrations,
   discordChannelRoutes,
+  factions,
   itemTypes,
   users,
   type DiscordEventType,
@@ -47,6 +48,33 @@ const COLOR = {
 } as const;
 
 /**
+ * The glyph in front of the title.
+ *
+ * The left colour bar already says in/out/trouble, but only once your eye is
+ * on the embed. Scrolling a busy channel, the emoji is what separates a haul
+ * from a payout from a strike at a glance — and it is the one piece of
+ * decoration Discord renders identically on every client.
+ */
+const EMOJI: Record<DiscordEvent['type'], string> = {
+  entry_logged: '\u{1F4E5}',           // inbox tray
+  payout_requested: '\u{1F64B}',       // raised hand
+  payout_approved: '\u{2705}',         // check
+  payout_rejected: '\u{26D4}',         // no entry
+  payout_completed: '\u{1F4B8}',       // money with wings
+  expense_recorded: '\u{1F9FE}',       // receipt
+  strike_issued: '\u{26A0}\u{FE0F}',   // warning
+  announcement_posted: '\u{1F4E2}',    // loudspeaker
+  member_joined: '\u{1F91D}',          // handshake
+  member_left: '\u{1F44B}',            // waving hand
+  laundering_completed: '\u{1F9FC}',   // soap
+  entry_deleted: '\u{1F5D1}\u{FE0F}',  // wastebasket
+  payout_deleted: '\u{1F5D1}\u{FE0F}',
+  expense_deleted: '\u{1F5D1}\u{FE0F}',
+  strike_revoked: '\u{1F54A}\u{FE0F}', // dove
+  announcement_removed: '\u{1F5D1}\u{FE0F}',
+};
+
+/**
  * Thousand separators without going through Number.
  *
  * Amounts are decimal strings because the column is decimal, and FiveM money
@@ -63,6 +91,78 @@ function formatAmount(amount: string): string {
   return `${sign}${grouped}${rest}`;
 }
 
+/**
+ * The amount as the item itself writes it: `$1,250,000.00` for money,
+ * `30 pcs` for things you can count.
+ *
+ * Same convention the interface uses, deliberately — somebody who reads a
+ * figure in the channel and then goes looking for it in the app should not
+ * have to translate it on the way.
+ */
+function formatQuantity(amount: string, item: ItemRef | null): string {
+  if (!item) return formatAmount(amount);
+
+  if (item.isCurrency) {
+    const [whole = '0', fraction = ''] = amount.split('.');
+    const sign = whole.startsWith('-') ? '-' : '';
+    const digits = (sign ? whole.slice(1) : whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const cents = `${fraction}00`.slice(0, 2);
+    return `${sign}${item.unit || '$'}${digits}.${cents}`;
+  }
+
+  const n = formatAmount(amount);
+  // The default unit is a dollar sign, which on a countable item means the
+  // faction never set one rather than "these are dollars".
+  return item.unit && item.unit !== '$' ? `${n} ${item.unit}` : n;
+}
+
+interface ActorRef {
+  name: string;
+  avatarUrl: string | null;
+}
+
+interface ItemRef {
+  name: string;
+  icon: string | null;
+  imageUrl: string | null;
+  unit: string;
+  isCurrency: boolean;
+  category: string;
+}
+
+/**
+ * A glyph for an item type that has none of its own.
+ *
+ * `image_url` is for factions with real artwork and most will never set it;
+ * `icon` is the cheap version and plenty of item types will not have that
+ * either. Falling back on the category means every amount in the channel gets
+ * a glyph, which matters more than the glyph being exactly right: an embed
+ * where some lines have a picture and some do not looks broken, where one
+ * whose pictures are merely generic just looks plain.
+ */
+const CATEGORY_ICON: Record<string, string> = {
+  cash: '\u{1F4B5}',        // banknotes
+  goods: '\u{1F4E6}',       // package
+  contraband: '\u{2697}\u{FE0F}', // alembic
+  other: '\u{1F3F7}\u{FE0F}',     // label
+};
+
+/** The item's own emoji, or the one its category lends it. */
+function itemGlyph(item: ItemRef): string {
+  if (item.icon) return item.icon;
+  // `category` defaults to 'other' and plenty of factions will never touch it,
+  // so money would end up under a generic label. `isCurrency` is the flag they
+  // do set, because it changes how the app formats every amount — which makes
+  // it the more reliable signal of the two.
+  if (item.isCurrency) return CATEGORY_ICON.cash!;
+  return CATEGORY_ICON[item.category] || CATEGORY_ICON.other!;
+}
+
+interface FactionRef {
+  name: string;
+  brandColor: string | null;
+}
+
 /** Names of the people and item types an event mentions, in one round trip each. */
 async function resolveNames(userIds: string[], itemTypeIds: string[]) {
   const wantedUsers = [...new Set(userIds.filter(Boolean))];
@@ -71,34 +171,107 @@ async function resolveNames(userIds: string[], itemTypeIds: string[]) {
   const [userRows, itemRows] = await Promise.all([
     wantedUsers.length
       ? db
-          .select({ id: users.id, username: users.username, inGameName: users.inGameName, isSystem: users.isSystem })
+          .select({
+            id: users.id,
+            username: users.username,
+            inGameName: users.inGameName,
+            avatarUrl: users.avatarUrl,
+            isSystem: users.isSystem,
+          })
           .from(users)
           .where(inArray(users.id, wantedUsers))
       : Promise.resolve([]),
     wantedItems.length
       ? db
-          .select({ id: itemTypes.id, name: itemTypes.name })
+          .select({
+            id: itemTypes.id,
+            name: itemTypes.name,
+            icon: itemTypes.icon,
+            imageUrl: itemTypes.imageUrl,
+            unit: itemTypes.unit,
+            isCurrency: itemTypes.isCurrency,
+            category: itemTypes.category,
+          })
           .from(itemTypes)
           .where(inArray(itemTypes.id, wantedItems))
       : Promise.resolve([]),
   ]);
 
-  const userName = new Map<string, string>();
+  const actors = new Map<string, ActorRef>();
   for (const u of userRows) {
     // The shared placeholder is not a person, and naming it in a public
-    // channel would read as an accusation against whoever it is called.
-    userName.set(u.id, u.isSystem ? 'the faction' : (u.inGameName ?? u.username));
+    // channel would read as an accusation against whoever it is called. It
+    // gets no avatar either — an empty face is better than a wrong one.
+    actors.set(u.id, {
+      name: u.isSystem ? 'the faction' : (u.inGameName ?? u.username),
+      avatarUrl: u.isSystem ? null : u.avatarUrl,
+    });
   }
-  const itemName = new Map<string, string>();
-  for (const i of itemRows) itemName.set(i.id, i.name);
+
+  const items = new Map<string, ItemRef>();
+  for (const i of itemRows) {
+    items.set(i.id, {
+      name: i.name,
+      icon: i.icon,
+      imageUrl: i.imageUrl,
+      unit: i.unit,
+      isCurrency: i.isCurrency,
+      category: i.category,
+    });
+  }
 
   return {
-    user: (id: string) => userName.get(id) ?? 'someone',
-    item: (id: string) => itemName.get(id) ?? 'an item',
+    user: (id: string) => actors.get(id)?.name ?? 'someone',
+    actor: (id: string): ActorRef => actors.get(id) ?? { name: 'someone', avatarUrl: null },
+    item: (id: string) => items.get(id)?.name ?? 'an item',
+    itemRef: (id: string): ItemRef | null => items.get(id) ?? null,
   };
 }
 
 type Names = Awaited<ReturnType<typeof resolveNames>>;
+
+/**
+ * A faction's brand colour as Discord wants it, or null if it has none or the
+ * stored value is not a hex triple.
+ */
+function brandInt(faction: FactionRef): number | null {
+  const hex = faction.brandColor?.trim();
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return parseInt(hex.slice(1), 16);
+}
+
+/**
+ * The headline, big.
+ *
+ * Discord renders `###` inside an embed description as a real heading, which
+ * is the only size control an embed has. The amount is what everyone in the
+ * channel is actually reading for, so it gets the heading and the item name
+ * sits under it — rather than all of it being one bolded sentence at body size
+ * that you have to parse word by word.
+ */
+function headline(sign: '+' | '-' | '', amount: string, item: ItemRef | null): string {
+  const figure = `${sign}${formatQuantity(amount, item)}`;
+  if (!item) return `### ${figure}`;
+  // The glyph goes *in* the heading rather than beside the name below it.
+  // Emoji scale with the heading, so this is the one way to get something
+  // picture-sized into an embed that has no artwork — which, since almost no
+  // faction sets an image URL, is nearly every embed.
+  return `### ${itemGlyph(item)}  ${figure}\n${item.name}`;
+}
+
+/** What the switch below decides; the chrome around it is applied once, in `render`. */
+interface Spec {
+  title: string;
+  description: string;
+  color: number;
+  fields?: { name: string; value: string; inline?: boolean }[];
+  /** The person the message is *about* — shown with their avatar at the top. */
+  subject?: ActorRef;
+  /** Who acted, when that is somebody other than the subject. */
+  byline?: string;
+  /** Drawn in the corner when the item type has artwork. */
+  item?: ItemRef | null;
+}
 
 /**
  * The message itself.
@@ -109,85 +282,108 @@ type Names = Awaited<ReturnType<typeof resolveNames>>;
  * carries a `locale` column and the settings screen shows a (disabled) picker,
  * so the faction can choose one later without a migration.
  */
-function render(event: DiscordEvent, names: Names): DiscordEmbed {
-  const stamp = new Date().toISOString();
+function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec {
+  const brand = brandInt(faction);
+  // Neutral events take the faction's own colour where it has one. Direction
+  // and trouble keep their fixed meanings: a faction whose brand colour is red
+  // must not have its approvals look like rejections.
+  const info = brand ?? COLOR.info;
 
   switch (event.type) {
-    case 'entry_logged':
+    case 'entry_logged': {
+      const item = names.itemRef(event.itemTypeId);
       return {
         title: 'Entry logged',
-        description: `**${event.anonymous ? 'Anonymous' : names.user(event.actorUserId)}** added **${formatAmount(event.amount)} ${names.item(event.itemTypeId)}**`,
+        description: headline('+', event.amount, item),
         color: COLOR.in,
+        subject: event.anonymous ? { name: 'Anonymous', avatarUrl: null } : names.actor(event.actorUserId),
+        item,
         ...(event.description ? { fields: [{ name: 'Note', value: event.description }] } : {}),
-        timestamp: stamp,
       };
+    }
 
-    case 'payout_requested':
+    case 'payout_requested': {
+      const item = names.itemRef(event.itemTypeId);
       return {
         title: 'Withdrawal requested',
-        description: `**${names.user(event.recipientUserId)}** requested **${formatAmount(event.amount)} ${names.item(event.itemTypeId)}**`,
-        color: COLOR.info,
+        description: headline('', event.amount, item),
+        color: info,
+        subject: names.actor(event.recipientUserId),
+        item,
         ...(event.description ? { fields: [{ name: 'Note', value: event.description }] } : {}),
-        timestamp: stamp,
       };
+    }
 
-    case 'payout_approved':
+    case 'payout_approved': {
+      const item = names.itemRef(event.itemTypeId);
       return {
         title: 'Withdrawal approved',
-        description: `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** for **${names.user(event.recipientUserId)}**`,
-        color: COLOR.info,
-        footer: { text: `Approved by ${names.user(event.actorUserId)}` },
-        timestamp: stamp,
+        description: headline('', event.amount, item),
+        color: COLOR.in,
+        subject: names.actor(event.recipientUserId),
+        byline: `Approved by ${names.user(event.actorUserId)}`,
+        item,
       };
+    }
 
-    case 'payout_rejected':
+    case 'payout_rejected': {
+      const item = names.itemRef(event.itemTypeId);
       return {
         title: 'Withdrawal rejected',
-        description: `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** for **${names.user(event.recipientUserId)}**`,
+        description: headline('', event.amount, item),
         color: COLOR.trouble,
+        subject: names.actor(event.recipientUserId),
+        byline: `Rejected by ${names.user(event.actorUserId)}`,
+        item,
         ...(event.reason ? { fields: [{ name: 'Reason', value: event.reason }] } : {}),
-        footer: { text: `Rejected by ${names.user(event.actorUserId)}` },
-        timestamp: stamp,
       };
+    }
 
-    case 'payout_completed':
+    case 'payout_completed': {
+      const item = names.itemRef(event.itemTypeId);
       return {
         title: 'Withdrawal paid out',
-        description: `**${names.user(event.recipientUserId)}** received **${formatAmount(event.amount)} ${names.item(event.itemTypeId)}**`,
+        description: headline('-', event.amount, item),
         color: COLOR.out,
-        timestamp: stamp,
+        subject: names.actor(event.recipientUserId),
+        byline: `Paid by ${names.user(event.actorUserId)}`,
+        item,
       };
+    }
 
-    case 'expense_recorded':
+    case 'expense_recorded': {
+      const item = names.itemRef(event.itemTypeId);
       return {
         title: 'Expense recorded',
-        description: `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** left the vault`,
+        description: headline('-', event.amount, item),
         color: COLOR.out,
+        subject: names.actor(event.actorUserId),
+        item,
         fields: [
           { name: 'Category', value: event.category, inline: true },
-          ...(event.description ? [{ name: 'Note', value: event.description }] : []),
+          ...(event.description ? [{ name: 'Note', value: event.description, inline: true }] : []),
         ],
-        footer: { text: `Recorded by ${names.user(event.actorUserId)}` },
-        timestamp: stamp,
       };
+    }
 
     case 'strike_issued':
       return {
         title: 'Strike issued',
-        description: `**${names.user(event.targetUserId)}** — ${event.severity}`,
+        description: `### ${event.severity}`,
         color: COLOR.trouble,
+        subject: names.actor(event.targetUserId),
+        byline: `Issued by ${names.user(event.actorUserId)}`,
         fields: [{ name: 'Reason', value: event.reason }],
-        footer: { text: `Issued by ${names.user(event.actorUserId)}` },
-        timestamp: stamp,
       };
 
     case 'announcement_posted':
       return {
-        title: 'Announcement',
-        description: `**${event.title}**`,
-        color: event.priority === 'urgent' ? COLOR.trouble : COLOR.info,
-        footer: { text: `Posted by ${names.user(event.actorUserId)}` },
-        timestamp: stamp,
+        title: event.priority === 'urgent' ? 'Announcement — urgent' : 'Announcement',
+        // Long titles stay at body size: Discord styles only the first line of
+        // a heading, so a title that wraps would change size halfway through.
+        description: event.title.length <= 80 ? `### ${event.title}` : `**${event.title}**`,
+        color: event.priority === 'urgent' ? COLOR.trouble : info,
+        subject: names.actor(event.actorUserId),
       };
 
     case 'member_joined':
@@ -195,7 +391,7 @@ function render(event: DiscordEvent, names: Names): DiscordEmbed {
         title: 'Member joined',
         description: `**${names.user(event.targetUserId)}** joined the faction`,
         color: COLOR.in,
-        timestamp: stamp,
+        subject: names.actor(event.targetUserId),
       };
 
     case 'member_left':
@@ -203,73 +399,120 @@ function render(event: DiscordEvent, names: Names): DiscordEmbed {
         title: 'Member left',
         description: `**${names.user(event.targetUserId)}** left the faction`,
         color: COLOR.trouble,
-        timestamp: stamp,
+        subject: names.actor(event.targetUserId),
       };
 
-    case 'entry_deleted':
-      return removal(
-        'Entry removed',
-        `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** logged by **${names.user(event.ownerUserId)}**`,
-        // The 5-minute self-undo and a leader striking a row out are different
-        // acts and the channel should not blur them.
-        event.selfUndone ? 'Undone by the member within 5 minutes' : `Removed by ${names.user(event.actorUserId)}`,
-        stamp,
-      );
-
-    case 'payout_deleted':
-      return removal(
-        event.selfCancelled ? 'Withdrawal request cancelled' : 'Withdrawal removed',
-        `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** for **${names.user(event.recipientUserId)}** (was ${event.status})`,
-        event.selfCancelled ? 'Cancelled by the requester' : `Removed by ${names.user(event.actorUserId)}`,
-        stamp,
-      );
-
-    case 'expense_deleted':
-      return removal(
-        'Expense removed',
-        `**${formatAmount(event.amount)} ${names.item(event.itemTypeId)}** — ${event.category}`,
-        `Removed by ${names.user(event.actorUserId)}`,
-        stamp,
-      );
-
-    case 'strike_revoked':
-      return removal(
-        'Strike revoked',
-        `**${names.user(event.targetUserId)}** — ${event.severity} no longer counts against them`,
-        `Revoked by ${names.user(event.actorUserId)}`,
-        stamp,
-      );
-
-    case 'announcement_removed':
-      return removal(
-        'Announcement removed',
-        `**${event.title}**`,
-        `Removed by ${names.user(event.actorUserId)}`,
-        stamp,
-      );
-
-    case 'laundering_completed':
+    case 'laundering_completed': {
+      const from = names.itemRef(event.fromItemTypeId);
+      const to = names.itemRef(event.toItemTypeId);
       return {
         title: 'Laundering completed',
-        description:
-          `**${formatAmount(event.fromAmount)} ${names.item(event.fromItemTypeId)}** became ` +
-          `**${formatAmount(event.toAmount)} ${names.item(event.toItemTypeId)}**`,
-        color: COLOR.info,
-        footer: { text: `Run by ${names.user(event.actorUserId)}` },
-        timestamp: stamp,
+        description: `### ${formatQuantity(event.fromAmount, from)} → ${formatQuantity(event.toAmount, to)}`,
+        color: info,
+        subject: names.actor(event.actorUserId),
+        item: to,
+        fields: [
+          { name: 'In', value: from ? `${itemGlyph(from)} ${from.name}` : names.item(event.fromItemTypeId), inline: true },
+          { name: 'Out', value: to ? `${itemGlyph(to)} ${to.name}` : names.item(event.toItemTypeId), inline: true },
+        ],
+      };
+    }
+
+    case 'entry_deleted': {
+      const item = names.itemRef(event.itemTypeId);
+      return {
+        title: 'Entry removed',
+        description: headline('-', event.amount, item),
+        color: COLOR.removed,
+        subject: names.actor(event.ownerUserId),
+        // The 5-minute self-undo and a leader striking a row out are different
+        // acts and the channel should not blur them.
+        byline: event.selfUndone
+          ? 'Undone by the member within 5 minutes'
+          : `Removed by ${names.user(event.actorUserId)}`,
+        item,
+      };
+    }
+
+    case 'payout_deleted': {
+      const item = names.itemRef(event.itemTypeId);
+      return {
+        title: event.selfCancelled ? 'Withdrawal request cancelled' : 'Withdrawal removed',
+        description: headline('', event.amount, item),
+        color: COLOR.removed,
+        subject: names.actor(event.recipientUserId),
+        byline: event.selfCancelled
+          ? 'Cancelled by the requester'
+          : `Removed by ${names.user(event.actorUserId)}`,
+        item,
+        fields: [{ name: 'Was', value: event.status, inline: true }],
+      };
+    }
+
+    case 'expense_deleted': {
+      const item = names.itemRef(event.itemTypeId);
+      return {
+        title: 'Expense removed',
+        description: headline('', event.amount, item),
+        color: COLOR.removed,
+        subject: names.actor(event.actorUserId),
+        byline: `Removed by ${names.user(event.actorUserId)}`,
+        item,
+        fields: [{ name: 'Category', value: event.category, inline: true }],
+      };
+    }
+
+    case 'strike_revoked':
+      return {
+        title: 'Strike revoked',
+        description: `**${names.user(event.targetUserId)}** — ${event.severity} no longer counts against them`,
+        color: COLOR.removed,
+        subject: names.actor(event.targetUserId),
+        byline: `Revoked by ${names.user(event.actorUserId)}`,
+      };
+
+    case 'announcement_removed':
+      return {
+        title: 'Announcement removed',
+        description: `**${event.title}**`,
+        color: COLOR.removed,
+        subject: names.actor(event.actorUserId),
+        byline: `Removed by ${names.user(event.actorUserId)}`,
       };
   }
 }
 
 /**
- * A removal, said plainly.
+ * The same chrome on every message: who it is about at the top with their
+ * face, which faction it came from at the bottom, the item's artwork in the
+ * corner, and the time Discord renders in each reader's own timezone.
  *
- * Worth its own colour and a consistent shape: somebody reading the channel
- * later needs to see at a glance that value came back *out* of the ledger,
- * without reading the sentence twice.
+ * Doing it in one place is what makes a channel look like a feed rather than
+ * sixteen messages that were each written separately — which is exactly what
+ * the earlier version was.
  */
-function removal(title: string, description: string, footer: string, stamp: string): DiscordEmbed {
-  return { title, description, color: COLOR.removed, footer: { text: footer }, timestamp: stamp };
+function render(event: DiscordEvent, names: Names, faction: FactionRef): DiscordEmbed {
+  const spec = describe(event, names, faction);
+
+  return {
+    ...(spec.subject
+      ? {
+          author: {
+            name: spec.subject.name,
+            ...(spec.subject.avatarUrl ? { icon_url: spec.subject.avatarUrl } : {}),
+          },
+        }
+      : {}),
+    // Two spaces: Discord collapses the gap after an emoji otherwise, and the
+    // title ends up touching the glyph.
+    title: `${EMOJI[event.type]}  ${spec.title}`,
+    description: spec.description,
+    color: spec.color,
+    ...(spec.fields?.length ? { fields: spec.fields } : {}),
+    ...(spec.item?.imageUrl ? { thumbnail: { url: spec.item.imageUrl } } : {}),
+    footer: { text: spec.byline ? `${faction.name} • ${spec.byline}` : faction.name },
+    timestamp: new Date().toISOString(),
+  };
 }
 
 /** The ids each event mentions, so they can be looked up in one go. */
@@ -301,18 +544,22 @@ function referencedIds(event: DiscordEvent): { userIds: string[]; itemTypeIds: s
 export async function dispatchDiscord(factionId: string, event: DiscordEvent): Promise<void> {
   try {
     // One indexed lookup, and for most factions the story ends here. The join
-    // means a route left behind by some future bug cannot send anything once
-    // the integration is gone.
+    // to the integration means a route left behind by some future bug cannot
+    // send anything once the integration is gone; the join to the faction
+    // costs nothing extra and is what puts a name and a colour on the embed.
     const [target] = await db
       .select({
         channelId: discordChannelRoutes.channelId,
         isEnabled: discordChannelRoutes.isEnabled,
+        factionName: factions.name,
+        brandColor: factions.brandColor,
       })
       .from(discordChannelRoutes)
       .innerJoin(
         discordIntegrations,
         eq(discordChannelRoutes.factionId, discordIntegrations.factionId),
       )
+      .innerJoin(factions, eq(discordChannelRoutes.factionId, factions.id))
       .where(
         and(
           eq(discordChannelRoutes.factionId, factionId),
@@ -325,7 +572,8 @@ export async function dispatchDiscord(factionId: string, event: DiscordEvent): P
 
     const { userIds, itemTypeIds } = referencedIds(event);
     const names = await resolveNames(userIds, itemTypeIds);
-    const result = await postToChannel(target.channelId, { embeds: [render(event, names)] });
+    const faction: FactionRef = { name: target.factionName, brandColor: target.brandColor };
+    const result = await postToChannel(target.channelId, { embeds: [render(event, names, faction)] });
     await recordDeliveryOutcome(factionId, result);
   } catch (err) {
     // Reached only if the lookup itself fails; postToChannel does not throw.

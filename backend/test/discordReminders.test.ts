@@ -372,10 +372,10 @@ describe('the message', () => {
     await api().post(`${base()}/${created.body.data.id}/send`).set('Cookie', w.admin.cookie);
 
     const [, payload] = postMock.mock.calls[0] as unknown as [string, { embeds: Record<string, string>[] }];
-    expect(payload.embeds[0]!.title).toBe('Reminder');
+    expect(payload.embeds[0]!.title).toContain('Reminder');
   });
 
-  // Discord renders <t:unix:F> in each reader's own timezone and locale, so a
+  // Discord renders <t:unix:f> in each reader's own timezone and locale, so a
   // player in another country sees the right wall clock without the app
   // knowing anything about where they are.
   it('writes the date as Discord timestamp markup', async () => {
@@ -386,7 +386,7 @@ describe('the message', () => {
     const [, payload] = postMock.mock.calls[0] as unknown as [string, {
       embeds: { fields: { name: string; value: string }[] }[];
     }];
-    expect(payload.embeds[0]!.fields[0]!.value).toMatch(/^<t:\d+:F>$/);
+    expect(payload.embeds[0]!.fields[0]!.value).toMatch(/^<t:\d+:f>$/);
   });
 });
 
