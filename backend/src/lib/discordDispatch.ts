@@ -30,6 +30,8 @@ export type DiscordEvent =
   | { type: 'member_joined'; actorUserId: string; targetUserId: string }
   | { type: 'member_left'; actorUserId: string; targetUserId: string }
   | { type: 'laundering_completed'; actorUserId: string; fromItemTypeId: string; fromAmount: string; toItemTypeId: string; toAmount: string }
+  | { type: 'craft_completed'; actorUserId: string; recipeName: string; quantity: number; inputs: { itemTypeId: string; amount: string }[]; outputs: { itemTypeId: string; amount: string }[] }
+  | { type: 'craft_reverted'; actorUserId: string; recipeName: string; quantity: number; crafterUserId: string }
   | { type: 'entry_deleted'; actorUserId: string; ownerUserId: string; itemTypeId: string; amount: string; selfUndone?: boolean }
   | { type: 'payout_deleted'; actorUserId: string; recipientUserId: string; itemTypeId: string; amount: string; status: string; selfCancelled?: boolean }
   | { type: 'expense_deleted'; actorUserId: string; itemTypeId: string; amount: string; category: string }
@@ -67,6 +69,8 @@ const EMOJI: Record<DiscordEvent['type'], string> = {
   member_joined: '\u{1F91D}',          // handshake
   member_left: '\u{1F44B}',            // waving hand
   laundering_completed: '\u{1F9FC}',   // soap
+  craft_completed: '\u{1F528}',        // hammer
+  craft_reverted: '\u{21A9}\u{FE0F}',  // arrow curving back
   entry_deleted: '\u{1F5D1}\u{FE0F}',  // wastebasket
   payout_deleted: '\u{1F5D1}\u{FE0F}',
   expense_deleted: '\u{1F5D1}\u{FE0F}',
@@ -259,6 +263,19 @@ function headline(sign: '+' | '-' | '', amount: string, item: ItemRef | null): s
   return `### ${itemGlyph(item)}  ${figure}\n${item.name}`;
 }
 
+/**
+ * One line of a craft: its glyph, its amount and its name.
+ *
+ * A craft names several item types at once, so each line has to carry its own
+ * identity — unlike every other event here, where the single item can sit on a
+ * line of its own beneath the figure.
+ */
+function glyphAmount(line: { itemTypeId: string; amount: string }, names: Names): string {
+  const item = names.itemRef(line.itemTypeId);
+  const figure = formatQuantity(line.amount, item);
+  return item ? `${itemGlyph(item)} ${figure} ${item.name}` : figure;
+}
+
 /** What the switch below decides; the chrome around it is applied once, in `render`. */
 interface Spec {
   title: string;
@@ -418,6 +435,35 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
       };
     }
 
+    case 'craft_completed': {
+      // The output is the headline — it is what the faction now has. Inputs go
+      // in a field, because "what it cost" is the second question every time
+      // and never the first.
+      const made = event.outputs
+        .map((o) => `${glyphAmount(o, names)}`)
+        .join('\n');
+      const used = event.inputs
+        .map((i) => `${glyphAmount(i, names)}`)
+        .join('\n');
+      return {
+        title: event.quantity > 1 ? `Crafted ${event.quantity} × ${event.recipeName}` : `Crafted ${event.recipeName}`,
+        description: `### ${made}`,
+        color: COLOR.in,
+        subject: names.actor(event.actorUserId),
+        item: names.itemRef(event.outputs[0]?.itemTypeId ?? ''),
+        ...(used ? { fields: [{ name: 'Materials used', value: used }] } : {}),
+      };
+    }
+
+    case 'craft_reverted':
+      return {
+        title: 'Craft reverted',
+        description: `### ${event.quantity > 1 ? `${event.quantity} × ` : ''}${event.recipeName}`,
+        color: COLOR.removed,
+        subject: names.actor(event.crafterUserId),
+        byline: `Reverted by ${names.user(event.actorUserId)}`,
+      };
+
     case 'entry_deleted': {
       const item = names.itemRef(event.itemTypeId);
       return {
@@ -525,6 +571,11 @@ function referencedIds(event: DiscordEvent): { userIds: string[]; itemTypeIds: s
   if ('ownerUserId' in event) userIds.push(event.ownerUserId);
   if ('itemTypeId' in event) itemTypeIds.push(event.itemTypeId);
   if ('fromItemTypeId' in event) itemTypeIds.push(event.fromItemTypeId, event.toItemTypeId);
+  if ('crafterUserId' in event) userIds.push(event.crafterUserId);
+  if ('inputs' in event) {
+    for (const line of event.inputs) itemTypeIds.push(line.itemTypeId);
+    for (const line of event.outputs) itemTypeIds.push(line.itemTypeId);
+  }
 
   return { userIds, itemTypeIds };
 }
