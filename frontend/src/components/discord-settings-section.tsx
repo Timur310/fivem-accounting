@@ -6,6 +6,8 @@ import { discordApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   SearchableSelect, type SearchableSelectOption,
@@ -36,6 +38,9 @@ export function DiscordSettingsSection({ factionId }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+  // Defaults to off every time the dialog opens. A destructive extra should
+  // never be pre-ticked, and should never remember a previous yes.
+  const [alsoLeave, setAlsoLeave] = useState(false);
 
   const { data: status, isLoading, error } = useQuery({
     queryKey: ['discord-status', factionId],
@@ -65,11 +70,23 @@ export function DiscordSettingsSection({ factionId }: Props) {
   });
 
   const unlink = useMutation({
-    mutationFn: () => discordApi.unlink(factionId),
-    onSuccess: () => {
+    mutationFn: (leave: boolean) => discordApi.unlink(factionId, leave),
+    onSuccess: (result) => {
       setConfirmUnlink(false);
       invalidate();
-      toast({ title: t('discord.disconnected') });
+      // Three outcomes, and they are not the same news: they did not ask to
+      // remove the bot, it was removed, or we asked and Discord refused — in
+      // which case the bot is still sitting in their server and they need to
+      // know that rather than assume it is gone.
+      if (result.left === false) {
+        toast({
+          title: t('discord.disconnected'),
+          description: t('discord.leaveFailed', { error: result.leaveError ?? '' }),
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: result.left ? t('discord.disconnectedAndLeft') : t('discord.disconnected') });
+      }
     },
     onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
   });
@@ -185,7 +202,10 @@ export function DiscordSettingsSection({ factionId }: Props) {
                   <Button variant="outline" onClick={() => connect.mutate()} disabled={connect.isPending}>
                     {t('discord.reconnect')}
                   </Button>
-                  <Button variant="destructive" onClick={() => setConfirmUnlink(true)}>
+                  <Button
+                    variant="destructive"
+                    onClick={() => { setAlsoLeave(false); setConfirmUnlink(true); }}
+                  >
                     <Unlink className="mr-2 h-4 w-4" />
                     {t('discord.disconnect')}
                   </Button>
@@ -284,9 +304,27 @@ export function DiscordSettingsSection({ factionId }: Props) {
             </AlertDialogTitle>
             <AlertDialogDescription>{t('discord.disconnectBody')}</AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* Off by default, and the warning sits with the switch rather than
+              in the paragraph above: the same bot may be doing other work in
+              that server, and this is the moment to think about it. */}
+          <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+            <div className="space-y-1">
+              <Label htmlFor="discord-also-leave" className="text-sm font-medium">
+                {t('discord.alsoLeave')}
+              </Label>
+              <p className="text-xs text-muted-foreground">{t('discord.alsoLeaveHint')}</p>
+            </div>
+            <Switch
+              id="discord-also-leave"
+              checked={alsoLeave}
+              onCheckedChange={setAlsoLeave}
+            />
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => unlink.mutate()} disabled={unlink.isPending}>
+            <AlertDialogAction onClick={() => unlink.mutate(alsoLeave)} disabled={unlink.isPending}>
               {t('discord.disconnect')}
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -15,6 +15,7 @@ import { createAuditLog } from '../lib/audit.js';
 import {
   buildBotInviteUrl,
   isDiscordConfigured,
+  leaveGuild,
   listGuildChannels,
   postToChannel,
   recordDeliveryOutcome,
@@ -79,8 +80,13 @@ router.get('/invite-url', async (req: Request, res: Response) => {
 });
 
 // ── DELETE / — disconnect the server ──────────────────
+// `?leave=true` also makes the bot remove itself from the guild. Opt-in, never
+// assumed: one Discord application can carry a bot doing several jobs, and the
+// server a faction connected may be the one where that same bot already runs
+// their whitelist. Leaving by default would break it silently.
 router.delete('/', async (req: Request, res: Response) => {
   const factionId = req.params.id as string;
+  const alsoLeave = req.query.leave === 'true';
 
   const [existing] = await db
     .select()
@@ -101,19 +107,30 @@ router.delete('/', async (req: Request, res: Response) => {
     await tx.delete(discordIntegrations).where(eq(discordIntegrations.factionId, factionId));
   });
 
+  // Only after the local state is already gone. The disconnect is the part the
+  // faction asked for and the part we can guarantee; leaving the guild is a
+  // best-effort favour on top, and a failure there must not undo it.
+  let left: boolean | null = null;
+  let leaveError: string | undefined;
+  if (alsoLeave) {
+    const result = await leaveGuild(existing.guildId);
+    left = result.ok;
+    leaveError = result.error;
+  }
+
   await createAuditLog({
     userId: req.user!.id,
     factionId,
     action: 'discord_unlinked',
     entityType: 'discord_integration',
-    details: { guildId: existing.guildId, guildName: existing.guildName },
+    details: { guildId: existing.guildId, guildName: existing.guildName, leftGuild: left },
     req,
   });
 
-  // Note the bot is still sitting in their Discord server. Removing it is
-  // theirs to do — we hold no authority over their guild, and pretending
-  // otherwise by silently trying and failing would be worse than saying so.
-  success(res, { unlinked: true });
+  // `left` is null when they did not ask, false when we asked Discord and it
+  // refused. The client says something different for each: nothing, or "the
+  // bot is still in the server, remove it there".
+  success(res, { unlinked: true, left, leaveError });
 });
 
 // ── GET /channels — the guild's text channels ─────────

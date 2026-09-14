@@ -815,7 +815,15 @@ export const discordApi = {
       .get<ApiSuccessResponse<{ channels: DiscordChannel[] }>>(`/factions/${factionId}/discord/channels`)
       .then((r) => r.data.data.channels),
 
-  unlink: (factionId: string) => api.delete(`/factions/${factionId}/discord`),
+  // `leave` also removes the bot from the guild. Opt-in: the same bot may be
+  // doing other work in that server.
+  unlink: (factionId: string, leave = false) =>
+    api
+      .delete<ApiSuccessResponse<{ unlinked: boolean; left: boolean | null; leaveError?: string }>>(
+        `/factions/${factionId}/discord`,
+        { params: leave ? { leave: 'true' } : undefined },
+      )
+      .then(unwrap),
 
   setRoute: (
     factionId: string,
