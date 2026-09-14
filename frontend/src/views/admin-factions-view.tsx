@@ -118,7 +118,8 @@ export function AdminFactionsView() {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : factions.length === 0 ? (
-            <EmptyState icon={Shield} title={t('admin.noFactionsYet')} />
+            <EmptyState icon={Shield} title={t('admin.noFactionsYet')}
+              hint={t('admin.noFactionsYetHint')} />
           ) : (
             <>
               <Table>

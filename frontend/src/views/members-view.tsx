@@ -252,7 +252,8 @@ export function MembersView({ factionId, isFactionAdmin, canManageMembers = true
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : members.length === 0 ? (
-            <EmptyState icon={UserPlus} title={t('members.noneYet')} />
+            <EmptyState icon={UserPlus} title={t('members.noneYet')}
+              hint={t('members.noneYetHint')} />
           ) : (
             <Table>
               <TableHeader>

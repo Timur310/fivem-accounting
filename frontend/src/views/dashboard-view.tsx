@@ -617,7 +617,8 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
           </CardHeader>
           <CardContent>
             {topContributors.length === 0 ? (
-              <EmptyState icon={Trophy} title={t('dashboard.noContributions')} compact />
+              <EmptyState icon={Trophy} title={t('dashboard.noContributions')}
+              hint={t('dashboard.noContributionsHint')} compact />
             ) : (
               <div className="space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
@@ -657,7 +658,8 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
           </CardHeader>
           <CardContent>
             {recentEntries.length === 0 ? (
-              <EmptyState icon={List} title={t('entries.noneYet')} compact />
+              <EmptyState icon={List} title={t('entries.noneYet')}
+              hint={t('entries.noneYetHint')} compact />
             ) : (
               <div className="space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (

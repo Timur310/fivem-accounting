@@ -187,7 +187,8 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : strikes.length === 0 ? (
-            <EmptyState icon={AlertTriangle} title={t('strikes.none')} />
+            <EmptyState icon={AlertTriangle} title={t('strikes.none')}
+              hint={t('strikes.noneHint')} />
           ) : (
             <Table>
               <TableHeader>

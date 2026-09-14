@@ -80,7 +80,8 @@ export function AdminFactionDetailView() {
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-sm text-zinc-200 flex items-center gap-2"><Users className="h-4 w-4 text-zinc-400" />{t('nav.members')} ({data.members.length})</CardTitle></CardHeader>
           <CardContent>
-            {data.members.length === 0 ? (<EmptyState icon={Users} title={t('members.none')} compact />) : (
+            {data.members.length === 0 ? (<EmptyState icon={Users} title={t('members.none')}
+              hint={t('members.noneHint')} compact />) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.members.map((m: Member) => (
                   <div key={m.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
@@ -97,7 +98,8 @@ export function AdminFactionDetailView() {
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-sm text-zinc-200 flex items-center gap-2"><Package className="h-4 w-4 text-zinc-400" />{t('settings.itemTypes')} ({data.itemTypes.length})</CardTitle></CardHeader>
           <CardContent>
-            {data.itemTypes.length === 0 ? (<EmptyState icon={Package} title={t('itemTypes.none')} compact />) : (
+            {data.itemTypes.length === 0 ? (<EmptyState icon={Package} title={t('itemTypes.none')}
+              hint={t('itemTypes.noneHint')} compact />) : (
               <div className="space-y-1 max-h-96 overflow-y-auto">
                 {data.itemTypes.map((item: ItemType) => (
                   <div key={item.id} className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">

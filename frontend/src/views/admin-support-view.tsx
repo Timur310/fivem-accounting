@@ -171,7 +171,8 @@ export function AdminSupportView() {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : tickets.length === 0 ? (
-            <EmptyState icon={LifeBuoy} title={t('support.inboxEmpty')} />
+            <EmptyState icon={LifeBuoy} title={t('support.inboxEmpty')}
+              hint={t('support.inboxEmptyHint')} />
           ) : (
             <div className="divide-y divide-[var(--line-1)]">
               {tickets.map((ticket) => (

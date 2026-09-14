@@ -176,7 +176,8 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           ) : isError ? (
             <ErrorState error={loadError} onRetry={() => retry()} />
           ) : rankings.length === 0 ? (
-            <EmptyState icon={Trophy} title={t('leaderboard.noEntriesForPeriod')} />
+            <EmptyState icon={Trophy} title={t('leaderboard.noEntriesForPeriod')}
+              hint={t('leaderboard.noEntriesForPeriodHint')} />
           ) : (
             <div>
             {/* Podium: the top three get an emphasized header row — the race

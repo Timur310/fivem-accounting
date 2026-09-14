@@ -445,7 +445,8 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
           ) : isError ? (
             <ErrorState error={entriesError} onRetry={() => refetchEntries()} />
           ) : entries.length === 0 ? (
-            <EmptyState icon={Search} title={t('entries.noneFound')} />
+            <EmptyState icon={Search} title={t('entries.noneFound')}
+              hint={t('entries.noneFoundHint')} />
           ) : (
             <>
               <div className="overflow-x-auto">

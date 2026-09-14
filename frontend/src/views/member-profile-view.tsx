@@ -434,7 +434,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {quotaProgress.length === 0 ? (
-                  <EmptyState icon={Target} title={t('quota.noneActive')} compact />
+                  <EmptyState icon={Target} title={t('quota.noneActive')}
+              hint={t('quota.noneActiveHint')} compact />
                 ) : (
                   <div className="space-y-3">
                     {quotaProgress.map((q) => {
@@ -479,7 +480,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardHeader>
               <CardContent>
                 {strikes.length === 0 ? (
-                  <EmptyState icon={AlertTriangle} title={t('strikes.none')} compact />
+                  <EmptyState icon={AlertTriangle} title={t('strikes.none')}
+              hint={t('strikes.noneHint')} compact />
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
                     {strikes.slice(0, 5).map((s) => (
@@ -625,7 +627,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           {notesLoading ? <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div> : notesIsError ? (
             <Card><CardContent className="p-0"><ErrorState error={notesError} onRetry={() => notesRefetch()} compact /></CardContent></Card>
           ) : notes.length === 0 ? (
-            <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')} compact /></CardContent></Card>
+            <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')}
+              hint={t('notes.noneHint')} compact /></CardContent></Card>
           ) : (
             <div className="space-y-2">
               {notes.map((n) => (
@@ -661,7 +664,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </CardHeader>
           <CardContent>
             {!historyData?.data?.length ? (
-              <EmptyState icon={Clock} title={t('profile.noHistory')} compact />
+              <EmptyState icon={Clock} title={t('profile.noHistory')}
+              hint={t('profile.noHistoryHint')} compact />
             ) : (
               <div className="space-y-2">
                 {historyData.data.map((h) => (

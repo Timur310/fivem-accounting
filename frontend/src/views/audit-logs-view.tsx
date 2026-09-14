@@ -149,7 +149,8 @@ export function AuditLogsView({ factionId }: Props) {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : logs.length === 0 ? (
-            <EmptyState icon={ScrollText} title={t('audit.none')} />
+            <EmptyState icon={ScrollText} title={t('audit.none')}
+              hint={t('audit.noneHint')} />
           ) : (
             <>
               <div className="overflow-x-auto">

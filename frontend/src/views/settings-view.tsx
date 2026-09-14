@@ -1431,7 +1431,8 @@ function FactionSettingsSection({
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
-            <EmptyState icon={Shield} title={t('settings.noRanksYet')} compact />
+            <EmptyState icon={Shield} title={t('settings.noRanksYet')}
+              hint={t('settings.noRanksYetHint')} compact />
           ) : (
             <div className="space-y-3">
               {[...ranks].sort((a, b) => a.level - b.level).map((r, sortedIdx) => {

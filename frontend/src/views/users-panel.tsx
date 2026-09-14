@@ -176,9 +176,10 @@ export function UsersPanel() {
           ) : isError ? (
             <ErrorState error={error} onRetry={() => refetch()} />
           ) : allUsers.length === 0 ? (
-            <EmptyState icon={Users} title={t('users.none')} />
+            <EmptyState icon={Users} title={t('users.none')}
+              hint={t('users.noneHint')} />
           ) : users.length === 0 ? (
-            <EmptyState icon={Search} title={t('members.noneMatch')} />
+            <EmptyState icon={Search} title={t('members.noneMatch')} hint={t('members.noneMatchHint')} />
           ) : (
             <Table>
               <TableHeader>

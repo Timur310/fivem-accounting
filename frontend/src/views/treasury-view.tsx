@@ -298,9 +298,10 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         {balancesOpen && (
         <CardContent>
           {balances.length === 0 ? (
-            <EmptyState icon={Wallet} title={t('treasury.noBalances')} compact />
+            <EmptyState icon={Wallet} title={t('treasury.noBalances')}
+              hint={t('treasury.noBalancesHint')} compact />
           ) : visibleBalances.length === 0 ? (
-            <EmptyState icon={Search} title={t('itemTypes.noneMatch')} compact />
+            <EmptyState icon={Search} title={t('itemTypes.noneMatch')} hint={t('itemTypes.noneMatchHint')} compact />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleBalances.map((b) => (
@@ -406,7 +407,8 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
         </CardHeader>
         <CardContent>
           {recentPayouts.length === 0 ? (
-            <EmptyState icon={ArrowDownToLine} title={t('treasury.noCompletedWithdrawals')} compact />
+            <EmptyState icon={ArrowDownToLine} title={t('treasury.noCompletedWithdrawals')}
+              hint={t('treasury.noCompletedWithdrawalsHint')} compact />
           ) : (
             <div className="space-y-1">
               {recentPayouts.map((p) => (
@@ -677,7 +679,8 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
         ) : isError ? (
           <ErrorState error={error} onRetry={() => refetch()} compact />
         ) : expenses.length === 0 ? (
-          <EmptyState icon={Receipt} title={t('expenses.none')} compact />
+          <EmptyState icon={Receipt} title={t('expenses.none')}
+              hint={t('expenses.noneHint')} compact />
         ) : (
           // Columns, not a sentence. The amount used to sit mid-paragraph
           // between a badge and the item name, so nothing lined up and the
@@ -954,7 +957,8 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
         ) : isError ? (
           <ErrorState error={error} onRetry={() => refetch()} compact />
         ) : checks.length === 0 ? (
-          <EmptyState icon={ClipboardCheck} title={t('treasury.noChecks')} compact />
+          <EmptyState icon={ClipboardCheck} title={t('treasury.noChecks')}
+              hint={t('treasury.noChecksHint')} compact />
         ) : (
           <div className="space-y-1">
             {checks.map((c) => {
