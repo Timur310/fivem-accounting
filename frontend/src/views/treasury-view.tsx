@@ -72,6 +72,15 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
     refetchOnWindowFocus: true,
   });
 
+  // Above the loading and error guards, because a hook cannot sit behind an
+  // early return: on the first render `data` is undefined, TreasuryView bails
+  // out before reaching this line, and the next render calls one hook more
+  // than the last. React counts hooks by call order, not by name.
+  //
+  // Magnitude only — the sign is rendered separately, so the figure never
+  // animates through zero on its way to a negative.
+  const displayNetBalance = useCountUp(Math.abs(data?.netBalance ?? 0));
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -97,11 +106,6 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
   const fmt = (n: number) => `$${formatNumber(n)}`;
 
   const { balances, netBalance, totalInflow, totalOutflow, totals, pending, outflowTrend, recentPayouts } = data;
-
-  // The headline figure travels to its new value rather than jumping, so a
-  // withdrawal completing is something you watch happen rather than something
-  // you notice afterwards. Magnitude only — the sign is rendered separately.
-  const displayNetBalance = useCountUp(Math.abs(netBalance));
 
   // Filtering and ordering are a reading aid over a list the API already sent
   // whole, so both happen here rather than as query parameters: no refetch, and
