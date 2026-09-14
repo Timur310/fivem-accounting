@@ -6,7 +6,7 @@
 const TEST_DB_NAME = process.env.TEST_DB_NAME ?? 'faction_accountant_test';
 const ADMIN_URL =
   process.env.TEST_ADMIN_DATABASE_URL ??
-  'postgresql://hackforge:supersecret@localhost:5432/postgres';
+  'postgresql://postgres:1313@localhost:5432/postgres';
 
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = ADMIN_URL.replace(/\/[^/]+$/, `/${TEST_DB_NAME}`);
