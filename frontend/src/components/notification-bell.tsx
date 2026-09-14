@@ -12,7 +12,7 @@ import { Bell, Check, Trash2 } from 'lucide-react';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatAmount, formatDateTime } from '@/lib/format';
 import type { AppNotification } from '@/lib/api-types';
-import type { TranslationKey } from '@/lib/i18n';
+import type { TranslationKey, TranslationParams } from '@/lib/i18n';
 
 /** Icon tint per type. Red for a strike and a rejection, green for the rest. */
 const TONE: Record<string, string> = {
@@ -77,23 +77,44 @@ export function NotificationBell() {
   /**
    * Render one notification's sentence.
    *
-   * Amounts are formatted here rather than stored formatted, so they follow
-   * the same rules as every other figure in the app — and a missing key shows
-   * the raw type instead of an empty row, which makes the omission visible.
+   * The server's whole `data` bag is handed to the translator, rather than a
+   * hand-written list of the placeholders each sentence happens to use. That
+   * list was the bug: `announcement_posted` carries a `title` nobody had
+   * added to it, so the bell read "Új közlemény: {title}" — and every new
+   * notification type would have failed the same way until someone noticed.
+   * Passing everything makes forgetting impossible.
+   *
+   * Two fields are then overridden, because they are not raw values:
+   * amounts are formatted here so they follow the same rules as every other
+   * figure in the app, and a severity is a translated word, not a key.
+   *
+   * A missing key shows the raw type instead of an empty row, which makes
+   * that kind of omission visible too.
    */
   const describe = (n: AppNotification): string => {
     const d = n.data ?? {};
-    const amount =
-      d.amount !== undefined && d.amount !== null
-        ? formatAmount(String(d.amount), String(d.itemUnit ?? ''), Number(d.itemIsCurrency) === 1)
-        : '';
+
+    const params: TranslationParams = {};
+    for (const [name, value] of Object.entries(d)) {
+      // null renders as an empty gap rather than the word "null".
+      params[name] = value == null ? '' : String(value);
+    }
+
+    if (d.amount !== undefined && d.amount !== null) {
+      params.amount = formatAmount(
+        String(d.amount),
+        String(d.itemUnit ?? ''),
+        Number(d.itemIsCurrency) === 1,
+      );
+    }
+    if (d.severity) {
+      params.severity = t(`strikes.severity.${d.severity}` as TranslationKey);
+    }
+    // The payout sentences name it `itemType`; the server sends `itemTypeName`.
+    if (d.itemTypeName !== undefined) params.itemType = String(d.itemTypeName ?? '');
+
     const key = `notification.${n.type}` as TranslationKey;
-    const text = t(key, {
-      amount,
-      itemType: String(d.itemTypeName ?? ''),
-      severity: d.severity ? t(`strikes.severity.${d.severity}` as TranslationKey) : '',
-      subject: String(d.subject ?? ''),
-    });
+    const text = t(key, params);
     return text === key ? n.type : text;
   };
 

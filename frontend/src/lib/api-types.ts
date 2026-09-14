@@ -1309,8 +1309,28 @@ export const DISCORD_EVENT_TYPES = [
   'member_joined',
   'member_left',
   'laundering_completed',
+  'entry_deleted',
+  'payout_deleted',
+  'expense_deleted',
+  'strike_revoked',
+  'announcement_removed',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
+
+/**
+ * Where the settings list breaks in two.
+ *
+ * Removals are routed separately from additions on purpose: a faction may want
+ * the ledger in a busy public channel and "somebody took that back" somewhere
+ * leadership actually reads.
+ */
+export const DISCORD_REMOVAL_EVENTS: readonly DiscordEventType[] = [
+  'entry_deleted',
+  'payout_deleted',
+  'expense_deleted',
+  'strike_revoked',
+  'announcement_removed',
+];
 
 export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> = {
   entry_logged: 'discord.event.entryLogged',
@@ -1324,6 +1344,11 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   member_joined: 'discord.event.memberJoined',
   member_left: 'discord.event.memberLeft',
   laundering_completed: 'discord.event.launderingCompleted',
+  entry_deleted: 'discord.event.entryDeleted',
+  payout_deleted: 'discord.event.payoutDeleted',
+  expense_deleted: 'discord.event.expenseDeleted',
+  strike_revoked: 'discord.event.strikeRevoked',
+  announcement_removed: 'discord.event.announcementRemoved',
 };
 
 export interface DiscordIntegration {

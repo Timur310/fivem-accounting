@@ -494,6 +494,15 @@ router.delete('/:entryId', async (req: Request, res: Response) => {
     return;
   }
 
+  void dispatchDiscord(factionId, {
+    type: 'entry_deleted',
+    actorUserId: req.user!.id,
+    ownerUserId: existing.userId,
+    itemTypeId: existing.itemTypeId,
+    amount: existing.amount,
+    selfUndone: withinUndo && !canManage,
+  });
+
   success(res, { id: entryId, deleted: true });
 });
 

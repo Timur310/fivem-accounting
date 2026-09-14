@@ -197,6 +197,18 @@ router.patch('/:strikeId', requirePermission('manage_strikes'), async (req: Requ
     req,
   });
 
+  // Only revocation is announced. 'appealed' is a conversation in progress and
+  // 'active' is the normal state; neither is news, and a channel that reports
+  // every click on a strike stops being read.
+  if (parsed.data.status === 'revoked' && current !== 'revoked') {
+    void dispatchDiscord(factionId, {
+      type: 'strike_revoked',
+      actorUserId: req.user!.id,
+      targetUserId,
+      severity: existing.severity,
+    });
+  }
+
   success(res, updated ? { ...updated, effectiveStatus: effectiveStatus(updated) } : null);
 });
 

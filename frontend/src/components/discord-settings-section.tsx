@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import {
   DISCORD_EVENT_LABEL_KEYS,
+  DISCORD_REMOVAL_EVENTS,
   type DiscordChannelRoute,
   type DiscordEventType,
 } from '@/lib/api-types';
@@ -145,6 +146,51 @@ export function DiscordSettingsSection({ factionId }: Props) {
   const routeFor = (eventType: DiscordEventType): DiscordChannelRoute | undefined =>
     status.routes.find((r) => r.eventType === eventType);
 
+  // Rendered twice, once per group, so the row is written once.
+  const renderRow = (eventType: DiscordEventType) => {
+    const route = routeFor(eventType);
+    const current = route?.channelId ?? OFF;
+    return (
+      <div
+        key={eventType}
+        className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+      >
+        <span className="text-sm font-medium">{t(DISCORD_EVENT_LABEL_KEYS[eventType])}</span>
+        <div className="flex items-center gap-2">
+          <SearchableSelect
+            value={current}
+            onValueChange={(channelId) =>
+              setRoute.mutate({
+                eventType,
+                channelId,
+                channelName: channels?.find((c) => c.id === channelId)?.name,
+              })
+            }
+            options={channelOptions}
+            className="w-56"
+            aria-label={t(DISCORD_EVENT_LABEL_KEYS[eventType])}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            // Nothing to test while the event is switched off.
+            disabled={current === OFF || sendTest.isPending}
+            onClick={() => sendTest.mutate(current)}
+            title={t('discord.test')}
+            aria-label={t('discord.test')}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  // Driven by the server's list, not a local copy: an event type added later
+  // appears here without a frontend change.
+  const additions = status.eventTypes.filter((e) => !DISCORD_REMOVAL_EVENTS.includes(e));
+  const removals = status.eventTypes.filter((e) => DISCORD_REMOVAL_EVENTS.includes(e));
+
   const channelOptions: SearchableSelectOption[] = [
     { value: OFF, label: t('discord.off') },
     ...(channels ?? []).map((c) => ({
@@ -266,47 +312,26 @@ export function DiscordSettingsSection({ factionId }: Props) {
             ) : channelsLoading ? (
               <Skeleton className="h-48 w-full" />
             ) : (
-              <div className="space-y-2">
-                {status.eventTypes.map((eventType) => {
-                  const route = routeFor(eventType);
-                  const current = route?.channelId ?? OFF;
-                  return (
-                    <div
-                      key={eventType}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
-                    >
-                      <span className="text-sm font-medium">
-                        {t(DISCORD_EVENT_LABEL_KEYS[eventType])}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <SearchableSelect
-                          value={current}
-                          onValueChange={(channelId) =>
-                            setRoute.mutate({
-                              eventType,
-                              channelId,
-                              channelName: channels?.find((c) => c.id === channelId)?.name,
-                            })
-                          }
-                          options={channelOptions}
-                          className="w-56"
-                          aria-label={t(DISCORD_EVENT_LABEL_KEYS[eventType])}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          // Nothing to test while the event is switched off.
-                          disabled={current === OFF || sendTest.isPending}
-                          onClick={() => sendTest.mutate(current)}
-                          title={t('discord.test')}
-                          aria-label={t('discord.test')}
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="space-y-6">
+                {/* Two groups, because they are two different decisions. Most
+                    factions want activity in a public log; "somebody took that
+                    back out" is the one leadership needs to see. */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t('discord.routingAdditions')}
+                  </p>
+                  {additions.map(renderRow)}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {t('discord.routingRemovals')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('discord.routingRemovalsHint')}
+                  </p>
+                  {removals.map(renderRow)}
+                </div>
               </div>
             )}
           </CardContent>

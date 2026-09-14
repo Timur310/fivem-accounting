@@ -34,11 +34,14 @@ ledger for that vault:
 - **what the faction spent** — rent, utilities, supplies,
 - **what's expected** — weekly and monthly quotas,
 - **who stepped up and who didn't** — leaderboards, streaks, inactivity,
+- **what the faction needs to know** — announcements, a shared activity feed,
 - **and who touched what** — a complete, uneditable audit trail.
 
-It replaces Discord messages, spreadsheets and memory. Everything here is
-permanent on purpose: log honestly, because leaders can see the history of
-all of it — including the numbers you'd rather they didn't.
+It replaces spreadsheets and memory. It does not replace your Discord — it
+feeds it: connect a server and the ledger posts there by itself (§8.6).
+
+Everything here is permanent on purpose: log honestly, because leaders can see
+the history of all of it — including the numbers you'd rather they didn't.
 
 ---
 
@@ -423,6 +426,11 @@ the list shows the whole roster, so the useful part is who has not.
 You can edit only your own announcements. You can remove your own, and with
 `manage_settings` you can remove anybody's.
 
+If your faction has connected a Discord server and routed **Announcement
+posted** to a channel (§8.6), posting one also drops it into that channel —
+title and author, not the whole message. Editing it afterwards does not update
+what Discord already received.
+
 ---
 
 ### 5.10 Activity — what the faction has been doing
@@ -438,6 +446,10 @@ screen would not.
 
 Anonymous entries appear as **The faction** rather than a name, because that is
 who they belong to.
+
+This is the in-app timeline, and it is separate from Discord posting (§8.6).
+The feed narrows itself to what you are allowed to see; a Discord channel shows
+the same message to everyone in it. Choose which channels get what accordingly.
 
 ---
 
@@ -621,6 +633,10 @@ Formal warnings. Issue from a member's profile or the Strikes view.
   faction's configured threshold, the roster shows a **Kick suggestion**
   badge (§6.1).
 
+**If strikes are routed to Discord** (§8.6), issuing one posts the member's
+name, the severity and the reason into that channel. Everyone who can read the
+channel reads it. Pick a leadership-only channel, or leave strikes unrouted.
+
 ### 6.8 Audit logs (`view_audit_logs`)
 
 The app's memory of who did what: actor, action, entity, timestamp, and
@@ -738,8 +754,52 @@ approved, a strike issued — gets its own dropdown. Pick a channel and it saves
 straight away. Anything left on **Off** is not sent, and everything starts on
 Off: nothing is posted until you decide it should be.
 
+You can route them all to one channel, or split them up — the ledger to a
+quiet log channel, strikes somewhere only leadership reads.
+
+**Activity:**
+
+| | |
+|---|---|
+| Entry logged | somebody added to the vault |
+| Withdrawal requested / approved / rejected / paid out | each state, separately |
+| Expense recorded | money that left the vault with no member receiving it |
+| Strike issued | discipline |
+| Announcement posted | title and author |
+| Member joined / left | roster changes |
+| Laundering completed | one currency converted into another |
+
+**Corrections and removals**, listed separately underneath:
+
+| | |
+|---|---|
+| Entry removed | including a member undoing their own within 5 minutes |
+| Withdrawal removed or cancelled | a leader removing one, or the requester taking their own back |
+| Expense removed | |
+| Strike revoked | it no longer counts against the member |
+| Announcement removed | |
+
+These have their own channels for a reason. A log that only shows things going
+*in* can be worked: log it, take the credit, quietly remove it later. Routing
+the removals — even to a channel only leadership reads — closes that. The
+message says whose row it was, not just who removed it.
+
 The **send icon** beside each row posts a test message to that channel, so you
 can confirm it arrives before waiting for something real to happen.
+
+Once a channel is set, the real thing posts by itself: somebody logs an entry,
+the message appears. Nothing is ever sent for an event you left on Off.
+
+**Message language** is English, and the picker is switched off for now. Unlike
+the app, a Discord message has no single reader — everyone in the channel sees
+the same text — so it cannot follow each member's own language. The faction
+will choose one once there is a second language to choose.
+
+**Think about who reads the channel.** Inside the app, a withdrawal or a
+strike is only visible to the people whose permission covers it. A Discord
+channel has no such thing: everybody who can read the channel reads the
+message. Strikes and withdrawals are the two to place carefully — a channel
+your whole faction sees will show your whole faction who got disciplined.
 
 **If it stops working.** A red bar appears here with the last failure. Almost
 always it means the bot was removed from the server, or lost access to a
@@ -865,6 +925,11 @@ action, the entity, when it happened, and before/after values for changes.
   it never colors a number.
 - **Private notes stay private.** A member can see their own strikes; they
   can never see the notes written about them.
+- **Discord is told, never asked.** The bot only posts. It reads no messages,
+  takes no commands, and nothing in Discord can change a number here.
+- **A Discord problem is never your problem.** If the bot cannot post, the
+  entry, withdrawal or strike still happened and still saved. The message is
+  the only thing lost, and the failure is shown in Settings → Discord.
 
 ---
 
@@ -907,8 +972,18 @@ Record a vault count (Treasury → Vault verification). The variance is the
 starting point of the investigation, and the count is audited.
 
 **Where do announcements go?**
-There is no announcement system (yet) — that lives in Discord. Everything
-here is numbers and history.
+The **Announcements** screen (§5.9) — pinned, prioritised, with read tracking,
+so "quota deadline is Friday" stops getting buried. If your faction has
+connected a Discord server (§8.6), new announcements are posted there too.
+
+**Can the app post to our Discord?**
+Yes. A leader with `manage_discord` connects your server in Settings → Discord
+and picks which channel each kind of activity goes to (§8.6). Nothing is sent
+until somebody chooses a channel for it.
+
+**Our Discord channel stopped getting messages.**
+Settings → Discord shows the last failure in a red bar. Usually the bot was
+removed from the server, or lost access to that channel.
 
 **Can I use the app in Hungarian?**
 Yes — globe icon in the header. Everything is translated, and your choice is

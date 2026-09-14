@@ -17,7 +17,7 @@ import { useTranslation } from '@/providers/i18n-provider';
 import { formatAmount, formatDateTime, displayName } from '@/lib/format';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import type { FeedItem, FeedType, ItemCategory } from '@/lib/api-types';
-import type { TranslationKey } from '@/lib/i18n';
+import type { TranslationKey, TranslationParams } from '@/lib/i18n';
 
 const PAGE_SIZE = 30;
 
@@ -91,16 +91,23 @@ export function FeedView({ factionId }: { factionId: string }) {
         ? formatAmount(String(d.amount), String(d.itemUnit ?? ''), d.itemIsCurrency === true)
         : '';
 
+    // The whole data bag goes through, then the few fields that are not raw
+    // values are overridden. Hand-listing the placeholders is what broke the
+    // notification bell — a sentence gained a `{title}` nobody added to the
+    // list, and it rendered literally. Nothing here uses a placeholder the
+    // server does not send today, and this keeps it that way.
+    const params: TranslationParams = {};
+    for (const [name, value] of Object.entries(d)) {
+      params[name] = value == null ? '' : String(value);
+    }
+    // After the loop: the resolved name wins over anything the row carries.
+    params.who = who;
+    if (amount) params.amount = amount;
+    if (d.itemTypeName !== undefined) params.itemType = String(d.itemTypeName ?? '');
+    if (d.severity) params.severity = t(`strikes.severity.${d.severity}` as TranslationKey);
+
     const key = `feed.${item.type}` as TranslationKey;
-    const text = t(key, {
-      who,
-      amount,
-      itemType: String(d.itemTypeName ?? ''),
-      title: String(d.title ?? ''),
-      rank: String(d.rank ?? ''),
-      severity: d.severity ? t(`strikes.severity.${d.severity}` as TranslationKey) : '',
-      status: d.status ? String(d.status) : '',
-    });
+    const text = t(key, params);
     return text === key ? item.type : text;
   };
 
