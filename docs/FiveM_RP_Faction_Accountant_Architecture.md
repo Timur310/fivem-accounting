@@ -1159,7 +1159,15 @@ an outage would be indistinguishable from one on time.
 - **A stale run is skipped, not sent late.** Past a one-hour grace window the
   run is dropped and the schedule rolls forward. "Quota deadline tonight"
   arriving the following morning is worse than never arriving, because people
-  act on it.
+  act on it. The roll-forward is measured from **now**, not from the missed
+  moment: advancing one occurrence at a time would cost a daily reminder one
+  tick per missed day, so a month of downtime would spend half an hour claiming
+  and rewriting the same row before anything fired again.
+- **A one-off that has fired keeps its past date**, so the "must be in the
+  future" rule is applied only while a reminder is meant to fire. Otherwise
+  every edit to an already-sent reminder — even switching it off — would be
+  refused over a date nobody was changing. Switching one back on without a new
+  date is the one case that is still refused, and the message says so.
 - **The next occurrence is measured from when it was *due*, not from now.**
   Otherwise a 20:00 daily reminder drifts later every time the tick that picked
   it up ran a few seconds past the minute.
@@ -1232,6 +1240,13 @@ week wrap and the clock going forward are where the bugs live, and they are
 tested without a database or a Discord. Times are **server local**, the same
 clock quotas reset on (§9.2) — one notion of "local" in the app is worth more
 than a second one.
+
+**That makes `TZ` a real deployment setting.** Most hosts default to UTC, which
+puts every reminder an hour or two off for players in Central Europe — wrong in
+a way nothing reports as a fault, since the schedule is working exactly as
+asked. The runner therefore prints its resolved timezone and current local time
+at boot, and `.env.example` carries a `TZ` line. The same caveat has always
+applied to quota periods; reminders are simply where somebody notices.
 
 `runDueReminders()` never throws. It runs on a timer with nobody to catch it,
 and one bad reminder must neither stop the batch nor leave its row claimed with

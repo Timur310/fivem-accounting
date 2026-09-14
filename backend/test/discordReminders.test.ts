@@ -180,6 +180,62 @@ describe('editing', () => {
   });
 });
 
+describe('a one-off that has already fired', () => {
+  /** Create one, let it go out, and hand back the retired row. */
+  async function spent() {
+    await link();
+    const created = await create(w.admin.cookie, daily({
+      scheduleType: 'once',
+      timeOfDay: undefined,
+      runAt: new Date(Date.now() + 60_000).toISOString(),
+    }));
+    expect(created.status).toBe(201);
+
+    // Drag its moment into the past the way time would have.
+    await db.update(discordReminders)
+      .set({ nextRunAt: new Date(Date.now() - 1000), runAt: new Date(Date.now() - 1000) })
+      .where(eq(discordReminders.id, created.body.data.id));
+    await runDueReminders();
+
+    return created.body.data.id as string;
+  }
+
+  // Its moment is in the past forever. Refusing every edit because of a date
+  // nobody is changing would strand the row.
+  it('can still be edited', async () => {
+    const id = await spent();
+    const res = await api().patch(`${base()}/${id}`)
+      .set('Cookie', w.admin.cookie).send({ title: 'Renamed' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.title).toBe('Renamed');
+  });
+
+  it('can still be deleted', async () => {
+    const id = await spent();
+    expect((await api().delete(`${base()}/${id}`).set('Cookie', w.admin.cookie)).status).toBe(200);
+  });
+
+  // Switching it back on without a new date is the one case that should be
+  // refused, and the message has to say what to do about it.
+  it('cannot be switched back on without a new date', async () => {
+    const id = await spent();
+    const res = await api().patch(`${base()}/${id}`)
+      .set('Cookie', w.admin.cookie).send({ isEnabled: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/pick a new date/i);
+  });
+
+  it('can be scheduled again with a new date', async () => {
+    const id = await spent();
+    const res = await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie).send({
+      isEnabled: true,
+      runAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.nextRunAt).not.toBeNull();
+  });
+});
+
 describe('deleting', () => {
   it('removes it', async () => {
     await link();
@@ -493,6 +549,23 @@ describe('the runner', () => {
     await due(new Date(Date.now() - 1000), { message: 'second' });
     await _testing.tick();
     expect(postMock).toHaveBeenCalledTimes(2);
+  });
+
+  // Rolling forward one occurrence at a time would take a daily reminder one
+  // tick per missed day to catch up — a month of downtime is half an hour of
+  // claim-and-rewrite churn before anything fires again.
+  it('catches up from a long outage in a single pass', async () => {
+    await link();
+    const row = await due(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+
+    await runDueReminders();
+    const [after] = await db.select().from(discordReminders)
+      .where(eq(discordReminders.id, row.id));
+    expect(after!.nextRunAt!.getTime()).toBeGreaterThan(Date.now());
+    expect(postMock).not.toHaveBeenCalled();
+
+    // And nothing is left due, so the next tick has no work to do.
+    expect(await runDueReminders()).toBe(0);
   });
 
   it('one broken reminder does not stop the others', async () => {
