@@ -9,6 +9,7 @@ import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
@@ -200,6 +201,17 @@ router.post('/', async (req: Request, res: Response) => {
     error(res, 'INTERNAL_ERROR', 'Failed to create payout', 500);
     return;
   }
+
+  // A payout created by someone with the permission is already settled, so it
+  // is the completed event rather than a request nobody has to act on.
+  void dispatchDiscord(factionId, {
+    type: payout.status === 'completed' ? 'payout_completed' : 'payout_requested',
+    actorUserId: req.user!.id,
+    recipientUserId: payout.recipientUserId,
+    itemTypeId: payout.itemTypeId,
+    amount: payout.amount,
+    ...(payout.status === 'completed' ? {} : { description: payout.description }),
+  });
 
   success(res, payout, 201);
 });
@@ -541,6 +553,23 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
       parsed.data.status === 'approved' ? 'payout_approved' :
       parsed.data.status === 'rejected' ? 'payout_rejected' :
       parsed.data.status === 'completed' ? 'payout_completed' : null;
+
+    // Discord hears about every settlement, including one someone made on
+    // their own request: the channel is the faction's record, not a personal
+    // inbox, so the "do not tell someone what they just did" rule that governs
+    // the bell does not apply here.
+    if (type) {
+      void dispatchDiscord(factionId, {
+        type,
+        actorUserId: req.user!.id,
+        recipientUserId: existing.recipientUserId,
+        itemTypeId: existing.itemTypeId,
+        amount: existing.amount,
+        // No rejection-reason field exists on a payout; the description is
+        // the only note the row carries.
+        ...(type === 'payout_rejected' ? { reason: existing.description } : {}),
+      });
+    }
 
     if (type && existing.recipientUserId !== req.user!.id) {
       const [item] = await db

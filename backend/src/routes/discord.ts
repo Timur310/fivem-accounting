@@ -38,6 +38,9 @@ router.get('/', async (req: Request, res: Response) => {
       guildName: discordIntegrations.guildName,
       linkedAt: discordIntegrations.linkedAt,
       linkedByName: users.username,
+      // Only 'en' is rendered today; the picker that shows it is disabled.
+      // Returned anyway so the screen states the fact rather than assuming it.
+      locale: discordIntegrations.locale,
       lastError: discordIntegrations.lastError,
       lastErrorAt: discordIntegrations.lastErrorAt,
     })

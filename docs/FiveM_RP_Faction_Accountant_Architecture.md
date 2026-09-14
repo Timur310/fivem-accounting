@@ -1043,10 +1043,43 @@ quietly stopped working says so instead of presenting as connected.
 The request itself succeeded: we asked and were told no, and the reason is the
 useful half of the answer, to be rendered rather than thrown.
 
-**Not built yet:** the event dispatch itself. This ships the permission, the
-link and the routing — everything a faction manages — plus a test message that
-makes the wiring provable. Wiring the eleven event types into the routes that
-raise them is the next step.
+#### Dispatch
+
+`lib/discordDispatch.ts` is the single place that turns a faction event into a
+message. Call sites pass **ids, not sentences**; every name is resolved inside,
+and only after a route is known to exist. A faction with Discord switched off —
+which is every faction until it opts in — costs one indexed lookup and nothing
+else.
+
+**Call sites do not await it.** A Discord round trip is a couple of hundred
+milliseconds and nobody logging an entry should wait for one. Each site calls
+`void dispatchDiscord(...)`; because the function never rejects, there is no
+unhandled rejection to leak. A test pins the consequence that matters: logging
+an entry answers 201 with Discord refusing every connection.
+
+Eleven events, wired into the routes that raise them: entries, the four payout
+states, expenses, strikes, announcements, member joins and departures, and
+laundering. Two details worth keeping:
+
+- A payout created by someone holding `manage_payouts` is already settled, so
+  it raises `payout_completed`, not `payout_requested` — it is money that left
+  the vault, not a request waiting on somebody.
+- Settlements are announced even when the person settled their own request.
+  The channel is the faction's record, not a personal inbox, so the "never tell
+  someone what they just did" rule that governs the bell (§8.10) does not apply.
+
+Amounts are grouped **on the digits**, not through `Number`: the column is
+decimal, FiveM money runs long, and `Number('9007199254740993')` already lies.
+The system placeholder renders as "the faction" rather than by name — printing
+the name of the row that carries anonymous entries into a public channel would
+read as an accusation against whoever it is called.
+
+**Messages are English only, and that is a property of the medium.** A Discord
+message has no viewer: it is one text read by everyone in the channel, so it
+cannot follow each member's chosen language the way the interface does. The
+faction picks one. `discord_integrations.locale` (migration `0016`) and a
+disabled picker on the settings screen exist so adding Hungarian later is a
+translation job rather than a migration.
 
 ---
 

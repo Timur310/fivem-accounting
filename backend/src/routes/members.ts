@@ -8,6 +8,7 @@ import { parsePagination } from '../lib/types.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { getPeriodRange } from '../lib/period.js';
 import { daysSince, toDateString, periodHasStarted } from '../lib/date.js';
 import { countActiveStrikes, countActiveStrikesBySeverity } from '../lib/strikes.js';
@@ -133,6 +134,12 @@ router.post('/', requirePermission('manage_members'), async (req: Request, res: 
     error(res, 'INTERNAL_ERROR', 'Failed to add member', 500);
     return;
   }
+
+  void dispatchDiscord(factionId, {
+    type: 'member_joined',
+    actorUserId: req.user!.id,
+    targetUserId: targetUser.id,
+  });
 
   success(res, {
     ...member,
@@ -483,6 +490,12 @@ router.delete('/:userId', requirePermission('manage_members'), async (req: Reque
     error(res, 'INTERNAL_ERROR', 'Failed to remove member', 500);
     return;
   }
+
+  void dispatchDiscord(factionId, {
+    type: 'member_left',
+    actorUserId: req.user!.id,
+    targetUserId,
+  });
 
   success(res, { removed: true });
 });

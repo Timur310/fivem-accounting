@@ -10,6 +10,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notifyMany } from '../lib/notify.js';
 
 /**
@@ -151,6 +152,13 @@ router.post('/', requirePermission('manage_settings'), async (req: Request, res:
     factionId,
     linkView: 'announcements',
     data: { title, priority },
+  });
+
+  void dispatchDiscord(factionId, {
+    type: 'announcement_posted',
+    actorUserId: req.user!.id,
+    title,
+    priority,
   });
 
   success(res, row, 201);
