@@ -1017,6 +1017,7 @@ export const hu: Translations = {
   'reminder.tag': 'Megjelölés',
   'reminder.tagHint': 'Kiket pingeljen, amikor kimegy. Ha semmit nem választasz, csendben posztol.',
   'reminder.tagCount': { one: '{count} megjelölve', other: '{count} megjelölve' },
+  'reminder.reconnectForRoles': 'Néhány rangot még nem lehet pingelni. A Discord kikapcsolt @említéssel hozza létre a rangokat, a bot pedig csak későbbi verzióban kapott jogot arra, hogy ettől függetlenül pingelje őket. Csatlakoztasd újra a szervert ezen a képernyőn, vagy kapcsold be a rangnál a Discordon.',
   'reminder.roleNotMentionable': 'Ezt a rangot a Discord nem engedi pingelni. Egy szerveradmin engedélyezheti a rang beállításainál.',
   'reminder.tagNothing': 'Még nincs megjelölhető rang vagy tag.',
   'reminder.enabled': 'Be',

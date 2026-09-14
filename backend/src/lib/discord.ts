@@ -13,13 +13,27 @@ const API = 'https://discord.com/api/v10';
  * job — see the channel list, post, and render an embed:
  *
  *   VIEW_CHANNEL (1 << 10) | SEND_MESSAGES (1 << 11) | EMBED_LINKS (1 << 14)
+ *   | MENTION_EVERYONE (1 << 17)
  *
  * Asking for Administrator would be one fewer thing to think about, and a very
  * good reason for a faction leader to refuse the invite. They are handing a
  * third-party app access to their community's server; Discord's dialog shows
  * them exactly this list before they agree.
+ *
+ * MENTION_EVERYONE was left out at first, on the reasoning that reminders did
+ * not need to ping `@everyone`. That was true and beside the point: the same
+ * permission is what lets a bot ping a **role**, and Discord creates roles
+ * with "allow anyone to @mention this role" switched off. Without it, nearly
+ * every role in a normal server is unpingable and the tag picker greys out.
+ *
+ * It does not make the bot noisy on its own. Every message is sent with
+ * `allowed_mentions` naming the exact ids chosen, so `@everyone` can only ever
+ * be pinged if something deliberately asks for it — and nothing does.
  */
-export const BOT_PERMISSIONS = String((1 << 10) | (1 << 11) | (1 << 14));
+export const BOT_PERMISSIONS = String((1 << 10) | (1 << 11) | (1 << 14) | (1 << 17));
+
+/** The bit that lets the bot ping a role that is not marked mentionable. */
+const MENTION_EVERYONE = 1n << 17n;
 
 /** How long a leader has to finish the invite before the link expires. */
 const STATE_TTL_SECONDS = 10 * 60;
@@ -229,6 +243,35 @@ export async function listGuildRoles(guildId: string): Promise<DiscordRole[]> {
     .filter((r) => r.id !== guildId && !r.managed)
     .map((r) => ({ id: r.id, name: r.name, mentionable: r.mentionable, position: r.position }))
     .sort((a, b) => b.position - a.position);
+}
+
+/**
+ * Can the bot ping any role in this guild, or only the mentionable ones?
+ *
+ * A faction that connected before MENTION_EVERYONE was asked for still has the
+ * old, narrower grant — Discord does not widen an existing bot's permissions
+ * when the invite URL changes. They have to re-invite, and the settings screen
+ * can only tell them that if it knows.
+ *
+ * `GET /users/@me/guilds` carries the bot's permission bitfield per guild and
+ * needs no privileged intent, unlike fetching the bot's member object.
+ *
+ * Returns null when the question cannot be answered, which the caller treats
+ * as "assume the narrow case" rather than guessing generously.
+ */
+export async function botCanMentionAnyRole(guildId: string): Promise<boolean | null> {
+  try {
+    const res = await axios.get<{ id: string; permissions: string }[]>(
+      `${API}/users/@me/guilds`,
+      { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }, timeout: 10_000 },
+    );
+    const guild = res.data.find((g) => g.id === guildId);
+    if (!guild) return null;
+    return (BigInt(guild.permissions) & MENTION_EVERYONE) !== 0n;
+  } catch (err) {
+    console.error('[DISCORD] could not read guild permissions', err);
+    return null;
+  }
 }
 
 /**

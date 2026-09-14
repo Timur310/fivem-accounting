@@ -103,12 +103,18 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
   });
 
   // Both only matter while the form is open, so neither is fetched until then.
-  const { data: roles } = useQuery({
+  const { data: roleData } = useQuery({
     queryKey: ['discord-roles', factionId],
     queryFn: () => discordApi.roles(factionId),
     enabled: !!draft,
     retry: false,
   });
+  const roles = roleData?.roles;
+  // False for a faction that connected before the bot asked for the
+  // permission. Discord does not widen an existing bot's grant when the invite
+  // URL changes, so they have to re-invite — and until they do, only roles
+  // somebody marked mentionable can be pinged.
+  const canMentionAnyRole = roleData?.canMentionAnyRole ?? false;
 
   // People come from this app's roster rather than from Discord: listing a
   // guild's members needs a privileged intent, and every member here already
@@ -440,10 +446,11 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                           type="button"
                           size="sm"
                           variant={on ? 'default' : 'outline'}
-                          // A role nobody may ping would be a choice that
-                          // silently does nothing, so it is not offered.
-                          disabled={!role.mentionable}
-                          title={role.mentionable ? undefined : t('reminder.roleNotMentionable')}
+                          // A ping that silently does nothing is worse than a
+                          // disabled button, so a role stays unselectable only
+                          // while the bot genuinely cannot reach it.
+                          disabled={!canMentionAnyRole && !role.mentionable}
+                          title={canMentionAnyRole || role.mentionable ? undefined : t('reminder.roleNotMentionable')}
                           onClick={() =>
                             patchDraft({
                               mentionRoleIds: on
@@ -481,6 +488,17 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                         </Button>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* The whole reason role tagging can look broken: Discord
+                    creates roles with @mention switched off, so before the bot
+                    had this permission nearly every role greyed out with no
+                    explanation of what to do about it. */}
+                {!canMentionAnyRole && roles?.some((r) => !r.mentionable) && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/[0.04] p-2.5">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <p className="text-xs text-muted-foreground">{t('reminder.reconnectForRoles')}</p>
                   </div>
                 )}
 

@@ -1036,6 +1036,7 @@ export const en = {
   'reminder.tag': 'Tag',
   'reminder.tagHint': 'Who gets pinged when this goes out. Leave everything unpicked and it posts quietly.',
   'reminder.tagCount': { one: 'Tags {count}', other: 'Tags {count}' } as PluralForms,
+  'reminder.reconnectForRoles': 'Some roles cannot be pinged yet. Discord creates roles with @mention switched off, and the bot only gained permission to ping them anyway in a later version. Reconnect your server on this screen to grant it — or switch the role on in Discord.',
   'reminder.roleNotMentionable': 'Discord does not let this role be pinged. A server admin can allow it in the role’s settings.',
   'reminder.tagNothing': 'No roles or members to tag yet.',
   'reminder.enabled': 'On',

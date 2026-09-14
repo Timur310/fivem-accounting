@@ -18,6 +18,7 @@ import {
   leaveGuild,
   listGuildChannels,
   listGuildRoles,
+  botCanMentionAnyRole,
   postToChannel,
   recordDeliveryOutcome,
 } from '../lib/discord.js';
@@ -193,7 +194,13 @@ router.get('/roles', async (req: Request, res: Response) => {
   }
 
   try {
-    success(res, { roles: await listGuildRoles(integration.guildId) });
+    const [roles, canMentionAnyRole] = await Promise.all([
+      listGuildRoles(integration.guildId),
+      botCanMentionAnyRole(integration.guildId),
+    ]);
+    // null means we could not tell; the client assumes the narrow case rather
+    // than offering a ping that would silently do nothing.
+    success(res, { roles, canMentionAnyRole: canMentionAnyRole === true });
   } catch (err) {
     console.error('[DISCORD] role list failed', err);
     error(

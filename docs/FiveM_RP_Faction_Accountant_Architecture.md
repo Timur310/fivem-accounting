@@ -1207,9 +1207,25 @@ feature is built wrong — so the pings go above the embed.
 **`allowed_mentions` is always sent and always explicit.** `parse: []` refuses
 every mention Discord would otherwise find in the text, and only the chosen ids
 are let through, so an `@everyone` typed into a reminder body cannot ping the
-server. Roles that are not mentionable are disabled in the picker rather than
-offered: the bot never asked for `MENTION_EVERYONE`, so choosing one would be a
-ping that silently does nothing.
+server.
+
+**The invite asks for `MENTION_EVERYONE`, and that was a correction.** It was
+left out at first on the reasoning that reminders did not need to ping
+`@everyone` — true, and beside the point: the same permission is what lets a
+bot ping a **role**, and Discord creates roles with "allow anyone to @mention
+this role" switched off. Without it nearly every role in a normal server is
+unpingable, and the picker greyed out almost entirely. It does not make the bot
+noisy on its own, because `allowed_mentions` names the exact ids and nothing
+ever asks for `@everyone`.
+
+Discord does not widen an existing bot's grant when the invite URL changes, so
+a faction connected before this still has the narrow one. `GET /discord/roles`
+therefore returns `canMentionAnyRole` alongside the list — read from
+`GET /users/@me/guilds`, which carries the bot's permission bitfield per guild
+and needs no privileged intent. When it is false the picker keeps
+non-mentionable roles disabled and says to reconnect, instead of greying them
+out with no explanation. Unknown is treated as false: assuming the narrow case
+is better than offering a ping that silently does nothing.
 
 Everyone tagged must be a member of the faction, checked on create and on edit.
 Without it, a faction's channel could ping any id at all, including a member of
