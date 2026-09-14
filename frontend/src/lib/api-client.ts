@@ -75,6 +75,9 @@ import type {
   LaunderingOverview,
   LaunderInput,
   LaunderResult,
+  DiscordStatus,
+  DiscordChannel,
+  DiscordEventType,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -794,6 +797,44 @@ export const feedApi = {
     api
       .get<ApiSuccessResponse<FeedItem[]>>(`/factions/${factionId}/feed`, { params })
       .then((r) => ({ data: r.data.data, meta: r.data.meta })),
+};
+
+// ── Discord integration ──
+
+export const discordApi = {
+  status: (factionId: string) =>
+    api.get<ApiSuccessResponse<DiscordStatus>>(`/factions/${factionId}/discord`).then(unwrap),
+
+  inviteUrl: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ url: string }>>(`/factions/${factionId}/discord/invite-url`)
+      .then(unwrap),
+
+  channels: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ channels: DiscordChannel[] }>>(`/factions/${factionId}/discord/channels`)
+      .then((r) => r.data.data.channels),
+
+  unlink: (factionId: string) => api.delete(`/factions/${factionId}/discord`),
+
+  setRoute: (
+    factionId: string,
+    eventType: DiscordEventType,
+    input: { channelId: string; channelName?: string; isEnabled?: boolean },
+  ) => api.put(`/factions/${factionId}/discord/routes/${eventType}`, input),
+
+  clearRoute: (factionId: string, eventType: DiscordEventType) =>
+    api.delete(`/factions/${factionId}/discord/routes/${eventType}`),
+
+  // Resolves with ok:false when Discord refused, which is a result to render
+  // rather than an error to throw — the reason is the useful part.
+  test: (factionId: string, channelId: string) =>
+    api
+      .post<ApiSuccessResponse<{ ok: boolean; error?: string }>>(
+        `/factions/${factionId}/discord/test`,
+        { channelId },
+      )
+      .then(unwrap),
 };
 
 export { api };

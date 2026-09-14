@@ -50,6 +50,7 @@ import { TreasuryView } from '@/views/treasury-view';
 import { GuideView } from '@/views/guide-view';
 import { CommandPalette } from '@/components/command-palette';
 import { MembersView } from '@/views/members-view';
+import { useToast } from '@/hooks/use-toast';
 import { SettingsView } from '@/views/settings-view';
 import { AuditLogsView } from '@/views/audit-logs-view';
 import { ReportsView } from '@/views/reports-view';
@@ -103,6 +104,7 @@ interface NavItem {
 
 export function AppShell() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const user = useAppStore((s) => s.user);
   const currentView = useAppStore((s) => s.currentView);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
@@ -137,6 +139,44 @@ export function AppShell() {
       setBrandColor(factionSettings.brandColor);
     }
   }, [factionSettings?.brandColor, selectedFactionId, setBrandColor]);
+
+  // ── Coming back from Discord ──
+  // The bot-invite callback can only redirect to a fixed URL, so it says what
+  // happened in a query parameter and the app turns that into a sentence. The
+  // parameter is stripped afterwards: leaving it in the URL would replay the
+  // toast on every refresh, and "connected!" on a reload is a lie half the
+  // time.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('discord');
+    if (!outcome) return;
+
+    const messages: Record<string, { key: TranslationKey; ok: boolean }> = {
+      linked: { key: 'discord.linked', ok: true },
+      cancelled: { key: 'discord.linkCancelled', ok: false },
+      expired: { key: 'discord.linkExpired', ok: false },
+      forbidden: { key: 'discord.linkForbidden', ok: false },
+      mismatch: { key: 'discord.linkMismatch', ok: false },
+      guild_taken: { key: 'discord.linkGuildTaken', ok: false },
+    };
+    const message = messages[outcome] ?? { key: 'discord.linkFailed' as TranslationKey, ok: false };
+
+    toast({
+      title: t(message.key),
+      variant: message.ok ? undefined : 'destructive',
+    });
+
+    // Land them back where they started, rather than on whichever screen the
+    // app happened to open on.
+    setCurrentView('settings');
+    queryClient.invalidateQueries({ queryKey: ['discord-status'] });
+
+    params.delete('discord');
+    const query = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    // Runs once on mount: the parameter is consumed the first time it is seen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const router = useRouter();
 
@@ -436,6 +476,7 @@ export function AppShell() {
             canManageItemTypes={hasPermission('manage_item_types')}
             canManageQuotas={hasPermission('manage_quotas')}
             canManageSettings={hasPermission('manage_settings')}
+            canManageDiscord={hasPermission('manage_discord')}
           /> : null;
       case 'audit-logs':
         return selectedFactionId ? <AuditLogsView factionId={selectedFactionId} /> : null;

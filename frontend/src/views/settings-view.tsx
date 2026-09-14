@@ -23,7 +23,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History, MessageSquare } from 'lucide-react';
+import { DiscordSettingsSection } from '@/components/discord-settings-section';
 
 const EXPENSE_CATEGORY_LABELS = {
   warehouse: 'expenses.category.warehouse',
@@ -78,11 +79,16 @@ interface Props {
   canManageItemTypes?: boolean;
   canManageQuotas?: boolean;
   canManageSettings?: boolean;
+  /**
+   * Separate from manage_settings on purpose: pointing the faction's activity
+   * at a Discord channel is reach outside the app, so it is its own grant.
+   */
+  canManageDiscord?: boolean;
 }
 
-type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings';
+type SettingsTab = 'item-types' | 'quotas' | 'customization' | 'faction-settings' | 'discord';
 
-export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = false, canManageQuotas = false, canManageSettings = false }: Props) {
+export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = false, canManageQuotas = false, canManageSettings = false, canManageDiscord = false }: Props) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('item-types');
 
@@ -118,6 +124,17 @@ export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = f
           <Shield className="mr-2 h-4 w-4" />
           {t('settings.factionSettings')}
         </Button>
+        {/* Hidden rather than disabled: a tab nobody in this rank can use is
+            just a question they cannot answer. */}
+        {canManageDiscord && (
+          <Button
+            variant={activeTab === 'discord' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('discord')}
+          >
+            <MessageSquare className="mr-2 h-4 w-4" />
+            {t('discord.title')}
+          </Button>
+        )}
       </div>
 
       {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} canManage={canManageItemTypes} />}
@@ -126,6 +143,7 @@ export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = f
       {activeTab === 'faction-settings' && (
         <FactionSettingsSection factionId={factionId} isFactionAdmin={!!isFactionAdmin} canManage={canManageSettings} />
       )}
+      {activeTab === 'discord' && canManageDiscord && <DiscordSettingsSection factionId={factionId} />}
     </div>
   );
 }

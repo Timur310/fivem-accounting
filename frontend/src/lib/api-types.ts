@@ -924,6 +924,7 @@ export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
+  'manage_discord',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -938,6 +939,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   view_audit_logs: 'permission.viewAuditLogs', view_reports: 'permission.viewReports',
   manage_laundering: 'permission.manageLaundering',
   manage_expenses: 'permission.manageExpenses',
+  manage_discord: 'permission.manageDiscord',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1286,4 +1288,72 @@ export interface FeedItem {
   /** The shared placeholder that carries anonymous entries and laundering. */
   actorIsSystem: boolean;
   data: Record<string, string | number | boolean | null>;
+}
+
+// ── Discord integration ────────────────────────────────
+
+/**
+ * Faction activity a Discord channel can be subscribed to. Mirrors
+ * DISCORD_EVENT_TYPES on the server; the order here is the order the settings
+ * screen lists them in, grouped loosely by what a reader would go looking for.
+ */
+export const DISCORD_EVENT_TYPES = [
+  'entry_logged',
+  'payout_requested',
+  'payout_approved',
+  'payout_rejected',
+  'payout_completed',
+  'expense_recorded',
+  'strike_issued',
+  'announcement_posted',
+  'member_joined',
+  'member_left',
+  'laundering_completed',
+] as const;
+export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
+
+export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> = {
+  entry_logged: 'discord.event.entryLogged',
+  payout_requested: 'discord.event.payoutRequested',
+  payout_approved: 'discord.event.payoutApproved',
+  payout_rejected: 'discord.event.payoutRejected',
+  payout_completed: 'discord.event.payoutCompleted',
+  expense_recorded: 'discord.event.expenseRecorded',
+  strike_issued: 'discord.event.strikeIssued',
+  announcement_posted: 'discord.event.announcementPosted',
+  member_joined: 'discord.event.memberJoined',
+  member_left: 'discord.event.memberLeft',
+  laundering_completed: 'discord.event.launderingCompleted',
+};
+
+export interface DiscordIntegration {
+  guildId: string;
+  guildName: string | null;
+  linkedAt: string;
+  linkedByName: string;
+  /** The last delivery failure, so a link that quietly broke says so. */
+  lastError: string | null;
+  lastErrorAt: string | null;
+}
+
+export interface DiscordChannelRoute {
+  eventType: DiscordEventType;
+  channelId: string;
+  channelName: string | null;
+  isEnabled: boolean;
+}
+
+export interface DiscordStatus {
+  /** Whether this deployment has a bot token at all — not a faction setting. */
+  configured: boolean;
+  integration: DiscordIntegration | null;
+  routes: DiscordChannelRoute[];
+  eventTypes: readonly DiscordEventType[];
+}
+
+export interface DiscordChannel {
+  id: string;
+  name: string;
+  parentName: string | null;
+  position: number;
 }

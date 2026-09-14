@@ -452,6 +452,7 @@ Prefix: `/factions/:id`.
 | `/expenses` | faction running costs. Read for any member, `manage_expenses` writes |
 | `/laundering` | convert one currency into another |
 | `/item-types`, `/quotas`, `/settings` | faction configuration |
+| `/discord` | connect a Discord server and route activity to its channels, `manage_discord` — see §8.13 |
 | `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
 | `/dashboard`, `/charts`, `/reports`, `/leaderboard`, `/audit-logs`, `/export`, `/bulk` | reading and reporting |
 
@@ -492,7 +493,7 @@ manage_members       manage_payouts      manage_entries
 manage_strikes       manage_quotas       manage_item_types
 manage_settings      manage_customization
 view_audit_logs      view_reports        manage_laundering
-manage_expenses
+manage_expenses      manage_discord
 ```
 
 The admin seat itself is not delegable: `manage_members` runs the roster, but
@@ -520,6 +521,7 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Issue and settle strikes | Yes | Yes | `manage_strikes` | No |
 | Launder currency | Yes | Yes | `manage_laundering` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
+| Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
 | View audit logs | Yes | Yes | `view_audit_logs` | No |
 | View reports | Yes | Yes | `view_reports` | No |
@@ -941,6 +943,99 @@ The route hand-writes its SQL, so it wraps execution in `try`/`catch`. Express
 4 does not catch a rejected promise from an async handler, and without the
 guard a query error leaves the request hanging open forever rather than
 answering 500 — a far worse failure, and one that is invisible in logs.
+
+### 8.13 Discord Integration
+
+A faction connects its own Discord server and chooses which channel each kind
+of activity is posted to. Migration `0015`; permission `manage_discord`.
+
+**One bot, every guild.** The reason this was previously recorded as
+impossible (Phase 8 below) was a wrong assumption: that delivering to a
+faction's Discord meant hosting something per faction. It does not. The app
+already owns a Discord application — it is what signs people in — and a single
+bot on that application is invited into each faction's own server by that
+faction's leader. The operator hosts nothing extra and holds one token.
+
+**No gateway connection.** The bot only ever pushes: it opens no websocket,
+receives no events and reads no messages. Everything is an outbound REST call
+from the backend that is already running, which is why the feature adds no
+process, no scheduler and no new deployment concern. It also means the invite
+asks for only `VIEW_CHANNEL | SEND_MESSAGES | EMBED_LINKS` — a leader is being
+asked to let a third-party app into their community's server, and Discord
+shows them that list before they agree.
+
+**`DISCORD_BOT_TOKEN` is optional, and empty is a supported state.** Without
+it `isDiscordConfigured()` is false, the settings screen says so plainly, and
+every other feature is untouched. The client has to distinguish three states,
+because they call for three different responses: *this installation has no
+bot* (nothing the leader can do), *this faction has not connected one* (a
+button), and *connected but failing* (the last delivery error, shown on the
+integration row).
+
+#### The link flow
+
+Discord matches redirect URIs exactly, so the callback cannot carry a `:id`
+and cannot go through `requireFactionMember`. It lands on a fixed path,
+`GET /auth/discord/bot-callback`, and re-does every check by hand:
+
+1. `GET /factions/:id/discord/invite-url` returns Discord's authorize URL with
+   `scope=bot`, `response_type=code` and a signed, ten-minute `state` carrying
+   the faction and the user.
+2. The leader picks a server in Discord's own dialog.
+3. The callback verifies the state, requires the session to be *the same
+   person* who started it, re-checks `manage_discord` (ten minutes is long
+   enough to be demoted), and exchanges the code.
+
+`response_type=code` is what makes step 3 provable. The callback also receives
+a `guild_id` query parameter, which is whatever the caller put in the URL; the
+guild in the **token response** is what Discord says happened, and that is the
+one stored. Without the code exchange anyone could claim a server by hitting
+the callback with an id of their choosing.
+
+**The state is signed with a key derived from `JWT_SECRET`, not with
+`JWT_SECRET` itself.** The state rides through a redirect URL, so it turns up
+in browser history and proxy logs. `verifyJwt` casts whatever it decodes to a
+`JwtPayload` and `requireAuth` loads the user named by its `userId` — so a
+state signed with the session key *would be a session*, and a leaked URL would
+be an account takeover. Separate key, no crossover; tested in both directions.
+
+**`guild_id` is unique across the whole table**, not per faction: without that
+two factions could claim the same Discord server and each could aim the
+other's traffic at it.
+
+#### Routing
+
+`discord_channel_routes` is unique on `(faction_id, event_type)` — one channel
+per kind of activity. That constraint is the feature: it keeps the settings
+screen a list of choices instead of a rule engine, and choosing a new channel
+*moves* the event rather than sending it twice. An event with no row is simply
+not sent, so **off is the default for everything**, including any event type
+added after a faction connected. Disconnecting deletes the routes, because
+keeping them would silently aim a later connection at channel ids from a
+server the faction no longer uses.
+
+The event vocabulary is deliberately the one the activity feed (§8.12) already
+speaks, so a leader is choosing from a list they have seen rather than
+learning a second set of names.
+
+#### Delivery
+
+`postToChannel()` **never throws**, on the same reasoning as `notify()`
+(§8.10): a Discord message is a courtesy attached to something that already
+happened for real, and an outage, a kicked bot or a deleted channel must not
+roll back the entry that triggered it. It honours one 429 retry — Discord
+rate-limits per channel and a faction logging a burst will hit that
+legitimately — and records the failure on the integration row so a link that
+quietly stopped working says so instead of presenting as connected.
+
+`POST /discord/test` answers **200 with `ok: false`** when Discord refuses.
+The request itself succeeded: we asked and were told no, and the reason is the
+useful half of the answer, to be rendered rather than thrown.
+
+**Not built yet:** the event dispatch itself. This ships the permission, the
+link and the routing — everything a faction manages — plus a test message that
+makes the wiring provable. Wiring the eleven event types into the routes that
+raise them is the next step.
 
 ---
 
@@ -1436,26 +1531,35 @@ crontab -e
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
-| 1 | Discord bot integration | Bot commands: /balance, /log <amount> <type>, /top, /quotas, /announce — **NOT PLANNED**¹ | High |
-| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings — **BLOCKED**² | High |
-| 3 | Webhook system | Outgoing webhooks on configurable events — **DEFERRED**³ | Medium |
+| 1 | Discord bot integration | Outbound activity notifications — **PARTLY BUILT**¹ (§8.13). Bot *commands* remain unplanned² | High |
+| 2 | Automated Discord reports | Scheduled messages: daily summary, weekly report, quota deadline warnings — **BLOCKED**³ | High |
+| 3 | Webhook system | Outgoing webhooks on configurable events — **SUPERSEDED**⁴ | Medium |
 | 4 | API tokens | Faction-level API tokens for server-side scripts (FiveM in-game resource tracking) | Medium |
 | 5 | Data backup/restore | Full faction data export (JSON) and import. Superadmin can backup all data | Medium |
 | 6 | Faction templates | Preset configurations for common faction types (cartel, police, EMS, mechanic, etc.) | Low |
 | 7 | i18n framework | Translation infrastructure + community translation support | Low |
 
-¹ A bot has to be invited into, and managed on, each faction's own Discord
-server. The operator does not have that access and does not want it, so the
-feature cannot be delivered as specified regardless of effort.
+¹ Revised. This row previously read NOT PLANNED, on the reasoning that a bot
+"has to be invited into, and managed on, each faction's own Discord server,
+which the operator does not have access to". The first half is true and the
+conclusion did not follow: the leader does the inviting, one bot serves every
+guild, and a push-only bot needs no gateway connection and no per-faction
+hosting. The notification half is built — see §8.13.
 
-² Wants a scheduler the app does not have, and a delivery channel — see ¹ and ³.
-The in-app bell (§8.10) covers the event half of what this was for.
+² Bot *commands* (/balance, /log, /top) are a different proposition and remain
+unplanned. A command means reading from Discord, which means a gateway
+connection and a process that stays up, and it means a second way to write to
+the ledger with its own authorisation story. The value over opening the app is
+small; the surface is not.
 
-³ A webhook needs no bot and no hosting: a faction admin pastes a URL from
-their own server settings. It was deferred rather than refused, on the grounds
-that the user base is currently small enough that the in-app bell reaches
-everyone and there is not yet enough feedback to know what people would want
-pushed. Worth revisiting as the user base grows.
+³ Still blocked, but on one thing rather than two: it wants a scheduler the
+app does not have. The delivery channel now exists (§8.13).
+
+⁴ A webhook was the cheap way to reach Discord without a bot: a faction admin
+pastes a URL from their own server settings. The bot integration does the same
+job with a better setup experience (a picker instead of a pasted secret) and
+without a per-channel URL to leak, so this is superseded rather than deferred.
+Worth reviving only for non-Discord destinations.
 
 ### Phase 9: Frontend Redesign — "Serious Ledger, Game Soul" (Weeks 25-26) — MOSTLY COMPLETE
 

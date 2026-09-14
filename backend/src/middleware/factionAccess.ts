@@ -5,6 +5,77 @@ import { eq, and } from 'drizzle-orm';
 import { error } from '../lib/response.js';
 
 /**
+ * What this user may do in this faction, decided the same way for everyone who
+ * needs to know.
+ *
+ * Extracted from the middleware because the Discord bot callback cannot go
+ * through it: Discord matches redirect URIs exactly, so the callback lands on
+ * a fixed path with no `:id` to hang `requireFactionMember` off. It still has
+ * to answer the identical question, and answering it twice in two places is
+ * how the two answers start to differ.
+ *
+ * Returns null when the user has no business in the faction at all.
+ */
+export async function resolveFactionAccess(
+  factionId: string,
+  user: { id: string; role: string },
+): Promise<{ role: 'admin' | 'member' | 'superadmin'; permissions: string[] } | null> {
+  const [membership] = await db
+    .select()
+    .from(factionMembers)
+    .where(
+      and(
+        eq(factionMembers.factionId, factionId),
+        eq(factionMembers.userId, user.id),
+      ),
+    )
+    .limit(1);
+
+  let role: 'admin' | 'member' | 'superadmin';
+  if (membership) {
+    // User is a member — use their faction role
+    role = membership.role as 'admin' | 'member';
+  } else if (user.role === 'superadmin') {
+    // Superadmin without membership — still gets access, but flagged
+    // as 'superadmin' so entry creation etc. can be restricted.
+    role = 'superadmin';
+  } else {
+    return null;
+  }
+
+  // Admins and superadmins implicitly have all permissions — the role is the
+  // source of truth, not the rank list.
+  //
+  // `user.role` is checked separately from the faction role: a superadmin who
+  // joined a faction as a plain member takes that membership role (which is
+  // what lets them log entries), and without this they would lose every
+  // permission in the one faction they actually belong to.
+  if (role === 'admin' || role === 'superadmin' || user.role === 'superadmin') {
+    return { role, permissions: [...FACTION_PERMISSIONS] };
+  }
+
+  // Members get whatever permissions their assigned rank grants.
+  let rankPermissions: string[] = [];
+  if (membership?.rank) {
+    const [faction] = await db
+      .select({ ranks: factions.ranks })
+      .from(factions)
+      .where(eq(factions.id, factionId))
+      .limit(1);
+    const ranks = faction?.ranks ?? [];
+    const rank = ranks.find((r) => r.name === membership.rank);
+    if (rank) {
+      // Keep only permissions the system actually knows about, in case a
+      // previous definition removed a name that a rank still grants.
+      rankPermissions = (rank.permissions ?? []).filter((p) =>
+        (FACTION_PERMISSIONS as readonly string[]).includes(p),
+      );
+    }
+  }
+  return { role, permissions: rankPermissions };
+}
+
+/**
  * Middleware: verify the authenticated user is a member of the faction
  * in req.params.id. Attaches:
  *   - req.factionRole        'admin' | 'member' | 'superadmin'
@@ -24,65 +95,13 @@ export async function requireFactionMember(req: Request, res: Response, next: Ne
     return;
   }
 
-  // Always check faction membership — even for superadmins,
-  // so we can use their membership role for member-level actions.
-  const [membership] = await db
-    .select()
-    .from(factionMembers)
-    .where(
-      and(
-        eq(factionMembers.factionId, factionId),
-        eq(factionMembers.userId, req.user!.id),
-      ),
-    )
-    .limit(1);
-
-  if (membership) {
-    // User is a member — use their faction role
-    req.factionRole = membership.role as 'admin' | 'member';
-  } else if (req.user!.role === 'superadmin') {
-    // Superadmin without membership — still gets access, but flagged
-    // as 'superadmin' so entry creation etc. can be restricted.
-    req.factionRole = 'superadmin';
-  } else {
+  const access = await resolveFactionAccess(factionId, req.user!);
+  if (!access) {
     error(res, 'FORBIDDEN', 'You are not a member of this faction', 403);
     return;
   }
-
-  // Admins and superadmins implicitly have all permissions — the role is the
-  // source of truth, not the rank list.
-  //
-  // `user.role` is checked separately from `factionRole`: a superadmin who
-  // joined a faction as a plain member takes that membership role (which is
-  // what lets them log entries), and without this they would lose every
-  // permission in the one faction they actually belong to.
-  if (
-    req.factionRole === 'admin' ||
-    req.factionRole === 'superadmin' ||
-    req.user!.role === 'superadmin'
-  ) {
-    req.factionPermissions = [...FACTION_PERMISSIONS];
-  } else {
-    // Members get whatever permissions their assigned rank grants.
-    let rankPermissions: string[] = [];
-    if (membership?.rank) {
-      const [faction] = await db
-        .select({ ranks: factions.ranks })
-        .from(factions)
-        .where(eq(factions.id, factionId))
-        .limit(1);
-      const ranks = faction?.ranks ?? [];
-      const rank = ranks.find((r) => r.name === membership.rank);
-      if (rank) {
-        // Keep only permissions the system actually knows about, in case a
-        // previous definition removed a name that a rank still grants.
-        rankPermissions = (rank.permissions ?? []).filter((p) =>
-          (FACTION_PERMISSIONS as readonly string[]).includes(p),
-        );
-      }
-    }
-    req.factionPermissions = rankPermissions;
-  }
+  req.factionRole = access.role;
+  req.factionPermissions = access.permissions;
 
   // Block access to soft-deleted factions for non-superadmins. The analytics
   // test pins dashboard-after-delete to 404 rather than 410, so both the

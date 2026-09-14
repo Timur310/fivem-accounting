@@ -13,6 +13,10 @@ process.env.DATABASE_URL = ADMIN_URL.replace(/\/[^/]+$/, `/${TEST_DB_NAME}`);
 process.env.DISCORD_CLIENT_ID = 'test-client-id';
 process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
 process.env.DISCORD_REDIRECT_URI = 'http://localhost:8000/api/v1/auth/callback';
+// Present so the Discord integration reports itself configured. No test ever
+// reaches Discord: the suites exercise permissions, validation and the local
+// side of the link, and stop short of the handlers that would open a socket.
+process.env.DISCORD_BOT_TOKEN = 'test-bot-token';
 process.env.JWT_SECRET = 'test-jwt-secret-not-used-in-production';
 process.env.CORS_ORIGINS = 'http://localhost:3000';
 process.env.LOG_LEVEL = 'error';

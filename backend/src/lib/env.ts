@@ -4,6 +4,16 @@ export const env = cleanEnv(process.env, {
   DISCORD_CLIENT_ID:     str({ desc: 'Discord OAuth2 Client ID' }),
   DISCORD_CLIENT_SECRET: str({ desc: 'Discord OAuth2 Client Secret' }),
   DISCORD_REDIRECT_URI:  url({ desc: 'Discord OAuth redirect URI' }),
+  // The bot living on the same Discord application as the login above. Empty
+  // by default and empty is a supported state: without it the Discord
+  // integration reports itself unavailable and every other feature carries on
+  // untouched. A deployment that wants it adds a Bot to the existing
+  // application and pastes the token here.
+  DISCORD_BOT_TOKEN:     str({ default: '', desc: 'Discord bot token (blank disables the Discord integration)' }),
+  // Where Discord returns the leader after they pick a server for the bot.
+  // Separate from DISCORD_REDIRECT_URI because Discord matches redirect URIs
+  // exactly and this one lands on a different handler.
+  DISCORD_BOT_REDIRECT_URI: str({ default: '', desc: 'Discord bot-invite callback URL (defaults to the login redirect with /bot-callback)' }),
   JWT_SECRET:            str({ desc: 'JWT signing secret' }),
   JWT_EXPIRATION_DAYS:   num({ default: 7, desc: 'JWT expiration in days' }),
   // Session cookie Secure flag. Default false so plain-http dev setups keep
