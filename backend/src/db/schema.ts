@@ -136,6 +136,7 @@ export const FACTION_PERMISSIONS = [
   // costs.
   'manage_crafting',
   'craft',
+  'manage_map',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -156,6 +157,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_discord: 'Manage Discord',
   manage_crafting: 'Manage Recipes',
   craft: 'Craft Items',
+  manage_map: 'Manage Map',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -958,3 +960,76 @@ export type NewCraftingRecipe = typeof craftingRecipes.$inferInsert;
 export type CraftingRecipeItem = typeof craftingRecipeItems.$inferSelect;
 export type Craft = typeof crafts.$inferSelect;
 export type CraftMovement = typeof craftMovements.$inferSelect;
+
+// ── map_markers ────────────────────────────────────────
+// What a faction knows about the map: stash spots, meets, turf, supply runs.
+//
+// One table for points, areas and routes rather than three. They differ only
+// in how many coordinates they carry and how the client draws them — the name,
+// the description, who may see it and who put it there are identical, and
+// three tables would mean three of every query, route and permission check.
+//
+// Coordinates are stored in **game space**, never in map pixels. A player
+// reads `-1037.2, -2737.5` off `/coords` in game and that is the number that
+// has to survive: the map image, its zoom levels and the transform that puts a
+// pixel on screen are all rendering details that can be replaced without
+// touching a row here. Storing pixels would tie every marker to one tile set.
+export const mapMarkers = pgTable('map_markers', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+
+  kind:        varchar('kind', { length: 8 }).notNull(),
+  name:        varchar('name', { length: 120 }).notNull(),
+  description: text('description'),
+
+  /**
+   * Free-text label the faction chooses — "stash", "meet", "turf". Not an
+   * enum: every server has its own vocabulary, and a fixed list would be wrong
+   * for most of them within a week.
+   */
+  category:    varchar('category', { length: 40 }),
+  /** Marker colour, `#rrggbb`. Null falls back to the faction's accent. */
+  color:       varchar('color', { length: 7 }),
+  /** An emoji standing in for the marker, same idea as item types. */
+  icon:        varchar('icon', { length: 16 }),
+
+  /**
+   * The shape, in game coordinates: `[{x, y, z?}, …]`.
+   *
+   * One coordinate for a point, two or more for a route, three or more for an
+   * area. `z` is only meaningful on a point — a stash is on a specific floor,
+   * a turf boundary is not.
+   */
+  points:      jsonb('points').$type<{ x: number; y: number; z?: number }[]>().notNull(),
+
+  /**
+   * The lowest rank level allowed to see this, or null for everybody.
+   *
+   * **Lower level means higher rank** in this app — level 1 is the boss. So a
+   * marker with `minRankLevel: 2` is visible to levels 1 and 2 and hidden from
+   * 3 downwards.
+   *
+   * The level is stored rather than the rank's name so that renaming a rank
+   * does not silently change who can see a stash. Re-*levelling* the hierarchy
+   * does shift the meaning, which is the honest trade: something has to be the
+   * anchor, and names change far more often than levels.
+   */
+  minRankLevel: integer('min_rank_level'),
+
+  createdBy:   uuid('created_by').notNull().references(() => users.id),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('map_marker_faction').on(table.factionId),
+}));
+
+export const MAP_MARKER_KINDS = ['point', 'area', 'route'] as const;
+export type MapMarkerKind = (typeof MAP_MARKER_KINDS)[number];
+
+export const mapMarkersRelations = relations(mapMarkers, ({ one }) => ({
+  faction: one(factions, { fields: [mapMarkers.factionId], references: [factions.id] }),
+  creator: one(users,    { fields: [mapMarkers.createdBy], references: [users.id] }),
+}));
+
+export type MapMarker = typeof mapMarkers.$inferSelect;
+export type NewMapMarker = typeof mapMarkers.$inferInsert;
