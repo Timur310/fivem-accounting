@@ -183,6 +183,7 @@ sidebar shows exactly what your rank gives you:
 | `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
 | `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11), and reverting a booked sale |
 | `sell` | Booking a sale into the treasury (§6.11). Safe to hand out widely — it records what was sold, it does not decide what things cost |
+| *(rank, not a permission)* | Seeing cost and margin (§6.11). Set in the price list, and it works like a map's rank: at or above the level you pick |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
@@ -830,10 +831,42 @@ time on the entries or withdrawals screens. Half an unpicked sale is money
 received for goods that never moved, and the app will not let the books say
 that. Revert the sale instead.
 
-**What it does not do yet:** it cannot tell you what you made on the deal.
-Margins — cost from your crafting recipes, visible only above a rank you
-choose — are the next step, along with quoting the same basket in clean or
-dirty money.
+### What the deal is worth
+
+If you have written crafting recipes and priced their materials, the
+calculator also shows **cost** and **margin** — what the goods cost the
+faction to make, and what is left after the discount. Nothing extra to enter:
+the recipe already says ten steel makes a pistol, and the price list already
+says what steel costs.
+
+Three things it will not do:
+
+- If any material in a recipe has no price, it shows **no cost for that item
+  at all** rather than a number that looks like a margin and is not one. It
+  says so under the total.
+- If two of your recipes make the same thing, it uses the **cheaper** one.
+- The margin is a percentage of the price, not of the cost — "we keep 40% of
+  what they pay".
+
+**Who sees it is up to you.** In the price list, *Who sees cost and margin*
+sets a rank: everyone, or only that rank and above. A soldier at the counter
+does not need to know the markup, and a screenshot from them should not reveal
+it. Below the line, the figures are not hidden on screen — they are never sent
+to that browser at all.
+
+### Selling in two kinds of money
+
+If your faction quotes some things in clean money and some in dirty, set the
+**exchange rates** in the price list. Then the calculator gets a *Quote in*
+picker: one basket, priced in whichever money the buyer is paying with, with
+each converted line marked.
+
+Each direction is its own rate. Dirty → clean does not give the app clean →
+dirty, on purpose: washing money takes a cut, so the reverse is a different
+deal and you should be the one to say what it is.
+
+Without a rate the app refuses rather than inventing one, and the message names
+the two currencies so you know which rate is missing.
 
 ---
 

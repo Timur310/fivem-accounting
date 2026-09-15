@@ -83,6 +83,7 @@ import type {
   QuantityBreakInput,
   Quote,
   QuoteInput,
+  CurrencyRate,
   Sale,
   SaleInput,
   SaleResult,
@@ -1054,6 +1055,22 @@ export const pricingApi = {
 
   removeBreak: (factionId: string, id: string) =>
     api.delete(`/factions/${factionId}/pricing/breaks/${id}`),
+
+  /** Upsert: a faction editing a rate is changing the one deal it has. */
+  setRate: (factionId: string, input: { fromItemTypeId: string; toItemTypeId: string; rate: string }) =>
+    api
+      .put<ApiSuccessResponse<CurrencyRate>>(`/factions/${factionId}/pricing/rates`, input)
+      .then(unwrap),
+
+  removeRate: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/pricing/rates/${id}`),
+
+  setMarginRank: (factionId: string, marginMinRankLevel: number | null) =>
+    api
+      .patch<ApiSuccessResponse<{ marginMinRankLevel: number | null }>>(
+        `/factions/${factionId}/pricing/settings`, { marginMinRankLevel },
+      )
+      .then(unwrap),
 
   sell: (factionId: string, input: SaleInput) =>
     api
