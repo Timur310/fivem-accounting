@@ -198,7 +198,7 @@ FactionMember 1---* MemberNote
 
 ### 5.2 Tables As Built
 
-Sixteen tables. Every id is a `uuid` with `defaultRandom()` unless noted.
+Eighteen tables. Every id is a `uuid` with `defaultRandom()` unless noted.
 
 **`users`** — one row per Discord account, and per person registered before they
 ever signed in.
@@ -288,6 +288,17 @@ sides — refining 10 crates into 6 better ones is a real recipe.
 or the other). This is what makes a revert exact, and what lets entries and
 payouts refuse to be edited individually. The link lives here rather than as
 a `craft_id` column so the two busiest tables in the app stay untouched.
+
+**`map_layers`** — one named map: `faction_id`, `name` (unique per faction),
+`description`, `color`, `icon`, `min_rank_level`, `created_by`. Permission
+lives here and nowhere else — see §8.16.
+
+**`map_markers`** — `faction_id`, `layer_id` (cascade), `kind`
+(`point` / `area` / `route`), `name`, `description`, `category`, `color`,
+`icon`, and `points`: a jsonb array of `{x, y, z?}` in **game coordinates**.
+Never pixels. The map image, its zoom levels and the transform that puts a
+pixel on screen are rendering details that can be replaced without touching a
+row; storing pixels would tie every marker to one tile set.
 
 **Removed:** `factions.payout_approval_required` (migration `0007`). It decided
 where a payout started rather than who could settle it, and once the four-eyes
@@ -474,6 +485,7 @@ Prefix: `/factions/:id`.
 | `/expenses` | faction running costs. Read for any member, `manage_expenses` writes |
 | `/laundering` | convert one currency into another |
 | `/crafting` | recipes, running them, history and revert — see §8.15 |
+| `/map`, `/map/layers` | the faction's maps and what is drawn on them — see §8.16 |
 | `/item-types`, `/quotas`, `/settings` | faction configuration |
 | `/discord` | connect a Discord server and route activity to its channels, `manage_discord` — see §8.13 |
 | `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
@@ -545,6 +557,9 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Launder currency | Yes | Yes | `manage_laundering` | No |
 | Write / retire / delete a recipe, revert a craft | Yes | Yes | `manage_crafting` | No |
 | Run a saved recipe | Yes | Yes | `craft` | No |
+| Open the map screen | Yes | Yes | Yes | Yes |
+| See a map layer and its markers | Yes | Yes | rank at or above the layer's | unrestricted layers only |
+| Create a layer, draw, edit, delete | Yes | Yes | `manage_map`, and only on layers it can see | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
@@ -1369,6 +1384,59 @@ event (§8.13). The completed embed leads with what was made and lists the
 materials underneath — "what it cost" is the second question every time and
 never the first.
 
+### 8.16 The Map
+
+An interactive map of Los Santos carrying the faction's own marks: stash
+spots, meets, turf, supply runs.
+
+**Coordinates are stored in game space** — the numbers `/coords` prints. The
+transform to map pixels lives in `frontend/src/lib/gta-map.ts` and nowhere
+else, which is what lets the tile set be replaced, re-sliced or restyled
+without migrating a row. Leaflet runs on `CRS.Simple`: the GTA world is flat
+and a spherical Mercator would bend every straight road.
+
+Tiles are served from `frontend/public/map-tiles` and **no imagery ships with
+the project** — the GTA V map is Rockstar's, and supplying it is the
+operator's decision on their own instance. `scripts/make-map-tiles.mjs`
+slices one high-resolution image into the pyramid; `MAP_THEMES` holds one
+entry per style, and two or more put a switcher on the map. Every style must
+be cut from an identically framed image, because the transform is shared.
+
+**Permission lives on the layer.** A layer is one named map with a
+`min_rank_level`; a marker belongs to exactly one layer and carries no rank of
+its own. One rule follows from that and governs every route in the file:
+
+> You can see, and change, exactly the markers whose layer you can open.
+
+Reading is a join — `map_markers INNER JOIN map_layers` with the visibility
+predicate — so a marker on a closed layer has no row to join to and never
+enters the response. Writing goes through the same predicate: `openLayer()`
+and `openMarker()` are the only ways a write reaches a row.
+
+That last part is a fix, not a design that was right first time. The original
+version put the rank on each marker and looked markers up by id on PATCH and
+DELETE with no visibility check at all, while PATCH returned the whole row —
+so a low rank holding `manage_map` who learned an id could read and rewrite a
+stash they could not see. Ids are not guessable, but the audit log prints
+`entityId`, so `view_audit_logs` was a way to learn one. Six tests cover it
+now; three fail against the old lookup.
+
+Two smaller rules, both learned by asking what somebody could do by accident:
+
+- **A layer cannot be restricted above its creator's own rank.** Otherwise a
+  leader locks themselves out of their own map in one click, with no way back
+  through the interface.
+- **A missing layer and a closed one answer identically** (404). "Forbidden"
+  would confirm that a map by that id exists.
+
+Coordinates are deliberately absent from the audit log's details: the audit
+log is read by people who may not be allowed to see where a marker is.
+
+Layers arrived after markers, so migration `0021` folds each distinct rank a
+faction was using into one generated layer and moves its markers onto it — a
+marker restricted to level 2 lands on a layer restricted to level 2, leaving
+who-sees-what unchanged — and `0022` drops the old column.
+
 ---
 
 ## 9. Frontend Architecture
@@ -1417,7 +1485,7 @@ the page never diverge).
 ### 9.2 Views
 
 `views/` holds one component per screen: dashboard, entries, payouts, treasury,
-laundering, crafting, members, member-profile, strikes, leaderboard, reports, settings,
+laundering, crafting, map, members, member-profile, strikes, leaderboard, reports, settings,
 audit-logs, admin-factions, admin-faction-detail, users-panel.
 
 `support` and `admin-support` are the two halves of §8.9: the form plus your
@@ -1444,6 +1512,15 @@ reading anything.
 
 Expenses are not a view of their own: they render as a section inside the
 treasury view, because the balance cards above them already carry their effect.
+
+The map view mounts Leaflet imperatively in an effect rather than through a
+React wrapper: it owns its own DOM and its own event loop, and letting React
+re-render into it produces duplicated layers and leaked handlers. One thing to
+know before touching it — `.leaflet-container` needs `isolation: isolate`.
+Leaflet stacks panes at z-index 200-700 and controls at 800-1000 and sets no
+stacking context of its own, so without it those numbers land in the root
+context and paint over every dialog in the app, all of which sit at z-50. The
+symptom is a dialog that opens, dims the page, and cannot be seen.
 
 The crafting view is tabbed rather than split into two screens — bench,
 recipes, history. Two audiences use it: most people open it to run a recipe
@@ -1939,6 +2016,19 @@ per component plus an entry for the result, every time.
 | 6 | Discord events | `craft_completed` and `craft_reverted`, routed like any other — **DONE** | Medium |
 
 See §8.15 for the design and the two bugs it surfaced.
+
+### Phase 11: The Map (Week 28) — COMPLETE
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Leaflet map on CRS.Simple | GTA V tile pyramid, one shared game-coordinate transform — **DONE** | High |
+| 2 | Points, routes and areas | Draw by clicking, or paste what `/coords` printed — **DONE** | High |
+| 3 | Layers | Named maps, each with its own rank, gating both reading and writing — **DONE** | High |
+| 4 | Tiler | One command turns a high-resolution image into the pyramid — **DONE** | Medium |
+| 5 | Themes | Several tile styles side by side, switchable, remembered per browser — **DONE** | Low |
+
+See §8.16 for the design, the authorization hole it closed, and the
+calibration the operator has to do once.
 
 ---
 
