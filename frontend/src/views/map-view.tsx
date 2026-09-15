@@ -61,6 +61,7 @@ export function MapView({ factionId, canManage }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const boundsRef = useRef<L.LatLngBounds | null>(null);
+  const resizeRef = useRef<ResizeObserver | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const leafletRef = useRef<typeof L | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
@@ -221,16 +222,52 @@ export function MapView({ factionId, canManage }: Props) {
         bounds,
       }).addTo(map);
 
-      map.setMaxBounds(bounds.pad(0.2));
-      map.fitBounds(bounds);
-
+      map.setMaxBounds(bounds);
       layerRef.current = leaflet.layerGroup().addTo(map);
       mapRef.current = map;
+
+      // Fill the canvas rather than fit inside it.
+      //
+      // fitBounds picks the zoom where the whole square is *visible*, which on
+      // a panel wider than it is tall leaves a gutter down both sides — the map
+      // opens small and has to be zoomed in before it covers anything.
+      // getBoundsZoom(bounds, true) is the opposite question: the zoom at
+      // which the *view* fits inside the bounds. That is cover, and it is what
+      // this screen wants on arrival.
+      //
+      // It is also the floor: zooming out past it would only ever reveal empty
+      // space outside the map, so minZoom is set to the same number.
+      const cover = () => {
+        const box = map.getSize();
+        // Leaflet returns nonsense for a container with no layout yet — a
+        // sidebar still animating, a tab that has not been shown.
+        if (box.x === 0 || box.y === 0) return;
+        const zoom = Math.min(map.getBoundsZoom(bounds, true), MAP_MAX_ZOOM);
+        map.setMinZoom(zoom);
+        map.setView(bounds.getCenter(), zoom, { animate: false });
+      };
+      cover();
+
+      // The panel changes width when the sidebar collapses, and a wider panel
+      // at the old zoom shows the gutter again. Only the floor is recomputed;
+      // the reader's own zoom and position are left alone, because yanking the
+      // view back to the centre because a sidebar moved is worse than a sliver
+      // of empty space.
+      resizeRef.current = new ResizeObserver(() => {
+        map.invalidateSize();
+        const box = map.getSize();
+        if (box.x === 0 || box.y === 0) return;
+        map.setMinZoom(Math.min(map.getBoundsZoom(bounds, true), MAP_MAX_ZOOM));
+      });
+      resizeRef.current.observe(map.getContainer());
+
       setReady(true);
     });
 
     return () => {
       cancelled = true;
+      resizeRef.current?.disconnect();
+      resizeRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
       layerRef.current = null;
