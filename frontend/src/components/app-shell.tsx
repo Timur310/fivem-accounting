@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   WashingMachine,
   Hammer,
+  Map,
   BookOpen,
   Search,
 } from 'lucide-react';
@@ -61,6 +62,7 @@ import { MemberProfileView } from '@/views/member-profile-view';
 import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
 import { CraftingView } from '@/views/crafting-view';
+import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
 import { AnnouncementsView } from '@/views/announcements-view';
@@ -304,6 +306,10 @@ export function AppShell() {
       // one are different jobs, and the bench is the same page for both.
       anyPermission: ['manage_crafting', 'craft'],
     },
+    // No permission: the map is faction knowledge, and each marker carries its
+    // own visibility. Gating the screen as well would hide the public pins
+    // from the people they exist for.
+    { group: 'manage', view: 'map', label: 'nav.map', icon: Map },
     { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
     { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
     // Everyone reads the board; posting is gated inside the view.
@@ -466,6 +472,8 @@ export function AppShell() {
         return selectedFactionId ? <PayoutsView factionId={selectedFactionId} canManagePayouts={hasPermission('manage_payouts')} /> : null;
       case 'laundering':
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
+      case 'map':
+        return selectedFactionId ? <MapView factionId={selectedFactionId} canManage={hasPermission('manage_map')} /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView
             factionId={selectedFactionId}

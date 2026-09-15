@@ -11,6 +11,7 @@ export type AppView =
   | 'treasury'
   | 'laundering'
   | 'crafting'
+  | 'map'
   | 'members'
   | 'member-profile'
   | 'strikes'

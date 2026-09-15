@@ -39,6 +39,10 @@ Discord history.
 - 🔨 **Crafting** — write a recipe once (10 steel + 2 powder → 1 pistol) and
   run it in one click; the materials leave the vault and the product arrives,
   in batches, with a one-click revert if it was a mistake
+- 🗺️ **Map** — an interactive Los Santos map with the faction's own marks on
+  it; points, routes and turf grouped into named maps, each of which decides
+  which ranks may open it. Paste coordinates straight from `/coords` and the
+  pin lands where the player stood
 - 🧼 **Laundering** — convert one of the faction's currencies into another,
   booked against the faction so nobody's score moves
 - 📣 **Announcements** — a faction bulletin board with priorities, pinning,
@@ -95,7 +99,7 @@ backups) live in [`docs/FiveM_RP_Faction_Accountant_Architecture.md`](docs/FiveM
 
 ## Roadmap
 
-Actively developed. Crafting shipped most recently; Discord bot commands,
+Actively developed. The map shipped most recently; Discord bot commands,
 automated reports, webhooks and faction templates are next up — see the roadmap in the architecture doc for
 the full phase-by-phase plan and what's already shipped.
 

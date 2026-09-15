@@ -97,8 +97,10 @@ button collapses it.
 - **Play** — Dashboard, Entries, Withdrawals, Announcements, Activity,
   Leaderboard, Support and the User Guide. The ones you open daily, and all
   open to every member whatever their rank.
-- **Manage** — Members, Strikes, Treasury, Laundering, Crafting, Reports,
-  Audit logs, Settings. Visible only if your rank grants them (§4).
+- **Manage** — Members, Strikes, Treasury, Laundering, Crafting, Map,
+  Reports, Audit logs, Settings. Visible only if your rank grants them
+  (§4) — except the Map, which every member can open; what they find on it
+  depends on their rank (§6.8).
 - **Server** — superadmin only: faction administration and the Support Inbox.
 
 Each group collapses on its own, so a plain member's sidebar stays short even
@@ -178,6 +180,7 @@ sidebar shows exactly what your rank gives you:
 | `manage_laundering` | The laundering desk |
 | `manage_crafting` | Writing and retiring recipes, and reverting a craft (§6.7) |
 | `craft` | Running a saved recipe (§6.7). Safe to hand out widely — it spends materials, it does not define what they cost |
+| `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
@@ -668,7 +671,62 @@ to be edited or deleted individually, and point you at Revert instead. Undoing
 one half and not the other would either hand the faction free materials or
 destroy the product it paid for.
 
-### 6.8 Strikes (`manage_strikes`)
+### 6.8 The map (`manage_map`)
+
+An interactive map of the city with the faction's own marks on it: stash
+spots, meeting points, turf, supply runs. Every member can open the screen —
+what they find on it is the question, and the answer is *maps*.
+
+**A map is a named set of marks.** "Robbery routes". "Where friends live".
+"Turf". A faction keeps as many as it wants, and each one decides who may open
+it. That is the whole permission model: **you can see, and change, exactly the
+marks on maps you can open.**
+
+The panel on the right lists them. The eye beside each one shows or hides it
+without changing anything — that is your own view, not a setting. The number
+is how many marks it holds. A padlock means the map is restricted.
+
+**Who can open a map** is a rank, set when the map is made:
+
+- *Everyone in the faction* — the default.
+- *Underboss and above* — visible to the Underboss, the Boss, and faction
+  admins. Invisible below, and that means genuinely absent: a mark you may not
+  see is never sent to your browser at all, not merely hidden on screen.
+
+Visibility runs upward only. There is no way to hide a map from your
+superiors; faction admins and superadmins see every map.
+
+You cannot restrict a map to a rank above your own — you would not be able to
+open it afterwards, and there would be no way back through the app.
+
+**Drawing.** With `manage_map`, click a map's name in the panel to aim at it,
+then pick Point, Route or Area:
+
+- **Point** — one click. A stash, a meet, a door.
+- **Route** — click each turn. Two or more.
+- **Area** — click each corner. Three or more.
+
+Press **Done** and name it. Each mark can take its own colour and an emoji;
+leave the colour alone and it takes the map's, so a whole map recolours in one
+place.
+
+**Paste coordinates instead.** This is the part that beats a screenshot in a
+Discord channel. Run `/coords` in game, copy the line, paste it into the box
+in the side panel, press Place. The mark lands exactly where you stood —
+including which floor, which a click on a flat map can never say. It reads
+`-1037.2, -2737.5, 20.1` and `vector3(...)` and most of what other scripts
+print.
+
+**Deleting a map deletes everything drawn on it.** The confirmation says how
+many.
+
+**If marks land in the wrong place**, the map image and the game's coordinates
+are out of step — that is one setting on the server, not something you did.
+Hover anywhere and the coordinate under the cursor is shown in the bottom-left
+corner; send a screenshot of that over somewhere you know the real coordinates
+of, and whoever runs the instance can correct it.
+
+### 6.9 Strikes (`manage_strikes`)
 
 Formal warnings. Issue from a member's profile or the Strikes view.
 
@@ -694,7 +752,7 @@ Formal warnings. Issue from a member's profile or the Strikes view.
 name, the severity and the reason into that channel. Everyone who can read the
 channel reads it. Pick a leadership-only channel, or leave strikes unrouted.
 
-### 6.9 Audit logs (`view_audit_logs`)
+### 6.10 Audit logs (`view_audit_logs`)
 
 The app's memory of who did what: actor, action, entity, timestamp, and
 before/after values for changes. Filterable and paginated. It is
@@ -1036,6 +1094,10 @@ action, the entity, when it happened, and before/after values for changes.
   it never colors a number.
 - **Private notes stay private.** A member can see their own strikes; they
   can never see the notes written about them.
+- **A hidden map mark is absent, not hidden.** Marks on a map your rank
+  cannot open are never sent to your browser, so there is nothing to find
+  by looking harder. The same rule blocks editing one: you can only change
+  what you could already see.
 - **Discord is told, never asked.** The bot only posts. It reads no messages,
   takes no commands, and nothing in Discord can change a number here.
 - **A Discord problem is never your problem.** If the bot cannot post, the
@@ -1066,6 +1128,14 @@ you, and the fix reaches every faction you're in.
 Crafting → History → Revert. Materials back, product out, in one move.
 Anyone with `manage_crafting` can do it. Deleting the rows by hand is
 refused on purpose — it would undo one half and not the other.
+
+**The draw buttons on the map are greyed out.**
+There is no map to draw on yet. Make one in the panel on the right — the
+plus button — then click its name to aim at it.
+
+**Somebody says there is a mark on the map and I cannot see it.**
+It is on a map your rank cannot open. Ask whoever drew it; they can move it
+to one you can, or widen who may open that map.
 
 **The craft button is greyed out.**
 The vault is short of a material. The card shows each one as needed / held
