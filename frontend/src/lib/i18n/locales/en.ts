@@ -1169,7 +1169,6 @@ export const en = {
 
   // ── Tags that will not reach anybody ──
   'reminder.someTagsWontReach': 'Saved, but some tags will not reach anybody',
-  'reminder.tagNeverSignedIn': '{name} has never signed in, so their Discord account is unconfirmed',
   'reminder.tagNotInServer': '{name} is not in this Discord server',
 
   'reminder.taggedNow': 'Tagged:',

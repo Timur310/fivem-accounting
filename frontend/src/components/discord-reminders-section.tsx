@@ -190,11 +190,7 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
         toast({
           title: t('reminder.someTagsWontReach'),
           description: unreachable
-            .map((u) =>
-              u.reason === 'provisional'
-                ? t('reminder.tagNeverSignedIn', { name: u.name })
-                : t('reminder.tagNotInServer', { name: u.name }),
-            )
+            .map((u) => t('reminder.tagNotInServer', { name: u.name }))
             .join(' · '),
           variant: 'destructive',
         });
