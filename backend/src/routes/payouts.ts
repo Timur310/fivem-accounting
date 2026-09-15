@@ -9,7 +9,7 @@ import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
-import { craftHolding, craftHoldingMessage } from '../lib/crafting.js';
+import { ledgerHoldMessage } from '../lib/ledgerHold.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
@@ -459,10 +459,11 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
     return;
   }
 
-  // A craft's movements are not independently editable; see craftHolding.
-  const heldBy = await craftHolding({ payoutIds: [payoutId] });
+  // A craft's or a sale's movements are not independently editable;
+  // see ledgerHoldMessage.
+  const heldBy = await ledgerHoldMessage({ payoutIds: [payoutId] });
   if (heldBy) {
-    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
+    error(res, 'VALIDATION_ERROR', heldBy);
     return;
   }
 
@@ -632,10 +633,11 @@ router.delete('/:payoutId', async (req: Request, res: Response) => {
     return;
   }
 
-  // A craft's movements are not independently editable; see craftHolding.
-  const heldBy = await craftHolding({ payoutIds: [payoutId] });
+  // A craft's or a sale's movements are not independently editable;
+  // see ledgerHoldMessage.
+  const heldBy = await ledgerHoldMessage({ payoutIds: [payoutId] });
   if (heldBy) {
-    error(res, 'VALIDATION_ERROR', craftHoldingMessage(heldBy));
+    error(res, 'VALIDATION_ERROR', heldBy);
     return;
   }
 

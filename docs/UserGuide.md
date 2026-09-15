@@ -181,7 +181,8 @@ sidebar shows exactly what your rank gives you:
 | `manage_crafting` | Writing and retiring recipes, and reverting a craft (§6.7) |
 | `craft` | Running a saved recipe (§6.7). Safe to hand out widely — it spends materials, it does not define what they cost |
 | `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
-| `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11). Reading the list and quoting from it needs nothing |
+| `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11), and reverting a booked sale |
+| `sell` | Booking a sale into the treasury (§6.11). Safe to hand out widely — it records what was sold, it does not decide what things cost |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
@@ -800,9 +801,39 @@ Two things worth knowing about the numbers:
 Deactivating a partner is better than deleting them where the deal is only
 paused.
 
-**What it does not do yet:** nothing here touches the treasury. Selling is
-still entered by hand. Booking an accepted quote straight into the books —
-money in, goods out, revertible in one click — is the next step.
+### Booking a sale (`sell`)
+
+When the deal is done, press **Sold**. The payment goes into the treasury and
+the goods come out of it, in one act — no separate entry, no withdrawal per
+item. This is the part that removes the double bookkeeping.
+
+It asks two things first:
+
+- **Whose contribution it counts as.** *Nobody* moves the treasury and leaves
+  every leaderboard alone, the way laundering does. *The seller* credits you,
+  as a logged entry would. Pick whichever matches how your faction measures
+  work.
+- **A note**, if the sale needs one.
+
+**Selling more than the vault holds is allowed.** The app books it and tells
+you what is short, rather than refusing in front of the buyer — usually it
+means the stock is real and the books are behind.
+
+**Sales** lists what has been booked, newest first. **Revert** on any of them
+takes the payment back out and puts the goods back, together. Reverting needs
+`manage_prices`, not `sell`: the till takes money in, and moving it back out is
+a different decision. It is refused if the money has already been spent — the
+vault cannot give back what it no longer has.
+
+While a sale stands, the rows it wrote cannot be edited or deleted one at a
+time on the entries or withdrawals screens. Half an unpicked sale is money
+received for goods that never moved, and the app will not let the books say
+that. Revert the sale instead.
+
+**What it does not do yet:** it cannot tell you what you made on the deal.
+Margins — cost from your crafting recipes, visible only above a rank you
+choose — are the next step, along with quoting the same basket in clean or
+dirty money.
 
 ---
 

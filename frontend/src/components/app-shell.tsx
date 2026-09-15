@@ -488,7 +488,11 @@ export function AppShell() {
       case 'map':
         return selectedFactionId ? <MapView factionId={selectedFactionId} canManage={hasPermission('manage_map')} /> : null;
       case 'pricing':
-        return selectedFactionId ? <PricingView factionId={selectedFactionId} canManage={hasPermission('manage_prices')} /> : null;
+        return selectedFactionId ? <PricingView
+            factionId={selectedFactionId}
+            canManage={hasPermission('manage_prices')}
+            canSell={hasPermission('sell') || hasPermission('manage_prices')}
+          /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView
             factionId={selectedFactionId}

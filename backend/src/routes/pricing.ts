@@ -1,13 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
-import { db } from '../db/index.js';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { db, type TransactionLike } from '../db/index.js';
 import {
   counterparties,
+  entries,
   itemTypes,
+  payouts,
   productAddons,
   productPrices,
   quantityBreaks,
+  saleLines,
+  saleMovements,
+  sales,
+  users,
+  CREDIT_SALE_TO,
 } from '../db/schema.js';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -16,6 +23,10 @@ import { createAuditLog } from '../lib/audit.js';
 import {
   computeQuote, loadCurrencies, loadPriceBook, ownsItemType,
 } from '../lib/pricing.js';
+import { resolveAnonymousUserId } from '../lib/anonymous.js';
+import { todayDateString } from '../lib/date.js';
+import { balancesFor, lockItemTypes, toCents } from '../lib/treasury.js';
+import { compareQuantity } from '../lib/crafting.js';
 
 /**
  * The price list, and the calculator that reads it.
@@ -544,6 +555,329 @@ router.post('/quote', async (req: Request, res: Response) => {
   }
 
   success(res, result.quote);
+});
+
+// ── Sales — the quote, booked ─────────────────────────
+//
+// Phase 2. Pressing Sold turns the basket into ledger rows: the payment as one
+// entry, each item handed over as a completed payout. Nothing here invents a
+// new kind of money, so every balance, report and export in the app counts a
+// sale correctly without knowing that sales exist.
+//
+// The figures are recomputed here from the price list rather than taken from
+// the request. The browser is welcome to display a total; it is not allowed to
+// decide one, or a seller with devtools could book any number they liked.
+
+const saleSchema = quoteSchema.extend({
+  notes: z.string().max(500).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').optional(),
+  creditSaleTo: z.enum(CREDIT_SALE_TO).optional(),
+});
+
+router.post('/sales', requirePermission('sell'), async (req: Request, res: Response) => {
+  const body = saleSchema.parse(req.body);
+  const id = factionId(req);
+
+  const [book, currencies] = await Promise.all([loadPriceBook(id), loadCurrencies(id)]);
+  const computed = computeQuote(body, book, currencies);
+  if (!computed.ok) {
+    error(res, computed.error.code === 'NOT_PRICED' ? 'NOT_FOUND' : 'VALIDATION_ERROR',
+      computed.error.message,
+      computed.error.code === 'NOT_PRICED' ? 404 : 400);
+    return;
+  }
+  const quote = computed.quote;
+
+  const saleDate = body.date ?? todayDateString();
+  const creditSaleTo = body.creditSaleTo ?? 'nobody';
+  const note = body.notes?.trim()
+    || (quote.counterparty ? `Sold to ${quote.counterparty.name}` : 'Sold');
+
+  const result = await db.transaction(async (tx: TransactionLike) => {
+    // Everything the sale touches: the money coming in, the goods going out,
+    // and any add-on that is itself stock.
+    const touched = new Set<string>([quote.currency.itemTypeId]);
+    for (const line of quote.lines) {
+      touched.add(line.itemTypeId);
+      for (const addon of line.addons) {
+        const stocked = book.prices
+          .find((p) => p.itemTypeId === line.itemTypeId)?.addons
+          .find((a) => a.id === addon.id)?.itemTypeId;
+        if (stocked) touched.add(stocked);
+      }
+    }
+    await lockItemTypes(tx, [...touched]);
+
+    const [sale] = await tx
+      .insert(sales)
+      .values({
+        factionId: id,
+        counterpartyId: quote.counterparty?.id ?? null,
+        counterpartyName: quote.counterparty?.name ?? null,
+        counterpartyDiscountPercent: quote.counterparty?.discountPercent ?? '0',
+        currencyItemTypeId: quote.currency.itemTypeId,
+        subtotal: quote.subtotal,
+        discountTotal: quote.discountTotal,
+        total: quote.total,
+        creditSaleTo,
+        soldBy: req.user!.id,
+        saleDate,
+        notes: body.notes?.trim() || null,
+      })
+      .returning();
+    if (!sale) throw new Error('Failed to record the sale');
+
+    const anonymousUserId = await resolveAnonymousUserId(tx);
+    // Whose entry the payment is. `nobody` keeps selling off the leaderboards
+    // the way laundering is kept off; `seller` is for factions where working
+    // the counter is the contribution being measured.
+    const paymentOwner = creditSaleTo === 'seller' ? req.user!.id : anonymousUserId;
+
+    const movements: (typeof saleMovements.$inferInsert)[] = [];
+
+    // The payment in. A sale given away entirely — a partner at 100% — books
+    // no entry, because a zero-amount row on the treasury screen reads as a
+    // mistake rather than as a gift.
+    if (toCents(quote.total) > 0n) {
+      const [entry] = await tx
+        .insert(entries)
+        .values({
+          factionId: id,
+          userId: paymentOwner,
+          itemTypeId: quote.currency.itemTypeId,
+          amount: quote.total,
+          description: note,
+          entryDate: saleDate,
+        })
+        .returning();
+      if (!entry) throw new Error('Failed to record the payment');
+      movements.push({
+        saleId: sale.id,
+        role: 'money_in',
+        itemTypeId: quote.currency.itemTypeId,
+        quantity: quote.total,
+        entryId: entry.id,
+      });
+    }
+
+    // The goods out, as completed payouts against the placeholder: they left
+    // the vault the moment they changed hands, and no member received them.
+    const handOver = async (itemTypeId: string, quantity: string, description: string) => {
+      const [payout] = await tx
+        .insert(payouts)
+        .values({
+          factionId: id,
+          recipientUserId: anonymousUserId,
+          createdBy: req.user!.id,
+          itemTypeId,
+          amount: quantity,
+          description,
+          payoutDate: saleDate,
+          status: 'completed',
+        })
+        .returning();
+      if (!payout) throw new Error('Failed to record the goods sold');
+      movements.push({ saleId: sale.id, role: 'goods_out', itemTypeId, quantity, payoutId: payout.id });
+    };
+
+    for (const line of quote.lines) {
+      const priceRow = book.prices.find((p) => p.itemTypeId === line.itemTypeId)!;
+      await tx.insert(saleLines).values({
+        saleId: sale.id,
+        itemTypeId: line.itemTypeId,
+        itemTypeName: line.itemTypeName,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        addons: line.addons.map((a) => ({
+          name: a.name,
+          price: a.price,
+          itemTypeId: priceRow.addons.find((x) => x.id === a.id)?.itemTypeId ?? null,
+        })),
+        discountPercent: line.discountPercent,
+        gross: line.gross,
+        discount: line.discount,
+        total: line.total,
+      });
+
+      await handOver(line.itemTypeId, line.quantity, `${note} — ${line.itemTypeName}`);
+
+      // An add-on that is itself stock leaves the vault too. One that is pure
+      // margin ("engraved", "delivered") is only ever a number on the receipt.
+      for (const addon of line.addons) {
+        const stocked = priceRow.addons.find((a) => a.id === addon.id)?.itemTypeId;
+        if (stocked) await handOver(stocked, line.quantity, `${note} — ${addon.name}`);
+      }
+    }
+
+    await tx.insert(saleMovements).values(movements);
+
+    // What the vault now holds of everything that went out. Reported, not
+    // enforced: selling from a personal stash before the treasury catches up
+    // is ordinary, and a till that refuses the sale in front of the buyer is
+    // worse than one that says the books are behind.
+    const goods = movements.filter((m) => m.role === 'goods_out');
+    const balances = await balancesFor(id, [...new Set(goods.map((m) => m.itemTypeId))], tx);
+    const shortfalls = goods
+      .filter((m) => compareQuantity(balances.get(m.itemTypeId) ?? '0', '0') < 0)
+      .map((m) => ({
+        itemTypeId: m.itemTypeId,
+        itemTypeName: currencies.get(m.itemTypeId)?.name ?? 'that item',
+        available: balances.get(m.itemTypeId) ?? '0',
+      }));
+
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId: id,
+      action: 'create',
+      entityType: 'sale',
+      entityId: sale.id,
+      details: {
+        counterparty: quote.counterparty?.name ?? null,
+        total: quote.total,
+        creditSaleTo,
+        lines: quote.lines.map((l) => ({
+          itemTypeName: l.itemTypeName, quantity: l.quantity, total: l.total,
+        })),
+      },
+      req,
+      tx,
+    });
+
+    return { sale, shortfalls };
+  });
+
+  success(res, { sale: result.sale, quote, shortfalls: result.shortfalls }, 201);
+});
+
+// ── GET /sales — what has been sold ───────────────────
+
+router.get('/sales', async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+  const rows = await db
+    .select({
+      id: sales.id,
+      counterpartyName: sales.counterpartyName,
+      counterpartyDiscountPercent: sales.counterpartyDiscountPercent,
+      currencyItemTypeId: sales.currencyItemTypeId,
+      currencyName: itemTypes.name,
+      currencyUnit: itemTypes.unit,
+      currencyIsCurrency: itemTypes.isCurrency,
+      subtotal: sales.subtotal,
+      discountTotal: sales.discountTotal,
+      total: sales.total,
+      creditSaleTo: sales.creditSaleTo,
+      saleDate: sales.saleDate,
+      notes: sales.notes,
+      soldBy: sales.soldBy,
+      sellerName: sql<string>`COALESCE(${users.inGameName}, ${users.username})`,
+      revertedAt: sales.revertedAt,
+      createdAt: sales.createdAt,
+    })
+    .from(sales)
+    .innerJoin(users, eq(sales.soldBy, users.id))
+    .innerJoin(itemTypes, eq(sales.currencyItemTypeId, itemTypes.id))
+    .where(eq(sales.factionId, id))
+    .orderBy(desc(sales.createdAt))
+    .limit(limit);
+
+  const ids = rows.map((r) => r.id);
+  const lines = ids.length
+    ? await db.select().from(saleLines).where(inArray(saleLines.saleId, ids))
+    : [];
+
+  success(res, {
+    sales: rows.map((r) => ({ ...r, lines: lines.filter((l) => l.saleId === r.id) })),
+  });
+});
+
+// ── POST /sales/:saleId/revert — take it back ─────────
+//
+// Reverting needs `manage_prices` rather than `sell`, mirroring crafting: the
+// till books, leadership unbooks. A revert moves money back out of the vault,
+// and that is not the same authority as taking money in.
+
+router.post('/sales/:saleId/revert', requirePermission('manage_prices'), async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const saleId = req.params.saleId as string;
+
+  let outcome: { ok: true } | { ok: false; code: 'NOT_FOUND' | 'ALREADY' | 'OVERSPENT'; message: string };
+
+  outcome = await db.transaction(async (tx: TransactionLike) => {
+    const [sale] = await tx
+      .select()
+      .from(sales)
+      .where(and(eq(sales.id, saleId), eq(sales.factionId, id)))
+      .limit(1)
+      .for('update');
+
+    if (!sale) return { ok: false as const, code: 'NOT_FOUND' as const, message: 'Sale not found' };
+    if (sale.revertedAt) {
+      return { ok: false as const, code: 'ALREADY' as const, message: 'That sale has already been reverted.' };
+    }
+
+    const moves = await tx.select().from(saleMovements).where(eq(saleMovements.saleId, saleId));
+    await lockItemTypes(tx, [...new Set(moves.map((m) => m.itemTypeId))]);
+
+    // Returning the goods is free; taking the payment back out is not. If the
+    // faction has already spent what the sale brought in, undoing it would
+    // drive that balance below zero — a real state the app allows, but never
+    // one it should enter by accident on a correction.
+    const payment = moves.filter((m) => m.role === 'money_in');
+    if (payment.length > 0) {
+      const balances = await balancesFor(id, [sale.currencyItemTypeId], tx);
+      const have = balances.get(sale.currencyItemTypeId) ?? '0';
+      if (compareQuantity(have, sale.total) < 0) {
+        return {
+          ok: false as const,
+          code: 'OVERSPENT' as const,
+          message: `Reverting needs ${sale.total} back out and the treasury holds ${have}.`,
+        };
+      }
+    }
+
+    const entryIds = moves.map((m) => m.entryId).filter((x): x is string => !!x);
+    const payoutIds = moves.map((m) => m.payoutId).filter((x): x is string => !!x);
+
+    // Soft-deleted, not removed: the ledger keeps saying what happened, and
+    // every balance query in the app already ignores `is_deleted` rows.
+    if (entryIds.length) {
+      await tx.update(entries)
+        .set({ isDeleted: true, updatedAt: new Date() })
+        .where(inArray(entries.id, entryIds));
+    }
+    if (payoutIds.length) {
+      await tx.update(payouts)
+        .set({ isDeleted: true, updatedAt: new Date() })
+        .where(inArray(payouts.id, payoutIds));
+    }
+
+    await tx.update(sales)
+      .set({ revertedAt: new Date(), revertedBy: req.user!.id })
+      .where(eq(sales.id, saleId));
+
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId: id,
+      action: 'delete',
+      entityType: 'sale',
+      entityId: saleId,
+      details: { total: sale.total, counterparty: sale.counterpartyName },
+      req,
+      tx,
+    });
+
+    return { ok: true as const };
+  });
+
+  if (!outcome.ok) {
+    error(res, outcome.code === 'NOT_FOUND' ? 'NOT_FOUND' : 'VALIDATION_ERROR',
+      outcome.message, outcome.code === 'NOT_FOUND' ? 404 : 400);
+    return;
+  }
+
+  success(res, { reverted: true });
 });
 
 export default router;

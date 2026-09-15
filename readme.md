@@ -57,7 +57,8 @@ Discord history.
 - 🛟 **Support** — anyone can send a bug report or feature request straight to
   whoever maintains the instance
 - 🧮 **Price calculator** — a price list with add-ons, per-partner discounts
-  and bulk rungs; pick the buyer, read the total, paste it into Discord
+  and bulk rungs; pick the buyer, read the total, paste it into Discord, and
+  book the sale into the treasury in one click
 - 🧾 **Audit log** — append-only record of every write in the system, actor
   and timestamp included
 - 💾 **Database backup** — a superadmin downloads the whole database as one

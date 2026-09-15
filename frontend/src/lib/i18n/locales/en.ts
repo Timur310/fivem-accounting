@@ -1328,6 +1328,31 @@ export const en = {
   'pricing.deletePartnerConfirm': 'Delete {name}?',
   'pricing.deletePartnerBody': 'Deactivate them instead if the deal is only paused.',
   'pricing.add': 'Add',
+
+  // -- Sales (booking a quote) --
+  'permission.sell': 'Record Sales',
+  'pricing.tab.sales': 'Sales',
+  'pricing.sell': 'Sold',
+  'pricing.sellTitle': 'Book this sale',
+  'pricing.sellHint': 'The payment goes into the treasury and the goods come out of it, as one act. It can be reverted in one click.',
+  'pricing.sellNotes': 'Note (optional)',
+  'pricing.creditTo': 'Counts as whose contribution',
+  'pricing.creditNobody': 'Nobody',
+  'pricing.creditNobodyHint': 'The treasury moves, no leaderboard does.',
+  'pricing.creditSeller': 'The seller',
+  'pricing.creditSellerHint': 'Credits you, the way a logged entry would.',
+  'pricing.sold': 'Booked. {total} in, goods out.',
+  'pricing.soldShort': 'Booked, but the vault is short on {items} — the books are behind.',
+  'pricing.noSales': 'Nothing sold yet.',
+  'pricing.noSalesHint': 'Build a quote on the calculator and press Sold.',
+  'pricing.saleTo': 'to {name}',
+  'pricing.saleWalkIn': 'walk-in',
+  'pricing.saleBy': 'by {name}',
+  'pricing.reverted': 'Reverted',
+  'pricing.revert': 'Revert',
+  'pricing.revertConfirm': 'Revert this sale?',
+  'pricing.revertBody': 'The payment comes back out of the treasury and the goods go back in. The ledger keeps both rows, marked deleted.',
+  'pricing.revertDone': 'Reverted. The goods are back and the payment is out.',
 };
 
 /** Every key the interface may ask for. */

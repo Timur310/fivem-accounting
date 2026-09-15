@@ -83,6 +83,9 @@ import type {
   QuantityBreakInput,
   Quote,
   QuoteInput,
+  Sale,
+  SaleInput,
+  SaleResult,
   CreateProvisionalUserInput,
   UpdateProvisionalUserInput,
   LaunderingOverview,
@@ -1051,6 +1054,23 @@ export const pricingApi = {
 
   removeBreak: (factionId: string, id: string) =>
     api.delete(`/factions/${factionId}/pricing/breaks/${id}`),
+
+  sell: (factionId: string, input: SaleInput) =>
+    api
+      .post<ApiSuccessResponse<SaleResult>>(`/factions/${factionId}/pricing/sales`, input)
+      .then(unwrap),
+
+  sales: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ sales: Sale[] }>>(`/factions/${factionId}/pricing/sales`)
+      .then(unwrap),
+
+  revertSale: (factionId: string, id: string) =>
+    api
+      .post<ApiSuccessResponse<{ reverted: boolean }>>(
+        `/factions/${factionId}/pricing/sales/${id}/revert`,
+      )
+      .then(unwrap),
 };
 
 // ── Database backup (superadmin) ──

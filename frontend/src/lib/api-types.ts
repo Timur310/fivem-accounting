@@ -924,7 +924,7 @@ export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
-  'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices',
+  'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -944,6 +944,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   craft: 'permission.craft',
   manage_map: 'permission.manageMap',
   manage_prices: 'permission.managePrices',
+  sell: 'permission.sell',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1065,6 +1066,61 @@ export interface Quote {
   discountTotal: string;
   total: string;
   belowFloor: boolean;
+}
+
+/** A line of a booked sale, frozen as it read on the day. */
+export interface SaleLine {
+  id: string;
+  saleId: string;
+  itemTypeId: string;
+  itemTypeName: string;
+  quantity: string;
+  unitPrice: string;
+  addons: { name: string; price: string; itemTypeId: string | null }[] | null;
+  discountPercent: string;
+  gross: string;
+  discount: string;
+  total: string;
+}
+
+/**
+ * One accepted quote, booked into the ledger.
+ *
+ * Every figure is a snapshot: a sale from six weeks ago keeps saying what was
+ * actually charged after the price list has moved on.
+ */
+export interface Sale {
+  id: string;
+  counterpartyName: string | null;
+  counterpartyDiscountPercent: string;
+  currencyItemTypeId: string;
+  currencyName: string;
+  currencyUnit: string;
+  currencyIsCurrency: boolean;
+  subtotal: string;
+  discountTotal: string;
+  total: string;
+  creditSaleTo: 'nobody' | 'seller';
+  saleDate: string;
+  notes: string | null;
+  soldBy: string;
+  sellerName: string;
+  revertedAt: string | null;
+  createdAt: string;
+  lines: SaleLine[];
+}
+
+export interface SaleInput extends QuoteInput {
+  notes?: string;
+  date?: string;
+  creditSaleTo?: 'nobody' | 'seller';
+}
+
+export interface SaleResult {
+  sale: Sale;
+  quote: Quote;
+  /** Items the vault could not cover. Reported, never blocking. */
+  shortfalls: { itemTypeId: string; itemTypeName: string; available: string }[];
 }
 
 export interface ProductPriceInput {

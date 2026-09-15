@@ -141,6 +141,10 @@ export const FACTION_PERMISSIONS = [
   // from it is the counter. Only the first needs a permission — a price list
   // nobody may read is a price list nobody can sell from.
   'manage_prices',
+  // Booking a sale into the books is the counter's job; reverting one is not.
+  // The split mirrors crafting: `sell` runs the till, `manage_prices` is what
+  // it takes to undo a booking, because a revert moves money back out.
+  'sell',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -163,6 +167,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   craft: 'Craft Items',
   manage_map: 'Manage Map',
   manage_prices: 'Manage Prices',
+  sell: 'Record Sales',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -1236,3 +1241,133 @@ export type Counterparty = typeof counterparties.$inferSelect;
 export type NewCounterparty = typeof counterparties.$inferInsert;
 export type QuantityBreak = typeof quantityBreaks.$inferSelect;
 export type NewQuantityBreak = typeof quantityBreaks.$inferInsert;
+
+// ── sales ──────────────────────────────────────────────
+// One accepted quote, booked.
+//
+// Everything on it is a snapshot. A sale from six weeks ago has to keep saying
+// what was actually charged after the price list has moved, the partner has
+// been renamed and the add-on has been deleted — so the figures live here
+// rather than being recomputed from the book on every read.
+//
+// Like a craft, it invents no new kind of money: the payment arrives as an
+// ordinary entry and the goods leave as completed payouts, so every balance,
+// report and export in the app counts a sale correctly without knowing that
+// sales exist. This row is what makes those movements legible as *one act*
+// afterwards, and what a revert reverses.
+export const sales = pgTable('sales', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+
+  // Nullable and set null on delete: losing the link to a deleted partner is
+  // acceptable, losing the sale is not. The name and the rate are snapshotted
+  // beside it for exactly that case.
+  counterpartyId:   uuid('counterparty_id').references(() => counterparties.id, { onDelete: 'set null' }),
+  counterpartyName: varchar('counterparty_name', { length: 80 }),
+  counterpartyDiscountPercent: decimal('counterparty_discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
+
+  currencyItemTypeId: uuid('currency_item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  subtotal:      decimal('subtotal', { precision: 15, scale: 2 }).notNull(),
+  discountTotal: decimal('discount_total', { precision: 15, scale: 2 }).notNull(),
+  total:         decimal('total', { precision: 15, scale: 2 }).notNull(),
+
+  /**
+   * Whose contribution the payment counts as: `nobody` or `seller`.
+   *
+   * The same choice crafting makes about its output, and for the same reason.
+   * `nobody` books the money against the anonymous placeholder — the treasury
+   * moves and no leaderboard does. `seller` credits whoever ran the sale,
+   * which is right where selling is the work being measured.
+   */
+  creditSaleTo: varchar('credit_sale_to', { length: 10 }).notNull().default('nobody'),
+
+  soldBy:   uuid('sold_by').notNull().references(() => users.id),
+  saleDate: date('sale_date').notNull(),
+  notes:    text('notes'),
+
+  // A sale is reverted once or not at all; the timestamp is the guard.
+  revertedAt: timestamp('reverted_at', { withTimezone: true }),
+  revertedBy: uuid('reverted_by').references(() => users.id),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('sale_faction').on(table.factionId, table.createdAt),
+}));
+
+// ── sale_lines ─────────────────────────────────────────
+// What was on the receipt, as it read on the day.
+//
+// `addons` is jsonb rather than a fourth table because these are snapshots,
+// never joined to and never queried by: nothing asks "which sales included a
+// suppressor" without also wanting the sale. A table would buy referential
+// integrity with a row that must not follow the add-on it was copied from.
+export const saleLines = pgTable('sale_lines', {
+  id:           uuid('id').defaultRandom().primaryKey(),
+  saleId:       uuid('sale_id').notNull().references(() => sales.id, { onDelete: 'cascade' }),
+  itemTypeId:   uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  itemTypeName: varchar('item_type_name', { length: 100 }).notNull(),
+  quantity:     decimal('quantity', { precision: 15, scale: 2 }).notNull(),
+  /** The book price of one, before add-ons, as it stood at the sale. */
+  unitPrice:    decimal('unit_price', { precision: 15, scale: 2 }).notNull(),
+  addons:       jsonb('addons').$type<{ name: string; price: string; itemTypeId: string | null }[]>(),
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }).notNull(),
+  gross:    decimal('gross', { precision: 15, scale: 2 }).notNull(),
+  discount: decimal('discount', { precision: 15, scale: 2 }).notNull(),
+  total:    decimal('total', { precision: 15, scale: 2 }).notNull(),
+}, (table) => ({
+  saleIndex: index('sale_line_sale').on(table.saleId),
+}));
+
+// ── sale_movements ─────────────────────────────────────
+// The ledger rows a sale created, so a revert can undo exactly those and
+// nothing else.
+//
+// The payment is an entry and each item handed over is a completed payout,
+// which is why the two id columns are each nullable — a movement is one or the
+// other. The link lives here rather than as a `sale_id` column on entries and
+// payouts, keeping the two busiest tables in the app untouched. It is also
+// what makes those rows refuse to be edited one at a time: unpicking half a
+// sale would leave the books describing a trade that never happened.
+export const saleMovements = pgTable('sale_movements', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  saleId:     uuid('sale_id').notNull().references(() => sales.id, { onDelete: 'cascade' }),
+  role:       varchar('role', { length: 10 }).notNull(),
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  quantity:   decimal('quantity', { precision: 15, scale: 2 }).notNull(),
+  entryId:    uuid('entry_id').references(() => entries.id, { onDelete: 'set null' }),
+  payoutId:   uuid('payout_id').references(() => payouts.id, { onDelete: 'set null' }),
+}, (table) => ({
+  saleIndex: index('sale_movement_sale').on(table.saleId),
+}));
+
+export const SALE_MOVEMENT_ROLES = ['money_in', 'goods_out'] as const;
+export type SaleMovementRole = (typeof SALE_MOVEMENT_ROLES)[number];
+
+export const CREDIT_SALE_TO = ['nobody', 'seller'] as const;
+export type CreditSaleTo = (typeof CREDIT_SALE_TO)[number];
+
+export const salesRelations = relations(sales, ({ one, many }) => ({
+  faction:      one(factions,       { fields: [sales.factionId], references: [factions.id] }),
+  counterparty: one(counterparties, { fields: [sales.counterpartyId], references: [counterparties.id] }),
+  currency:     one(itemTypes,      { fields: [sales.currencyItemTypeId], references: [itemTypes.id] }),
+  seller:       one(users,          { fields: [sales.soldBy], references: [users.id] }),
+  lines:        many(saleLines),
+  movements:    many(saleMovements),
+}));
+
+export const saleLinesRelations = relations(saleLines, ({ one }) => ({
+  sale:     one(sales,     { fields: [saleLines.saleId], references: [sales.id] }),
+  itemType: one(itemTypes, { fields: [saleLines.itemTypeId], references: [itemTypes.id] }),
+}));
+
+export const saleMovementsRelations = relations(saleMovements, ({ one }) => ({
+  sale:     one(sales,     { fields: [saleMovements.saleId], references: [sales.id] }),
+  itemType: one(itemTypes, { fields: [saleMovements.itemTypeId], references: [itemTypes.id] }),
+  entry:    one(entries,   { fields: [saleMovements.entryId], references: [entries.id] }),
+  payout:   one(payouts,   { fields: [saleMovements.payoutId], references: [payouts.id] }),
+}));
+
+export type Sale = typeof sales.$inferSelect;
+export type NewSale = typeof sales.$inferInsert;
+export type SaleLine = typeof saleLines.$inferSelect;
+export type SaleMovement = typeof saleMovements.$inferSelect;

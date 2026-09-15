@@ -20,16 +20,17 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
-import { formatAmount } from '@/lib/format';
+import { formatAmount, formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
   Calculator, Tags, Handshake, Plus, Trash2, Pencil, Copy, TriangleAlert,
+  Receipt, Undo2,
 } from 'lucide-react';
 import type {
-  ProductPrice, Counterparty, QuantityBreak, Quote, QuoteLineInput,
+  ProductPrice, Counterparty, QuantityBreak, Quote, QuoteLineInput, Sale,
 } from '@/lib/api-types';
 
-type Tab = 'calculator' | 'prices' | 'partners';
+type Tab = 'calculator' | 'prices' | 'partners' | 'sales';
 
 /** One row of the basket, before it has been priced. */
 interface BasketLine {
@@ -64,9 +65,12 @@ const newLine = (): BasketLine => ({
 export function PricingView({
   factionId,
   canManage,
+  canSell,
 }: {
   factionId: string;
   canManage: boolean;
+  /** May book a quote into the ledger. Reverting one needs `manage_prices`. */
+  canSell: boolean;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -75,6 +79,7 @@ export function PricingView({
   const [tab, setTab] = useState<Tab>('calculator');
   const [lines, setLines] = useState<BasketLine[]>([newLine()]);
   const [partyId, setPartyId] = useState<string>('');
+  const [selling, setSelling] = useState(false);
 
   const bookQuery = useQuery({
     queryKey: ['price-book', factionId],
@@ -90,6 +95,17 @@ export function PricingView({
   );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['price-book', factionId] });
+
+  /**
+   * A booked sale moves the treasury, so everything downstream of it is stale:
+   * the sales list, the dashboard, the treasury screen and the entries and
+   * payouts it just wrote.
+   */
+  const invalidateAfterSale = () => {
+    for (const key of ['price-book', 'sales', 'treasury', 'dashboard', 'entries', 'payouts']) {
+      void queryClient.invalidateQueries({ queryKey: [key, factionId] });
+    }
+  };
 
   // Only lines with an item and a positive quantity are worth sending; the
   // rest are half-filled rows the seller is still typing into.
@@ -136,6 +152,7 @@ export function PricingView({
     { id: 'calculator', label: t('pricing.tab.calculator'), icon: Calculator },
     { id: 'prices', label: t('pricing.tab.prices'), icon: Tags },
     { id: 'partners', label: t('pricing.tab.partners'), icon: Handshake },
+    { id: 'sales', label: t('pricing.tab.sales'), icon: Receipt },
   ];
 
   if (bookQuery.isLoading) {
@@ -335,9 +352,20 @@ export function PricingView({
                       </p>
                     )}
 
-                    <Button className="w-full" onClick={() => void copyToClipboard()}>
-                      <Copy className="h-4 w-4" /> {t('pricing.copyForDiscord')}
-                    </Button>
+                    <div className="space-y-2">
+                      <Button className="w-full" onClick={() => void copyToClipboard()}>
+                        <Copy className="h-4 w-4" /> {t('pricing.copyForDiscord')}
+                      </Button>
+                      {canSell && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setSelling(true)}
+                        >
+                          <Receipt className="h-4 w-4" /> {t('pricing.sell')}
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>
@@ -364,6 +392,233 @@ export function PricingView({
           onChanged={invalidate}
         />
       )}
+
+      {tab === 'sales' && (
+        <SalesTab factionId={factionId} canRevert={canManage} />
+      )}
+
+      {selling && quote && (
+        <SellDialog
+          factionId={factionId}
+          quote={quote}
+          lines={payload}
+          counterpartyId={partyId || null}
+          onClose={() => setSelling(false)}
+          onSold={() => {
+            setSelling(false);
+            setLines([newLine()]);
+            invalidateAfterSale();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The step between a quote and the books.
+ *
+ * A dialog rather than a second click on the same button: booking a sale
+ * writes to the treasury, and the two questions it asks — whose contribution
+ * this counts as, and what to call it — have no sensible default that is right
+ * for every faction.
+ */
+function SellDialog({
+  factionId, quote, lines, counterpartyId, onClose, onSold,
+}: {
+  factionId: string;
+  quote: Quote;
+  lines: QuoteLineInput[];
+  counterpartyId: string | null;
+  onClose: () => void;
+  onSold: () => void;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [notes, setNotes] = useState('');
+  const [creditTo, setCreditTo] = useState<'nobody' | 'seller'>('nobody');
+
+  const money = (v: string) => formatAmount(v, quote.currency.unit, quote.currency.isCurrency);
+
+  const book = useMutation({
+    mutationFn: () => pricingApi.sell(factionId, {
+      lines,
+      counterpartyId,
+      creditSaleTo: creditTo,
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+    }),
+    onSuccess: (result) => {
+      // The sale is booked either way; a shortfall is news about the books,
+      // not a failure of the sale.
+      if (result.shortfalls.length > 0) {
+        toast({
+          title: t('pricing.soldShort', {
+            items: result.shortfalls.map((s) => s.itemTypeName).join(', '),
+          }),
+        });
+      } else {
+        toast({ title: t('pricing.sold', { total: money(result.sale.total) }) });
+      }
+      onSold();
+    },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('pricing.sellTitle')}</DialogTitle>
+          <DialogDescription>{t('pricing.sellHint')}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border border-[var(--line-2)] p-3 space-y-1.5 text-sm">
+            {quote.lines.map((line, i) => (
+              <div key={i} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate text-zinc-300">
+                  {line.quantity} × {line.itemTypeName}
+                </span>
+                <span className="tabular-nums shrink-0">{money(line.total)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between gap-3 border-t border-[var(--line-2)] pt-1.5 font-medium">
+              <span>{quote.counterparty?.name ?? t('pricing.walkIn')}</span>
+              <span className="tabular-nums">{money(quote.total)}</span>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t('pricing.creditTo')}</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                ['nobody', t('pricing.creditNobody'), t('pricing.creditNobodyHint')],
+                ['seller', t('pricing.creditSeller'), t('pricing.creditSellerHint')],
+              ] as const).map(([value, label, hint]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCreditTo(value)}
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-left transition-colors',
+                    creditTo === value
+                      ? 'border-[var(--brand-color,#6366f1)] bg-[var(--brand-color,#6366f1)]/10'
+                      : 'border-[var(--line-2)] hover:border-[var(--line-1)]',
+                  )}
+                >
+                  <span className="block text-sm text-zinc-200">{label}</span>
+                  <span className="block text-meta text-zinc-500">{hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t('pricing.sellNotes')}</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button disabled={book.isPending} onClick={() => book.mutate()}>
+            <Receipt className="h-4 w-4" /> {t('pricing.sell')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// -- Sales tab --
+
+function SalesTab({ factionId, canRevert }: { factionId: string; canRevert: boolean }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [reverting, setReverting] = useState<Sale | null>(null);
+
+  const salesQuery = useQuery({
+    queryKey: ['sales', factionId],
+    queryFn: () => pricingApi.sales(factionId),
+  });
+
+  const revert = useMutation({
+    mutationFn: (id: string) => pricingApi.revertSale(factionId, id),
+    onSuccess: () => {
+      setReverting(null);
+      toast({ title: t('pricing.revertDone') });
+      for (const key of ['sales', 'treasury', 'dashboard', 'entries', 'payouts']) {
+        void queryClient.invalidateQueries({ queryKey: [key, factionId] });
+      }
+    },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  if (salesQuery.isLoading) return <Skeleton className="h-40 w-full" />;
+  if (salesQuery.isError) {
+    return <ErrorState error={salesQuery.error} onRetry={() => void salesQuery.refetch()} />;
+  }
+
+  const sales = salesQuery.data?.sales ?? [];
+  if (sales.length === 0) {
+    return <EmptyState icon={Receipt} title={t('pricing.noSales')} hint={t('pricing.noSalesHint')} />;
+  }
+
+  return (
+    <div className="space-y-2">
+      {sales.map((sale) => {
+        const money = (v: string) => formatAmount(v, sale.currencyUnit, sale.currencyIsCurrency);
+        return (
+          <Card key={sale.id} className={cn(sale.revertedAt && 'opacity-60')}>
+            <CardContent className="p-4 flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium tabular-nums">{money(sale.total)}</span>
+                  <span className="text-zinc-400">
+                    {sale.counterpartyName
+                      ? t('pricing.saleTo', { name: sale.counterpartyName })
+                      : t('pricing.saleWalkIn')}
+                  </span>
+                  {sale.revertedAt && (
+                    <Badge variant="outline" className="text-micro">{t('pricing.reverted')}</Badge>
+                  )}
+                </div>
+                <p className="text-meta text-zinc-500">
+                  {sale.lines.map((l) => `${l.quantity} × ${l.itemTypeName}`).join(', ')}
+                </p>
+                <p className="text-meta text-zinc-600">
+                  {formatDateTime(sale.createdAt)} · {t('pricing.saleBy', { name: sale.sellerName })}
+                  {sale.notes ? ` · ${sale.notes}` : ''}
+                </p>
+              </div>
+              {canRevert && !sale.revertedAt && (
+                <Button variant="outline" size="sm" onClick={() => setReverting(sale)}>
+                  <Undo2 className="h-3.5 w-3.5" /> {t('pricing.revert')}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      <AlertDialog open={!!reverting} onOpenChange={(open) => !open && setReverting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('pricing.revertConfirm')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('pricing.revertBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => reverting && revert.mutate(reverting.id)}
+              disabled={revert.isPending}
+            >
+              {t('pricing.revert')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

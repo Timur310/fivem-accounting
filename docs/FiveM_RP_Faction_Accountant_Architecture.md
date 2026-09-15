@@ -564,6 +564,8 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Create a layer, draw, edit, delete | Yes | Yes | `manage_map`, and only on layers it can see | No |
 | Read the price list, build a quote | Yes | Yes | Yes | No |
 | Set prices, add-ons, partners, bulk rungs | Yes | Yes | `manage_prices` | No |
+| Book a sale into the ledger | Yes | Yes | `sell` | No |
+| Revert a booked sale | Yes | Yes | `manage_prices` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
@@ -1565,12 +1567,52 @@ item with no active price is a 404 rather than a zero.
 standing at the counter hold the fewest permissions, and a price list they
 cannot read is a price list they cannot sell from.
 
-Phase 2 adds `quotes`, `quote_lines` and `sale_movements` — the last a copy of
-`craft_movements` — so an accepted quote writes the money in as an entry and
-the goods out as completed payouts, revertible in one click and refusing to be
-dismantled row by row. Line snapshots belong to that phase and matter there:
-a quote sold last week must not change when somebody edits the price book
-today.
+Phase 2 is now in: an accepted quote books itself.
+
+**A sale writes ordinary ledger rows** — the payment as one entry, each item
+handed over as a completed payout — so every balance, report and export in the
+app counts a sale correctly without knowing that sales exist. That is the same
+decision crafting and laundering made, and the reason none of them needed a
+special case in the treasury query.
+
+`sales`, `sale_lines` and `sale_movements` hold the rest. **Everything on them
+is a snapshot**: a sale from six weeks ago has to keep saying what was actually
+charged after the price list has moved, the partner has been renamed and the
+add-on has been deleted. `sale_lines.addons` is jsonb rather than a fourth
+table for the same reason — nothing joins to it, and a foreign key would tie a
+snapshot to a row it must not follow. `sale_movements` is a copy of
+`craft_movements`, down to the two nullable id columns.
+
+The figures are **recomputed on the server from the price list** rather than
+taken from the request. The browser may display a total; it may not decide one,
+or a seller with devtools could book any number they liked.
+
+Four decisions worth knowing:
+
+- **Stock is reported, never enforced.** A sale the vault cannot cover is
+  recorded and the response names what is short. Selling from a personal stash
+  before the treasury catches up is ordinary, and a till that refuses in front
+  of the buyer is worse than one that says the books are behind. Crafting
+  blocks instead, because materials it cannot find genuinely cannot be
+  consumed.
+- **A sale given away entirely books no entry.** A zero-amount row on the
+  treasury screen reads as a mistake rather than as a gift; the goods still
+  leave.
+- **Reverting checks the money is still there.** Undoing a sale takes the
+  payment back out, and if the faction has already spent it, that would drive
+  the balance below zero — a real state the app allows, but never one to enter
+  by accident on a correction. Returning the goods is free and unchecked.
+- **`sell` books, `manage_prices` reverts.** The split mirrors crafting: the
+  till takes money in, and moving money back out is a different authority.
+
+The guard that keeps a sale intact now lives in `lib/ledgerHold.ts`. Two
+features write ledger rows as part of a single act, and both break if one row
+is edited alone — so the six places that edit or delete an entry or a payout
+ask one question instead of two. Asking in two steps is how one of them
+eventually gets forgotten at a seventh call site.
+
+Phases 3 and 4 remain: margins from the crafting recipes, rank-gated, and
+exchange rates so the same basket can be quoted clean or dirty.
 
 ---
 
@@ -2179,7 +2221,7 @@ calibration the operator has to do once.
 
 See §8.17 for the design and the four guards in front of the restore.
 
-### Phase 13: The Price Calculator (Week 30) — PHASE 1 COMPLETE
+### Phase 13: The Price Calculator (Week 30) — PHASES 1-2 COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -2188,7 +2230,7 @@ See §8.17 for the design and the four guards in front of the restore.
 | 3 | Partners | Named buyers, each with their own discount — **DONE** | High |
 | 4 | Bulk discounts | A quantity ladder, faction-wide or per item — **DONE** | Medium |
 | 5 | Copy for Discord | The quote as a block to paste to the buyer — **DONE** | Medium |
-| 6 | Book the sale | Accepted quote writes entries and payouts, revertible — *phase 2* | High |
+| 6 | Book the sale | Accepted quote writes entries and payouts, revertible — **DONE** | High |
 | 7 | Margins | Cost from the recipes, rank-gated — *phase 3* | Medium |
 | 8 | Exchange rates | Quoting the same basket clean or dirty — *phase 4* | Low |
 
