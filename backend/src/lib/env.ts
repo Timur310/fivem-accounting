@@ -29,6 +29,18 @@ export const env = cleanEnv(process.env, {
   FRONTEND_URL:          url({ default: 'http://localhost:3000', desc: 'Frontend URL for OAuth redirects' }),
   DB_POOL_MAX:           num({ default: 10, desc: 'Maximum PostgreSQL pool connections' }),
   LOG_LEVEL:             str({ choices: ['debug', 'info', 'warn', 'error'], default: 'info' }),
+  // Where pg_dump and pg_restore should connect. Blank means DATABASE_URL.
+  //
+  // It exists because DATABASE_URL points at pgbouncer in transaction pooling
+  // mode, and pg_dump cannot work through it: a dump needs one session held
+  // open across many statements with a single consistent snapshot, and
+  // transaction pooling hands the connection to somebody else between them.
+  // Point this straight at Postgres.
+  BACKUP_DATABASE_URL:   str({ default: '', desc: 'Direct (non-pooled) PostgreSQL URL for pg_dump/pg_restore; blank uses DATABASE_URL' }),
+  // Directory holding pg_dump/pg_restore, for machines where they are not on
+  // PATH — a Windows dev box with Postgres installed under Program Files, say.
+  PG_BIN_DIR:            str({ default: '', desc: 'Directory containing pg_dump/pg_restore (blank means PATH)' }),
+  BACKUP_MAX_UPLOAD_MB:  num({ default: 512, desc: 'Largest backup file accepted by the restore endpoint' }),
 });
 
 // ── Post-load validation ──────────────────────────────
@@ -42,4 +54,7 @@ if (env.JWT_EXPIRATION_DAYS < 1 || env.JWT_EXPIRATION_DAYS > 30) {
 }
 if (env.DB_POOL_MAX < 1 || env.DB_POOL_MAX > 100) {
   throw new Error('DB_POOL_MAX must be between 1 and 100');
+}
+if (env.BACKUP_MAX_UPLOAD_MB < 1 || env.BACKUP_MAX_UPLOAD_MB > 10_000) {
+  throw new Error('BACKUP_MAX_UPLOAD_MB must be between 1 and 10000');
 }

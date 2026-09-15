@@ -20,6 +20,11 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodejs
 # tini reaps zombie processes that node leaves behind on signal handling,
 # which would otherwise accumulate across deploys. wget powers HEALTHCHECK.
 RUN apk add --no-cache tini wget
+# pg_dump and pg_restore, for the superadmin's backup page. Pinned to the same
+# major version as the `postgres:16-alpine` service in docker-compose: a client
+# older than the server cannot read its dumps at all, and keeping the two in
+# step means a dump taken here restores anywhere else running the same server.
+RUN apk add --no-cache postgresql16-client
 
 # Copy files with proper ownership assigned to non-root user.
 # Build artefacts come from `builder`; production deps come from `deps` (which

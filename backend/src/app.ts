@@ -42,6 +42,7 @@ import expenseRoutes from './routes/expenses.js';
 import discordRoutes from './routes/discord.js';
 import discordReminderRoutes from './routes/discordReminders.js';
 import configIoRoutes from './routes/configIo.js';
+import backupRoutes from './routes/backup.js';
 
 const app = express();
 
@@ -142,6 +143,7 @@ app.use('/api/v1/factions', factionRoutes);
 app.use('/api/v1/admin/analytics', adminAnalyticsRoutes);
 app.use('/api/v1/admin/provisional-users', provisionalUserRoutes);
 app.use('/api/v1/admin/users', adminUserRoutes);
+app.use('/api/v1/admin/backup', backupRoutes);
 // Cross-faction ranking (superadmin) — not scoped to a faction.
 app.use('/api/v1/leaderboard', globalLeaderboardRoutes);
 // Bug reports and feature requests. Not faction-scoped: anyone signed in may
