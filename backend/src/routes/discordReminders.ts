@@ -2,12 +2,12 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { discordReminders, discordIntegrations, factionMembers } from '../db/schema.js';
+import { discordReminders, discordIntegrations, factionMembers, users } from '../db/schema.js';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
-import { postToChannel, recordDeliveryOutcome } from '../lib/discord.js';
+import { guildMemberExists, postToChannel, recordDeliveryOutcome } from '../lib/discord.js';
 import { buildReminderMessage } from '../lib/reminderMessage.js';
 import {
   nextRun,
@@ -103,6 +103,80 @@ function scheduleFromInput(input: ReminderInput): ReminderSchedule | null {
  * including a member of some other faction, whose Discord this one has no
  * business notifying.
  */
+/** A tagged member whose ping will not actually reach them, and why. */
+export interface UnpingableMember {
+  userId: string;
+  name: string;
+  reason: 'provisional' | 'not_in_server';
+}
+
+/**
+ * Which of these tagged members will not actually be pinged.
+ *
+ * Reported rather than refused. A reminder that tags eight people and reaches
+ * seven is still worth sending, and a leader who tags somebody before they
+ * join the Discord server is doing something reasonable — they simply need to
+ * know it will be silent until that person arrives.
+ *
+ * Two ways a tag goes nowhere, and neither is visible from the outside:
+ *
+ * **Provisional.** The account was registered by Discord id and has never
+ * signed in, so nothing has confirmed that id belongs to the person it names.
+ * The send path has always dropped these, silently, which is how a reminder
+ * ends up arriving with nobody tagged and no explanation anywhere.
+ *
+ * **Not in the server.** `<@id>` for somebody who is not a guild member
+ * renders as a mention and notifies nobody. The message looks completely
+ * correct in the channel and their client never lights up.
+ *
+ * Runs at save time and only over the tagged ids — at most 25 — so it costs a
+ * handful of requests when somebody is looking at the screen, rather than a
+ * burst against Discord every time the settings page renders.
+ */
+async function unpingableMembers(
+  factionId: string,
+  userIds: string[],
+): Promise<UnpingableMember[]> {
+  if (userIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      id: users.id,
+      discordId: users.discordId,
+      username: users.username,
+      inGameName: users.inGameName,
+      isProvisional: users.isProvisional,
+    })
+    .from(users)
+    .where(inArray(users.id, userIds));
+
+  const [integration] = await db
+    .select({ guildId: discordIntegrations.guildId })
+    .from(discordIntegrations)
+    .where(eq(discordIntegrations.factionId, factionId))
+    .limit(1);
+
+  const out: UnpingableMember[] = [];
+  for (const row of rows) {
+    const name = row.inGameName ?? row.username;
+
+    if (row.isProvisional) {
+      out.push({ userId: row.id, name, reason: 'provisional' });
+      continue;
+    }
+    if (!integration) continue;
+
+    // null means Discord could not be asked. Staying quiet beats warning
+    // about a tag that is probably fine.
+    const present = await guildMemberExists(integration.guildId, row.discordId);
+    if (present === false) {
+      out.push({ userId: row.id, name, reason: 'not_in_server' });
+    }
+  }
+
+  return out;
+}
+
 async function mentionableMembers(factionId: string, userIds: string[]): Promise<boolean> {
   if (userIds.length === 0) return true;
   const rows = await db
@@ -190,6 +264,8 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
+  const unpingable = await unpingableMembers(factionId, parsed.data.mentionUserIds ?? []);
+
   const [row] = await db
     .insert(discordReminders)
     .values({ factionId, createdBy: req.user!.id, ...columnsFor(parsed.data) })
@@ -209,7 +285,7 @@ router.post('/', async (req: Request, res: Response) => {
     req,
   });
 
-  success(res, row, 201);
+  success(res, { ...row, unpingable }, 201);
 });
 
 // ── PATCH /:reminderId — change one ──────────────────
@@ -253,6 +329,8 @@ router.patch('/:reminderId', async (req: Request, res: Response) => {
     return;
   }
 
+  const unpingable = await unpingableMembers(factionId, parsed.data.mentionUserIds ?? []);
+
   const [row] = await db
     .update(discordReminders)
     .set({ ...columnsFor(parsed.data), lastError: null, updatedAt: new Date() })
@@ -269,7 +347,7 @@ router.patch('/:reminderId', async (req: Request, res: Response) => {
     req,
   });
 
-  success(res, row);
+  success(res, { ...row, unpingable });
 });
 
 // ── DELETE /:reminderId ──────────────────────────────

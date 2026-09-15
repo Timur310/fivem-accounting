@@ -133,10 +133,29 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
       editing
         ? discordRemindersApi.update(factionId, editing.id, input)
         : discordRemindersApi.create(factionId, input),
-    onSuccess: () => {
+    onSuccess: (saved) => {
       setDraft(null);
       setEditing(null);
       invalidate();
+
+      // A tag that reaches nobody is invisible in Discord — the message
+      // arrives looking completely correct. Saying so here is the only chance
+      // anybody gets to notice.
+      const unreachable = saved.unpingable ?? [];
+      if (unreachable.length > 0) {
+        toast({
+          title: t('reminder.someTagsWontReach'),
+          description: unreachable
+            .map((u) =>
+              u.reason === 'provisional'
+                ? t('reminder.tagNeverSignedIn', { name: u.name })
+                : t('reminder.tagNotInServer', { name: u.name }),
+            )
+            .join(' · '),
+          variant: 'destructive',
+        });
+        return;
+      }
       toast({ title: t('reminder.saved') });
     },
     onError: (e) =>

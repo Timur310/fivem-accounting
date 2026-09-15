@@ -2,12 +2,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { api, resetDatabase, seedBasicWorld, type BasicWorld } from './helpers.js';
 import { db } from '../src/db/index.js';
-import { discordIntegrations, discordReminders } from '../src/db/schema.js';
+import { discordIntegrations, discordReminders, users } from '../src/db/schema.js';
 
 const postMock = vi.hoisted(() => vi.fn(async () => ({ ok: true })));
+// Defaults to "yes, they are in the server", so existing tests are unaffected.
+const memberMock = vi.hoisted(() => vi.fn(async (): Promise<boolean | null> => true));
 vi.mock('../src/lib/discord.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/lib/discord.js')>()),
   postToChannel: postMock,
+  guildMemberExists: memberMock,
 }));
 
 const { runDueReminders, _testing } = await import('../src/lib/reminderRunner.js');
@@ -22,6 +25,8 @@ beforeEach(async () => {
   w = await seedBasicWorld();
   postMock.mockClear();
   postMock.mockResolvedValue({ ok: true });
+  memberMock.mockClear();
+  memberMock.mockResolvedValue(true);
 });
 
 async function link() {
@@ -580,5 +585,73 @@ describe('the runner', () => {
       .where(eq(discordReminders.factionId, w.faction.id));
     // Both are back in the queue whatever happened to them.
     expect(rows.every((r) => r.nextRunAt !== null)).toBe(true);
+  });
+});
+
+/**
+ * Reported from the field: "the reminder arrives, but the bot does not ping
+ * the people I selected."
+ *
+ * Both causes are invisible from the outside. The picker offered the person,
+ * the reminder saved, the message arrived — and the tag reached nobody.
+ */
+describe('tags that would not actually reach anybody', () => {
+  it('says so when a tagged member has never signed in', async () => {
+    await link();
+    // Registered by Discord id by a superadmin and never confirmed — the send
+    // path has always dropped these silently.
+    await db.update(users).set({ isProvisional: true }).where(eq(users.id, w.member.id));
+
+    const res = await create(w.admin.cookie, daily({ mentionUserIds: [w.member.id] }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.unpingable).toHaveLength(1);
+    expect(res.body.data.unpingable[0].reason).toBe('provisional');
+    expect(res.body.data.unpingable[0].name).toBe(w.member.username);
+  });
+
+  it('says so when a tagged member is not in the Discord server', async () => {
+    await link();
+    memberMock.mockResolvedValue(false);
+
+    const res = await create(w.admin.cookie, daily({ mentionUserIds: [w.member.id] }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.unpingable).toHaveLength(1);
+    expect(res.body.data.unpingable[0].reason).toBe('not_in_server');
+  });
+
+  // Warning about a tag that is probably fine is its own kind of wrong.
+  it('stays quiet when Discord cannot be asked', async () => {
+    await link();
+    memberMock.mockResolvedValue(null);
+
+    const res = await create(w.admin.cookie, daily({ mentionUserIds: [w.member.id] }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.unpingable).toHaveLength(0);
+  });
+
+  it('saves the reminder anyway — seven of eight reached is still worth sending', async () => {
+    await link();
+    memberMock.mockResolvedValue(false);
+
+    const res = await create(w.admin.cookie, daily({ mentionUserIds: [w.member.id] }));
+    expect(res.status).toBe(201);
+
+    const [row] = await db.select().from(discordReminders).where(eq(discordReminders.id, res.body.data.id));
+    expect(row!.mentionUserIds).toEqual([w.member.id]);
+  });
+
+  it('reports the same way on an edit', async () => {
+    await link();
+    const created = await create(w.admin.cookie, daily());
+    memberMock.mockResolvedValue(false);
+
+    const res = await api().patch(`${base()}/${created.body.data.id}`).set('Cookie', w.admin.cookie)
+      .send({ mentionUserIds: [w.member.id] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.unpingable).toHaveLength(1);
   });
 });
