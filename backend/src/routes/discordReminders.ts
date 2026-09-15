@@ -103,11 +103,11 @@ function scheduleFromInput(input: ReminderInput): ReminderSchedule | null {
  * including a member of some other faction, whose Discord this one has no
  * business notifying.
  */
-/** A tagged member whose ping will not actually reach them, and why. */
+/** A tagged member whose ping will not actually reach them. */
 export interface UnpingableMember {
   userId: string;
   name: string;
-  reason: 'provisional' | 'not_in_server';
+  reason: 'not_in_server';
 }
 
 /**
@@ -118,16 +118,13 @@ export interface UnpingableMember {
  * join the Discord server is doing something reasonable — they simply need to
  * know it will be silent until that person arrives.
  *
- * Two ways a tag goes nowhere, and neither is visible from the outside:
+ * One way a tag goes nowhere, and it is invisible from the outside: `<@id>`
+ * for somebody who is not a guild member renders as a mention and notifies
+ * nobody. The message looks completely correct in the channel and their client
+ * never lights up.
  *
- * **Provisional.** The account was registered by Discord id and has never
- * signed in, so nothing has confirmed that id belongs to the person it names.
- * The send path has always dropped these, silently, which is how a reminder
- * ends up arriving with nobody tagged and no explanation anywhere.
- *
- * **Not in the server.** `<@id>` for somebody who is not a guild member
- * renders as a mention and notifies nobody. The message looks completely
- * correct in the channel and their client never lights up.
+ * Whether they have signed into this app is not part of the question. That was
+ * the original test and it was the wrong one — see resolveMentions.
  *
  * Runs at save time and only over the tagged ids — at most 25 — so it costs a
  * handful of requests when somebody is looking at the screen, rather than a
@@ -145,7 +142,6 @@ async function unpingableMembers(
       discordId: users.discordId,
       username: users.username,
       inGameName: users.inGameName,
-      isProvisional: users.isProvisional,
     })
     .from(users)
     .where(inArray(users.id, userIds));
@@ -159,11 +155,6 @@ async function unpingableMembers(
   const out: UnpingableMember[] = [];
   for (const row of rows) {
     const name = row.inGameName ?? row.username;
-
-    if (row.isProvisional) {
-      out.push({ userId: row.id, name, reason: 'provisional' });
-      continue;
-    }
     if (!integration) continue;
 
     // null means Discord could not be asked. Staying quiet beats warning

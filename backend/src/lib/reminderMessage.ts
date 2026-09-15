@@ -24,9 +24,18 @@ export interface ReminderMessage {
  * name in it left, and a ping to an id nobody recognises renders as raw text
  * in the channel.
  *
- * Provisional users are skipped too. Their Discord id is a registration a
- * superadmin typed in, not a confirmed account, and pinging one that was
- * mistyped would be a stranger's notification.
+ * Members registered by Discord id who have never signed in **are** pinged.
+ * They were skipped at first, on the reasoning that an unconfirmed id might be
+ * mistyped and would then notify a stranger. That reasoning was wrong: Discord
+ * does not notify somebody who is not in the guild and cannot see the channel,
+ * so a mistyped id renders as an unresolved mention and reaches nobody. The
+ * risk did not exist, and the cost was the whole feature — in these factions
+ * most of the roster is registered by Discord id and never signs into the
+ * accounting app, so tagging silently reached almost nobody.
+ *
+ * The real check is whether the person is in the server, and that runs when
+ * the reminder is saved, where it can be reported to somebody who can act on
+ * it. See unpingableMembers in routes/discordReminders.ts.
  */
 async function resolveMentions(reminder: DiscordReminder): Promise<{
   content?: string;
@@ -39,11 +48,12 @@ async function resolveMentions(reminder: DiscordReminder): Promise<{
   let discordIds: string[] = [];
   if (wantedUserIds.length > 0) {
     const rows = await db
-      .select({ discordId: users.discordId, isProvisional: users.isProvisional, isSystem: users.isSystem })
+      .select({ discordId: users.discordId, isSystem: users.isSystem })
       .from(users)
       .where(inArray(users.id, wantedUserIds));
+    // The shared placeholder is not a person and owns no Discord account.
     discordIds = rows
-      .filter((r) => !r.isProvisional && !r.isSystem)
+      .filter((r) => !r.isSystem)
       .map((r) => r.discordId);
   }
 

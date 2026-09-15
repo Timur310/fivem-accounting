@@ -31,7 +31,8 @@ import {
   type ReminderScheduleType,
 } from '@/lib/api-types';
 import type { TranslationKey } from '@/lib/i18n';
-import { AlarmClock, Plus, Pencil, Trash2, Send, AlertTriangle, AtSign } from 'lucide-react';
+import { AlarmClock, Plus, Pencil, Trash2, Send, AlertTriangle, AtSign, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { displayName } from '@/lib/format';
 
 interface Props {
@@ -60,6 +61,49 @@ function emptyDraft(): ReminderInput {
     mentionUserIds: [],
     isEnabled: true,
   };
+}
+
+/**
+ * A tag you can switch on and off.
+ *
+ * Written out rather than reached for by Button variant name, which is how
+ * this went wrong: the members list used `secondary` for selected against
+ * `outline` for not, and those two resolve to a 4% and a 6% white overlay —
+ * a 2% difference, on which the selected one also *loses* its border. Opening
+ * a saved reminder showed no sign of who was already tagged.
+ *
+ * Selected is now the faction's accent, filled, with a tick. Colour alone is
+ * never the only carrier of state; the tick survives a colourblind reader and
+ * a faction whose accent happens to sit close to the page.
+ */
+function TagChip({
+  on, label, disabled, title, onClick,
+}: {
+  on: boolean;
+  label: string;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+        'disabled:opacity-40 disabled:cursor-not-allowed',
+        on
+          ? 'bg-[var(--brand-color,#6366f1)] text-white hover:brightness-110'
+          : 'border border-[var(--line-2)] bg-[var(--fill-2)] text-zinc-300 hover:bg-[var(--fill-3)] hover:border-[var(--line-3)]',
+      )}
+    >
+      {on && <Check className="h-3 w-3 shrink-0" aria-hidden />}
+      {label}
+    </button>
+  );
 }
 
 function draftFrom(reminder: DiscordReminder): ReminderInput {
@@ -146,11 +190,7 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
         toast({
           title: t('reminder.someTagsWontReach'),
           description: unreachable
-            .map((u) =>
-              u.reason === 'provisional'
-                ? t('reminder.tagNeverSignedIn', { name: u.name })
-                : t('reminder.tagNotInServer', { name: u.name }),
-            )
+            .map((u) => t('reminder.tagNotInServer', { name: u.name }))
             .join(' · '),
           variant: 'destructive',
         });
@@ -455,16 +495,39 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                 <Label>{t('reminder.tag')}</Label>
                 <p className="text-xs text-muted-foreground">{t('reminder.tagHint')}</p>
 
+                {/* A highlight inside forty chips is still something to hunt
+                    for. This says what is tagged without reading the list. */}
+                {(() => {
+                  const tagged = [
+                    ...(draft.mentionRoleIds ?? []).map(
+                      (id) => `@${roles?.find((r) => r.id === id)?.name ?? '…'}`,
+                    ),
+                    ...(draft.mentionUserIds ?? []).map((id) => {
+                      const m = members?.find((x) => x.userId === id);
+                      return m ? displayName(m) : '…';
+                    }),
+                  ];
+                  return (
+                    <p className="text-xs">
+                      <span className="text-muted-foreground">{t('reminder.taggedNow')} </span>
+                      {tagged.length === 0 ? (
+                        <span className="text-muted-foreground">{t('reminder.taggedNobody')}</span>
+                      ) : (
+                        <span className="text-brand font-medium">{tagged.join(', ')}</span>
+                      )}
+                    </p>
+                  );
+                })()}
+
                 {!!roles?.length && (
                   <div className="flex flex-wrap gap-1">
                     {roles.map((role) => {
                       const on = draft.mentionRoleIds?.includes(role.id) ?? false;
                       return (
-                        <Button
+                        <TagChip
                           key={role.id}
-                          type="button"
-                          size="sm"
-                          variant={on ? 'default' : 'outline'}
+                          on={on}
+                          label={`@${role.name}`}
                           // A ping that silently does nothing is worse than a
                           // disabled button, so a role stays unselectable only
                           // while the bot genuinely cannot reach it.
@@ -477,9 +540,7 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                                 : [...(draft.mentionRoleIds ?? []), role.id],
                             })
                           }
-                        >
-                          @{role.name}
-                        </Button>
+                        />
                       );
                     })}
                   </div>
@@ -490,11 +551,10 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                     {members.map((m) => {
                       const on = draft.mentionUserIds?.includes(m.userId) ?? false;
                       return (
-                        <Button
+                        <TagChip
                           key={m.userId}
-                          type="button"
-                          size="sm"
-                          variant={on ? 'secondary' : 'outline'}
+                          on={on}
+                          label={displayName(m)}
                           onClick={() =>
                             patchDraft({
                               mentionUserIds: on
@@ -502,9 +562,7 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                                 : [...(draft.mentionUserIds ?? []), m.userId],
                             })
                           }
-                        >
-                          {displayName(m)}
-                        </Button>
+                        />
                       );
                     })}
                   </div>

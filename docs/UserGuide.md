@@ -888,6 +888,13 @@ everything unpicked and the reminder posts quietly.
   *"allow anyone to @mention this role"* on in Discord also works.)
 - Members are tagged from your faction roster, so you pick by in-game name. If
   someone leaves, the reminder keeps working and simply stops tagging them.
+  Somebody who was added by Discord ID and has never signed in is tagged like
+  anyone else — most of a faction never opens the app, and the ping is for them
+  more than for anybody.
+- **A tag only reaches somebody who is in your Discord server.** A mention of
+  someone who is not a member of it renders perfectly in the channel and
+  notifies nobody, which is impossible to spot by looking. Saving a reminder
+  checks this and names anybody it applies to.
 - **@everyone cannot be pinged**, even if you type it into the message. The bot
   was never given that permission, and the message is sent pinning only the
   roles and people you picked.

@@ -596,18 +596,25 @@ describe('the runner', () => {
  * the reminder saved, the message arrived — and the tag reached nobody.
  */
 describe('tags that would not actually reach anybody', () => {
-  it('says so when a tagged member has never signed in', async () => {
+  // Reported from the field: a whole roster of in-game members tagged, and
+  // the message arrived with no ping line at all. Most of a FiveM faction is
+  // registered by Discord id and never signs into the accounting app, so the
+  // "unconfirmed account" filter silently excluded nearly everybody.
+  it('pings a member who was registered by Discord id and never signed in', async () => {
     await link();
-    // Registered by Discord id by a superadmin and never confirmed — the send
-    // path has always dropped these silently.
     await db.update(users).set({ isProvisional: true }).where(eq(users.id, w.member.id));
 
     const res = await create(w.admin.cookie, daily({ mentionUserIds: [w.member.id] }));
-
     expect(res.status).toBe(201);
-    expect(res.body.data.unpingable).toHaveLength(1);
-    expect(res.body.data.unpingable[0].reason).toBe('provisional');
-    expect(res.body.data.unpingable[0].name).toBe(w.member.username);
+    expect(res.body.data.unpingable).toHaveLength(0);
+
+    await api().post(`${base()}/${res.body.data.id}/send`).set('Cookie', w.admin.cookie);
+    const [, payload] = postMock.mock.calls[0] as unknown as [string, {
+      content?: string;
+      allowed_mentions: { users?: string[] };
+    }];
+    expect(payload.content).toContain(`<@${w.member.discordId}>`);
+    expect(payload.allowed_mentions.users).toEqual([w.member.discordId]);
   });
 
   it('says so when a tagged member is not in the Discord server', async () => {
