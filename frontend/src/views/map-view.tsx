@@ -280,6 +280,22 @@ export function MapView({ factionId, canManage }: Props) {
     return pixelToGame(pixel.x, pixel.y);
   };
 
+  // ── the cursor says what the next click will do ──────
+  //
+  // Leaflet ships `.leaflet-crosshair` for this, including the rule that
+  // covers markers underneath, so there is nothing to write but the toggle.
+  //
+  // Toggled through classList rather than React's className: Leaflet mutates
+  // the class list of this same element for drag state and zoom animation, and
+  // a React re-render setting className would wipe whatever it had added.
+  useEffect(() => {
+    const container = mapRef.current?.getContainer();
+    if (!container) return;
+
+    container.classList.toggle('leaflet-crosshair', drawMode !== null);
+    return () => container.classList.remove('leaflet-crosshair');
+  }, [drawMode, ready]);
+
   // ── the coordinate readout, and clicks while drawing ──
   useEffect(() => {
     const map = mapRef.current;
