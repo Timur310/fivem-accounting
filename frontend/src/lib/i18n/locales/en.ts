@@ -1353,6 +1353,28 @@ export const en = {
   'pricing.revertConfirm': 'Revert this sale?',
   'pricing.revertBody': 'The payment comes back out of the treasury and the goods go back in. The ledger keeps both rows, marked deleted.',
   'pricing.revertDone': 'Reverted. The goods are back and the payment is out.',
+
+  // -- Margins and exchange rates --
+  'pricing.quoteIn': 'Quote in',
+  'pricing.converted': 'converted from {name}',
+  'pricing.cost': 'Cost',
+  'pricing.margin': 'Margin',
+  'pricing.marginOf': '{percent}% margin',
+  'pricing.costFrom': 'from the recipe "{name}"',
+  'pricing.costUnknown': 'Some items have no recipe priced, so this is only part of the cost.',
+  'pricing.costEach': 'costs {amount}',
+  'pricing.rates': 'Exchange rates',
+  'pricing.ratesHint': 'What one of your currencies buys of another. Each direction is its own rate — washing money takes a cut, so the reverse is rarely just the inverse.',
+  'pricing.noRates': 'No exchange rates. A basket has to be in one currency without them.',
+  'pricing.rateRow': '1 {from} = {rate} {to}',
+  'pricing.rateFrom': 'From',
+  'pricing.rateTo': 'To',
+  'pricing.rateValue': 'Rate',
+  'pricing.marginRank': 'Who sees cost and margin',
+  'pricing.marginRankHint': 'Everyone who can open this screen, or only ranks at or above the one you pick. A soldier at the counter does not need to know the markup.',
+  'pricing.marginRankEveryone': 'Everyone',
+  'pricing.marginRankLevel': 'Level {level} and above',
+  'pricing.settingsSaved': 'Saved.',
 };
 
 /** Every key the interface may ask for. */

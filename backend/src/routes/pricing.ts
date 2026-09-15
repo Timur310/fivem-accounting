@@ -4,7 +4,9 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
 import {
   counterparties,
+  currencyRates,
   entries,
+  factions,
   itemTypes,
   payouts,
   productAddons,
@@ -21,8 +23,10 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import {
-  computeQuote, loadCurrencies, loadPriceBook, ownsItemType,
+  computeQuote, loadCosts, loadCurrencies, loadPriceBook, loadRates, ownsItemType,
+  type QuoteExtras,
 } from '../lib/pricing.js';
+import { viewerRankLevel } from '../lib/rank.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { todayDateString } from '../lib/date.js';
 import { balancesFor, lockItemTypes, toCents } from '../lib/treasury.js';
@@ -100,6 +104,8 @@ const breakUpdateSchema = breakSchema.partial();
 
 const quoteSchema = z.object({
   counterpartyId: z.string().uuid().nullable().optional(),
+  /** Quote in this currency, converting anything priced in another. */
+  currencyItemTypeId: z.string().uuid().nullable().optional(),
   lines: z
     .array(z.object({
       itemTypeId: z.string().uuid(),
@@ -112,11 +118,108 @@ const quoteSchema = z.object({
     .max(50),
 });
 
+/**
+ * May this viewer see what things cost the faction?
+ *
+ * Null means everybody who can open the screen. Otherwise it is a rank level,
+ * and lower is higher: `2` shows margins to the Boss and the Underboss and to
+ * nobody below them. A soldier working the counter does not need to know the
+ * markup, and a screenshot from them should not reveal it.
+ */
+async function marginsVisible(id: string, req: Request): Promise<boolean> {
+  const [faction] = await db
+    .select({ level: factions.marginMinRankLevel })
+    .from(factions)
+    .where(eq(factions.id, id))
+    .limit(1);
+  if (faction?.level == null) return true;
+  return (await viewerRankLevel(id, req)) <= faction.level;
+}
+
+/**
+ * Everything a quote needs, loaded once.
+ *
+ * The costs are omitted entirely rather than blanked for viewers who may not
+ * see them: a field that is absent cannot be read out of a response by
+ * somebody who knows where to look.
+ */
+async function quoteContext(id: string, req: Request) {
+  const [book, currencies, rates, canSeeMargins] = await Promise.all([
+    loadPriceBook(id),
+    loadCurrencies(id),
+    loadRates(id),
+    marginsVisible(id, req),
+  ]);
+  const extras: QuoteExtras = { rates };
+  if (canSeeMargins) extras.costs = await loadCosts(id, book, rates);
+  return { book, currencies, extras, canSeeMargins };
+}
+
 // ── GET / — the whole book, in one read ───────────────
 
 router.get('/', async (req: Request, res: Response) => {
-  const book = await loadPriceBook(factionId(req));
-  success(res, book);
+  const id = factionId(req);
+  const [book, rates, canSeeMargins, faction] = await Promise.all([
+    loadPriceBook(id),
+    db.select({
+      id: currencyRates.id,
+      fromItemTypeId: currencyRates.fromItemTypeId,
+      toItemTypeId: currencyRates.toItemTypeId,
+      rate: currencyRates.rate,
+    }).from(currencyRates).where(eq(currencyRates.factionId, id)),
+    marginsVisible(id, req),
+    db.select({ marginMinRankLevel: factions.marginMinRankLevel })
+      .from(factions).where(eq(factions.id, id)).limit(1),
+  ]);
+
+  const costs = canSeeMargins
+    ? await loadCosts(id, book, new Map(rates.map((r) => [`${r.fromItemTypeId}>${r.toItemTypeId}`, r.rate])))
+    : new Map();
+
+  success(res, {
+    ...book,
+    rates,
+    canSeeMargins,
+    marginMinRankLevel: faction[0]?.marginMinRankLevel ?? null,
+    // Attached to the price rows the viewer may see them for, so the list can
+    // show cost beside price without a second request.
+    prices: book.prices.map((p) => ({
+      ...p,
+      ...(costs.get(p.itemTypeId)
+        ? {
+          unitCost: costs.get(p.itemTypeId)!.unitCost,
+          costRecipeName: costs.get(p.itemTypeId)!.recipeName,
+        }
+        : {}),
+    })),
+  });
+});
+
+// ── PATCH /settings — who may see margins ─────────────
+
+const settingsSchema = z.object({
+  marginMinRankLevel: z.number().int().min(1).max(100).nullable(),
+});
+
+router.patch('/settings', requirePermission('manage_prices'), async (req: Request, res: Response) => {
+  const body = settingsSchema.parse(req.body);
+  const id = factionId(req);
+
+  await db.update(factions)
+    .set({ marginMinRankLevel: body.marginMinRankLevel })
+    .where(eq(factions.id, id));
+
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId: id,
+    action: 'update',
+    entityType: 'faction_settings',
+    entityId: id,
+    details: { marginMinRankLevel: body.marginMinRankLevel },
+    req,
+  });
+
+  success(res, { marginMinRankLevel: body.marginMinRankLevel });
 });
 
 // ── Prices ────────────────────────────────────────────
@@ -544,8 +647,8 @@ router.post('/quote', async (req: Request, res: Response) => {
   const body = quoteSchema.parse(req.body);
   const id = factionId(req);
 
-  const [book, currencies] = await Promise.all([loadPriceBook(id), loadCurrencies(id)]);
-  const result = computeQuote(body, book, currencies);
+  const { book, currencies, extras } = await quoteContext(id, req);
+  const result = computeQuote(body, book, currencies, extras);
 
   if (!result.ok) {
     error(res, result.error.code === 'NOT_PRICED' ? 'NOT_FOUND' : 'VALIDATION_ERROR',
@@ -555,6 +658,79 @@ router.post('/quote', async (req: Request, res: Response) => {
   }
 
   success(res, result.quote);
+});
+
+// ── Exchange rates ────────────────────────────────────
+//
+// Directional and never inverted automatically. A row says dirty → clean;
+// quoting the other way needs its own row. Deriving the reverse as 1/rate
+// looks helpful and produces a number the faction never agreed to — rates here
+// are rarely symmetric, because washing money takes a cut.
+
+const rateSchema = z.object({
+  fromItemTypeId: z.string().uuid(),
+  toItemTypeId: z.string().uuid(),
+  rate: z.string().trim()
+    .regex(/^\d{1,12}(\.\d{1,6})?$/, 'Rate must be a number with up to six decimals')
+    .refine((v) => Number(v) > 0, 'Rate must be above zero'),
+});
+
+router.put('/rates', requirePermission('manage_prices'), async (req: Request, res: Response) => {
+  const body = rateSchema.parse(req.body);
+  const id = factionId(req);
+
+  if (body.fromItemTypeId === body.toItemTypeId) {
+    error(res, 'VALIDATION_ERROR', 'A currency is always worth one of itself.', 400);
+    return;
+  }
+  for (const itemId of [body.fromItemTypeId, body.toItemTypeId]) {
+    if (!await ownsItemType(id, itemId)) {
+      error(res, 'NOT_FOUND', 'That currency is not this faction\'s', 404);
+      return;
+    }
+  }
+
+  // Upsert: a faction editing a rate is changing the one deal, not keeping a
+  // history of what dirty money used to be worth.
+  const [row] = await db
+    .insert(currencyRates)
+    .values({
+      factionId: id,
+      fromItemTypeId: body.fromItemTypeId,
+      toItemTypeId: body.toItemTypeId,
+      rate: body.rate,
+      updatedBy: req.user!.id,
+    })
+    .onConflictDoUpdate({
+      target: [currencyRates.factionId, currencyRates.fromItemTypeId, currencyRates.toItemTypeId],
+      set: { rate: body.rate, updatedBy: req.user!.id, updatedAt: new Date() },
+    })
+    .returning();
+
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId: id,
+    action: 'update',
+    entityType: 'currency_rate',
+    entityId: row!.id,
+    details: { from: body.fromItemTypeId, to: body.toItemTypeId, rate: body.rate },
+    req,
+  });
+
+  success(res, row);
+});
+
+router.delete('/rates/:rateId', requirePermission('manage_prices'), async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const [row] = await db
+    .delete(currencyRates)
+    .where(and(eq(currencyRates.id, req.params.rateId as string), eq(currencyRates.factionId, id)))
+    .returning();
+  if (!row) {
+    error(res, 'NOT_FOUND', 'Rate not found', 404);
+    return;
+  }
+  success(res, { deleted: true });
 });
 
 // ── Sales — the quote, booked ─────────────────────────
@@ -578,8 +754,12 @@ router.post('/sales', requirePermission('sell'), async (req: Request, res: Respo
   const body = saleSchema.parse(req.body);
   const id = factionId(req);
 
-  const [book, currencies] = await Promise.all([loadPriceBook(id), loadCurrencies(id)]);
-  const computed = computeQuote(body, book, currencies);
+  // Margins never reach this response — a sale books money, and what the
+  // faction made on it is a separate question with its own rank behind it.
+  const [book, currencies, rates] = await Promise.all([
+    loadPriceBook(id), loadCurrencies(id), loadRates(id),
+  ]);
+  const computed = computeQuote(body, book, currencies, { rates });
   if (!computed.ok) {
     error(res, computed.error.code === 'NOT_PRICED' ? 'NOT_FOUND' : 'VALIDATION_ERROR',
       computed.error.message,

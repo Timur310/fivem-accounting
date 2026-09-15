@@ -566,6 +566,8 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Set prices, add-ons, partners, bulk rungs | Yes | Yes | `manage_prices` | No |
 | Book a sale into the ledger | Yes | Yes | `sell` | No |
 | Revert a booked sale | Yes | Yes | `manage_prices` | No |
+| See cost and margin | Yes | Yes | rank at or above the faction's setting | No |
+| Set exchange rates, margin visibility | Yes | Yes | `manage_prices` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
@@ -1611,8 +1613,48 @@ is edited alone — so the six places that edit or delete an entry or a payout
 ask one question instead of two. Asking in two steps is how one of them
 eventually gets forgotten at a seventh call site.
 
-Phases 3 and 4 remain: margins from the crafting recipes, rank-gated, and
-exchange rates so the same basket can be quoted clean or dirty.
+Phases 3 and 4 complete the feature.
+
+**Margins come out of the crafting recipes**, which already say that ten steel
+and two powder make a pistol; the price list already says what steel is worth.
+Nothing new is entered. `loadCosts` walks the active recipes and prices each
+one's inputs, and three of its rules are refusals to guess:
+
+- A recipe whose inputs are not all priced yields **no cost at all**, rather
+  than a total that silently counts the priced half. A number that reads as a
+  margin and is not one is worse than a blank.
+- An input priced in another currency is converted, and without a rate the
+  recipe yields nothing. A cost in mixed money is not a cost.
+- Where two recipes make the same thing, **the cheaper wins**. A faction with
+  two routes can take the cheap one, and a margin quoted against the expensive
+  route understates the deal.
+
+Margin percentage is measured **against the price, not the cost** — "we keep
+40% of what they pay" is the figure a seller can hold in their head.
+
+**Who sees it is a rank**, `factions.margin_min_rank_level`, the same shape as
+a map layer's. The figures are **omitted from the response** rather than
+blanked for viewers below it: a field that is absent cannot be read out of
+devtools by somebody who knows where to look. Sales never carry margins at all
+— booking money and knowing what was made on it are separate questions.
+
+**`currency_rates` lets one basket be quoted in either money.** Directional,
+and never inverted automatically: a row says dirty → clean, and quoting the
+other way needs its own row. Deriving the reverse as 1/rate looks helpful and
+produces a number the faction never agreed to, because washing money takes a
+cut and these rates are not symmetric.
+
+Conversion happens **once per line, at the unit**, before discounts or
+quantity. Converting the gross and the discount separately would mean two
+rounded conversions that no longer add back up to the converted total. Floors
+are converted too, because the floor is about the money actually changing
+hands.
+
+A mixed basket with no currency named is a question — "pick which one" — not a
+guess, and a missing rate names both currencies so somebody can go and add it.
+
+`viewerRankLevel` moved to `lib/rank.ts`: the map asked it first, margins ask
+it now, and two copies of that question are two answers waiting to differ.
 
 ---
 
@@ -2221,7 +2263,7 @@ calibration the operator has to do once.
 
 See §8.17 for the design and the four guards in front of the restore.
 
-### Phase 13: The Price Calculator (Week 30) — PHASES 1-2 COMPLETE
+### Phase 13: The Price Calculator (Week 30) — COMPLETE
 
 | # | Feature | Description | Priority |
 |---|---------|-------------|----------|
@@ -2231,8 +2273,8 @@ See §8.17 for the design and the four guards in front of the restore.
 | 4 | Bulk discounts | A quantity ladder, faction-wide or per item — **DONE** | Medium |
 | 5 | Copy for Discord | The quote as a block to paste to the buyer — **DONE** | Medium |
 | 6 | Book the sale | Accepted quote writes entries and payouts, revertible — **DONE** | High |
-| 7 | Margins | Cost from the recipes, rank-gated — *phase 3* | Medium |
-| 8 | Exchange rates | Quoting the same basket clean or dirty — *phase 4* | Low |
+| 7 | Margins | Cost from the recipes, rank-gated — **DONE** | Medium |
+| 8 | Exchange rates | Quoting the same basket clean or dirty — **DONE** | Low |
 
 See §8.18 for the design and the three arithmetic decisions behind it.
 

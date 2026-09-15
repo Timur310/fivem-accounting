@@ -994,6 +994,23 @@ export interface ProductPrice {
   isActive: boolean;
   updatedAt: string;
   addons: ProductAddon[];
+  /** What it costs the faction to make, from its recipes. Absent when the
+   *  viewer's rank may not see margins, or no recipe prices it. */
+  unitCost?: string;
+  costRecipeName?: string;
+}
+
+/**
+ * What one currency is worth in another, for this faction.
+ *
+ * Directional: a row saying dirty → clean does not let the app quote the other
+ * way. Rates here are rarely symmetric, so the reverse is its own agreement.
+ */
+export interface CurrencyRate {
+  id: string;
+  fromItemTypeId: string;
+  toItemTypeId: string;
+  rate: string;
 }
 
 export interface Counterparty {
@@ -1018,6 +1035,11 @@ export interface PriceBook {
   prices: ProductPrice[];
   breaks: QuantityBreak[];
   parties: Counterparty[];
+  rates: CurrencyRate[];
+  /** Whether this viewer's rank may see cost and margin at all. */
+  canSeeMargins: boolean;
+  /** Lowest rank level allowed to see them; null means everyone. */
+  marginMinRankLevel: number | null;
 }
 
 export interface QuoteLineInput {
@@ -1029,6 +1051,8 @@ export interface QuoteLineInput {
 export interface QuoteInput {
   counterpartyId?: string | null;
   lines: QuoteLineInput[];
+  /** Quote in this currency, converting anything priced in another. */
+  currencyItemTypeId?: string | null;
 }
 
 export interface QuotedLine {
@@ -1050,6 +1074,13 @@ export interface QuotedLine {
   total: string;
   floorPrice: string | null;
   belowFloor: boolean;
+  unitCost?: string;
+  cost?: string;
+  margin?: string;
+  marginPercent?: string | null;
+  costRecipeName?: string;
+  /** Set when the line was priced in another currency and converted. */
+  convertedFrom?: { itemTypeId: string; name: string } | null;
 }
 
 export interface Quote {
@@ -1066,6 +1097,11 @@ export interface Quote {
   discountTotal: string;
   total: string;
   belowFloor: boolean;
+  costTotal?: string;
+  marginTotal?: string;
+  marginPercent?: string | null;
+  /** Some line has no known cost, so the margin shown is only part of it. */
+  costIncomplete?: boolean;
 }
 
 /** A line of a booked sale, frozen as it read on the day. */

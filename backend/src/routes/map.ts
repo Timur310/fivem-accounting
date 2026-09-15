@@ -14,6 +14,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { NO_RANK_LEVEL, viewerRankLevel } from '../lib/rank.js';
 
 /**
  * The faction's maps.
@@ -34,9 +35,6 @@ import { createAuditLog } from '../lib/audit.js';
 const router = Router({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
-
-/** Every rank a member could hold; no rank at all is lower than all of them. */
-const NO_RANK_LEVEL = 1000;
 
 const coordinate = z.object({
   // GTA V's world is roughly -4000..4500 on X and -4000..8000 on Y. The bounds
@@ -78,36 +76,6 @@ function shapeError(kind: string, points: unknown[]): string | null {
   return null;
 }
 
-/**
- * How high the viewer sits in the hierarchy, as a rank level.
- *
- * Lower is higher: level 1 is the boss. Admins and superadmins get 0, which is
- * above every rank a faction can define, so they see everything — the same
- * rule every other permission in the app follows.
- */
-async function viewerRankLevel(factionId: string, req: Request): Promise<number> {
-  if (req.factionRole === 'admin' || req.factionRole === 'superadmin') return 0;
-
-  const [membership] = await db
-    .select({ rank: factionMembers.rank })
-    .from(factionMembers)
-    .where(and(eq(factionMembers.factionId, factionId), eq(factionMembers.userId, req.user!.id)))
-    .limit(1);
-
-  if (!membership?.rank) return NO_RANK_LEVEL;
-
-  const [faction] = await db
-    .select({ ranks: factions.ranks })
-    .from(factions)
-    .where(eq(factions.id, factionId))
-    .limit(1);
-
-  const rank = (faction?.ranks ?? []).find((r) => r.name === membership.rank);
-  // A rank the faction has since deleted leaves the member holding a name
-  // nothing defines. Treating that as "no rank" is the safe read: it can only
-  // ever hide a layer, never reveal one.
-  return rank?.level ?? NO_RANK_LEVEL;
-}
 
 /** Unrestricted, or restricted to a rank this viewer is at or above. */
 function openTo(level: number) {

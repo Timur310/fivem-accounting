@@ -92,6 +92,16 @@ export const factions = pgTable('factions', {
     supplies: number | null;
     other: number | null;
   }>(),
+  /**
+   * The lowest rank level allowed to see what things cost the faction, or null
+   * for everybody who can open the price screen.
+   *
+   * **Lower level means higher rank** — level 1 is the boss — so `2` shows
+   * margins to the Boss and the Underboss and to nobody below them. A soldier
+   * working the counter does not need to know the markup, and a screenshot
+   * from them should not reveal it.
+   */
+  marginMinRankLevel: integer('margin_min_rank_level'),
   createdBy:    uuid('created_by').notNull().references(() => users.id),
   createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   isActive:     boolean('is_active').notNull().default(true),
@@ -1371,3 +1381,46 @@ export type Sale = typeof sales.$inferSelect;
 export type NewSale = typeof sales.$inferInsert;
 export type SaleLine = typeof saleLines.$inferSelect;
 export type SaleMovement = typeof saleMovements.$inferSelect;
+
+// ── currency_rates ─────────────────────────────────────
+// What one currency is worth in another, for this faction.
+//
+// A faction prices some things in clean money and some in dirty, and a buyer
+// asks for one basket: "50k dirty, or 35k clean". Without a rate the only
+// honest answer is to refuse the mixed quote, which is what the calculator did
+// before this table existed.
+//
+// **Directional, and never inverted automatically.** A row says dirty → clean,
+// and quoting the other way needs its own row. Deriving the reverse as 1/rate
+// looks helpful and produces a number the faction never agreed to: rates in
+// these servers are rarely symmetric — laundering takes a cut — and a derived
+// inverse would quietly undercut it.
+export const currencyRates = pgTable('currency_rates', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  fromItemTypeId: uuid('from_item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  toItemTypeId:   uuid('to_item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  /**
+   * How much of `to` one unit of `from` buys.
+   *
+   * Six decimals because the interesting rates are fractions — 0.7 clean for
+   * a dirty dollar — and two would round a 0.685 agreement into a different
+   * deal on every line.
+   */
+  rate:      decimal('rate', { precision: 18, scale: 6 }).notNull(),
+  updatedBy: uuid('updated_by').notNull().references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('currency_rate_faction').on(table.factionId),
+  uniquePair: uniqueIndex('currency_rate_unique_pair')
+    .on(table.factionId, table.fromItemTypeId, table.toItemTypeId),
+}));
+
+export const currencyRatesRelations = relations(currencyRates, ({ one }) => ({
+  faction: one(factions,  { fields: [currencyRates.factionId], references: [factions.id] }),
+  from:    one(itemTypes, { fields: [currencyRates.fromItemTypeId], references: [itemTypes.id] }),
+  to:      one(itemTypes, { fields: [currencyRates.toItemTypeId], references: [itemTypes.id] }),
+}));
+
+export type CurrencyRate = typeof currencyRates.$inferSelect;
+export type NewCurrencyRate = typeof currencyRates.$inferInsert;

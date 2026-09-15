@@ -58,7 +58,8 @@ Discord history.
   whoever maintains the instance
 - 🧮 **Price calculator** — a price list with add-ons, per-partner discounts
   and bulk rungs; pick the buyer, read the total, paste it into Discord, and
-  book the sale into the treasury in one click
+  book the sale into the treasury in one click — with margins read straight
+  out of your crafting recipes, and either currency at your own rate
 - 🧾 **Audit log** — append-only record of every write in the system, actor
   and timestamp included
 - 💾 **Database backup** — a superadmin downloads the whole database as one

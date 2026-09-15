@@ -27,7 +27,7 @@ import {
   Receipt, Undo2,
 } from 'lucide-react';
 import type {
-  ProductPrice, Counterparty, QuantityBreak, Quote, QuoteLineInput, Sale,
+  ProductPrice, Counterparty, QuantityBreak, Quote, QuoteLineInput, Sale, CurrencyRate,
 } from '@/lib/api-types';
 
 type Tab = 'calculator' | 'prices' | 'partners' | 'sales';
@@ -80,6 +80,7 @@ export function PricingView({
   const [lines, setLines] = useState<BasketLine[]>([newLine()]);
   const [partyId, setPartyId] = useState<string>('');
   const [selling, setSelling] = useState(false);
+  const [quoteCurrency, setQuoteCurrency] = useState<string>('');
 
   const bookQuery = useQuery({
     queryKey: ['price-book', factionId],
@@ -89,6 +90,23 @@ export function PricingView({
   const prices = useMemo(() => bookQuery.data?.prices ?? [], [bookQuery.data]);
   const parties = useMemo(() => bookQuery.data?.parties ?? [], [bookQuery.data]);
   const breaks = useMemo(() => bookQuery.data?.breaks ?? [], [bookQuery.data]);
+  const rates = useMemo(() => bookQuery.data?.rates ?? [], [bookQuery.data]);
+
+  /**
+   * The currencies this faction actually prices in. One of them means there is
+   * nothing to choose, so the picker stays off the screen entirely.
+   */
+  const quoteCurrencies = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const price of prices) {
+      if (!seen.has(price.currencyItemTypeId)) {
+        seen.set(price.currencyItemTypeId, price.currencyItemTypeId);
+      }
+    }
+    return [...seen.keys()];
+  }, [prices]);
+  const currencyName = (id: string) =>
+    prices.find((p) => p.currencyItemTypeId === id)?.itemTypeName ?? id;
   const priceByItem = useMemo(
     () => new Map(prices.map((p) => [p.itemTypeId, p])),
     [prices],
@@ -121,10 +139,11 @@ export function PricingView({
   );
 
   const quoteQuery = useQuery({
-    queryKey: ['quote', factionId, partyId, payload],
+    queryKey: ['quote', factionId, partyId, quoteCurrency, payload],
     queryFn: () => pricingApi.quote(factionId, {
       lines: payload,
       ...(partyId ? { counterpartyId: partyId } : {}),
+      ...(quoteCurrency ? { currencyItemTypeId: quoteCurrency } : {}),
     }),
     enabled: payload.length > 0,
     // A quote is a pure function of the basket and the price list. Refetching
@@ -202,6 +221,20 @@ export function PricingView({
         ) : (
           <div className="grid gap-4 lg:grid-cols-[1fr_320px] items-start">
             <div className="space-y-3">
+              {quoteCurrencies.length > 1 && (
+                <div className="max-w-sm space-y-1.5">
+                  <Label>{t('pricing.quoteIn')}</Label>
+                  <SearchableSelect
+                    value={quoteCurrency}
+                    onValueChange={setQuoteCurrency}
+                    options={quoteCurrencies.map((id) => ({
+                      value: id,
+                      label: currencyName(id),
+                    }))}
+                  />
+                </div>
+              )}
+
               <div className="max-w-sm space-y-1.5">
                 <Label>{t('pricing.buyer')}</Label>
                 <SearchableSelect
@@ -315,6 +348,11 @@ export function PricingView({
                         <div key={i} className="flex justify-between gap-3 text-sm">
                           <span className="min-w-0 truncate text-zinc-300">
                             {line.quantity} × {line.itemTypeName}
+                            {line.convertedFrom && (
+                              <span className="text-zinc-500">
+                                {' '}({t('pricing.converted', { name: line.convertedFrom.name })})
+                              </span>
+                            )}
                           </span>
                           <span className={cn('tabular-nums shrink-0', line.belowFloor && 'text-red-300')}>
                             {formatAmount(line.total, quote.currency.unit, quote.currency.isCurrency)}
@@ -343,6 +381,30 @@ export function PricingView({
                           {formatAmount(quote.total, quote.currency.unit, quote.currency.isCurrency)}
                         </span>
                       </div>
+
+                      {/* Only for viewers whose rank may see it — the server
+                          leaves the figures out entirely for everyone else. */}
+                      {quote.costTotal !== undefined && (
+                        <div className="pt-1.5 space-y-1.5 border-t border-[var(--line-2)]">
+                          <Row
+                            label={t('pricing.cost')}
+                            value={formatAmount(quote.costTotal, quote.currency.unit, quote.currency.isCurrency)}
+                          />
+                          <Row
+                            label={t('pricing.margin')}
+                            value={formatAmount(quote.marginTotal ?? '0', quote.currency.unit, quote.currency.isCurrency)}
+                            className="text-emerald-300"
+                          />
+                          {quote.marginPercent && (
+                            <p className="text-meta text-zinc-500">
+                              {t('pricing.marginOf', { percent: quote.marginPercent })}
+                            </p>
+                          )}
+                          {quote.costIncomplete && (
+                            <p className="text-meta text-amber-300/80">{t('pricing.costUnknown')}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {quote.belowFloor && (
@@ -380,6 +442,8 @@ export function PricingView({
           canManage={canManage}
           prices={prices}
           breaks={breaks}
+          rates={rates}
+          marginMinRankLevel={bookQuery.data?.marginMinRankLevel ?? null}
           onChanged={invalidate}
         />
       )}
@@ -654,12 +718,14 @@ function quoteAsText(quote: Quote, totalLabel: string): string {
 // ── Prices tab ────────────────────────────────────────
 
 function PricesTab({
-  factionId, canManage, prices, breaks, onChanged,
+  factionId, canManage, prices, breaks, rates, marginMinRankLevel, onChanged,
 }: {
   factionId: string;
   canManage: boolean;
   prices: ProductPrice[];
   breaks: QuantityBreak[];
+  rates: CurrencyRate[];
+  marginMinRankLevel: number | null;
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
@@ -731,6 +797,11 @@ function PricesTab({
                       {t('pricing.floorShort', { amount: price.floorPrice })}
                     </Badge>
                   )}
+                  {price.unitCost && (
+                    <Badge variant="outline" className="text-micro text-emerald-300/80">
+                      {t('pricing.costEach', { amount: price.unitCost })}
+                    </Badge>
+                  )}
                   {!price.isActive && (
                     <Badge variant="outline" className="text-micro">{t('pricing.retired')}</Badge>
                   )}
@@ -771,6 +842,22 @@ function PricesTab({
         prices={prices}
         onChanged={onChanged}
       />
+
+      <RatesSection
+        factionId={factionId}
+        canManage={canManage}
+        rates={rates}
+        prices={prices}
+        onChanged={onChanged}
+      />
+
+      {canManage && (
+        <MarginRankSection
+          factionId={factionId}
+          level={marginMinRankLevel}
+          onChanged={onChanged}
+        />
+      )}
 
       {editing && (
         <PriceDialog
@@ -1120,6 +1207,178 @@ function BreaksSection({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * What one of the faction's currencies buys of another.
+ *
+ * Each direction is its own row. Offering to fill in the reverse
+ * automatically would mean quoting a rate nobody agreed to — washing money
+ * takes a cut, so the two directions are rarely inverses of each other.
+ */
+function RatesSection({
+  factionId, canManage, rates, prices, onChanged,
+}: {
+  factionId: string;
+  canManage: boolean;
+  rates: CurrencyRate[];
+  prices: ProductPrice[];
+  onChanged: () => void;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [rate, setRate] = useState('');
+
+  // The currencies the faction actually quotes in, named by a price that uses
+  // them — the item-types list is not loaded for members who cannot edit.
+  const currencies = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const price of prices) {
+      if (!out.has(price.currencyItemTypeId)) {
+        out.set(price.currencyItemTypeId, price.currencyItemTypeId);
+      }
+    }
+    for (const r of rates) {
+      out.set(r.fromItemTypeId, r.fromItemTypeId);
+      out.set(r.toItemTypeId, r.toItemTypeId);
+    }
+    return [...out.keys()];
+  }, [prices, rates]);
+
+  const nameOf = (id: string) =>
+    prices.find((p) => p.currencyItemTypeId === id)?.itemTypeName ?? id;
+
+  const save = useMutation({
+    mutationFn: () => pricingApi.setRate(factionId, {
+      fromItemTypeId: from, toItemTypeId: to, rate,
+    }),
+    onSuccess: () => { setRate(''); onChanged(); },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => pricingApi.removeRate(factionId, id),
+    onSuccess: onChanged,
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  // Nothing to convert between.
+  if (currencies.length < 2 && rates.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-sm font-medium text-zinc-200">{t('pricing.rates')}</h2>
+        <p className="text-meta text-zinc-500 max-w-2xl">{t('pricing.ratesHint')}</p>
+      </div>
+
+      {rates.length === 0 ? (
+        <p className="text-meta text-zinc-500">{t('pricing.noRates')}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {rates.map((row) => (
+            <div
+              key={row.id}
+              className="flex items-center justify-between gap-3 text-sm rounded-md border border-[var(--line-2)] px-3 py-2"
+            >
+              <span className="text-zinc-300 tabular-nums">
+                {t('pricing.rateRow', {
+                  from: nameOf(row.fromItemTypeId),
+                  rate: row.rate,
+                  to: nameOf(row.toItemTypeId),
+                })}
+              </span>
+              {canManage && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={t('common.delete')}
+                  onClick={() => remove.mutate(row.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canManage && currencies.length > 1 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="w-44 space-y-1.5">
+            <Label>{t('pricing.rateFrom')}</Label>
+            <SearchableSelect
+              value={from}
+              onValueChange={setFrom}
+              options={currencies.map((id) => ({ value: id, label: nameOf(id) }))}
+            />
+          </div>
+          <div className="w-44 space-y-1.5">
+            <Label>{t('pricing.rateTo')}</Label>
+            <SearchableSelect
+              value={to}
+              onValueChange={setTo}
+              options={currencies
+                .filter((id) => id !== from)
+                .map((id) => ({ value: id, label: nameOf(id) }))}
+            />
+          </div>
+          <div className="w-32 space-y-1.5">
+            <Label>{t('pricing.rateValue')}</Label>
+            <Input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} />
+          </div>
+          <Button
+            disabled={!from || !to || !rate.trim() || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            <Plus className="h-4 w-4" /> {t('pricing.add')}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Which ranks see cost and margin. Null means everybody on this screen. */
+function MarginRankSection({
+  factionId, level, onChanged,
+}: {
+  factionId: string;
+  level: number | null;
+  onChanged: () => void;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+
+  const save = useMutation({
+    mutationFn: (next: number | null) => pricingApi.setMarginRank(factionId, next),
+    onSuccess: () => { toast({ title: t('pricing.settingsSaved') }); onChanged(); },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-sm font-medium text-zinc-200">{t('pricing.marginRank')}</h2>
+        <p className="text-meta text-zinc-500 max-w-2xl">{t('pricing.marginRankHint')}</p>
+      </div>
+      <div className="w-64">
+        <SearchableSelect
+          value={level === null ? '' : String(level)}
+          onValueChange={(v) => save.mutate(v === '' ? null : Number(v))}
+          options={[
+            { value: '', label: t('pricing.marginRankEveryone') },
+            ...[1, 2, 3, 4, 5].map((n) => ({
+              value: String(n),
+              label: t('pricing.marginRankLevel', { level: n }),
+            })),
+          ]}
+        />
+      </div>
     </div>
   );
 }
