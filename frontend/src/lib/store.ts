@@ -11,6 +11,7 @@ export type AppView =
   | 'treasury'
   | 'laundering'
   | 'crafting'
+  | 'pricing'
   | 'map'
   | 'members'
   | 'member-profile'
@@ -25,6 +26,7 @@ export type AppView =
   | 'announcements'
   | 'feed'
   | 'admin-support'
+  | 'admin-backup'
   | 'guide';
 
 export const DEFAULT_BRAND_COLOR = '#3b82f6';

@@ -43,6 +43,7 @@ import discordRoutes from './routes/discord.js';
 import discordReminderRoutes from './routes/discordReminders.js';
 import configIoRoutes from './routes/configIo.js';
 import backupRoutes from './routes/backup.js';
+import pricingRoutes from './routes/pricing.js';
 
 const app = express();
 
@@ -174,6 +175,7 @@ app.use('/api/v1/factions/:id/payouts', payoutRoutes);
 app.use('/api/v1/factions/:id/treasury', treasuryRoutes);
 app.use('/api/v1/factions/:id/laundering', launderingRoutes);
 app.use('/api/v1/factions/:id/crafting', craftingRoutes);
+app.use('/api/v1/factions/:id/pricing', pricingRoutes);
 app.use('/api/v1/factions/:id/map', mapRoutes);
 app.use('/api/v1/factions/:id/announcements', announcementRoutes);
 app.use('/api/v1/factions/:id/feed', feedRoutes);

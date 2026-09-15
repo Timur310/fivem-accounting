@@ -70,6 +70,19 @@ import type {
   GrowthData,
   AdminUser,
   ProvisionalUser,
+  BackupStatus,
+  RestoreResult,
+  PriceBook,
+  ProductPrice,
+  ProductPriceInput,
+  ProductAddon,
+  ProductAddonInput,
+  Counterparty,
+  CounterpartyInput,
+  QuantityBreak,
+  QuantityBreakInput,
+  Quote,
+  QuoteInput,
   CreateProvisionalUserInput,
   UpdateProvisionalUserInput,
   LaunderingOverview,
@@ -973,5 +986,135 @@ export const discordRemindersApi = {
       )
       .then(unwrap),
 };
+
+// ── Pricing ──
+//
+// `quote` is a POST that changes nothing: the basket is too structured to put
+// in a query string. Every total it returns was computed on the server — the
+// browser never does the arithmetic, or the figure a seller reads out and the
+// figure the books would record start to differ.
+
+export const pricingApi = {
+  book: (factionId: string) =>
+    api.get<ApiSuccessResponse<PriceBook>>(`/factions/${factionId}/pricing`).then(unwrap),
+
+  quote: (factionId: string, input: QuoteInput) =>
+    api.post<ApiSuccessResponse<Quote>>(`/factions/${factionId}/pricing/quote`, input).then(unwrap),
+
+  createPrice: (factionId: string, input: ProductPriceInput) =>
+    api
+      .post<ApiSuccessResponse<ProductPrice>>(`/factions/${factionId}/pricing/prices`, input)
+      .then(unwrap),
+
+  updatePrice: (factionId: string, id: string, input: Partial<ProductPriceInput>) =>
+    api
+      .patch<ApiSuccessResponse<ProductPrice>>(`/factions/${factionId}/pricing/prices/${id}`, input)
+      .then(unwrap),
+
+  removePrice: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/pricing/prices/${id}`),
+
+  createAddon: (factionId: string, priceId: string, input: ProductAddonInput) =>
+    api
+      .post<ApiSuccessResponse<ProductAddon>>(
+        `/factions/${factionId}/pricing/prices/${priceId}/addons`, input,
+      )
+      .then(unwrap),
+
+  updateAddon: (factionId: string, id: string, input: Partial<ProductAddonInput>) =>
+    api
+      .patch<ApiSuccessResponse<ProductAddon>>(`/factions/${factionId}/pricing/addons/${id}`, input)
+      .then(unwrap),
+
+  removeAddon: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/pricing/addons/${id}`),
+
+  createParty: (factionId: string, input: CounterpartyInput) =>
+    api
+      .post<ApiSuccessResponse<Counterparty>>(`/factions/${factionId}/pricing/counterparties`, input)
+      .then(unwrap),
+
+  updateParty: (factionId: string, id: string, input: Partial<CounterpartyInput>) =>
+    api
+      .patch<ApiSuccessResponse<Counterparty>>(
+        `/factions/${factionId}/pricing/counterparties/${id}`, input,
+      )
+      .then(unwrap),
+
+  removeParty: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/pricing/counterparties/${id}`),
+
+  createBreak: (factionId: string, input: QuantityBreakInput) =>
+    api
+      .post<ApiSuccessResponse<QuantityBreak>>(`/factions/${factionId}/pricing/breaks`, input)
+      .then(unwrap),
+
+  removeBreak: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/pricing/breaks/${id}`),
+};
+
+// ── Database backup (superadmin) ──
+//
+// Both transfers are whole-database sized, so neither may inherit the client's
+// 15-second timeout: `timeout: 0` on each. They are also the only two calls in
+// this file that move bytes rather than JSON.
+
+export const backupApi = {
+  status: () =>
+    api.get<ApiSuccessResponse<BackupStatus>>('/admin/backup/status').then(unwrap),
+
+  /**
+   * Download a fresh dump.
+   *
+   * Fetched as a blob and handed back with the filename the server chose,
+   * rather than pointed at with a plain link: a link cannot report an error,
+   * and the failure this is most likely to hit — pg_dump missing from the
+   * image — answers with JSON that a link would silently save as a .dump.
+   */
+  download: async (onProgress?: (loadedBytes: number) => void) => {
+    const res = await api.get('/admin/backup/download', {
+      responseType: 'blob',
+      timeout: 0,
+      onDownloadProgress: (e) => onProgress?.(e.loaded),
+    });
+    const disposition = String(res.headers['content-disposition'] ?? '');
+    const match = /filename="([^"]+)"/.exec(disposition);
+    return {
+      blob: res.data as Blob,
+      filename: match?.[1] ?? String(res.headers['x-backup-filename'] ?? 'backup.dump'),
+    };
+  },
+
+  restore: (file: File, onProgress?: (fraction: number) => void) =>
+    api
+      .post<ApiSuccessResponse<RestoreResult>>('/admin/backup/restore', file, {
+        params: { confirm: 'RESTORE' },
+        headers: { 'Content-Type': 'application/octet-stream' },
+        timeout: 0,
+        onUploadProgress: (e) =>
+          onProgress?.(e.total ? e.loaded / e.total : 0),
+      })
+      .then(unwrap),
+};
+
+/**
+ * The message inside a failed blob request.
+ *
+ * With `responseType: 'blob'` axios hands back the error body as a Blob, so
+ * the usual extraction finds nothing and reports "Network Error" over a
+ * perfectly clear 503 from the server.
+ */
+export async function blobErrorMessage(err: unknown, fallback = 'Unknown error'): Promise<string> {
+  const body = (err as { response?: { data?: unknown } })?.response?.data;
+  if (body instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await body.text()) as { error?: { message?: string } };
+      if (parsed.error?.message) return parsed.error.message;
+    } catch {
+      // Not JSON — fall through to the generic message.
+    }
+  }
+  return apiErrorMessage(err, fallback);
+}
 
 export { api };

@@ -15,7 +15,7 @@ import {
   index,
   primaryKey,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 // ── users ──────────────────────────────────────────────
 export const users = pgTable('users', {
@@ -137,6 +137,10 @@ export const FACTION_PERMISSIONS = [
   'manage_crafting',
   'craft',
   'manage_map',
+  // Writing the price list is a leadership decision; reading it and quoting
+  // from it is the counter. Only the first needs a permission — a price list
+  // nobody may read is a price list nobody can sell from.
+  'manage_prices',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -158,6 +162,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_crafting: 'Manage Recipes',
   craft: 'Craft Items',
   manage_map: 'Manage Map',
+  manage_prices: 'Manage Prices',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -1075,3 +1080,159 @@ export const mapMarkersRelations = relations(mapMarkers, ({ one }) => ({
 
 export type MapMarker = typeof mapMarkers.$inferSelect;
 export type NewMapMarker = typeof mapMarkers.$inferInsert;
+
+// ── product_prices ─────────────────────────────────────
+// What the faction sells a thing for.
+//
+// One row per item type, per faction — a price list, not a history. The list
+// is small, people read it as a list, and a second price for the same item is
+// a question ("which one is current?") nobody at the counter can answer.
+//
+// A price names the currency it is in, because a faction quotes some things in
+// clean money and some in dirty, and "$40,000" is two different offers
+// depending on which. The currency is itself an item type: the treasury
+// already knows what money the faction holds, and a second list of currencies
+// here would let the two drift apart.
+export const productPrices = pgTable('product_prices', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  // Cascades: an item type that no longer exists cannot have a price.
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  unitPrice:  decimal('unit_price', { precision: 15, scale: 2 }).notNull(),
+  // Restricted rather than cascaded: deleting the currency would silently make
+  // every price quoted in it meaningless, so it has to be refused until the
+  // prices naming it are dealt with.
+  currencyItemTypeId: uuid('currency_item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+
+  /**
+   * The lowest price this may be sold at, or null for no floor.
+   *
+   * It warns rather than blocks for anyone holding `manage_prices` — a leader
+   * undercutting their own floor is a decision, not a mistake — and blocks for
+   * everybody else.
+   */
+  floorPrice: decimal('floor_price', { precision: 15, scale: 2 }),
+  note:       text('note'),
+  // Retired rather than deleted, for a thing the faction has stopped selling
+  // but does not want to re-enter next month.
+  isActive:   boolean('is_active').notNull().default(true),
+
+  updatedBy:  uuid('updated_by').notNull().references(() => users.id),
+  createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('product_price_faction').on(table.factionId),
+  uniqueItem: uniqueIndex('product_price_unique_item').on(table.factionId, table.itemTypeId),
+}));
+
+// ── product_addons ─────────────────────────────────────
+// The extras a product can be sold with: a suppressor, an extended magazine,
+// a scope.
+//
+// They hang off the price rather than off the item type, so retiring a price
+// takes its add-ons with it. Modelling each combination as its own product
+// instead would turn one pistol into eight rows — and eight rows to edit the
+// day the pistol price changes.
+//
+// `itemTypeId` is set only when the add-on is a thing the faction actually
+// stocks, which is what will let a later phase take it out of the treasury
+// when the sale is booked. An add-on that is pure margin — "engraved",
+// "delivered" — leaves it null and is only ever a number on the quote.
+export const productAddons = pgTable('product_addons', {
+  id:             uuid('id').defaultRandom().primaryKey(),
+  productPriceId: uuid('product_price_id').notNull().references(() => productPrices.id, { onDelete: 'cascade' }),
+  name:           varchar('name', { length: 80 }).notNull(),
+  price:          decimal('price', { precision: 15, scale: 2 }).notNull(),
+  itemTypeId:     uuid('item_type_id').references(() => itemTypes.id, { onDelete: 'set null' }),
+  sortOrder:      integer('sort_order').notNull().default(0),
+  isActive:       boolean('is_active').notNull().default(true),
+}, (table) => ({
+  priceIndex: index('product_addon_price').on(table.productPriceId),
+  uniqueName: uniqueIndex('product_addon_unique_name').on(table.productPriceId, table.name),
+}));
+
+// ── counterparties ─────────────────────────────────────
+// Who the faction sells to, and what deal each one has.
+//
+// This was asked for as a single "alliance mode" switch. One switch breaks the
+// day two allies have different deals, and that day always comes — so it is a
+// list with a discount each, and the switch is a dropdown.
+//
+// Deactivated rather than deleted: a buyer who disappears takes the reason for
+// an old price with them.
+export const counterparties = pgTable('counterparties', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  name:      varchar('name', { length: 80 }).notNull(),
+  /** Percent off every line. 0 is a real answer — a walk-in customer. */
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
+  note:      text('note'),
+  color:     varchar('color', { length: 7 }),
+  icon:      varchar('icon', { length: 16 }),
+  isActive:  boolean('is_active').notNull().default(true),
+
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('counterparty_faction').on(table.factionId),
+  uniqueName: uniqueIndex('counterparty_unique_name').on(table.factionId, table.name),
+}));
+
+// ── quantity_breaks ────────────────────────────────────
+// Buy more, pay less: five or more is 10% off.
+//
+// A null `itemTypeId` is the faction's default ladder, applying to everything
+// without one of its own. An item with its own ladder ignores the default
+// entirely rather than merging with it — merged ladders cannot be reasoned
+// about from the screen that shows them.
+export const quantityBreaks = pgTable('quantity_breaks', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  itemTypeId: uuid('item_type_id').references(() => itemTypes.id, { onDelete: 'cascade' }),
+  /** The quantity at which this rate starts applying. */
+  minQuantity: decimal('min_quantity', { precision: 15, scale: 2 }).notNull(),
+  discountPercent: decimal('discount_percent', { precision: 5, scale: 2 }).notNull(),
+}, (table) => ({
+  factionIndex: index('quantity_break_faction').on(table.factionId),
+  // Two indexes rather than one, because Postgres treats NULLs as distinct: a
+  // single unique index over the nullable column would happily accept two
+  // faction-wide rungs at the same quantity.
+  uniqueItemRung: uniqueIndex('quantity_break_unique_item')
+    .on(table.factionId, table.itemTypeId, table.minQuantity)
+    .where(sql`item_type_id IS NOT NULL`),
+  uniqueDefaultRung: uniqueIndex('quantity_break_unique_default')
+    .on(table.factionId, table.minQuantity)
+    .where(sql`item_type_id IS NULL`),
+}));
+
+export const productPricesRelations = relations(productPrices, ({ one, many }) => ({
+  faction:  one(factions,  { fields: [productPrices.factionId], references: [factions.id] }),
+  itemType: one(itemTypes, { fields: [productPrices.itemTypeId], references: [itemTypes.id] }),
+  currency: one(itemTypes, { fields: [productPrices.currencyItemTypeId], references: [itemTypes.id] }),
+  addons:   many(productAddons),
+}));
+
+export const productAddonsRelations = relations(productAddons, ({ one }) => ({
+  price:    one(productPrices, { fields: [productAddons.productPriceId], references: [productPrices.id] }),
+  itemType: one(itemTypes,     { fields: [productAddons.itemTypeId], references: [itemTypes.id] }),
+}));
+
+export const counterpartiesRelations = relations(counterparties, ({ one }) => ({
+  faction: one(factions, { fields: [counterparties.factionId], references: [factions.id] }),
+  creator: one(users,    { fields: [counterparties.createdBy], references: [users.id] }),
+}));
+
+export const quantityBreaksRelations = relations(quantityBreaks, ({ one }) => ({
+  faction:  one(factions,  { fields: [quantityBreaks.factionId], references: [factions.id] }),
+  itemType: one(itemTypes, { fields: [quantityBreaks.itemTypeId], references: [itemTypes.id] }),
+}));
+
+export type ProductPrice = typeof productPrices.$inferSelect;
+export type NewProductPrice = typeof productPrices.$inferInsert;
+export type ProductAddon = typeof productAddons.$inferSelect;
+export type NewProductAddon = typeof productAddons.$inferInsert;
+export type Counterparty = typeof counterparties.$inferSelect;
+export type NewCounterparty = typeof counterparties.$inferInsert;
+export type QuantityBreak = typeof quantityBreaks.$inferSelect;
+export type NewQuantityBreak = typeof quantityBreaks.$inferInsert;

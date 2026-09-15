@@ -162,6 +162,13 @@
       "when": 1789467785475,
       "tag": "0022_wakeful_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789471774720,
+      "tag": "0023_pricing",
+      "breakpoints": true
     }
   ]
 }

@@ -486,6 +486,8 @@ Prefix: `/factions/:id`.
 | `/laundering` | convert one currency into another |
 | `/crafting` | recipes, running them, history and revert — see §8.15 |
 | `/map`, `/map/layers` | the faction's maps and what is drawn on them — see §8.16 |
+| `/admin/backup` | the superadmin's database dump and restore — see §8.17 |
+| `/pricing` | the price list, and the calculator that reads it — see §8.18 |
 | `/item-types`, `/quotas`, `/settings` | faction configuration |
 | `/discord` | connect a Discord server and route activity to its channels, `manage_discord` — see §8.13 |
 | `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
@@ -560,6 +562,8 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Open the map screen | Yes | Yes | Yes | Yes |
 | See a map layer and its markers | Yes | Yes | rank at or above the layer's | unrestricted layers only |
 | Create a layer, draw, edit, delete | Yes | Yes | `manage_map`, and only on layers it can see | No |
+| Read the price list, build a quote | Yes | Yes | Yes | No |
+| Set prices, add-ons, partners, bulk rungs | Yes | Yes | `manage_prices` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
@@ -1437,6 +1441,137 @@ faction was using into one generated layer and moves its markers onto it — a
 marker restricted to level 2 lands on a layer restricted to level 2, leaving
 who-sees-what unchanged — and `0022` drops the old column.
 
+### 8.17 Database Backup
+
+One superadmin screen with two buttons: download a complete dump, and put one
+back.
+
+**Nothing is stored on the server.** No backup directory, no retention policy,
+no scheduler. That is the operator's decision, taken knowingly, and it has a
+price worth writing down: *a backup is exactly as fresh as the last time
+somebody clicked*. What it buys is that there is never a second copy of every
+player's Discord ID sitting in a directory on the same disk as the database —
+and that a copy which lives on the machine it protects was never a backup in
+the first place.
+
+**pg_dump cannot run through pgbouncer.** `DATABASE_URL` points at the pooler
+in transaction mode; a dump is one session holding one snapshot across
+thousands of statements, and transaction pooling hands that session to someone
+else between them. `BACKUP_DATABASE_URL` is the direct address, and the status
+endpoint reports when it is unset so the screen can say so before a click
+rather than after one. The backend image installs `postgresql16-client` —
+matched to the `postgres:16-alpine` service, because a client older than the
+server cannot read its dumps at all.
+
+The connection reaches the child process through `PGHOST` and friends, never
+through argv: a command line is readable by every process on the host.
+
+**The format is pg_dump's custom format** (`-Fc`) — compressed, restorable
+with `--clean` in a single transaction, and inspectable with `pg_restore -l`.
+Its first five bytes are `PGDMP`, which the restore endpoint checks before it
+does anything else.
+
+Four things guard the restore, in order, and each exists because of what the
+alternative would have cost:
+
+1. **A typed confirmation** (`confirm=RESTORE`), so no single click reaches it.
+2. **The upload lands on disk first**, not straight into pg_restore. The file
+   has to be checked before the first `DROP` runs, and a network drop halfway
+   through must not leave a half-restored database.
+3. **The magic bytes are checked.** A screenshot or a plain-SQL file would fail
+   in pg_restore too — but only after the restore was already under way.
+4. **A safety dump is taken** of what is about to be replaced, and the restore
+   is refused outright if that dump fails. Its path comes back in the response
+   and in the audit log. The operator asked to overwrite the database; they did
+   not ask to lose it if the file turns out to be the wrong one.
+
+`--single-transaction` carries the rest: every `DROP` and every `COPY` in one
+transaction, so a file that fails halfway leaves the database exactly as it
+was. It also implies `--exit-on-error`, which is what separates "it printed
+warnings" from "it did not work". `lock_timeout=60s` matters because `--clean`
+needs an exclusive lock on every table while the app is still serving
+requests — without it, a restore queued behind one long-running query waits
+forever with nothing visible from outside.
+
+Two smaller decisions:
+
+- **The download's response headers wait for pg_dump's first byte.** Setting
+  them up front is the obvious way and the wrong one: a missing binary or a
+  refused connection would arrive as a *downloaded file* containing an error
+  message, named `.dump`, indistinguishable from a real backup until the day
+  somebody tried to restore it. If pg_dump fails after bytes are already on
+  the wire, the connection is destroyed rather than ended — a truncated
+  download beats a truncated file that looks whole.
+- **The post-restore audit entry is best-effort.** The `users` table now holds
+  whatever the backup held, so the account that asked for the restore may no
+  longer exist and the audit row's foreign key would fail. That is not a failed
+  restore, and it must not be reported as one. The `restore_started` entry is
+  written *before*, so it is inside the safety copy.
+
+nginx needs its own `location` for this path: the defaults are a 1 MB body
+limit, a 60 second read timeout, and full response buffering, all three of
+which a whole-database transfer breaks.
+
+### 8.18 The Price Calculator
+
+What the faction sells, what it sells for, and what each buyer pays. Phase 1
+of the feature: it calculates, and it does not book anything.
+
+Four tables, all faction-scoped. **`product_prices`** is one row per item type
+— a list, not a history, because a second price for the same item is a
+question ("which one is current?") nobody at the counter can answer. It names
+the currency it is quoted in, and that currency is itself an `item_types` row:
+the treasury already knows what money the faction holds, and a second list of
+currencies would let the two drift apart. **`product_addons`** hangs off the
+price rather than the item type, so retiring a price takes its extras with it;
+modelling each combination as its own product turns one pistol into eight rows.
+**`counterparties`** is who you sell to and what discount each one has, and
+**`quantity_breaks`** is the buy-more-pay-less ladder.
+
+The request arrived as a single "alliance mode" switch. It became a list,
+because one switch breaks the day two allies have different deals — and that
+day always comes. The switch survives as a dropdown.
+
+**The arithmetic lives on the server and only on the server.** The screen sends
+a basket to `POST /pricing/quote` and renders what comes back; it never
+multiplies anything itself. Computing totals a second time in the browser is
+how the figure a seller reads out and the figure the books would record start
+to differ by a dollar, and a dollar is enough for a buyer to argue about.
+
+Inside `lib/pricing.ts` everything is integer hundredths in BigInt, and three
+decisions are worth knowing:
+
+- **Discounts add, they do not compound.** An ally at 15% buying a bulk lot at
+  10% pays 25% less, not 23.5%. Compounding is arguably more correct and is the
+  wrong answer here: the seller has to say the number out loud and have it
+  check out against the buyer's own arithmetic. The sum is capped at 100%,
+  because a quote that owes the buyer money is not a quote.
+- **Rounding happens exactly twice per line** — once turning price × quantity
+  into a gross, once turning a percentage into a discount amount — and the
+  line total is then `gross − discount` rather than a third rounded figure.
+  That is what makes the printed lines add up to the printed total. BigInt
+  division truncates, so `divideRounded` rounds halves away from zero; plain
+  truncation would quietly take a cent per line, every line, in the faction's
+  favour.
+- **An item with its own quantity ladder ignores the faction-wide one.**
+  Merging the two produces a price nobody can derive from the screen that
+  shows the ladders.
+
+Two refusals rather than guesses: a quote mixing currencies is refused (a
+made-up exchange rate is worse than an error the seller can act on), and an
+item with no active price is a 404 rather than a zero.
+
+**Reading is open to every member; writing needs `manage_prices`.** The people
+standing at the counter hold the fewest permissions, and a price list they
+cannot read is a price list they cannot sell from.
+
+Phase 2 adds `quotes`, `quote_lines` and `sale_movements` — the last a copy of
+`craft_movements` — so an accepted quote writes the money in as an entry and
+the goods out as completed payouts, revertible in one click and refusing to be
+dismantled row by row. Line snapshots belong to that phase and matter there:
+a quote sold last week must not change when somebody edits the price book
+today.
+
 ---
 
 ## 9. Frontend Architecture
@@ -1737,6 +1872,9 @@ volumes:
 | `JWT_EXPIRATION_DAYS` | No | 7 | Session token expiration |
 | `COOKIE_SECURE` | No | false | Set the `Secure` flag on the session cookie — enable on every HTTPS deployment |
 | `LOG_LEVEL` | No | info | Node.js log level (debug/info/warn/error) |
+| `BACKUP_DATABASE_URL` | No | *(empty)* | Direct, non-pooled PostgreSQL URL for `pg_dump`/`pg_restore`. Empty falls back to `DATABASE_URL`, which is wrong wherever that points at pgbouncer — see §8.17 |
+| `PG_BIN_DIR` | No | *(empty)* | Directory holding `pg_dump`/`pg_restore`, for machines where they are not on `PATH` |
+| `BACKUP_MAX_UPLOAD_MB` | No | 512 | Largest backup file the restore endpoint accepts. Keep nginx's `client_max_body_size` at or above it |
 | `DOMAIN` | No | localhost | Domain for the reverse proxy's TLS |
 | `NEXT_PUBLIC_API_URL` | No | *(empty)* | Cross-origin API base. Empty means same-origin, proxied |
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | No | en | Interface language for a visitor with no saved choice (`en`, `hu`) |
@@ -2029,6 +2167,32 @@ See §8.15 for the design and the two bugs it surfaced.
 
 See §8.16 for the design, the authorization hole it closed, and the
 calibration the operator has to do once.
+
+### Phase 12: Database Backup (Week 29) — COMPLETE
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Download a dump | Superadmin-only, streamed straight from `pg_dump`, stored nowhere on the server — **DONE** | High |
+| 2 | Restore from a dump | Typed confirmation, magic-byte check, single transaction — **DONE** | High |
+| 3 | Pre-restore safety copy | Taken automatically; the restore is refused if it fails — **DONE** | High |
+| 4 | Status | Whether the tools are installed, what they point at, when a backup was last taken — **DONE** | Medium |
+
+See §8.17 for the design and the four guards in front of the restore.
+
+### Phase 13: The Price Calculator (Week 30) — PHASE 1 COMPLETE
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | Price list | One price per item, in a currency the treasury already knows — **DONE** | High |
+| 2 | Add-ons | Extras ticked per line rather than eight variants of one pistol — **DONE** | High |
+| 3 | Partners | Named buyers, each with their own discount — **DONE** | High |
+| 4 | Bulk discounts | A quantity ladder, faction-wide or per item — **DONE** | Medium |
+| 5 | Copy for Discord | The quote as a block to paste to the buyer — **DONE** | Medium |
+| 6 | Book the sale | Accepted quote writes entries and payouts, revertible — *phase 2* | High |
+| 7 | Margins | Cost from the recipes, rank-gated — *phase 3* | Medium |
+| 8 | Exchange rates | Quoting the same basket clean or dirty — *phase 4* | Low |
+
+See §8.18 for the design and the three arithmetic decisions behind it.
 
 ---
 

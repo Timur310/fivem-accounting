@@ -181,6 +181,7 @@ sidebar shows exactly what your rank gives you:
 | `manage_crafting` | Writing and retiring recipes, and reverting a craft (§6.7) |
 | `craft` | Running a saved recipe (§6.7). Safe to hand out widely — it spends materials, it does not define what they cost |
 | `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
+| `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11). Reading the list and quoting from it needs nothing |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
@@ -758,6 +759,51 @@ The app's memory of who did what: actor, action, entity, timestamp, and
 before/after values for changes. Filterable and paginated. It is
 append-only — no editing, no deleting, for anyone. See §10.
 
+### 6.11 The price calculator (`manage_prices`)
+
+Somewhere to look up what something costs, so nobody has to do the maths in
+the middle of a deal. Every member can open it and build a quote; changing
+what things cost needs `manage_prices`.
+
+**Calculator.** Pick the buyer, add the items, read the total. If a product has
+extras — a suppressor, an extended magazine — they appear as buttons under the
+line; tick the ones being sold and the price follows. **Copy for Discord** puts
+the whole quote on your clipboard, itemised, ready to paste to the person
+you are talking to.
+
+**Price list.** One price per item, and the currency it is quoted in, so
+"$40,000 clean" and "$40,000 dirty" cannot be confused for each other. A price
+can carry a **floor** — the lowest it should ever go for. Discounts that fall
+under it are flagged in red, not blocked: the app tells you, and you decide.
+
+Retiring a price keeps it and hides it from the calculator. Deleting it takes
+its add-ons with it.
+
+**Bulk discounts** are rungs: "5 or more, 10% off". Set them for everything, or
+for one item. An item with its own rungs ignores the faction-wide ones
+completely — so a ladder on pistols replaces the general one rather than
+stacking with it.
+
+**Partners** are the crews you sell to on standing terms, each with their own
+discount. Pick one on the calculator and the discount applies to every line.
+Everyone else is a walk-in at full price.
+
+Two things worth knowing about the numbers:
+
+- **Discounts add up, they do not compound.** An ally at 15% buying in bulk at
+  10% off pays 25% less. Not 23.5% — you have to be able to say the number out
+  loud and have the buyer's own arithmetic agree with it.
+- **Everything in one quote has to be in the same currency.** Mixing them would
+  need an exchange rate, and the app will not invent one. Quote them
+  separately.
+
+Deactivating a partner is better than deleting them where the deal is only
+paused.
+
+**What it does not do yet:** nothing here touches the treasury. Selling is
+still entered by hand. Booking an accepted quote straight into the books —
+money in, goods out, revertible in one click — is the next step.
+
 ---
 
 ## 7. Reports, exports and printing
@@ -1046,6 +1092,43 @@ Each ticket shows who sent it, which faction they were in, and the full message
 A ticket the reporter withdrew shows as **Withdrawn** and needs nothing from
 you.
 
+### 9.6 Backup
+
+**Download** gives you one file holding the entire database: every faction,
+every entry, every withdrawal, every member, every strike. **Restore** takes
+such a file and puts it back.
+
+Nothing is kept on the server. That is on purpose — a copy that lives on the
+machine it is protecting is not a backup, and a folder of database dumps
+sitting beside the database is the thing an intruder would want most. It has a
+cost, and it is yours to carry: **the backup is exactly as fresh as the last
+time you clicked Download.** Somebody has to do it, and nobody will be
+reminded.
+
+So: download regularly, and put the file somewhere else. Another machine,
+another drive, a cloud folder — anywhere the server cannot reach.
+
+The panel at the top says whether backups can run at all. If it reports that
+the tools are missing, or that it is pointed at the connection pooler, the
+buttons will not work until whoever deploys the app fixes it — the message
+names what to change.
+
+**Restoring replaces everything.** Anything entered between the moment that
+file was made and now is gone, with no way back. Because of that:
+
+- You have to type `RESTORE` before the button will do anything.
+- The file is checked before a single row is touched. Anything that is not a
+  backup this page produced is refused outright.
+- The server takes a copy of the current database first, automatically, and
+  refuses to restore at all if that copy fails. Where it put it is in the
+  message you get at the end — write it down if the restore turns out to be
+  the wrong file.
+- Either the whole file goes in or none of it does. A restore that fails
+  halfway leaves the database exactly as it was.
+
+One thing to expect: after a restore, the accounts that exist are the accounts
+in the file. If yours is not one of them, you will be signed out.
+
 ---
 
 ## 10. The audit log — who did what
@@ -1094,6 +1177,9 @@ action, the entity, when it happened, and before/after values for changes.
   it never colors a number.
 - **Private notes stay private.** A member can see their own strikes; they
   can never see the notes written about them.
+- **Only a superadmin can copy the database.** The backup page is the one
+  place the whole server leaves in one piece, so it is the one page no faction
+  admin can reach, in their own faction or anywhere else.
 - **A hidden map mark is absent, not hidden.** Marks on a map your rank
   cannot open are never sent to your browser, so there is nothing to find
   by looking harder. The same rule blocks editing one: you can only change
