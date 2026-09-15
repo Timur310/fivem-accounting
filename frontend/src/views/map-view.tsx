@@ -343,7 +343,7 @@ export function MapView({ factionId, canManage }: Props) {
           {/* The readout is how somebody checks the calibration without
               guessing: hover a place they know and compare the numbers. */}
           {hover && (
-            <div className="pointer-events-none absolute bottom-2 left-2 z-[500] rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-zinc-300">
+            <div className="pointer-events-none absolute bottom-2 left-2 z-10 rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-zinc-300">
               {formatGamePoint(hover)}
             </div>
           )}

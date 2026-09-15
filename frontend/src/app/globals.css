@@ -459,6 +459,17 @@
   background: #0b1020;
   font-family: inherit;
   outline: none;
+
+  /* Leaflet stacks its panes at z-index 200-700 and its controls at 800-1000,
+     and sets no position or z-index on the container itself — so none of that
+     is contained. Those values land in the *root* stacking context and paint
+     over anything below 1000, which includes every dialog in this app at
+     z-50. The symptom is a dialog that opens, dims the page, and then cannot
+     be seen: it is behind the map.
+
+     `isolation` gives the container its own stacking context without touching
+     layout, so Leaflet's numbers only ever compete with each other. */
+  isolation: isolate;
 }
 
 .map-pin {
