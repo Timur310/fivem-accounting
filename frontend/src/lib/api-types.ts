@@ -924,7 +924,7 @@ export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
-  'manage_discord', 'manage_crafting', 'craft',
+  'manage_discord', 'manage_crafting', 'craft', 'manage_map',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -942,6 +942,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_discord: 'permission.manageDiscord',
   manage_crafting: 'permission.manageCrafting',
   craft: 'permission.craft',
+  manage_map: 'permission.manageMap',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1560,4 +1561,46 @@ export interface CraftInput {
   quantity: number;
   notes?: string;
   date?: string;
+}
+
+// ── Map ────────────────────────────────────────────────
+
+export const MAP_MARKER_KINDS = ['point', 'area', 'route'] as const;
+export type MapMarkerKind = (typeof MAP_MARKER_KINDS)[number];
+
+/** A coordinate in game space, as `/coords` prints it. */
+export interface GameCoordinate {
+  x: number;
+  y: number;
+  z?: number;
+}
+
+export interface MapMarker {
+  id: string;
+  kind: MapMarkerKind;
+  name: string;
+  description: string | null;
+  category: string | null;
+  color: string | null;
+  icon: string | null;
+  points: GameCoordinate[];
+  /**
+   * Lowest rank level allowed to see this, or null for everybody. Lower level
+   * means higher rank, so 2 is visible to levels 1 and 2.
+   */
+  minRankLevel: number | null;
+  createdBy: string;
+  createdAt: string;
+  creatorName: string;
+}
+
+export interface MapMarkerInput {
+  kind: MapMarkerKind;
+  name: string;
+  description?: string;
+  category?: string;
+  color?: string;
+  icon?: string;
+  points: GameCoordinate[];
+  minRankLevel?: number | null;
 }

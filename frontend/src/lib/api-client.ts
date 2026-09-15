@@ -86,6 +86,8 @@ import type {
   RecipeInput,
   CraftInput,
   SavedReminder,
+  MapMarker,
+  MapMarkerInput,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -617,6 +619,28 @@ export const craftingApi = {
     api
       .post<ApiSuccessResponse<unknown>>(`/factions/${factionId}/crafting/crafts/${craftId}/revert`)
       .then(unwrap),
+};
+
+// ── Map ──
+
+export const mapApi = {
+  list: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ markers: MapMarker[] }>>(`/factions/${factionId}/map`)
+      .then(unwrap),
+
+  create: (factionId: string, input: MapMarkerInput) =>
+    api
+      .post<ApiSuccessResponse<MapMarker>>(`/factions/${factionId}/map`, input)
+      .then(unwrap),
+
+  update: (factionId: string, id: string, input: Partial<MapMarkerInput>) =>
+    api
+      .patch<ApiSuccessResponse<MapMarker>>(`/factions/${factionId}/map/${id}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/map/${id}`),
 };
 
 // ── Charts ──

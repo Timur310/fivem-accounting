@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Leaflet's own stylesheet: pane layout, zoom control, tile positioning. */
+@import "leaflet/dist/leaflet.css";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -447,3 +449,52 @@
 @media (prefers-reduced-motion: reduce) {
   .stamp { transform: none; }
 }
+
+/* ── Map ──────────────────────────────────────────────
+   Leaflet ships its own stylesheet and expects its marker images at a path
+   relative to the CSS file, which a bundler rewrites and then cannot find.
+   Points are drawn as a divIcon styled here instead, so there is no image to
+   lose and the pin can take the faction's accent. */
+.leaflet-container {
+  background: #0b1020;
+  font-family: inherit;
+  outline: none;
+}
+
+.map-pin {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 9999px;
+  background: var(--pin, #6366f1);
+  border: 2px solid rgb(0 0 0 / 0.45);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+  cursor: pointer;
+}
+
+/* Selected sits above its neighbours and grows, so a pin in a cluster of pins
+   is still findable once you click its row in the list. */
+.map-pin-on {
+  transform: scale(1.25);
+  border-color: #fff;
+  z-index: 500;
+}
+
+.leaflet-tooltip {
+  background: #101114;
+  border: 1px solid var(--line-2);
+  color: #f4f4f5;
+  font-size: 11px;
+  box-shadow: none;
+}
+.leaflet-tooltip-top::before { border-top-color: var(--line-2); }
+
+.leaflet-control-zoom a {
+  background: #101114;
+  color: #d4d4d8;
+  border-color: var(--line-2);
+}
+.leaflet-control-zoom a:hover { background: #1a1b1f; }

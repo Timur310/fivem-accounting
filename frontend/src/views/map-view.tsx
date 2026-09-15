@@ -1,0 +1,576 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type * as L from 'leaflet';
+import { mapApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { ErrorState } from '@/components/ui/empty-state';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { MapPin, Route, Hexagon, Trash2, Pencil, Lock, X, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from '@/providers/i18n-provider';
+import { cn } from '@/lib/utils';
+import {
+  MAP_TILE_URL, MAP_MAX_ZOOM, MAP_TILE_SIZE, MAP_IMAGE_SIZE,
+  gameToPixel, pixelToGame, formatGamePoint, parseGamePoint, type GamePoint,
+} from '@/lib/gta-map';
+import type { MapMarker, MapMarkerKind, MapMarkerInput } from '@/lib/api-types';
+
+interface Props {
+  factionId: string;
+  canManage: boolean;
+}
+
+/** What the map is waiting for the next click to mean. */
+type DrawMode = null | MapMarkerKind;
+
+/**
+ * The faction's map.
+ *
+ * Markers are stored in game coordinates and drawn through one transform in
+ * `lib/gta-map.ts`. Leaflet is used with `CRS.Simple`, which is the flat
+ * pixel-space projection — the GTA world is not a globe and running it through
+ * a spherical Mercator would bend every straight road.
+ *
+ * Leaflet is mounted imperatively in an effect rather than through a React
+ * wrapper. It owns its own DOM and its own event loop, and letting React
+ * re-render into it is how you get duplicated layers and leaked handlers.
+ */
+export function MapView({ factionId, canManage }: Props) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+  const leafletRef = useRef<typeof L | null>(null);
+
+  const [ready, setReady] = useState(false);
+  const [hover, setHover] = useState<GamePoint | null>(null);
+  const [drawMode, setDrawMode] = useState<DrawMode>(null);
+  const [drawn, setDrawn] = useState<GamePoint[]>([]);
+  const [editing, setEditing] = useState<MapMarker | null>(null);
+  const [pending, setPending] = useState<MapMarkerInput | null>(null);
+  const [deleting, setDeleting] = useState<MapMarker | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const markersQuery = useQuery({
+    queryKey: ['map-markers', factionId],
+    queryFn: () => mapApi.list(factionId),
+  });
+
+  const settingsQuery = useQuery({
+    queryKey: ['faction-settings', factionId],
+    queryFn: () => factionSettingsApi.get(factionId),
+    enabled: canManage,
+  });
+
+  const markers = useMemo(() => markersQuery.data?.markers ?? [], [markersQuery.data]);
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['map-markers', factionId] });
+
+  const save = useMutation({
+    mutationFn: (input: MapMarkerInput) =>
+      editing ? mapApi.update(factionId, editing.id, input) : mapApi.create(factionId, input),
+    onSuccess: () => {
+      setPending(null);
+      setEditing(null);
+      setDrawn([]);
+      setDrawMode(null);
+      invalidate();
+      toast({ title: t('map.saved') });
+    },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => mapApi.remove(factionId, id),
+    onSuccess: () => {
+      setDeleting(null);
+      invalidate();
+    },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  // ── mount the map once ──────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    // Imported here rather than at module scope: Leaflet touches `window` as
+    // it loads, and this app prerenders its shell on the server.
+    void import('leaflet').then((mod) => {
+      if (cancelled || !containerRef.current || mapRef.current) return;
+      const leaflet = mod.default ?? mod;
+      leafletRef.current = leaflet as unknown as typeof L;
+
+      const map = leaflet.map(containerRef.current, {
+        crs: leaflet.CRS.Simple,
+        minZoom: 0,
+        maxZoom: MAP_MAX_ZOOM,
+        zoomControl: true,
+        attributionControl: false,
+      });
+
+      // The image is square and CRS.Simple counts in pixels at zoom 0, so the
+      // corners are the native size scaled down by the zoom range.
+      const size = MAP_IMAGE_SIZE / 2 ** MAP_MAX_ZOOM;
+      const bounds = leaflet.latLngBounds(
+        leaflet.latLng(-size, 0),
+        leaflet.latLng(0, size),
+      );
+
+      leaflet.tileLayer(MAP_TILE_URL, {
+        tileSize: MAP_TILE_SIZE,
+        minZoom: 0,
+        maxZoom: MAP_MAX_ZOOM,
+        noWrap: true,
+        bounds,
+      }).addTo(map);
+
+      map.setMaxBounds(bounds.pad(0.2));
+      map.fitBounds(bounds);
+
+      layerRef.current = leaflet.layerGroup().addTo(map);
+      mapRef.current = map;
+      setReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      layerRef.current = null;
+    };
+  }, []);
+
+  /** Leaflet's own units for a game coordinate, and back. */
+  const toLatLng = (point: GamePoint): L.LatLng | null => {
+    const map = mapRef.current;
+    if (!map) return null;
+    const [px, py] = gameToPixel(point);
+    return map.unproject([px, py], MAP_MAX_ZOOM);
+  };
+
+  const fromLatLng = (latlng: L.LatLng): GamePoint => {
+    const map = mapRef.current!;
+    const pixel = map.project(latlng, MAP_MAX_ZOOM);
+    return pixelToGame(pixel.x, pixel.y);
+  };
+
+  // ── the coordinate readout, and clicks while drawing ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    const onMove = (e: L.LeafletMouseEvent) => setHover(fromLatLng(e.latlng));
+    const onClick = (e: L.LeafletMouseEvent) => {
+      if (!drawMode) return;
+      const point = fromLatLng(e.latlng);
+      setDrawn((previous) => (drawMode === 'point' ? [point] : [...previous, point]));
+    };
+
+    map.on('mousemove', onMove);
+    map.on('click', onClick);
+    return () => {
+      map.off('mousemove', onMove);
+      map.off('click', onClick);
+    };
+  }, [ready, drawMode]);
+
+  // ── redraw whenever the data or the draft changes ───
+  useEffect(() => {
+    const leaflet = leafletRef.current;
+    const layer = layerRef.current;
+    if (!leaflet || !layer || !ready) return;
+
+    layer.clearLayers();
+
+    const accent = (marker: MapMarker) => marker.color || 'var(--brand-color, #6366f1)';
+
+    for (const marker of markers) {
+      const coords = marker.points
+        .map(toLatLng)
+        .filter((c): c is L.LatLng => c !== null);
+      if (coords.length === 0) continue;
+
+      const isSelected = selected === marker.id;
+      const style = {
+        color: accent(marker),
+        weight: isSelected ? 4 : 2,
+        opacity: isSelected ? 1 : 0.85,
+        fillOpacity: isSelected ? 0.35 : 0.2,
+      };
+
+      let shape: L.Layer;
+      if (marker.kind === 'point') {
+        shape = leaflet.marker(coords[0]!, {
+          icon: leaflet.divIcon({
+            className: '',
+            html: `<div style="--pin:${accent(marker)}" class="map-pin${isSelected ? ' map-pin-on' : ''}">${marker.icon ?? ''}</div>`,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+          }),
+        });
+      } else if (marker.kind === 'route') {
+        shape = leaflet.polyline(coords, style);
+      } else {
+        shape = leaflet.polygon(coords, style);
+      }
+
+      shape.on('click', () => setSelected(marker.id));
+      shape.bindTooltip(marker.name, { direction: 'top' });
+      shape.addTo(layer);
+    }
+
+    // The shape being drawn right now, so it is visible as it is built.
+    if (drawn.length > 0) {
+      const coords = drawn.map(toLatLng).filter((c): c is L.LatLng => c !== null);
+      const draftStyle = { color: '#f59e0b', weight: 2, dashArray: '4 4', fillOpacity: 0.15 };
+      for (const c of coords) {
+        leaflet.circleMarker(c, { radius: 4, color: '#f59e0b', fillOpacity: 1 }).addTo(layer);
+      }
+      if (drawMode === 'route' && coords.length > 1) {
+        leaflet.polyline(coords, draftStyle).addTo(layer);
+      }
+      if (drawMode === 'area' && coords.length > 2) {
+        leaflet.polygon(coords, draftStyle).addTo(layer);
+      }
+    }
+  }, [markers, drawn, drawMode, selected, ready]);
+
+  const startDraw = (kind: MapMarkerKind) => {
+    setDrawMode(kind);
+    setDrawn([]);
+    setSelected(null);
+  };
+
+  const enoughDrawn =
+    drawMode === 'point' ? drawn.length === 1
+      : drawMode === 'route' ? drawn.length >= 2
+        : drawn.length >= 3;
+
+  const openEditorForDrawn = () => {
+    if (!drawMode || !enoughDrawn) return;
+    setEditing(null);
+    setPending({ kind: drawMode, name: '', points: drawn });
+  };
+
+  const ranks = useMemo(
+    () => [...(settingsQuery.data?.ranks ?? [])].sort((a, b) => a.level - b.level),
+    [settingsQuery.data],
+  );
+
+  const focus = (marker: MapMarker) => {
+    const map = mapRef.current;
+    const first = marker.points[0] && toLatLng(marker.points[0]);
+    if (!map || !first) return;
+    setSelected(marker.id);
+    map.setView(first, Math.max(map.getZoom(), 3));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-medium tracking-tight text-zinc-100">{t('map.title')}</h1>
+          <p className="text-meta text-zinc-500 mt-1 max-w-xl">{t('map.subtitle')}</p>
+        </div>
+        {canManage && (
+          <div className="flex flex-wrap gap-2">
+            {(['point', 'route', 'area'] as const).map((kind) => (
+              <Button
+                key={kind}
+                size="sm"
+                variant={drawMode === kind ? 'default' : 'outline'}
+                onClick={() => (drawMode === kind ? setDrawMode(null) : startDraw(kind))}
+              >
+                {kind === 'point' && <MapPin className="h-4 w-4" />}
+                {kind === 'route' && <Route className="h-4 w-4" />}
+                {kind === 'area' && <Hexagon className="h-4 w-4" />}
+                {t(`map.kind.${kind}` as never)}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {drawMode && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/[0.04] px-3 py-2">
+          <span className="text-xs text-amber-300">
+            {t(`map.drawHint.${drawMode}` as never)}
+            {drawn.length > 0 && ` · ${t('map.pointsPlaced', { count: drawn.length })}`}
+          </span>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => { setDrawMode(null); setDrawn([]); }}>
+              <X className="h-3.5 w-3.5" />
+              {t('common.cancel')}
+            </Button>
+            <Button size="sm" disabled={!enoughDrawn} onClick={openEditorForDrawn}>
+              <Check className="h-3.5 w-3.5" />
+              {t('map.finish')}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {markersQuery.isError && (
+        <ErrorState error={markersQuery.error} onRetry={() => void markersQuery.refetch()} />
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="relative">
+          <div
+            ref={containerRef}
+            className="h-[calc(100vh-18rem)] min-h-[420px] w-full rounded-lg border border-[var(--line-2)] bg-[#0b1020]"
+          />
+          {!ready && <Skeleton className="absolute inset-0 rounded-lg" />}
+
+          {/* The readout is how somebody checks the calibration without
+              guessing: hover a place they know and compare the numbers. */}
+          {hover && (
+            <div className="pointer-events-none absolute bottom-2 left-2 z-[500] rounded bg-black/70 px-2 py-1 font-mono text-[11px] text-zinc-300">
+              {formatGamePoint(hover)}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2 lg:max-h-[calc(100vh-18rem)] lg:overflow-y-auto">
+          {canManage && <PasteCoordinates onPlace={(p) => { setDrawMode('point'); setDrawn([p]); }} />}
+
+          {markersQuery.isLoading
+            ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)
+            : markers.length === 0
+              ? <p className="text-meta text-zinc-500 px-1">{t('map.none')}</p>
+              : markers.map((marker) => (
+                <button
+                  key={marker.id}
+                  onClick={() => focus(marker)}
+                  className={cn(
+                    'w-full rounded-md border p-2 text-left transition-colors',
+                    selected === marker.id
+                      ? 'border-[var(--brand-color,#6366f1)] bg-[var(--fill-3)]'
+                      : 'border-[var(--line-2)] bg-[var(--fill-2)] hover:border-[var(--line-3)]',
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-100 truncate">
+                      {marker.icon ? `${marker.icon} ` : ''}{marker.name}
+                    </span>
+                    {marker.minRankLevel !== null && (
+                      <Lock className="h-3 w-3 shrink-0 text-amber-400" aria-label={t('map.restricted')} />
+                    )}
+                    {canManage && (
+                      <span className="ml-auto flex shrink-0 gap-1">
+                        <Pencil
+                          className="h-3.5 w-3.5 text-zinc-500 hover:text-zinc-200"
+                          onClick={(e) => { e.stopPropagation(); setEditing(marker); setPending(toInput(marker)); }}
+                        />
+                        <Trash2
+                          className="h-3.5 w-3.5 text-zinc-500 hover:text-red-400"
+                          onClick={(e) => { e.stopPropagation(); setDeleting(marker); }}
+                        />
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-micro text-zinc-500 mt-0.5">
+                    {t(`map.kind.${marker.kind}` as never)}
+                    {marker.category ? ` · ${marker.category}` : ''}
+                    {marker.points[0] ? ` · ${formatGamePoint(marker.points[0])}` : ''}
+                  </p>
+                </button>
+              ))}
+        </div>
+      </div>
+
+      {pending && (
+        <MarkerEditor
+          value={pending}
+          isEdit={!!editing}
+          ranks={ranks}
+          saving={save.isPending}
+          onCancel={() => { setPending(null); setEditing(null); }}
+          onSave={(input) => save.mutate(input)}
+        />
+      )}
+
+      <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('map.deleteConfirm', { name: deleting?.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>{t('map.deleteBody')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleting && remove.mutate(deleting.id)}>
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function toInput(marker: MapMarker): MapMarkerInput {
+  return {
+    kind: marker.kind,
+    name: marker.name,
+    description: marker.description ?? '',
+    category: marker.category ?? '',
+    color: marker.color ?? undefined,
+    icon: marker.icon ?? '',
+    points: marker.points,
+    minRankLevel: marker.minRankLevel,
+  };
+}
+
+/**
+ * Paste what the game printed.
+ *
+ * The reason this beats a screenshot in Discord: a player runs `/coords`,
+ * copies the line, and the pin lands exactly where they stood — including the
+ * floor, which clicking a flat map can never express.
+ */
+function PasteCoordinates({ onPlace }: { onPlace: (point: GamePoint) => void }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState('');
+  const parsed = parseGamePoint(text);
+
+  return (
+    <div className="space-y-1 rounded-md border border-[var(--line-2)] bg-[var(--fill-2)] p-2">
+      <Label htmlFor="paste-coords" className="text-micro text-zinc-400">
+        {t('map.pasteLabel')}
+      </Label>
+      <div className="flex gap-2">
+        <Input
+          id="paste-coords"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="-1037.2, -2737.5, 20.1"
+          className="font-mono text-xs"
+        />
+        <Button
+          size="sm"
+          disabled={!parsed}
+          onClick={() => { if (parsed) { onPlace(parsed); setText(''); } }}
+        >
+          {t('map.place')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Name it, describe it, and decide who may see it. */
+function MarkerEditor({
+  value, isEdit, ranks, saving, onCancel, onSave,
+}: {
+  value: MapMarkerInput;
+  isEdit: boolean;
+  ranks: { name: string; level: number }[];
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (input: MapMarkerInput) => void;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<MapMarkerInput>(value);
+  const patch = (next: Partial<MapMarkerInput>) => setDraft((d) => ({ ...d, ...next }));
+
+  const rankOptions = [
+    { value: '', label: t('map.visibleToEveryone') },
+    ...ranks.map((r) => ({
+      value: String(r.level),
+      label: t('map.visibleToRank', { rank: r.name }),
+    })),
+  ];
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? t('map.editMarker') : t('map.newMarker')}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="marker-name">{t('map.name')}</Label>
+            <Input
+              id="marker-name"
+              value={draft.name}
+              onChange={(e) => patch({ name: e.target.value })}
+              placeholder={t('map.namePlaceholder')}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="marker-description">{t('map.description')}</Label>
+            <Textarea
+              id="marker-description"
+              rows={2}
+              value={draft.description ?? ''}
+              onChange={(e) => patch({ description: e.target.value })}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="marker-category">{t('map.category')}</Label>
+              <Input
+                id="marker-category"
+                value={draft.category ?? ''}
+                onChange={(e) => patch({ category: e.target.value })}
+                placeholder={t('map.categoryPlaceholder')}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="marker-icon">{t('map.icon')}</Label>
+              <Input
+                id="marker-icon"
+                value={draft.icon ?? ''}
+                onChange={(e) => patch({ icon: e.target.value })}
+                placeholder="📦"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>{t('map.visibility')}</Label>
+            <SearchableSelect
+              options={rankOptions}
+              value={draft.minRankLevel === null || draft.minRankLevel === undefined ? '' : String(draft.minRankLevel)}
+              onValueChange={(v: string) => patch({ minRankLevel: v === '' ? null : Number(v) })}
+            />
+            <p className="text-micro text-zinc-500">{t('map.visibilityHint')}</p>
+          </div>
+
+          <p className="text-micro text-zinc-500">
+            {t('map.coordCount', { count: draft.points.length })} ·{' '}
+            <span className="font-mono">{draft.points[0] ? formatGamePoint(draft.points[0]) : ''}</span>
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>{t('common.cancel')}</Button>
+          <Button disabled={!draft.name.trim() || saving} onClick={() => onSave(draft)}>
+            {t('common.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
