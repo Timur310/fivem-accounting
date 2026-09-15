@@ -21,10 +21,44 @@
  * is wrong.
  */
 
-/** Where the pyramid is served from. Tiles live in `public/map-tiles`. */
-export const MAP_TILE_URL = '/map-tiles/{z}/{x}/{y}.png';
+/**
+ * The map styles on offer, first one the default.
+ *
+ * Add an entry per pyramid. `npm run map:tiles -- image.png --theme satellite`
+ * writes the tiles and prints the block to paste here.
+ *
+ * Every theme must cover the same WORLD rectangle: the transform is shared, so
+ * a style sliced from a differently-framed image would put the same marker in
+ * two different places depending on which style you were looking at.
+ */
+export interface MapTheme {
+  /** Stable — it is what gets remembered in the browser. */
+  id: string;
+  /** Shown in the switcher. Not translated: these are style names. */
+  label: string;
+  url: string;
+  /**
+   * Deepest zoom this pyramid actually has tiles for. Leaflet upscales beyond
+   * it rather than requesting tiles that are not there, so a coarser style can
+   * sit next to a finer one without the map going blank at high zoom.
+   */
+  maxNativeZoom: number;
+}
 
-/** Highest zoom the pyramid provides. 2^5 × 256 = 8192px at native size. */
+export const MAP_THEMES: MapTheme[] = [
+  { id: 'atlas', label: 'Atlas', url: '/map-tiles/{z}/{x}/{y}.png', maxNativeZoom: 5 },
+];
+
+/** Where the browser remembers the reader's choice. Per viewer, not per faction. */
+export const MAP_THEME_STORAGE_KEY = 'faction-accountant:map-theme';
+
+/**
+ * How far the map can be zoomed, whatever the styles provide.
+ *
+ * Separate from a theme's `maxNativeZoom` on purpose: this is the projection's
+ * ceiling and changing it moves every coordinate, so it must not depend on
+ * which style happens to be showing.
+ */
 export const MAP_MAX_ZOOM = 5;
 export const MAP_TILE_SIZE = 256;
 export const MAP_IMAGE_SIZE = MAP_TILE_SIZE * 2 ** MAP_MAX_ZOOM;

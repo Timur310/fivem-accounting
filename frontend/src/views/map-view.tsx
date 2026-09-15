@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { cn } from '@/lib/utils';
 import {
-  MAP_TILE_URL, MAP_MAX_ZOOM, MAP_TILE_SIZE, MAP_IMAGE_SIZE,
+  MAP_THEMES, MAP_THEME_STORAGE_KEY, MAP_MAX_ZOOM, MAP_TILE_SIZE, MAP_IMAGE_SIZE,
   gameToPixel, pixelToGame, formatGamePoint, parseGamePoint, type GamePoint,
 } from '@/lib/gta-map';
 import type { MapMarker, MapMarkerKind, MapMarkerInput } from '@/lib/api-types';
@@ -56,10 +56,16 @@ export function MapView({ factionId, canManage }: Props) {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const boundsRef = useRef<L.LatLngBounds | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const leafletRef = useRef<typeof L | null>(null);
+  const tileRef = useRef<L.TileLayer | null>(null);
 
   const [ready, setReady] = useState(false);
+  // Read once, lazily, so the server render and the first client render agree
+  // — reading localStorage during render is a hydration mismatch waiting to
+  // happen. An unknown or missing id falls back to the first theme.
+  const [themeId, setThemeId] = useState(MAP_THEMES[0]!.id);
   const [hover, setHover] = useState<GamePoint | null>(null);
   const [drawMode, setDrawMode] = useState<DrawMode>(null);
   const [drawn, setDrawn] = useState<GamePoint[]>([]);
@@ -67,6 +73,16 @@ export function MapView({ factionId, canManage }: Props) {
   const [pending, setPending] = useState<MapMarkerInput | null>(null);
   const [deleting, setDeleting] = useState<MapMarker | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(MAP_THEME_STORAGE_KEY);
+      if (stored && MAP_THEMES.some((theme) => theme.id === stored)) setThemeId(stored);
+    } catch {
+      // Private windows and blocked site data. The default theme is a fine
+      // answer; nothing here is worth failing over.
+    }
+  }, []);
 
   const markersQuery = useQuery({
     queryKey: ['map-markers', factionId],
@@ -134,10 +150,12 @@ export function MapView({ factionId, canManage }: Props) {
         leaflet.latLng(0, size),
       );
 
-      leaflet.tileLayer(MAP_TILE_URL, {
+      boundsRef.current = bounds;
+      tileRef.current = leaflet.tileLayer(MAP_THEMES[0]!.url, {
         tileSize: MAP_TILE_SIZE,
         minZoom: 0,
         maxZoom: MAP_MAX_ZOOM,
+        maxNativeZoom: MAP_THEMES[0]!.maxNativeZoom,
         noWrap: true,
         bounds,
       }).addTo(map);
@@ -155,8 +173,37 @@ export function MapView({ factionId, canManage }: Props) {
       mapRef.current?.remove();
       mapRef.current = null;
       layerRef.current = null;
+      tileRef.current = null;
     };
   }, []);
+
+  // ── swap the tile layer when the style changes ──────
+  //
+  // The old layer is removed and a new one added rather than the URL being
+  // rewritten in place: setUrl keeps the old tiles on screen until each
+  // replacement loads, which on a slow connection is two styles blended
+  // together for several seconds.
+  useEffect(() => {
+    const leaflet = leafletRef.current;
+    const map = mapRef.current;
+    const bounds = boundsRef.current;
+    if (!leaflet || !map || !bounds || !ready) return;
+
+    const theme = MAP_THEMES.find((entry) => entry.id === themeId) ?? MAP_THEMES[0]!;
+    if (tileRef.current) map.removeLayer(tileRef.current);
+
+    tileRef.current = leaflet.tileLayer(theme.url, {
+      tileSize: MAP_TILE_SIZE,
+      minZoom: 0,
+      maxZoom: MAP_MAX_ZOOM,
+      maxNativeZoom: theme.maxNativeZoom,
+      noWrap: true,
+      bounds,
+    });
+    // Behind the markers, which live in their own layer group added later.
+    tileRef.current.addTo(map);
+    tileRef.current.bringToBack();
+  }, [themeId, ready]);
 
   /** Leaflet's own units for a game coordinate, and back. */
   const toLatLng = (point: GamePoint): L.LatLng | null => {
@@ -365,6 +412,34 @@ export function MapView({ factionId, canManage }: Props) {
             className="h-[calc(100vh-18rem)] min-h-[420px] w-full rounded-lg border border-[var(--line-2)] bg-[#0b1020]"
           />
           {!ready && <Skeleton className="absolute inset-0 rounded-lg" />}
+
+          {MAP_THEMES.length > 1 && (
+            <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md border border-[var(--line-2)] bg-black/70 p-1">
+              {MAP_THEMES.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => {
+                    setThemeId(theme.id);
+                    try {
+                      window.localStorage.setItem(MAP_THEME_STORAGE_KEY, theme.id);
+                    } catch {
+                      // Not remembering the choice is a smaller problem than
+                      // refusing to make it.
+                    }
+                  }}
+                  className={cn(
+                    'rounded px-2 py-1 text-[11px] font-medium transition-colors',
+                    themeId === theme.id
+                      ? 'bg-[var(--brand-color,#6366f1)] text-white'
+                      : 'text-zinc-300 hover:bg-white/10',
+                  )}
+                >
+                  {theme.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* The readout is how somebody checks the calibration without
               guessing: hover a place they know and compare the numbers. */}

@@ -34,6 +34,30 @@ written down nowhere.
 `gdal2tiles.py --profile=raster --xyz -z 0-5` does the same job if you already
 have GDAL, with that padding caveat.
 
+## Several styles
+
+A second pyramid goes in its own folder:
+
+```bash
+npm run map:tiles -- ../satellite.png --theme satellite
+```
+
+That writes `map-tiles/satellite/{z}/{x}/{y}.png` and prints the block to paste
+into `MAP_THEMES` in `src/lib/gta-map.ts`. Two or more entries and a switcher
+appears in the top-right of the map; the choice is remembered per browser.
+
+The first entry stays at the flat `map-tiles/{z}/{x}/{y}` path, so the pyramid
+you already made keeps working untouched.
+
+**Every style must be sliced from an image framed the same way.** The
+coordinate transform is shared, so a style cut from a differently-cropped
+source would put the same marker in two different places depending on which
+style was showing.
+
+A style can be coarser than the others — set its `maxNativeZoom` to whatever
+it actually has. Leaflet upscales past that instead of asking for tiles that
+do not exist, so the map does not go blank at high zoom.
+
 ## If markers land in the wrong place
 
 `WORLD` in `src/lib/gta-map.ts` says which slice of the game world the image
