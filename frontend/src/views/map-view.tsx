@@ -19,7 +19,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MapPin, Route, Hexagon, Trash2, Pencil, Lock, X, Check } from 'lucide-react';
+import {
+  MapPin, Route, Hexagon, Trash2, Pencil, Lock, X, Check, Plus, Layers, Eye, EyeOff,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { cn } from '@/lib/utils';
@@ -27,7 +29,9 @@ import {
   MAP_THEMES, MAP_THEME_STORAGE_KEY, MAP_MAX_ZOOM, MAP_TILE_SIZE, MAP_IMAGE_SIZE,
   gameToPixel, pixelToGame, formatGamePoint, parseGamePoint, type GamePoint,
 } from '@/lib/gta-map';
-import type { MapMarker, MapMarkerKind, MapMarkerInput } from '@/lib/api-types';
+import type {
+  MapMarker, MapMarkerKind, MapMarkerInput, MapLayer, MapLayerInput,
+} from '@/lib/api-types';
 
 interface Props {
   factionId: string;
@@ -73,6 +77,12 @@ export function MapView({ factionId, canManage }: Props) {
   const [pending, setPending] = useState<MapMarkerInput | null>(null);
   const [deleting, setDeleting] = useState<MapMarker | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [editingLayer, setEditingLayer] = useState<MapLayer | 'new' | null>(null);
+  const [deletingLayer, setDeletingLayer] = useState<MapLayer | null>(null);
+  /** Which maps are currently drawn. Absent means shown — everything starts on. */
+  const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
+  /** Where the next marker goes. */
+  const [targetLayerId, setTargetLayerId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -83,6 +93,11 @@ export function MapView({ factionId, canManage }: Props) {
       // answer; nothing here is worth failing over.
     }
   }, []);
+
+  const layersQuery = useQuery({
+    queryKey: ['map-layers', factionId],
+    queryFn: () => mapApi.layers(factionId),
+  });
 
   const markersQuery = useQuery({
     queryKey: ['map-markers', factionId],
@@ -95,10 +110,35 @@ export function MapView({ factionId, canManage }: Props) {
     enabled: canManage,
   });
 
-  const markers = useMemo(() => markersQuery.data?.markers ?? [], [markersQuery.data]);
+  const layers = useMemo(() => layersQuery.data?.layers ?? [], [layersQuery.data]);
+  const allMarkers = useMemo(() => markersQuery.data?.markers ?? [], [markersQuery.data]);
+  // Hidden layers are a view setting, not a permission: the server already
+  // withheld anything this viewer may not open.
+  const markers = useMemo(
+    () => allMarkers.filter((m) => !hiddenLayers.has(m.layerId)),
+    [allMarkers, hiddenLayers],
+  );
+  const layerById = useMemo(
+    () => new Map(layers.map((l) => [l.id, l])),
+    [layers],
+  );
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ['map-markers', factionId] });
+  // The first map is the default target, and the target follows the list if
+  // the one being drawn on is deleted.
+  useEffect(() => {
+    if (layers.length === 0) {
+      setTargetLayerId(null);
+      return;
+    }
+    if (!targetLayerId || !layers.some((l) => l.id === targetLayerId)) {
+      setTargetLayerId(layers[0]!.id);
+    }
+  }, [layers, targetLayerId]);
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['map-markers', factionId] });
+    void queryClient.invalidateQueries({ queryKey: ['map-layers', factionId] });
+  };
 
   const save = useMutation({
     mutationFn: (input: MapMarkerInput) =>
@@ -110,6 +150,27 @@ export function MapView({ factionId, canManage }: Props) {
       setDrawMode(null);
       invalidate();
       toast({ title: t('map.saved') });
+    },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  const saveLayer = useMutation({
+    mutationFn: (input: MapLayerInput) =>
+      editingLayer && editingLayer !== 'new'
+        ? mapApi.updateLayer(factionId, editingLayer.id, input)
+        : mapApi.createLayer(factionId, input),
+    onSuccess: () => {
+      setEditingLayer(null);
+      invalidate();
+    },
+    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  const removeLayer = useMutation({
+    mutationFn: (id: string) => mapApi.removeLayer(factionId, id),
+    onSuccess: () => {
+      setDeletingLayer(null);
+      invalidate();
     },
     onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
   });
@@ -252,7 +313,17 @@ export function MapView({ factionId, canManage }: Props) {
     // against the element's inherited value. Checked, because the opposite is
     // widely repeated and would have meant every uncoloured line drawing with
     // no stroke at all.
-    const accent = (marker: MapMarker) => marker.color || 'var(--brand-color, #6366f1)';
+    // Marker colour first, then the layer's, then the faction accent — so a
+    // whole map can be recoloured in one place and an individual pin can still
+    // stand out inside it.
+    //
+    // `var()` is fine here: Leaflet writes this into the SVG `stroke`
+    // presentation attribute, and browsers resolve custom properties in those
+    // against the element's inherited value. Checked, because the opposite is
+    // widely repeated and would have meant every uncoloured line drawing with
+    // no stroke at all.
+    const accent = (marker: MapMarker) =>
+      marker.color || layerById.get(marker.layerId)?.color || 'var(--brand-color, #6366f1)';
 
     for (const marker of markers) {
       const coords = marker.points
@@ -324,7 +395,7 @@ export function MapView({ factionId, canManage }: Props) {
         leaflet.polygon(coords, draftStyle).addTo(layer);
       }
     }
-  }, [markers, drawn, drawMode, selected, ready]);
+  }, [markers, drawn, drawMode, selected, ready, layerById]);
 
   const startDraw = (kind: MapMarkerKind) => {
     setDrawMode(kind);
@@ -338,9 +409,9 @@ export function MapView({ factionId, canManage }: Props) {
         : drawn.length >= 3;
 
   const openEditorForDrawn = () => {
-    if (!drawMode || !enoughDrawn) return;
+    if (!drawMode || !enoughDrawn || !targetLayerId) return;
     setEditing(null);
-    setPending({ kind: drawMode, name: '', points: drawn });
+    setPending({ layerId: targetLayerId, kind: drawMode, name: '', points: drawn });
   };
 
   const ranks = useMemo(
@@ -370,6 +441,9 @@ export function MapView({ factionId, canManage }: Props) {
                 key={kind}
                 size="sm"
                 variant={drawMode === kind ? 'default' : 'outline'}
+                // Nothing can be drawn before there is a map to draw it on.
+                disabled={!targetLayerId}
+                title={targetLayerId ? undefined : t('map.noLayersManage')}
                 onClick={() => (drawMode === kind ? setDrawMode(null) : startDraw(kind))}
               >
                 {kind === 'point' && <MapPin className="h-4 w-4" />}
@@ -387,6 +461,7 @@ export function MapView({ factionId, canManage }: Props) {
           <span className="text-xs text-amber-300">
             {t(`map.drawHint.${drawMode}` as never)}
             {drawn.length > 0 && ` · ${t('map.pointsPlaced', { count: drawn.length })}`}
+            {targetLayerId && ` · ${t('map.drawingOnto', { layer: layerById.get(targetLayerId)?.name ?? '' })}`}
           </span>
           <div className="ml-auto flex gap-2">
             <Button size="sm" variant="outline" onClick={() => { setDrawMode(null); setDrawn([]); }}>
@@ -451,6 +526,99 @@ export function MapView({ factionId, canManage }: Props) {
         </div>
 
         <div className="space-y-2 lg:max-h-[calc(100vh-18rem)] lg:overflow-y-auto">
+          <div className="rounded-md border border-[var(--line-2)] bg-[var(--fill-2)] p-2 space-y-1">
+            <div className="flex items-center gap-2">
+              <Layers className="h-3.5 w-3.5 text-zinc-500" />
+              <span className="text-micro font-medium text-zinc-300">{t('map.layers')}</span>
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto h-6 px-2"
+                  onClick={() => setEditingLayer('new')}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
+            {layersQuery.isLoading ? (
+              <Skeleton className="h-8 w-full" />
+            ) : layers.length === 0 ? (
+              <p className="text-micro text-zinc-500 py-1">
+                {canManage ? t('map.noLayersManage') : t('map.noLayers')}
+              </p>
+            ) : (
+              layers.map((layer) => {
+                const shown = !hiddenLayers.has(layer.id);
+                const isTarget = targetLayerId === layer.id;
+                return (
+                  <div
+                    key={layer.id}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded px-1.5 py-1',
+                      isTarget && canManage ? 'bg-[var(--fill-3)]' : '',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-label={shown ? t('map.hideLayer') : t('map.showLayer')}
+                      onClick={() =>
+                        setHiddenLayers((current) => {
+                          const next = new Set(current);
+                          if (next.has(layer.id)) next.delete(layer.id);
+                          else next.add(layer.id);
+                          return next;
+                        })
+                      }
+                      className="shrink-0 text-zinc-500 hover:text-zinc-200"
+                    >
+                      {shown ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </button>
+
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: layer.color || 'var(--brand-color, #6366f1)' }}
+                    />
+
+                    {/* Clicking the name aims the draw tools at that map, so
+                        "which map am I adding to" is answered before anything
+                        is drawn rather than in the dialog afterwards. */}
+                    <button
+                      type="button"
+                      onClick={() => canManage && setTargetLayerId(layer.id)}
+                      className={cn(
+                        'min-w-0 flex-1 truncate text-left text-xs',
+                        shown ? 'text-zinc-200' : 'text-zinc-600 line-through',
+                      )}
+                      title={layer.description ?? undefined}
+                    >
+                      {layer.name}
+                      <span className="ml-1 text-zinc-600">{layer.markerCount}</span>
+                    </button>
+
+                    {layer.minRankLevel != null && (
+                      <Lock className="h-3 w-3 shrink-0 text-amber-400" aria-label={t('map.restricted')} />
+                    )}
+
+                    {canManage && (
+                      <span className="flex shrink-0 gap-1">
+                        <Pencil
+                          className="h-3 w-3 cursor-pointer text-zinc-600 hover:text-zinc-200"
+                          onClick={() => setEditingLayer(layer)}
+                        />
+                        <Trash2
+                          className="h-3 w-3 cursor-pointer text-zinc-600 hover:text-red-400"
+                          onClick={() => setDeletingLayer(layer)}
+                        />
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
           {canManage && <PasteCoordinates onPlace={(p) => { setDrawMode('point'); setDrawn([p]); }} />}
 
           {markersQuery.isLoading
@@ -472,7 +640,7 @@ export function MapView({ factionId, canManage }: Props) {
                     <span className="text-sm font-medium text-zinc-100 truncate">
                       {marker.icon ? `${marker.icon} ` : ''}{marker.name}
                     </span>
-                    {marker.minRankLevel !== null && (
+                    {layerById.get(marker.layerId)?.minRankLevel != null && (
                       <Lock className="h-3 w-3 shrink-0 text-amber-400" aria-label={t('map.restricted')} />
                     )}
                     {canManage && (
@@ -502,12 +670,48 @@ export function MapView({ factionId, canManage }: Props) {
         <MarkerEditor
           value={pending}
           isEdit={!!editing}
-          ranks={ranks}
+          layers={layers}
           saving={save.isPending}
           onCancel={() => { setPending(null); setEditing(null); }}
           onSave={(input) => save.mutate(input)}
         />
       )}
+
+      {editingLayer && (
+        <LayerEditor
+          value={editingLayer === 'new'
+            ? { name: '', minRankLevel: null }
+            : {
+              name: editingLayer.name,
+              description: editingLayer.description ?? '',
+              color: editingLayer.color ?? undefined,
+              icon: editingLayer.icon ?? '',
+              minRankLevel: editingLayer.minRankLevel,
+            }}
+          isEdit={editingLayer !== 'new'}
+          ranks={ranks}
+          saving={saveLayer.isPending}
+          onCancel={() => setEditingLayer(null)}
+          onSave={(input) => saveLayer.mutate(input)}
+        />
+      )}
+
+      <AlertDialog open={!!deletingLayer} onOpenChange={(open) => !open && setDeletingLayer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('map.deleteLayerConfirm', { name: deletingLayer?.name ?? '' })}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('map.deleteLayerBody', { count: deletingLayer?.markerCount ?? 0 })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deletingLayer && removeLayer.mutate(deletingLayer.id)}>
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
@@ -524,6 +728,108 @@ export function MapView({ factionId, canManage }: Props) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/** Name a map, colour it, and decide which ranks can open it. */
+function LayerEditor({
+  value, isEdit, ranks, saving, onCancel, onSave,
+}: {
+  value: MapLayerInput;
+  isEdit: boolean;
+  ranks: { name: string; level: number }[];
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (input: MapLayerInput) => void;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<MapLayerInput>(value);
+  const patch = (next: Partial<MapLayerInput>) => setDraft((d) => ({ ...d, ...next }));
+
+  const rankOptions = [
+    { value: '', label: t('map.visibleToEveryone') },
+    ...ranks.map((r) => ({
+      value: String(r.level),
+      label: t('map.visibleToRank', { rank: r.name }),
+    })),
+  ];
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? t('map.editLayer') : t('map.newLayer')}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="layer-name">{t('map.name')}</Label>
+            <Input
+              id="layer-name"
+              value={draft.name}
+              onChange={(e) => patch({ name: e.target.value })}
+              placeholder={t('map.layerNamePlaceholder')}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="layer-description">{t('map.description')}</Label>
+            <Textarea
+              id="layer-description"
+              rows={2}
+              value={draft.description ?? ''}
+              onChange={(e) => patch({ description: e.target.value })}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="layer-color">{t('map.color')}</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="layer-color"
+                  type="color"
+                  value={draft.color ?? DEFAULT_MARKER_COLOR}
+                  onChange={(e) => patch({ color: e.target.value })}
+                  className="h-9 w-14 cursor-pointer rounded border border-[var(--line-2)] bg-transparent"
+                />
+                {draft.color && (
+                  <Button variant="outline" size="sm" onClick={() => patch({ color: undefined })}>
+                    {t('map.useFactionColor')}
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="layer-icon">{t('map.icon')}</Label>
+              <Input
+                id="layer-icon"
+                value={draft.icon ?? ''}
+                onChange={(e) => patch({ icon: e.target.value })}
+                placeholder="💰"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>{t('map.visibility')}</Label>
+            <SearchableSelect
+              options={rankOptions}
+              value={draft.minRankLevel == null ? '' : String(draft.minRankLevel)}
+              onValueChange={(v: string) => patch({ minRankLevel: v === '' ? null : Number(v) })}
+            />
+            <p className="text-micro text-zinc-500">{t('map.visibilityHint')}</p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>{t('common.cancel')}</Button>
+          <Button disabled={!draft.name.trim() || saving} onClick={() => onSave(draft)}>
+            {t('common.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -558,7 +864,7 @@ function toInput(marker: MapMarker): MapMarkerInput {
     color: marker.color ?? undefined,
     icon: marker.icon ?? '',
     points: marker.points,
-    minRankLevel: marker.minRankLevel,
+    layerId: marker.layerId,
   };
 }
 
@@ -601,11 +907,11 @@ function PasteCoordinates({ onPlace }: { onPlace: (point: GamePoint) => void }) 
 
 /** Name it, describe it, and decide who may see it. */
 function MarkerEditor({
-  value, isEdit, ranks, saving, onCancel, onSave,
+  value, isEdit, layers, saving, onCancel, onSave,
 }: {
   value: MapMarkerInput;
   isEdit: boolean;
-  ranks: { name: string; level: number }[];
+  layers: MapLayer[];
   saving: boolean;
   onCancel: () => void;
   onSave: (input: MapMarkerInput) => void;
@@ -613,14 +919,6 @@ function MarkerEditor({
   const { t } = useTranslation();
   const [draft, setDraft] = useState<MapMarkerInput>(value);
   const patch = (next: Partial<MapMarkerInput>) => setDraft((d) => ({ ...d, ...next }));
-
-  const rankOptions = [
-    { value: '', label: t('map.visibleToEveryone') },
-    ...ranks.map((r) => ({
-      value: String(r.level),
-      label: t('map.visibleToRank', { rank: r.name }),
-    })),
-  ];
 
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
@@ -717,13 +1015,17 @@ function MarkerEditor({
           </div>
 
           <div className="space-y-1">
-            <Label>{t('map.visibility')}</Label>
+            <Label>{t('map.layer')}</Label>
             <SearchableSelect
-              options={rankOptions}
-              value={draft.minRankLevel === null || draft.minRankLevel === undefined ? '' : String(draft.minRankLevel)}
-              onValueChange={(v: string) => patch({ minRankLevel: v === '' ? null : Number(v) })}
+              options={layers.map((layer) => ({
+                value: layer.id,
+                label: layer.icon ? `${layer.icon} ${layer.name}` : layer.name,
+                hint: layer.minRankLevel != null ? t('map.restricted') : undefined,
+              }))}
+              value={draft.layerId}
+              onValueChange={(v: string) => patch({ layerId: v })}
             />
-            <p className="text-micro text-zinc-500">{t('map.visibilityHint')}</p>
+            <p className="text-micro text-zinc-500">{t('map.layerHint')}</p>
           </div>
 
           <p className="text-micro text-zinc-500">

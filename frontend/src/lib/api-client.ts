@@ -88,6 +88,8 @@ import type {
   SavedReminder,
   MapMarker,
   MapMarkerInput,
+  MapLayer,
+  MapLayerInput,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -624,6 +626,24 @@ export const craftingApi = {
 // ── Map ──
 
 export const mapApi = {
+  layers: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ layers: MapLayer[] }>>(`/factions/${factionId}/map/layers`)
+      .then(unwrap),
+
+  createLayer: (factionId: string, input: MapLayerInput) =>
+    api
+      .post<ApiSuccessResponse<MapLayer>>(`/factions/${factionId}/map/layers`, input)
+      .then(unwrap),
+
+  updateLayer: (factionId: string, id: string, input: Partial<MapLayerInput>) =>
+    api
+      .patch<ApiSuccessResponse<MapLayer>>(`/factions/${factionId}/map/layers/${id}`, input)
+      .then(unwrap),
+
+  removeLayer: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/map/layers/${id}`),
+
   list: (factionId: string) =>
     api
       .get<ApiSuccessResponse<{ markers: MapMarker[] }>>(`/factions/${factionId}/map`)

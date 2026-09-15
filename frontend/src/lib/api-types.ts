@@ -1575,8 +1575,36 @@ export interface GameCoordinate {
   z?: number;
 }
 
+/** One named map. Permission lives here, not on the markers inside it. */
+export interface MapLayer {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  /**
+   * Lowest rank level allowed to open it, or null for everybody. Lower level
+   * means higher rank, so 2 is open to levels 1 and 2. It gates editing as
+   * well as reading.
+   */
+  minRankLevel: number | null;
+  createdBy: string;
+  createdAt: string;
+  creatorName: string;
+  markerCount: number;
+}
+
+export interface MapLayerInput {
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  minRankLevel?: number | null;
+}
+
 export interface MapMarker {
   id: string;
+  layerId: string;
   kind: MapMarkerKind;
   name: string;
   description: string | null;
@@ -1584,17 +1612,13 @@ export interface MapMarker {
   color: string | null;
   icon: string | null;
   points: GameCoordinate[];
-  /**
-   * Lowest rank level allowed to see this, or null for everybody. Lower level
-   * means higher rank, so 2 is visible to levels 1 and 2.
-   */
-  minRankLevel: number | null;
   createdBy: string;
   createdAt: string;
   creatorName: string;
 }
 
 export interface MapMarkerInput {
+  layerId: string;
   kind: MapMarkerKind;
   name: string;
   description?: string;
@@ -1602,5 +1626,4 @@ export interface MapMarkerInput {
   color?: string;
   icon?: string;
   points: GameCoordinate[];
-  minRankLevel?: number | null;
 }

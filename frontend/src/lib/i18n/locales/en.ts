@@ -1209,6 +1209,19 @@ export const en = {
   'map.deleteBody': 'The marker is removed for everyone. It is a note about a place, so nothing else depends on it.',
   'map.color': 'Colour',
   'map.useFactionColor': 'Faction colour',
+  'map.layers': 'Maps',
+  'map.layer': 'Map',
+  'map.layerHint': 'Which map this marker belongs to. The map decides who can see and edit it.',
+  'map.newLayer': 'New map',
+  'map.editLayer': 'Edit map',
+  'map.layerNamePlaceholder': 'Robbery routes, Where friends live, Turf…',
+  'map.noLayers': 'No maps yet.',
+  'map.noLayersManage': 'Make a map first — markers go on one.',
+  'map.hideLayer': 'Hide this map',
+  'map.showLayer': 'Show this map',
+  'map.drawingOnto': 'onto {layer}',
+  'map.deleteLayerConfirm': 'Delete the map "{name}"?',
+  'map.deleteLayerBody': 'Everything drawn on it goes too — {count} markers. This cannot be undone.',
 };
 
 /** Every key the interface may ask for. */

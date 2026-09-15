@@ -47,6 +47,12 @@ export interface MapTheme {
 
 export const MAP_THEMES: MapTheme[] = [
   { id: 'atlas', label: 'Atlas', url: '/map-tiles/{z}/{x}/{y}.png', maxNativeZoom: 5 },
+  {
+    id: 'road',
+    label: 'Road',
+    url: '/map-tiles/road/{z}/{x}/{y}.png',
+    maxNativeZoom: 5,
+  },
 ];
 
 /** Where the browser remembers the reader's choice. Per viewer, not per faction. */

@@ -27,8 +27,18 @@ async function setRank(rank: string | null) {
   expect(res.status).toBe(200);
 }
 
+/** Make a layer and return its id. Visibility lives here now. */
+async function makeLayer(name: string, minRankLevel: number | null = null, cookie = w.admin.cookie) {
+  const res = await api().post(`${map()}/layers`).set('Cookie', cookie)
+    .send({ name, minRankLevel });
+  return res;
+}
+
+let openLayerId: string;
+
 async function place(over: Record<string, unknown> = {}) {
   return api().post(map()).set('Cookie', w.admin.cookie).send({
+    layerId: openLayerId,
     kind: 'point',
     name: 'Stash',
     points: [{ x: -1037.2, y: -2737.5, z: 20.1 }],
@@ -46,6 +56,9 @@ beforeEach(async () => {
   await resetDatabase();
   w = await seedBasicWorld();
   await defineRanks();
+  const layer = await makeLayer('General');
+  expect(layer.status).toBe(201);
+  openLayerId = layer.body.data.id;
 });
 
 describe('placing markers', () => {
@@ -113,14 +126,16 @@ describe('who sees what', () => {
 
   it('hides a leadership marker from a lower rank', async () => {
     await setRank('Soldier');
-    await place({ name: 'Main stash', minRankLevel: 2 });
+    const secret = await makeLayer('Leadership', 2);
+    await place({ name: 'Main stash', layerId: secret.body.data.id });
 
     expect(await visibleTo(w.member.cookie)).not.toContain('Main stash');
     expect(await visibleTo(w.admin.cookie)).toContain('Main stash');
   });
 
   it('shows it once the member holds a high enough rank', async () => {
-    await place({ name: 'Main stash', minRankLevel: 2 });
+    const secret = await makeLayer('Leadership', 2);
+    await place({ name: 'Main stash', layerId: secret.body.data.id });
 
     await setRank('Soldier');
     expect(await visibleTo(w.member.cookie)).not.toContain('Main stash');
@@ -131,7 +146,8 @@ describe('who sees what', () => {
 
   it('treats a member with no rank as lower than every rank', async () => {
     await setRank(null);
-    await place({ name: 'Main stash', minRankLevel: 5 });
+    const secret = await makeLayer('Soldiers', 5);
+    await place({ name: 'Main stash', layerId: secret.body.data.id });
     expect(await visibleTo(w.member.cookie)).not.toContain('Main stash');
   });
 
@@ -139,7 +155,8 @@ describe('who sees what', () => {
   // the safe read — it can only ever hide a marker, never reveal one.
   it('treats a deleted rank as no rank', async () => {
     await setRank('Underboss');
-    await place({ name: 'Main stash', minRankLevel: 2 });
+    const secret = await makeLayer('Leadership', 2);
+    await place({ name: 'Main stash', layerId: secret.body.data.id });
     expect(await visibleTo(w.member.cookie)).toContain('Main stash');
 
     await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie).send({
@@ -151,7 +168,8 @@ describe('who sees what', () => {
 
   it('never sends the coordinates of a hidden marker', async () => {
     await setRank('Soldier');
-    await place({ name: 'Main stash', minRankLevel: 1, points: [{ x: 4242.5, y: -1337.25 }] });
+    const secret = await makeLayer('Boss only', 1);
+    await place({ name: 'Main stash', layerId: secret.body.data.id, points: [{ x: 4242.5, y: -1337.25 }] });
 
     const res = await api().get(map()).set('Cookie', w.member.cookie);
     expect(JSON.stringify(res.body)).not.toContain('4242.5');
@@ -198,6 +216,119 @@ describe('editing and removing', () => {
     const created = await place();
     const res = await api().delete(`${map()}/${created.body.data.id}`)
       .set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    expect(await visibleTo(w.admin.cookie)).toHaveLength(0);
+  });
+});
+
+/**
+ * Layers carry the permission, so these are the rules that matter most.
+ *
+ * The first three close a hole the pre-layer version left open: PATCH and
+ * DELETE looked markers up by id with no visibility check, and PATCH returned
+ * the whole row. A low rank holding manage_map who learned an id — the audit
+ * log prints entityId — could read and rewrite a stash they could not see.
+ */
+describe('a closed layer is closed for writing too', () => {
+  let secretLayerId: string;
+  let secretMarkerId: string;
+
+  beforeEach(async () => {
+    const secret = await makeLayer('Boss only', 1);
+    secretLayerId = secret.body.data.id;
+    const marker = await place({ name: 'Main stash', layerId: secretLayerId });
+    secretMarkerId = marker.body.data.id;
+    // Holds manage_map, but sits below the layer's rank.
+    await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie).send({
+      ranks: [
+        { name: 'Boss', level: 1, permissions: ['manage_map'] },
+        { name: 'Soldier', level: 5, permissions: ['manage_map'] },
+      ],
+    });
+    await setRank('Soldier');
+  });
+
+  it('will not edit a marker on a layer it cannot open', async () => {
+    const res = await api().patch(`${map()}/${secretMarkerId}`)
+      .set('Cookie', w.member.cookie).send({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('will not leak the marker through the edit response', async () => {
+    const res = await api().patch(`${map()}/${secretMarkerId}`)
+      .set('Cookie', w.member.cookie).send({ name: 'Renamed' });
+    expect(JSON.stringify(res.body)).not.toContain('-1037.2');
+  });
+
+  it('will not delete a marker on a layer it cannot open', async () => {
+    const res = await api().delete(`${map()}/${secretMarkerId}`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(404);
+    expect(await visibleTo(w.admin.cookie)).toContain('Main stash');
+  });
+
+  it('will not draw on a layer it cannot open', async () => {
+    const res = await api().post(map()).set('Cookie', w.member.cookie).send({
+      layerId: secretLayerId, kind: 'point', name: 'Sneaked in', points: [{ x: 1, y: 2 }],
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('will not move a marker onto a layer it cannot open', async () => {
+    const mine = await api().post(map()).set('Cookie', w.member.cookie).send({
+      layerId: openLayerId, kind: 'point', name: 'Mine', points: [{ x: 1, y: 2 }],
+    });
+    expect(mine.status).toBe(201);
+
+    const res = await api().patch(`${map()}/${mine.body.data.id}`)
+      .set('Cookie', w.member.cookie).send({ layerId: secretLayerId });
+    expect(res.status).toBe(404);
+  });
+
+  it('will not edit the layer itself', async () => {
+    const res = await api().patch(`${map()}/layers/${secretLayerId}`)
+      .set('Cookie', w.member.cookie).send({ name: 'Renamed' });
+    expect(res.status).toBe(404);
+  });
+
+  it('does not list a layer it cannot open', async () => {
+    const res = await api().get(`${map()}/layers`).set('Cookie', w.member.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.data.layers.map((l: { name: string }) => l.name)).not.toContain('Boss only');
+  });
+});
+
+describe('layers', () => {
+  it('refuses two maps with the same name', async () => {
+    expect((await makeLayer('Robbery routes')).status).toBe(201);
+    expect((await makeLayer('Robbery routes')).status).toBe(400);
+  });
+
+  // Otherwise a leader locks themselves out of their own map in one click,
+  // with no way back through the interface.
+  it('will not let somebody restrict a map above their own rank', async () => {
+    await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie).send({
+      ranks: [
+        { name: 'Boss', level: 1, permissions: ['manage_map'] },
+        { name: 'Soldier', level: 5, permissions: ['manage_map'] },
+      ],
+    });
+    await setRank('Soldier');
+
+    const res = await makeLayer('Boss only', 1, w.member.cookie);
+    expect(res.status).toBe(400);
+  });
+
+  it('counts what is drawn on it', async () => {
+    await place({ name: 'One' });
+    await place({ name: 'Two' });
+    const res = await api().get(`${map()}/layers`).set('Cookie', w.admin.cookie);
+    const general = res.body.data.layers.find((l: { name: string }) => l.name === 'General');
+    expect(general.markerCount).toBe(2);
+  });
+
+  it('takes its markers with it when deleted', async () => {
+    await place({ name: 'Doomed' });
+    const res = await api().delete(`${map()}/layers/${openLayerId}`).set('Cookie', w.admin.cookie);
     expect(res.status).toBe(200);
     expect(await visibleTo(w.admin.cookie)).toHaveLength(0);
   });

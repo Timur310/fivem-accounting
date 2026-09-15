@@ -148,6 +148,20 @@
       "when": 1789463879397,
       "tag": "0020_premium_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789467767176,
+      "tag": "0021_hard_salo",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789467785475,
+      "tag": "0022_wakeful_the_hunter",
+      "breakpoints": true
     }
   ]
 }
