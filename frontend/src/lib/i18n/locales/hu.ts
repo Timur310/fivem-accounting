@@ -1150,4 +1150,7 @@ export const hu: Translations = {
   'reminder.someTagsWontReach': 'Mentve, de néhány megjelölt személyt nem fog elérni',
   'reminder.tagNeverSignedIn': '{name} még sosem lépett be, így a Discord-fiókja nincs megerősítve',
   'reminder.tagNotInServer': '{name} nincs benne ebben a Discord-szerverben',
+
+  'reminder.taggedNow': 'Megjelölve:',
+  'reminder.taggedNobody': 'még senki',
 };
