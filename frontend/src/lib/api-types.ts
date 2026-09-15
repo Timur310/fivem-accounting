@@ -1450,6 +1450,24 @@ export interface DiscordReminder {
   lastError: string | null;
 }
 
+/**
+ * A tagged member whose ping will not actually reach them.
+ *
+ * Returned when a reminder is saved, not stored: both reasons can stop being
+ * true — somebody signs in, somebody joins the server — and a warning that
+ * outlives its cause is worse than no warning.
+ */
+export interface UnpingableMember {
+  userId: string;
+  name: string;
+  reason: 'provisional' | 'not_in_server';
+}
+
+/** What a save answers with: the reminder, plus any tag that will go nowhere. */
+export interface SavedReminder extends DiscordReminder {
+  unpingable?: UnpingableMember[];
+}
+
 export interface ReminderInput {
   channelId: string;
   channelName?: string;

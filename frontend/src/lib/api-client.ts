@@ -85,6 +85,7 @@ import type {
   CraftRecord,
   RecipeInput,
   CraftInput,
+  SavedReminder,
 } from './api-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
@@ -909,12 +910,12 @@ export const discordRemindersApi = {
 
   create: (factionId: string, input: ReminderInput) =>
     api
-      .post<ApiSuccessResponse<DiscordReminder>>(`/factions/${factionId}/discord/reminders`, input)
+      .post<ApiSuccessResponse<SavedReminder>>(`/factions/${factionId}/discord/reminders`, input)
       .then(unwrap),
 
   update: (factionId: string, id: string, input: Partial<ReminderInput>) =>
     api
-      .patch<ApiSuccessResponse<DiscordReminder>>(`/factions/${factionId}/discord/reminders/${id}`, input)
+      .patch<ApiSuccessResponse<SavedReminder>>(`/factions/${factionId}/discord/reminders/${id}`, input)
       .then(unwrap),
 
   remove: (factionId: string, id: string) =>

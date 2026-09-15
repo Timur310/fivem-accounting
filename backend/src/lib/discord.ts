@@ -279,6 +279,42 @@ export async function botCanMentionAnyRole(guildId: string): Promise<boolean | n
 }
 
 /**
+ * Is this Discord account actually in the guild?
+ *
+ * A `<@id>` for somebody who is not a member of the server renders as a plain
+ * mention and notifies nobody — the message arrives, the person is "tagged",
+ * and their client never lights up. That is indistinguishable from a bug from
+ * the outside, and it is the reason this check exists rather than trusting
+ * that a stored Discord id is pingable.
+ *
+ * Deliberately `GET /guilds/{id}/members/{user}` and not the list endpoint:
+ * listing a guild's members needs the privileged GUILD_MEMBERS intent switched
+ * on in the developer portal, and fetching one does not. This works on a
+ * default bot.
+ *
+ * `null` means the question could not be answered — a network failure, or the
+ * bot having been removed from the guild. The caller treats that as "cannot
+ * tell", never as "not a member": warning somebody about a tag that is
+ * actually fine is its own kind of wrong.
+ */
+export async function guildMemberExists(
+  guildId: string,
+  discordUserId: string,
+): Promise<boolean | null> {
+  if (!isDiscordConfigured()) return null;
+  try {
+    await axios.get(`${API}/guilds/${guildId}/members/${discordUserId}`, {
+      headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
+      timeout: 10_000,
+    });
+    return true;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 404) return false;
+    return null;
+  }
+}
+
+/**
  * Who a message is allowed to ping.
  *
  * Always sent, and always explicit. Discord's default is to honour every

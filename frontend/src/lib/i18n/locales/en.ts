@@ -1166,6 +1166,11 @@ export const en = {
   'crafting.deleteRecipe': 'Delete recipe',
   'crafting.deleteRecipeConfirm': 'Delete "{name}"?',
   'crafting.deleteRecipeBody': 'Past crafts keep their history. Retire it instead if you only want it out of the way.',
+
+  // ── Tags that will not reach anybody ──
+  'reminder.someTagsWontReach': 'Saved, but some tags will not reach anybody',
+  'reminder.tagNeverSignedIn': '{name} has never signed in, so their Discord account is unconfirmed',
+  'reminder.tagNotInServer': '{name} is not in this Discord server',
 };
 
 /** Every key the interface may ask for. */

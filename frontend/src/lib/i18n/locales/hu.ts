@@ -1145,4 +1145,9 @@ export const hu: Translations = {
   'crafting.deleteRecipe': 'Recept törlése',
   'crafting.deleteRecipeConfirm': 'Törlöd ezt: „{name}"?',
   'crafting.deleteRecipeBody': 'A korábbi gyártások megmaradnak. Ha csak útból kell, vond ki inkább.',
+
+  // ── Tags that will not reach anybody ──
+  'reminder.someTagsWontReach': 'Mentve, de néhány megjelölt személyt nem fog elérni',
+  'reminder.tagNeverSignedIn': '{name} még sosem lépett be, így a Discord-fiókja nincs megerősítve',
+  'reminder.tagNotInServer': '{name} nincs benne ebben a Discord-szerverben',
 };
