@@ -200,6 +200,11 @@ export function MapView({ factionId, canManage }: Props) {
 
     layer.clearLayers();
 
+    // `var()` is fine here: Leaflet writes this into the SVG `stroke`
+    // presentation attribute, and browsers resolve custom properties in those
+    // against the element's inherited value. Checked, because the opposite is
+    // widely repeated and would have meant every uncoloured line drawing with
+    // no stroke at all.
     const accent = (marker: MapMarker) => marker.color || 'var(--brand-color, #6366f1)';
 
     for (const marker of markers) {
@@ -209,11 +214,30 @@ export function MapView({ factionId, canManage }: Props) {
       if (coords.length === 0) continue;
 
       const isSelected = selected === marker.id;
+      // Leaflet's `weight` is screen pixels and does not grow with zoom, so a
+      // line thin enough to look tidy zoomed out disappears into the map
+      // detail zoomed in. These are the widths that stay readable at both
+      // ends; a route is meant to be followed, not admired.
+      const weight = marker.kind === 'route'
+        ? (isSelected ? 8 : 6)
+        : (isSelected ? 5 : 3);
       const style = {
         color: accent(marker),
-        weight: isSelected ? 4 : 2,
-        opacity: isSelected ? 1 : 0.85,
+        weight,
+        opacity: isSelected ? 1 : 0.9,
         fillOpacity: isSelected ? 0.35 : 0.2,
+        lineJoin: 'round' as const,
+        lineCap: 'round' as const,
+      };
+      // A dark casing underneath, the way road maps draw roads. Without it a
+      // bright line over bright ground — a desert, a runway — has no edge and
+      // reads as a smear.
+      const casing = {
+        color: '#000',
+        weight: weight + 4,
+        opacity: 0.45,
+        lineJoin: 'round' as const,
+        lineCap: 'round' as const,
       };
 
       let shape: L.Layer;
@@ -227,8 +251,10 @@ export function MapView({ factionId, canManage }: Props) {
           }),
         });
       } else if (marker.kind === 'route') {
+        leaflet.polyline(coords, casing).addTo(layer);
         shape = leaflet.polyline(coords, style);
       } else {
+        leaflet.polygon(coords, { ...casing, fill: false }).addTo(layer);
         shape = leaflet.polygon(coords, style);
       }
 
@@ -426,6 +452,28 @@ export function MapView({ factionId, canManage }: Props) {
   );
 }
 
+/** Shown when nothing has been picked, and the value the picker starts on. */
+const DEFAULT_MARKER_COLOR = '#6366f1';
+
+/**
+ * A small fixed palette, because picking a colour from a full wheel produces
+ * maps where every marker is a slightly different mud. These are spaced far
+ * enough apart to stay distinguishable at a glance on a dark map, and the
+ * native picker is still there for anybody who wants an exact shade.
+ */
+const MARKER_SWATCHES = [
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#14b8a6', // teal
+  '#3b82f6', // blue
+  '#6366f1', // indigo
+  '#a855f7', // purple
+  '#ec4899', // pink
+  '#e5e7eb', // near-white, for anything that must not read as a category
+] as const;
+
 function toInput(marker: MapMarker): MapMarkerInput {
   return {
     kind: marker.kind,
@@ -525,6 +573,51 @@ function MarkerEditor({
               value={draft.description ?? ''}
               onChange={(e) => patch({ description: e.target.value })}
             />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="marker-color">{t('map.color')}</Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="marker-color"
+                type="color"
+                value={draft.color ?? DEFAULT_MARKER_COLOR}
+                onChange={(e) => patch({ color: e.target.value })}
+                className="h-9 w-14 cursor-pointer rounded border border-[var(--line-2)] bg-transparent"
+              />
+              <Input
+                value={draft.color ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  patch({ color: v === '' ? undefined : v });
+                }}
+                placeholder={DEFAULT_MARKER_COLOR}
+                className="w-32 font-mono text-xs"
+                maxLength={7}
+              />
+              {draft.color && (
+                <Button variant="outline" size="sm" onClick={() => patch({ color: undefined })}>
+                  {t('map.useFactionColor')}
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1 pt-1">
+              {MARKER_SWATCHES.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  aria-label={swatch}
+                  onClick={() => patch({ color: swatch })}
+                  style={{ background: swatch }}
+                  className={cn(
+                    'h-6 w-6 rounded-md border transition-transform',
+                    draft.color?.toLowerCase() === swatch
+                      ? 'border-white scale-110'
+                      : 'border-black/40 hover:scale-105',
+                  )}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

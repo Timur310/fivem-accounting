@@ -1186,4 +1186,6 @@ export const hu: Translations = {
   'map.none': 'Még nincs semmi a térképen.',
   'map.deleteConfirm': 'Törlöd ezt: „{name}"?',
   'map.deleteBody': 'A jelölés mindenkinél eltűnik. Ez csak egy feljegyzés egy helyről, semmi más nem függ tőle.',
+  'map.color': 'Szín',
+  'map.useFactionColor': 'Frakció színe',
 };

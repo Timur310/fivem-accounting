@@ -1207,6 +1207,8 @@ export const en = {
   'map.none': 'Nothing on the map yet.',
   'map.deleteConfirm': 'Delete "{name}"?',
   'map.deleteBody': 'The marker is removed for everyone. It is a note about a place, so nothing else depends on it.',
+  'map.color': 'Colour',
+  'map.useFactionColor': 'Faction colour',
 };
 
 /** Every key the interface may ask for. */
