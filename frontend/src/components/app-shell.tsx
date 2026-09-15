@@ -41,9 +41,11 @@ import {
   AlertTriangle,
   WashingMachine,
   Hammer,
+  Calculator,
   Map,
   BookOpen,
   Search,
+  DatabaseBackup,
 } from 'lucide-react';
 import { DashboardView } from '@/views/dashboard-view';
 import { EntriesView } from '@/views/entries-view';
@@ -62,12 +64,14 @@ import { MemberProfileView } from '@/views/member-profile-view';
 import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
 import { CraftingView } from '@/views/crafting-view';
+import { PricingView } from '@/views/pricing-view';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
 import { AnnouncementsView } from '@/views/announcements-view';
 import { FeedView } from '@/views/feed-view';
 import { AdminSupportView } from '@/views/admin-support-view';
+import { AdminBackupView } from '@/views/admin-backup-view';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { displayName } from '@/lib/format';
@@ -306,6 +310,10 @@ export function AppShell() {
       // one are different jobs, and the bench is the same page for both.
       anyPermission: ['manage_crafting', 'craft'],
     },
+    // No permission: a price list nobody may read is a price list nobody can
+    // sell from, and the people at the counter hold the fewest rights. Editing
+    // it is gated inside the view.
+    { group: 'manage', view: 'pricing', label: 'nav.pricing', icon: Calculator },
     // No permission: the map is faction knowledge, and each marker carries its
     // own visibility. Gating the screen as well would hide the public pins
     // from the people they exist for.
@@ -343,6 +351,9 @@ export function AppShell() {
     // people most likely to hit a bug are the ones with the fewest rights.
     { group: 'play', view: 'support', label: 'nav.support', icon: LifeBuoy },
     { group: 'play', view: 'guide', label: 'nav.guide', icon: BookOpen },
+    // Superadmin only, and last in the admin group: it is the screen nobody
+    // needs until the day they need it badly.
+    { group: 'admin', view: 'admin-backup', label: 'nav.backup', icon: DatabaseBackup, superadminOnly: true },
     {
       group: 'admin',
       view: 'admin-support',
@@ -464,6 +475,8 @@ export function AppShell() {
         return selectedFactionId ? <AnnouncementsView factionId={selectedFactionId} canManage={hasPermission('manage_settings')} /> : null;
       case 'admin-support':
         return <AdminSupportView />;
+      case 'admin-backup':
+        return <AdminBackupView />;
       case 'dashboard':
         return selectedFactionId ? <DashboardView factionId={selectedFactionId} canLogEntries={canLogEntries} isFactionMember={canCreditSelf} /> : null;
       case 'entries':
@@ -474,6 +487,12 @@ export function AppShell() {
         return selectedFactionId ? <LaunderingView factionId={selectedFactionId} /> : null;
       case 'map':
         return selectedFactionId ? <MapView factionId={selectedFactionId} canManage={hasPermission('manage_map')} /> : null;
+      case 'pricing':
+        return selectedFactionId ? <PricingView
+            factionId={selectedFactionId}
+            canManage={hasPermission('manage_prices')}
+            canSell={hasPermission('sell') || hasPermission('manage_prices')}
+          /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView
             factionId={selectedFactionId}

@@ -56,8 +56,14 @@ Discord history.
   each member is allowed to see
 - 🛟 **Support** — anyone can send a bug report or feature request straight to
   whoever maintains the instance
+- 🧮 **Price calculator** — a price list with add-ons, per-partner discounts
+  and bulk rungs; pick the buyer, read the total, paste it into Discord, and
+  book the sale into the treasury in one click
 - 🧾 **Audit log** — append-only record of every write in the system, actor
   and timestamp included
+- 💾 **Database backup** — a superadmin downloads the whole database as one
+  file, or restores one; nothing is kept on the server, so the copy lives
+  wherever they put it
 - 🌐 **English & Hungarian** out of the box, with amounts formatted
   consistently in both
 - ⚡ **Command palette (Ctrl+K)**, installable as a PWA, mobile-first UI
@@ -99,7 +105,7 @@ backups) live in [`docs/FiveM_RP_Faction_Accountant_Architecture.md`](docs/FiveM
 
 ## Roadmap
 
-Actively developed. The map shipped most recently; Discord bot commands,
+Actively developed. The price calculator shipped most recently; Discord bot commands,
 automated reports, webhooks and faction templates are next up — see the roadmap in the architecture doc for
 the full phase-by-phase plan and what's already shipped.
 

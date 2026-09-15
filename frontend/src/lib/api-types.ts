@@ -924,7 +924,7 @@ export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
-  'manage_discord', 'manage_crafting', 'craft', 'manage_map',
+  'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -943,6 +943,8 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_crafting: 'permission.manageCrafting',
   craft: 'permission.craft',
   manage_map: 'permission.manageMap',
+  manage_prices: 'permission.managePrices',
+  sell: 'permission.sell',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -954,6 +956,224 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
  * waiting. `isProvisional` is what separates the two, and `lastLogin` is null
  * for exactly those.
  */
+/**
+ * What the backup screen needs to know before it offers a button.
+ *
+ * `available` is false on a deployment whose backend image was built without
+ * postgresql-client, and `pooledConnection` is true when the tools would be
+ * pointed at pgbouncer, which cannot carry a dump.
+ */
+// ── Pricing ────────────────────────────────────────────
+//
+// The price list and the calculator that reads it. Every amount is a decimal
+// string, as everywhere else in this file: the arithmetic happens on the
+// server, in integers, and the browser only ever displays what comes back.
+
+export interface ProductAddon {
+  id: string;
+  name: string;
+  price: string;
+  /** Set when the add-on is a thing the faction stocks rather than a fee. */
+  itemTypeId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface ProductPrice {
+  id: string;
+  itemTypeId: string;
+  itemTypeName: string;
+  unit: string;
+  isCurrency: boolean;
+  icon: string | null;
+  category: string;
+  unitPrice: string;
+  currencyItemTypeId: string;
+  floorPrice: string | null;
+  note: string | null;
+  isActive: boolean;
+  updatedAt: string;
+  addons: ProductAddon[];
+}
+
+export interface Counterparty {
+  id: string;
+  name: string;
+  discountPercent: string;
+  note: string | null;
+  color: string | null;
+  icon: string | null;
+  isActive: boolean;
+}
+
+/** A rung of the buy-more-pay-less ladder. Null item means faction-wide. */
+export interface QuantityBreak {
+  id: string;
+  itemTypeId: string | null;
+  minQuantity: string;
+  discountPercent: string;
+}
+
+export interface PriceBook {
+  prices: ProductPrice[];
+  breaks: QuantityBreak[];
+  parties: Counterparty[];
+}
+
+export interface QuoteLineInput {
+  itemTypeId: string;
+  quantity: string;
+  addonIds?: string[];
+}
+
+export interface QuoteInput {
+  counterpartyId?: string | null;
+  lines: QuoteLineInput[];
+}
+
+export interface QuotedLine {
+  itemTypeId: string;
+  itemTypeName: string;
+  unit: string;
+  icon: string | null;
+  isCurrency: boolean;
+  quantity: string;
+  unitPrice: string;
+  addons: { id: string; name: string; price: string }[];
+  /** One unit with its add-ons — the answer to "how much each?". */
+  unitTotal: string;
+  gross: string;
+  counterpartyPercent: string;
+  quantityBreakPercent: string;
+  discountPercent: string;
+  discount: string;
+  total: string;
+  floorPrice: string | null;
+  belowFloor: boolean;
+}
+
+export interface Quote {
+  currency: {
+    itemTypeId: string;
+    name: string;
+    unit: string;
+    isCurrency: boolean;
+    icon: string | null;
+  };
+  counterparty: { id: string; name: string; discountPercent: string } | null;
+  lines: QuotedLine[];
+  subtotal: string;
+  discountTotal: string;
+  total: string;
+  belowFloor: boolean;
+}
+
+/** A line of a booked sale, frozen as it read on the day. */
+export interface SaleLine {
+  id: string;
+  saleId: string;
+  itemTypeId: string;
+  itemTypeName: string;
+  quantity: string;
+  unitPrice: string;
+  addons: { name: string; price: string; itemTypeId: string | null }[] | null;
+  discountPercent: string;
+  gross: string;
+  discount: string;
+  total: string;
+}
+
+/**
+ * One accepted quote, booked into the ledger.
+ *
+ * Every figure is a snapshot: a sale from six weeks ago keeps saying what was
+ * actually charged after the price list has moved on.
+ */
+export interface Sale {
+  id: string;
+  counterpartyName: string | null;
+  counterpartyDiscountPercent: string;
+  currencyItemTypeId: string;
+  currencyName: string;
+  currencyUnit: string;
+  currencyIsCurrency: boolean;
+  subtotal: string;
+  discountTotal: string;
+  total: string;
+  creditSaleTo: 'nobody' | 'seller';
+  saleDate: string;
+  notes: string | null;
+  soldBy: string;
+  sellerName: string;
+  revertedAt: string | null;
+  createdAt: string;
+  lines: SaleLine[];
+}
+
+export interface SaleInput extends QuoteInput {
+  notes?: string;
+  date?: string;
+  creditSaleTo?: 'nobody' | 'seller';
+}
+
+export interface SaleResult {
+  sale: Sale;
+  quote: Quote;
+  /** Items the vault could not cover. Reported, never blocking. */
+  shortfalls: { itemTypeId: string; itemTypeName: string; available: string }[];
+}
+
+export interface ProductPriceInput {
+  itemTypeId: string;
+  unitPrice: string;
+  currencyItemTypeId: string;
+  floorPrice?: string | null;
+  note?: string | null;
+  isActive?: boolean;
+}
+
+export interface ProductAddonInput {
+  name: string;
+  price: string;
+  itemTypeId?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface CounterpartyInput {
+  name: string;
+  discountPercent?: string;
+  note?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  isActive?: boolean;
+}
+
+export interface QuantityBreakInput {
+  itemTypeId?: string | null;
+  minQuantity: string;
+  discountPercent: string;
+}
+
+export interface BackupStatus {
+  available: boolean;
+  pgDumpVersion: string | null;
+  pgRestoreVersion: string | null;
+  serverVersion: string | null;
+  databaseSizeBytes: number | null;
+  target: string;
+  pooledConnection: boolean;
+  maxUploadBytes: number;
+  lastBackupAt: string | null;
+}
+
+export interface RestoreResult {
+  restoredBytes: number;
+  /** Where the server put the copy it took of what the restore replaced. */
+  safetyBackup: string;
+  warnings: string[];
+}
+
 export interface AdminUser {
   id: string;
   discordId: string;
