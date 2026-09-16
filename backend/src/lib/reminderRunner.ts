@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { discordReminders, discordIntegrations, type DiscordReminder } from '../db/schema.js';
 import { isDiscordConfigured, postToChannel } from './discord.js';
@@ -58,6 +58,15 @@ interface ClaimedReminder {
  * Claiming writes `next_run_at = null`. Whatever happens next — sent, refused,
  * skipped as stale — the row is out of the queue until something deliberately
  * puts it back.
+ *
+ * The claim returns ids and due times; the rows themselves are then read back
+ * through Drizzle. That second query exists because the first version of this
+ * function rebuilt the row from the raw columns by hand, and the hand-written
+ * list quietly went out of date when mentions were added: every scheduled
+ * reminder went out with nobody tagged, while the Send now button — which
+ * loads the row properly — tagged everybody. Nothing in the type system could
+ * catch it, because the mapping ended in a cast. One extra indexed read per
+ * tick is a cheap price for a row that is always whatever the table says.
  */
 async function claimDue(now: Date): Promise<ClaimedReminder[]> {
   const result = await db.execute(sql`
@@ -73,36 +82,25 @@ async function claimDue(now: Date): Promise<ClaimedReminder[]> {
     SET next_run_at = NULL
     FROM due
     WHERE r.id = due.id
-    RETURNING r.*, due.next_run_at AS due_at
+    RETURNING r.id, due.next_run_at AS due_at
   `);
 
-  const rows =
+  const claimed =
     (result as unknown as { rows?: Record<string, unknown>[] }).rows ??
     (result as unknown as Record<string, unknown>[]);
 
-  return rows.map((raw) => ({
-    dueAt: new Date(raw.due_at as string),
-    row: {
-      id: raw.id,
-      factionId: raw.faction_id,
-      channelId: raw.channel_id,
-      channelName: raw.channel_name,
-      message: raw.message,
-      title: raw.title,
-      scheduleType: raw.schedule_type,
-      timeOfDay: raw.time_of_day,
-      weekdays: raw.weekdays,
-      dayOfMonth: raw.day_of_month,
-      runAt: raw.run_at ? new Date(raw.run_at as string) : null,
-      isEnabled: raw.is_enabled,
-      nextRunAt: null,
-      lastRunAt: raw.last_run_at ? new Date(raw.last_run_at as string) : null,
-      lastError: raw.last_error,
-      createdBy: raw.created_by,
-      createdAt: new Date(raw.created_at as string),
-      updatedAt: new Date(raw.updated_at as string),
-    } as DiscordReminder,
-  }));
+  if (claimed.length === 0) return [];
+
+  const dueById = new Map(
+    claimed.map((raw) => [raw.id as string, new Date(raw.due_at as string)]),
+  );
+
+  const rows = await db
+    .select()
+    .from(discordReminders)
+    .where(inArray(discordReminders.id, [...dueById.keys()]));
+
+  return rows.map((row) => ({ row, dueAt: dueById.get(row.id)! }));
 }
 
 /**
@@ -293,6 +291,9 @@ export function stopReminderRunner(): void {
 
 /** Exposed for the test that proves a tick cannot overlap the previous one. */
 export const _testing = { tick, isRunning: () => running };
+
+/** Exposed so a test can check the claim carries every column of the row. */
+export const _claimForTest = claimDue;
 
 // Used by the routes to keep `nextRunAt` honest after a change.
 export { nextRun };
