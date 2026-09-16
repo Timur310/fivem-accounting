@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
 import { computeTreasuryBalances } from '../lib/treasury.js';
 import { requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { toDateString } from '../lib/date.js';
 
@@ -16,7 +17,7 @@ const router = asyncRouter({ mergeParams: true });
 
 // Readable by any faction member: the treasury view is aggregate only and
 // exposes no individual payout records.
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('treasury'));
 
 const treasuryQuerySchema = z.object({
   trend_days: z.string().optional(),

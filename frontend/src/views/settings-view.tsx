@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History, MessageSquare } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History, MessageSquare, Check } from 'lucide-react';
 import { DiscordSettingsSection } from '@/components/discord-settings-section';
 
 const EXPENSE_CATEGORY_LABELS = {
@@ -38,6 +38,11 @@ import type { ItemCategory, ItemType, Quota, Member, FactionRank } from '@/lib/a
 import {
   FACTION_PERMISSIONS,
   PERMISSION_LABEL_KEYS,
+  FACTION_MODULES,
+  MODULE_LABEL_KEYS,
+  MODULE_HINT_KEYS,
+  PERMISSION_MODULE,
+  isModuleEnabled,
   type FactionPermission,
 } from '@/lib/api-types';
 import { useEffect, useMemo, useRef } from 'react';
@@ -1338,6 +1343,11 @@ function FactionSettingsSection({
   const [strikeExpiry, setStrikeExpiry] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: 30, minor: 90, major: null });
   const [strikeEscalation, setStrikeEscalation] = useState<{ warning: number | null; minor: number | null; major: number | null }>({ warning: null, minor: null, major: null });
   const [expenseBudgets, setExpenseBudgets] = useState<{ warehouse: number | null; utilities: number | null; supplies: number | null; other: number | null }>({ warehouse: null, utilities: null, supplies: null, other: null });
+  // Held as the full list of what is on, because that is what the API takes
+  // and what the checkboxes read. A faction that has never opened this has
+  // null on the server, which means everything — expanded here so the boxes
+  // render ticked, and sent back as a list once they touch it.
+  const [modules, setModules] = useState<string[]>([...FACTION_MODULES]);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1349,6 +1359,7 @@ function FactionSettingsSection({
       setStrikeExpiry(settings.strikeExpiryDays);
       setStrikeEscalation(settings.strikeEscalation);
       setExpenseBudgets(settings.expenseBudgets);
+      setModules(settings.enabledModules ?? [...FACTION_MODULES]);
     }
   }, [settings]);
 
@@ -1392,6 +1403,7 @@ function FactionSettingsSection({
         strikeExpiryDays: strikeExpiry,
         strikeEscalation,
         expenseBudgets,
+        ...(isFactionAdmin ? { enabledModules: modules } : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['faction-settings', factionId] });
@@ -1412,8 +1424,64 @@ function FactionSettingsSection({
     return <ErrorState error={error} onRetry={() => refetch()} />;
   }
 
+  const toggleModule = (module: string) => {
+    setModules((prev) => prev.includes(module)
+      ? prev.filter((m) => m !== module)
+      : [...prev, module]);
+    markChanged();
+  };
+
   return (
     <div className="space-y-6">
+      {/* ── Modules ──
+          This app is a set of tools rather than one program, and most
+          factions want some of them. Switching one off takes its screen out
+          of the navigation and its permissions out of the rank editor above;
+          it never touches the data behind it, and switching it back on finds
+          everything where it was left. */}
+      {isFactionAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm text-zinc-200">{t('settings.modules')}</CardTitle>
+            <p className="text-xs text-zinc-500 mt-1">{t('settings.modulesHint')}</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {FACTION_MODULES.map((module) => {
+                const on = modules.includes(module);
+                return (
+                  <button
+                    key={module}
+                    type="button"
+                    onClick={() => toggleModule(module)}
+                    className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      on
+                        ? 'border-[var(--line-2)] bg-[var(--fill-1)]'
+                        : 'border-[var(--line-1)] opacity-60 hover:opacity-100'
+                    }`}
+                    style={on ? { borderColor: `${brandColor}40` } : undefined}
+                  >
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                        on ? 'border-transparent' : 'border-[var(--line-2)]'
+                      }`}
+                      style={on ? { backgroundColor: brandColor } : undefined}
+                    >
+                      {on && <Check className="h-3 w-3 text-white" />}
+                    </span>
+                    <span>
+                      <span className="block text-sm text-zinc-200">{t(MODULE_LABEL_KEYS[module])}</span>
+                      <span className="block text-xs text-zinc-500">{t(MODULE_HINT_KEYS[module])}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">{t('settings.modulesDataSafe')}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Ranks ── */}
       <Card>
         <CardHeader>
@@ -1465,7 +1533,17 @@ function FactionSettingsSection({
                       {(isFactionAdmin
                         ? FACTION_PERMISSIONS
                         : FACTION_PERMISSIONS.filter((perm) => r.permissions.includes(perm))
-                      ).map((perm) => {
+                      ).filter((perm) => {
+                        // Permissions for a module this faction has switched
+                        // off are not choices, they are noise — and this list
+                        // is the longest in the app. One a rank already holds
+                        // stays visible, so nothing is hidden that is in
+                        // force.
+                        const module = PERMISSION_MODULE[perm];
+                        return !module
+                          || isModuleEnabled(modules, module)
+                          || r.permissions.includes(perm);
+                      }).map((perm) => {
                         const active = r.permissions.includes(perm);
                         const chipClass = `text-micro px-2 py-1 rounded-md border transition-colors ${
                           active

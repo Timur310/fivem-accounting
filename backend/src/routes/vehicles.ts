@@ -14,6 +14,7 @@ import {
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 
@@ -36,7 +37,7 @@ import { dispatchDiscord } from '../lib/discordDispatch.js';
  */
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('vehicles'));
 
 const factionId = (req: Request) => req.params.id as string;
 

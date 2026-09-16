@@ -7,6 +7,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notify } from '../lib/notify.js';
@@ -14,7 +15,7 @@ import { resolveStrikeExpiry, effectiveStatus } from '../lib/strikes.js';
 
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('strikes'));
 
 // ── Validation schemas ────────────────────────────────
 

@@ -14,6 +14,7 @@ import {
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { NO_RANK_LEVEL, viewerRankLevel } from '../lib/rank.js';
 
@@ -35,7 +36,7 @@ import { NO_RANK_LEVEL, viewerRankLevel } from '../lib/rank.js';
  */
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('map'));
 
 const coordinate = z.object({
   // GTA V's world is roughly -4000..4500 on X and -4000..8000 on Y. The bounds

@@ -9,6 +9,7 @@ import { parsePagination } from '../lib/types.js';
 import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { buildWhere } from '../lib/query.js';
 import { isActiveStrike, effectiveStatus } from '../lib/strikes.js';
 
@@ -18,7 +19,7 @@ const router = asyncRouter({ mergeParams: true });
 // who is asking. A member has to be able to see the strikes held against them,
 // including the ones that no longer count; reading the rest of the faction's
 // discipline record is what `manage_strikes` is for.
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('strikes'));
 
 const listQuerySchema = z.object({
   sort: z.string().max(40).optional(),

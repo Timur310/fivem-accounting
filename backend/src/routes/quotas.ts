@@ -7,6 +7,7 @@ import { eq, and, sql, desc, gte, lte, isNull } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { getPeriodRange, getPreviousPeriodRange, type PeriodRange } from '../lib/period.js';
 import { toDateString, periodHasStarted, parseLocalDate } from '../lib/date.js';
@@ -14,7 +15,7 @@ import { QUOTA_SCOPES, type QuotaScope } from '../db/schema.js';
 
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('quotas'));
 
 // ── Helpers ──────────────────────────────────────────
 

@@ -69,6 +69,7 @@ import { CraftingView } from '@/views/crafting-view';
 import { PricingView } from '@/views/pricing-view';
 import { VehiclesView } from '@/views/vehicles-view';
 import { OperationsView } from '@/views/operations-view';
+import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
@@ -107,6 +108,14 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   /** Any one of these is enough to see the item. */
   anyPermission?: FactionPermission[];
+  /**
+   * The module this screen belongs to, if it is one a faction can switch off.
+   *
+   * Screens without one — the dashboard, the roster, settings, the audit log,
+   * support, the guide — cannot be turned off, because a faction cannot be
+   * run without them.
+   */
+  module?: FactionModule;
   /** Hide unless the user actually belongs to the selected faction. */
   membersOnly?: boolean;
   superadminOnly?: boolean;
@@ -295,12 +304,13 @@ export function AppShell() {
 
   const navItems: NavItem[] = [
     { group: 'play', view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
-    { group: 'play', view: 'entries', label: 'nav.entries', icon: List },
-    { group: 'play', view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine },
-    { group: 'manage', view: 'treasury', label: 'nav.treasury', icon: Wallet },
+    { group: 'play', view: 'entries', label: 'nav.entries', icon: List, module: 'entries' },
+    { group: 'play', view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine, module: 'payouts' },
+    { group: 'manage', view: 'treasury', label: 'nav.treasury', icon: Wallet, module: 'treasury' },
     {
       group: 'manage',
       view: 'laundering',
+      module: 'laundering',
       label: 'nav.laundering',
       icon: WashingMachine,
       anyPermission: ['manage_laundering'],
@@ -308,6 +318,7 @@ export function AppShell() {
     {
       group: 'manage',
       view: 'crafting',
+      module: 'crafting',
       label: 'nav.crafting',
       icon: Hammer,
       // Either permission gets you the screen: running a recipe and writing
@@ -317,27 +328,27 @@ export function AppShell() {
     // No permission: the crew that ran the job wants to see what it came to,
     // and half of them hold nothing. Logging and reverting are gated inside
     // the view.
-    { group: 'play', view: 'operations', label: 'nav.operations', icon: Crosshair },
+    { group: 'play', view: 'operations', label: 'nav.operations', icon: Crosshair, module: 'operations' },
     // No permission: the person who needs to look a plate up is usually
     // staring at the car, and usually holds the fewest rights. Editing the
     // registry is gated inside the view.
-    { group: 'manage', view: 'vehicles', label: 'nav.vehicles', icon: Car },
+    { group: 'manage', view: 'vehicles', label: 'nav.vehicles', icon: Car, module: 'vehicles' },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
-    { group: 'manage', view: 'pricing', label: 'nav.pricing', icon: Calculator },
+    { group: 'manage', view: 'pricing', label: 'nav.pricing', icon: Calculator, module: 'pricing' },
     // No permission: the map is faction knowledge, and each marker carries its
     // own visibility. Gating the screen as well would hide the public pins
     // from the people they exist for.
-    { group: 'manage', view: 'map', label: 'nav.map', icon: Map },
+    { group: 'manage', view: 'map', label: 'nav.map', icon: Map, module: 'map' },
     { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
-    { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy },
+    { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy, module: 'leaderboard' },
     // Everyone reads the board; posting is gated inside the view.
-    { group: 'play', view: 'announcements', label: 'nav.announcements', icon: Megaphone },
+    { group: 'play', view: 'announcements', label: 'nav.announcements', icon: Megaphone, module: 'announcements' },
     // The timeline is scoped per source inside the query, so it needs no
     // permission of its own: everyone sees their own slice of it.
-    { group: 'play', view: 'feed', label: 'nav.feed', icon: Activity },
-    { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle },
+    { group: 'play', view: 'feed', label: 'nav.feed', icon: Activity, module: 'feed' },
+    { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle, module: 'strikes' },
     {
       group: 'manage',
       view: 'settings',
@@ -356,7 +367,7 @@ export function AppShell() {
       // faction they do not belong to has no business reading it.
       membersOnly: true,
     },
-    { group: 'manage', view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'] },
+    { group: 'manage', view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'], module: 'reports' },
     { group: 'admin', view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
     // The guide is for everyone, in every faction — the last item, never hidden.
     // Support sits with the player screens and carries no permission: the
@@ -377,6 +388,13 @@ export function AppShell() {
   ];
 
   const isNavItemVisible = (item: NavItem) => {
+    // Ahead of the superadmin shortcut below, because a switched-off module is
+    // not a permission: it is this faction saying it does not use that tool,
+    // and it is as true for a superadmin looking in as for anybody else.
+    if (item.module && !isModuleEnabled(factionSettings?.enabledModules, item.module)) {
+      return false;
+    }
+
     // Every screen, in every faction. `membersOnly` guards a faction's own
     // history from people passing through, and a superadmin is not passing
     // through — the audit log route lets them read it either way, so hiding

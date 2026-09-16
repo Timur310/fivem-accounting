@@ -10,6 +10,7 @@ import { eq, and, or, desc, sql, gt, isNull } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notifyMany } from '../lib/notify.js';
@@ -26,7 +27,7 @@ import { notifyMany } from '../lib/notify.js';
  */
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('announcements'));
 
 const createSchema = z.object({
   title: z.string().trim().min(1).max(200),
