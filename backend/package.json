@@ -12,6 +12,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "bootstrap": "tsx src/bootstrap.ts",
+    "backup:verify": "tsx src/scripts/verifyBackup.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
