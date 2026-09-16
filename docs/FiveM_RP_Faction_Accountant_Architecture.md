@@ -1825,6 +1825,44 @@ screen away from everybody in the faction. The same line the rank permissions
 draw, for the same reason. A permission a rank already holds stays visible in
 the editor even when its module is off, so nothing in force is ever hidden.
 
+### 8.23 Rehearsing a restore
+
+A backup nobody has restored is a file, not a backup. The restore endpoint is
+covered end to end in `backup.test.ts`, but what that proves is that the code
+works — not that *this* server's dump, taken from *this* database with the
+tool versions on that host, comes back whole. The only way to know is to
+restore one and look, and the only safe place to do that is somewhere that is
+not the live database.
+
+    npm run backup:verify -- ./faction-accountant-2026-09-16.dump
+
+It reads the archive's table of contents, creates a scratch database beside the
+live one, restores into it, counts every table, and drops the scratch database
+again. `--keep` leaves it in place for somebody who wants to look around,
+which is not the default: a second copy of every faction's books on the same
+host is the thing backups exist to protect against.
+
+**The counts are the output that matters.** A dump that restores without error
+but brings back four entries where the app has forty thousand has failed in the
+only way that counts, and nothing but the numbers says so. `users`, `factions`
+and `faction_members` coming back empty is reported as a failure rather than
+printed as a zero, because no real deployment has none of those.
+
+**It never touches the live database.** The scratch name is derived from the
+live one and compared against it, and the function throws rather than proceed
+if they could ever match.
+
+**It does not use the app's environment.** `lib/backupVerify.ts` reads
+`DATABASE_URL` (or `BACKUP_DATABASE_URL`) straight from `process.env` and
+repeats the small amount of connection handling it needs, rather than importing
+the validated `env`, which insists on a Discord client ID and a JWT secret.
+Somebody restoring onto a fresh machine in the middle of an outage has a
+database and a file; being told to invent an OAuth secret before they may check
+the file is the last thing they need.
+
+Run it after any change to the database, the Postgres version, or the host. The
+answer you want is boring.
+
 ## 9. Frontend Architecture
 
 ### 9.1 Shape
