@@ -98,7 +98,36 @@ function isDesktop() {
   }
 }
 
-type NavGroup = 'play' | 'manage' | 'admin';
+/**
+ * The sidebar's sections.
+ *
+ * It used to be three — Play, Manage, Server — and two of them grew past
+ * scanning: eleven items under "Manage" covering money, vehicles, the map,
+ * the roster, discipline and settings, which is not a section, it is a
+ * drawer. The split below is by *what you are doing*, so somebody looking for
+ * a screen can guess which heading it is under before reading any of them.
+ *
+ * Order is the order they appear, and it runs from what people open every
+ * session to what they open once a month.
+ */
+const NAV_GROUPS = [
+  // What happened while you were away.
+  { key: 'overview', label: 'nav.group.overview' },
+  // Everything that moves value: what comes in, what goes out, what it is
+  // worth. The app's original job, and still the biggest section.
+  { key: 'ledger', label: 'nav.group.ledger' },
+  // Things that exist out in the city rather than in the books.
+  { key: 'field', label: 'nav.group.field' },
+  // The roster and how it is doing.
+  { key: 'people', label: 'nav.group.people' },
+  // Running the faction itself, rather than playing in it.
+  { key: 'faction', label: 'nav.group.faction' },
+  { key: 'help', label: 'nav.group.help' },
+  // Superadmin only, and last: nobody in a faction ever sees it.
+  { key: 'admin', label: 'nav.group.admin' },
+] as const satisfies readonly { key: string; label: TranslationKey }[];
+
+type NavGroup = (typeof NAV_GROUPS)[number]['key'];
 
 interface NavItem {
   group: NavGroup;
@@ -303,12 +332,12 @@ export function AppShell() {
   const openTicketCount = openTickets?.open ?? 0;
 
   const navItems: NavItem[] = [
-    { group: 'play', view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
-    { group: 'play', view: 'entries', label: 'nav.entries', icon: List, module: 'entries' },
-    { group: 'play', view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine, module: 'payouts' },
-    { group: 'manage', view: 'treasury', label: 'nav.treasury', icon: Wallet, module: 'treasury' },
+    { group: 'overview', view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
+    { group: 'ledger', view: 'entries', label: 'nav.entries', icon: List, module: 'entries' },
+    { group: 'ledger', view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine, module: 'payouts' },
+    { group: 'ledger', view: 'treasury', label: 'nav.treasury', icon: Wallet, module: 'treasury' },
     {
-      group: 'manage',
+      group: 'ledger',
       view: 'laundering',
       module: 'laundering',
       label: 'nav.laundering',
@@ -316,7 +345,7 @@ export function AppShell() {
       anyPermission: ['manage_laundering'],
     },
     {
-      group: 'manage',
+      group: 'ledger',
       view: 'crafting',
       module: 'crafting',
       label: 'nav.crafting',
@@ -328,37 +357,38 @@ export function AppShell() {
     // No permission: the crew that ran the job wants to see what it came to,
     // and half of them hold nothing. Logging and reverting are gated inside
     // the view.
-    { group: 'play', view: 'operations', label: 'nav.operations', icon: Crosshair, module: 'operations' },
+    { group: 'field', view: 'operations', label: 'nav.operations', icon: Crosshair, module: 'operations' },
     // No permission: the person who needs to look a plate up is usually
     // staring at the car, and usually holds the fewest rights. Editing the
     // registry is gated inside the view.
-    { group: 'manage', view: 'vehicles', label: 'nav.vehicles', icon: Car, module: 'vehicles' },
+    { group: 'field', view: 'vehicles', label: 'nav.vehicles', icon: Car, module: 'vehicles' },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
-    { group: 'manage', view: 'pricing', label: 'nav.pricing', icon: Calculator, module: 'pricing' },
+    { group: 'ledger', view: 'pricing', label: 'nav.pricing', icon: Calculator, module: 'pricing' },
     // No permission: the map is faction knowledge, and each marker carries its
     // own visibility. Gating the screen as well would hide the public pins
     // from the people they exist for.
-    { group: 'manage', view: 'map', label: 'nav.map', icon: Map, module: 'map' },
-    { group: 'manage', view: 'members', label: 'nav.members', icon: Users },
-    { group: 'play', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy, module: 'leaderboard' },
+    { group: 'field', view: 'map', label: 'nav.map', icon: Map, module: 'map' },
+    { group: 'people', view: 'members', label: 'nav.members', icon: Users },
+    { group: 'people', view: 'leaderboard', label: 'nav.leaderboard', icon: Trophy, module: 'leaderboard' },
     // Everyone reads the board; posting is gated inside the view.
-    { group: 'play', view: 'announcements', label: 'nav.announcements', icon: Megaphone, module: 'announcements' },
+    { group: 'overview', view: 'announcements', label: 'nav.announcements', icon: Megaphone, module: 'announcements' },
     // The timeline is scoped per source inside the query, so it needs no
     // permission of its own: everyone sees their own slice of it.
-    { group: 'play', view: 'feed', label: 'nav.feed', icon: Activity, module: 'feed' },
-    { group: 'manage', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle, module: 'strikes' },
+    { group: 'overview', view: 'feed', label: 'nav.feed', icon: Activity, module: 'feed' },
+    { group: 'people', view: 'strikes', label: 'nav.strikes', icon: AlertTriangle, module: 'strikes' },
     {
-      group: 'manage',
+      group: 'faction',
       view: 'settings',
       label: 'nav.settings',
       icon: Settings,
       // Mirrors the PATCH guard: either permission opens the settings screen.
       anyPermission: ['manage_settings', 'manage_customization'],
     },
+    { group: 'faction', view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'], module: 'reports' },
     {
-      group: 'manage',
+      group: 'faction',
       view: 'audit-logs',
       label: 'nav.auditLogs',
       icon: ScrollText,
@@ -367,13 +397,12 @@ export function AppShell() {
       // faction they do not belong to has no business reading it.
       membersOnly: true,
     },
-    { group: 'manage', view: 'reports', label: 'nav.reports', icon: FileBarChart, anyPermission: ['view_reports'], module: 'reports' },
     { group: 'admin', view: 'admin-factions', label: 'nav.factionAdmin', icon: Shield, superadminOnly: true },
     // The guide is for everyone, in every faction — the last item, never hidden.
     // Support sits with the player screens and carries no permission: the
     // people most likely to hit a bug are the ones with the fewest rights.
-    { group: 'play', view: 'support', label: 'nav.support', icon: LifeBuoy },
-    { group: 'play', view: 'guide', label: 'nav.guide', icon: BookOpen },
+    { group: 'help', view: 'guide', label: 'nav.guide', icon: BookOpen },
+    { group: 'help', view: 'support', label: 'nav.support', icon: LifeBuoy },
     // Superadmin only, and last in the admin group: it is the screen nobody
     // needs until the day they need it badly.
     { group: 'admin', view: 'admin-backup', label: 'nav.backup', icon: DatabaseBackup, superadminOnly: true },
@@ -672,10 +701,12 @@ export function AppShell() {
 
         {/* Nav Items */}
         <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
-          {(['play', 'manage', 'admin'] as const).map((group) => {
+          {NAV_GROUPS.map(({ key: group, label }) => {
             const items = navItems.filter((g) => g.group === group && isNavItemVisible(g));
+            // A faction that switched a whole section's modules off never sees
+            // the heading either.
             if (items.length === 0) return null;
-            const groupLabel = group === 'play' ? t('nav.groupPlay') : group === 'manage' ? t('nav.groupManage') : t('nav.groupAdmin');
+            const groupLabel = t(label);
             return (
               <div key={group} className="mb-1">
                 {sidebarOpen && (
@@ -757,7 +788,14 @@ export function AppShell() {
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        views={navItems.filter(isNavItemVisible).map((i) => ({ view: i.view, label: i.label }))}
+        sections={NAV_GROUPS
+          .map(({ key, label }) => ({
+            label,
+            views: navItems
+              .filter((i) => i.group === key && isNavItemVisible(i))
+              .map((i) => ({ view: i.view, label: i.label })),
+          }))
+          .filter((section) => section.views.length > 0)}
       />
 
       {/* Mobile overlay */}
