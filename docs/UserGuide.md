@@ -1191,6 +1191,28 @@ on, and your ledger is untouched.
 
 Only a faction admin can change this.
 
+### 8.8 Starting from a rank template
+
+A blank rank list is the hardest part of setting a faction up. In **Settings →
+Rank hierarchy**, press **Start from a template** and pick the shape that fits:
+
+- **Crew** — a small group: someone runs it, someone helps, everybody else does
+  the work.
+- **Organisation** — a full hierarchy, with leadership and officers.
+- **Business** — a front or a real company: owner, managers, staff.
+
+The ranks appear **in the editor, not saved.** Rename them, change the levels,
+tick and untick permissions, then press Save. Members keep the rank they have
+until you do.
+
+The permissions each rank starts with follow the features your faction uses
+(§8.7), so a faction that only runs plates and a map is not handed a list of
+accounting permissions.
+
+The bottom rank deliberately holds nothing. Reading is open to members
+everywhere in this app, so a new recruit can already see the registry, the map,
+the noticeboard and the leaderboard on their first day.
+
 ## 9. For superadmins
 
 ### 9.1 Factions

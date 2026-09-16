@@ -84,6 +84,7 @@ import type {
   Quote,
   QuoteInput,
   Vehicle,
+  RankTemplate,
   Operation,
   OperationInput,
   OperationSplit,
@@ -337,6 +338,18 @@ export const factionSettingsApi = {
   update: (factionId: string, input: UpdateFactionSettingsInput) =>
     api
       .patch<ApiSuccessResponse<FactionSettings>>(`/factions/${factionId}/settings`, input)
+      .then(unwrap),
+
+  /**
+   * Starting points for a rank list, already filtered to this faction's
+   * modules. Read-only — applying one fills the editor, and saving it is an
+   * ordinary settings update.
+   */
+  rankTemplates: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ templates: RankTemplate[] }>>(
+        `/factions/${factionId}/settings/rank-templates`,
+      )
       .then(unwrap),
 };
 
