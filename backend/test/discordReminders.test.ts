@@ -13,7 +13,7 @@ vi.mock('../src/lib/discord.js', async (importOriginal) => ({
   guildMemberExists: memberMock,
 }));
 
-const { runDueReminders, _testing } = await import('../src/lib/reminderRunner.js');
+const { runDueReminders, _testing, _claimForTest } = await import('../src/lib/reminderRunner.js');
 
 let w: BasicWorld;
 const f = () => `/api/v1/factions/${w.faction.id}`;
@@ -323,6 +323,67 @@ describe('mentions', () => {
     expect(payload.content).toContain(`<@${w.member.discordId}>`);
     expect(payload.content).not.toContain(w.member.id);
     expect(payload.allowed_mentions.users).toEqual([w.member.discordId]);
+  });
+
+  /**
+   * The scheduled run has to ping the same people the button does.
+   *
+   * It did not. The two paths build the same message but reach it with
+   * different rows: the button loads the reminder with Drizzle, while the
+   * runner claims it in one hand-written statement and maps the columns by
+   * hand — and that mapping quietly left out the two mention columns. Every
+   * scheduled reminder arrived with nobody tagged, and pressing Send now on
+   * the same reminder tagged everybody correctly, which is what made it look
+   * like a Discord problem rather than ours.
+   */
+  async function createAndLetItFire(over: Record<string, unknown>) {
+    const created = await create(w.admin.cookie, daily(over));
+    expect(created.status).toBe(201);
+    await db.update(discordReminders)
+      .set({ nextRunAt: new Date(Date.now() - 1000) })
+      .where(eq(discordReminders.id, created.body.data.id));
+    expect(await runDueReminders()).toBe(1);
+    return created;
+  }
+
+  it('pings a role on the scheduled run, not only on Send now', async () => {
+    await link();
+    await createAndLetItFire({ mentionRoleIds: [ROLE] });
+    const payload = sent();
+    expect(payload.content).toContain(`<@&${ROLE}>`);
+    expect(payload.allowed_mentions.roles).toEqual([ROLE]);
+  });
+
+  it('pings a member on the scheduled run', async () => {
+    await link();
+    await createAndLetItFire({ mentionUserIds: [w.member.id] });
+    const payload = sent();
+    expect(payload.content).toContain(`<@${w.member.discordId}>`);
+    expect(payload.allowed_mentions.users).toEqual([w.member.discordId]);
+  });
+
+  // The guard against this coming back. The runner rebuilds the row column by
+  // column, so anything added to the table has to be added there too — and
+  // nothing in the type system says so, because the mapping is cast.
+  it('claims a row carrying every column the table has', async () => {
+    await link();
+    const created = await create(w.admin.cookie, daily({
+      mentionRoleIds: [ROLE], mentionUserIds: [w.member.id],
+    }));
+    await db.update(discordReminders)
+      .set({ nextRunAt: new Date(Date.now() - 1000) })
+      .where(eq(discordReminders.id, created.body.data.id));
+
+    const [before] = await db.select().from(discordReminders)
+      .where(eq(discordReminders.id, created.body.data.id));
+    const claimed = await _claimForTest(new Date());
+
+    expect(claimed).toHaveLength(1);
+    for (const key of Object.keys(before!) as (keyof typeof before)[]) {
+      // The claim is what clears these two; everything else must survive it.
+      if (key === 'nextRunAt' || key === 'updatedAt') continue;
+      expect({ [key]: claimed[0]!.row[key] }).toEqual({ [key]: before![key] });
+    }
   });
 
   // Mentions only fire from content. The same text inside an embed renders as
