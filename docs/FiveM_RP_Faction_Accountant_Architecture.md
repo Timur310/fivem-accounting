@@ -1825,6 +1825,39 @@ screen away from everybody in the faction. The same line the rank permissions
 draw, for the same reason. A permission a rank already holds stays visible in
 the editor even when its module is off, so nothing in force is ever hidden.
 
+### 8.22 Rank templates
+
+A new faction opens Settings to a blank rank list and twenty-one permission
+chips, and has to invent a hierarchy and decide what each level may do before
+anybody can be given anything. Almost every faction arrives at the same answer:
+somebody who runs it, somebody who helps run it, people who do the work. The
+app offers that answer and lets them edit it.
+
+**Three templates, and a template is applied into the editor rather than
+saved.** They see the ranks and the permissions, change whatever they disagree
+with, and press Save like any other edit — a starting point somebody can argue
+with beats a decision made on their behalf. Nothing is stored server-side:
+`GET /settings/rank-templates` computes them.
+
+**Permissions are classified once, by tier, instead of listed per rank per
+template.** `crew` is doing the faction's work, `officer` is watching over it,
+`leadership` is deciding what the faction is; each rank takes a tier and every
+tier contains the one below. Writing them out per template would be sixty-odd
+entries to keep correct, and a permission added later would have to be added to
+all of them or quietly go missing from every template. A test pins that every
+permission carries a tier.
+
+**Templates follow the faction's modules** (§8.21). A faction running only
+plates and a map gets a Boss rank holding the vehicle and map permissions and
+the ones that govern the faction itself — nothing about prices, recipes or the
+ledger. A template is the one place that could rebuild the twenty-one-chip wall
+modules exist to pull down.
+
+**Every template ends in a rank holding nothing**, which is the one most
+factions need: reading is open to members throughout this app, so a recruit
+with no permissions can already see the registry, the map, the board and the
+leaderboard on the day they join.
+
 ## 9. Frontend Architecture
 
 ### 9.1 Shape

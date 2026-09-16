@@ -1517,6 +1517,33 @@ export const en = {
   'module.hint.announcements': 'The faction noticeboard',
   'module.hint.feed': 'A timeline of what the faction has been doing',
   'module.hint.reports': 'Reports, charts and exports',
+
+  // ── rank templates ──
+  'settings.useTemplate': 'Use a template',
+  'settings.startFromTemplate': 'Start from a template',
+  'settings.templateTitle': 'Pick a starting point',
+  'settings.templateDescription': 'A rank list you can edit. Nothing is saved until you press Save.',
+  'settings.templateReplaces': 'This replaces the ranks in the editor. Nothing is saved until you press Save, and members keep their current rank until then.',
+  'settings.templateNoPermissions': '(no permissions)',
+  'settings.templatePermissionCount': '({count})',
+  'rankTemplate.crew': 'Crew',
+  'rankTemplate.crewHint': 'A small group: someone runs it, someone helps, everybody else does the work.',
+  'rankTemplate.organisation': 'Organisation',
+  'rankTemplate.organisationHint': 'A full hierarchy with a layer of leadership and a layer of officers.',
+  'rankTemplate.business': 'Business',
+  'rankTemplate.businessHint': 'A legal front or a real company: owner, managers, staff.',
+  'rankTemplate.role.boss': 'Boss',
+  'rankTemplate.role.underboss': 'Underboss',
+  'rankTemplate.role.rightHand': 'Right Hand',
+  'rankTemplate.role.lieutenant': 'Lieutenant',
+  'rankTemplate.role.soldier': 'Soldier',
+  'rankTemplate.role.member': 'Member',
+  'rankTemplate.role.associate': 'Associate',
+  'rankTemplate.role.recruit': 'Recruit',
+  'rankTemplate.role.owner': 'Owner',
+  'rankTemplate.role.manager': 'Manager',
+  'rankTemplate.role.staff': 'Staff',
+  'rankTemplate.role.trainee': 'Trainee',
 };
 
 /** Every key the interface may ask for. */
