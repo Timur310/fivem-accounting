@@ -8,7 +8,8 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
-import { FACTION_MODULES } from '../lib/modules.js';
+import { FACTION_MODULES, factionModules } from '../lib/modules.js';
+import { templatesFor } from '../lib/rankTemplates.js';
 
 const router = asyncRouter({ mergeParams: true });
 
@@ -76,6 +77,18 @@ const updateSettingsSchema = z.object({
   (d) => Object.keys(d).length > 0,
   'Provide at least one setting to update',
 );
+
+// ── GET /rank-templates — starting points for a rank list ──
+//
+// Read-only and computed: nothing is stored, and applying one is an ordinary
+// settings save made by the person who looked at it first. Carries only
+// permissions this faction's modules can use, so a template never rebuilds the
+// twenty-one-chip wall that modules exist to pull down.
+
+router.get('/rank-templates', async (req: Request, res: Response) => {
+  const enabledModules = await factionModules(req.params.id as string);
+  success(res, { templates: templatesFor(enabledModules) });
+});
 
 // ── GET / — read current settings ────────────────────
 // Readable by any member: ranks show up on the roster, and the inactivity
