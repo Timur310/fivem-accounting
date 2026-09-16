@@ -462,6 +462,36 @@ the same message to everyone in it. Choose which channels get what accordingly.
 
 ---
 
+### 5.11 Operations — logging a job you did together
+
+You and three others hit the bank. The cash and the gold are in one person's
+pockets, and now four people have to log four numbers that add up. **Don't.**
+Open **Operations** and log it once.
+
+Fill in what it was (*Pacific Standard*), the kind, roughly where and when, add
+everybody who was on it, and list what came back — one line per item.
+
+**Shares.** Everybody starts on 1, which splits it evenly. Give somebody 2 and
+they take twice as much as somebody on 1. You don't have to make anything add
+up to 100.
+
+**Faction cut.** If your faction keeps a percentage, type it in. It comes off
+the top before the crew split, and it counts for nobody — it does not put the
+person filling in the form at the top of the leaderboard.
+
+**Check the split before you log it.** The bottom of the form shows exactly
+what each person will be credited with, worked out by the server. Every
+hundredth is handed out, so the shares always add back up to the haul.
+
+Press **Log it** and everybody's share is written into the books as a normal
+entry — it counts for quotas, the leaderboard and the treasury like anything
+else you log.
+
+**Got it wrong?** Somebody with *Revert Operations* can take the whole thing
+back out in one go from the card, and then you log it again with the right
+numbers. You cannot edit one person's share on its own — that is how a split
+stops adding up.
+
 ## 6. For leaders — running the faction
 
 These sections appear only if your role or rank grants them. The permission

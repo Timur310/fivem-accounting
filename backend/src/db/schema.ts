@@ -159,6 +159,12 @@ export const FACTION_PERMISSIONS = [
   // need to look a plate up are usually the ones with the fewest rights — so
   // only changing it needs saying.
   'manage_vehicles',
+  // A job the crew ran together. Logging one is the crew's own business, so a
+  // rank that may record entries can record an operation; undoing one moves
+  // everybody's credit back out, which is leadership. Same division as the
+  // till and the recipe book.
+  'log_operations',
+  'manage_operations',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -183,6 +189,8 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_prices: 'Manage Prices',
   sell: 'Record Sales',
   manage_vehicles: 'Manage Vehicles',
+  log_operations: 'Log Operations',
+  manage_operations: 'Revert Operations',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -725,10 +733,12 @@ export const DISCORD_EVENT_TYPES = [
   'announcement_removed',
   'craft_reverted',
   'vehicle_removed',
+  'operation_reverted',
   // Not in the removals group above: the registry is a description of what the
   // faction has, so a car arriving is news in the same way a car leaving is,
   // and factions will want both in the same channel.
   'vehicle_added',
+  'operation_logged',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1531,3 +1541,135 @@ export const vehiclesRelations = relations(vehicles, ({ one }) => ({
 
 export type Vehicle = typeof vehicles.$inferSelect;
 export type NewVehicle = typeof vehicles.$inferInsert;
+
+
+// ── operations ─────────────────────────────────────────
+// A job the crew ran together, and the split of what they came back with.
+//
+// The problem this solves is not bookkeeping, it is arithmetic done in a
+// Discord voice channel at two in the morning. Four people rob a bank, the
+// takings land in one person's pockets, and the faction then wants four
+// entries that add up to the haul. Done by hand it is four people typing four
+// numbers, and the numbers do not add up: somebody rounds, somebody forgets
+// the gold, somebody logs their share twice.
+//
+// So the haul is recorded once, as one thing that happened, and the app does
+// the dividing. The entries it writes are ordinary entries — every balance,
+// leaderboard and report in the app already counts them, and none of them
+// needed to learn what an operation is.
+export const operations = pgTable('operations', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+
+  name:     varchar('name', { length: 120 }).notNull(),
+  kind:     varchar('kind', { length: 20 }).notNull().default('other'),
+  location: varchar('location', { length: 120 }),
+
+  /**
+   * When the job happened, not when somebody got round to logging it.
+   *
+   * A timestamp rather than a date because two jobs in one night is the normal
+   * case, and "the second Vangelico run" is how people will look for it. The
+   * entries it writes still carry the date, which is what the ledger works in.
+   */
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+
+  /**
+   * The share taken off the top for the faction itself, before the crew split.
+   *
+   * Booked against the anonymous placeholder, the same way laundering and an
+   * uncredited sale are: the treasury gains it and no leaderboard does. Most
+   * factions run a cut like this, and doing it by hand means the crew's shares
+   * stop adding up to the haul.
+   */
+  factionCutPercent: decimal('faction_cut_percent', { precision: 5, scale: 2 }).notNull().default('0'),
+
+  notes:    text('notes'),
+  loggedBy: uuid('logged_by').notNull().references(() => users.id),
+
+  // Reverted once or not at all; the timestamp is the guard, as with sales.
+  revertedAt: timestamp('reverted_at', { withTimezone: true }),
+  revertedBy: uuid('reverted_by').references(() => users.id),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('operation_faction').on(table.factionId, table.occurredAt),
+}));
+
+/** What kind of job it was. Labels only — nothing in the split depends on it. */
+export const OPERATION_KINDS = [
+  'bank',
+  'jewelry',
+  'store',
+  'house',
+  'convoy',
+  'contract',
+  'territory',
+  'other',
+] as const;
+export type OperationKind = (typeof OPERATION_KINDS)[number];
+
+// ── operation_participants ─────────────────────────────
+// Who was there, and how big a share they take.
+//
+// `share` is a weight, not a percentage: three people on 1 each is an even
+// three-way split, and giving the driver 2 makes it a quarter/quarter/half
+// without anybody working out that 25 and 50 come to 100. Percentages that
+// have to sum to a round number are the thing people get wrong.
+export const operationParticipants = pgTable('operation_participants', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  operationId: uuid('operation_id').notNull().references(() => operations.id, { onDelete: 'cascade' }),
+  userId:      uuid('user_id').notNull().references(() => users.id),
+  share:       integer('share').notNull().default(1),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueMember: uniqueIndex('operation_participant_unique').on(table.operationId, table.userId),
+}));
+
+// ── operation_loot ─────────────────────────────────────
+// What came back, as one line per item type, named as it read on the night.
+export const operationLoot = pgTable('operation_loot', {
+  id:           uuid('id').defaultRandom().primaryKey(),
+  operationId:  uuid('operation_id').notNull().references(() => operations.id, { onDelete: 'cascade' }),
+  itemTypeId:   uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  itemTypeName: varchar('item_type_name', { length: 100 }).notNull(),
+  quantity:     decimal('quantity', { precision: 15, scale: 2 }).notNull(),
+}, (table) => ({
+  operationIndex: index('operation_loot_operation').on(table.operationId),
+}));
+
+// ── operation_movements ────────────────────────────────
+// The ledger rows the split created, so a revert can undo exactly those.
+//
+// Shaped like sale_movements and for the same reason: the link lives here
+// rather than as an `operation_id` column on entries, which keeps the busiest
+// table in the app untouched, and it is what makes those entries refuse to be
+// edited one at a time. Half an unpicked split is a haul that does not add up.
+export const operationMovements = pgTable('operation_movements', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  operationId: uuid('operation_id').notNull().references(() => operations.id, { onDelete: 'cascade' }),
+  /** `share` for a member's cut, `faction_cut` for the part taken off the top. */
+  role:        varchar('role', { length: 12 }).notNull(),
+  userId:      uuid('user_id').notNull().references(() => users.id),
+  itemTypeId:  uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'restrict' }),
+  quantity:    decimal('quantity', { precision: 15, scale: 2 }).notNull(),
+  entryId:     uuid('entry_id').references(() => entries.id, { onDelete: 'set null' }),
+}, (table) => ({
+  operationIndex: index('operation_movement_operation').on(table.operationId),
+}));
+
+export const OPERATION_MOVEMENT_ROLES = ['share', 'faction_cut'] as const;
+export type OperationMovementRole = (typeof OPERATION_MOVEMENT_ROLES)[number];
+
+export const operationsRelations = relations(operations, ({ one, many }) => ({
+  faction:      one(factions, { fields: [operations.factionId], references: [factions.id] }),
+  logger:       one(users,    { fields: [operations.loggedBy],  references: [users.id] }),
+  participants: many(operationParticipants),
+  loot:         many(operationLoot),
+  movements:    many(operationMovements),
+}));
+
+export type Operation = typeof operations.$inferSelect;
+export type NewOperation = typeof operations.$inferInsert;
+export type OperationParticipant = typeof operationParticipants.$inferSelect;
+export type OperationLoot = typeof operationLoot.$inferSelect;

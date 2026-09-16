@@ -38,7 +38,31 @@ export type DiscordEvent =
   | { type: 'strike_revoked'; actorUserId: string; targetUserId: string; severity: string }
   | { type: 'announcement_removed'; actorUserId: string; title: string }
   | { type: 'vehicle_added'; actorUserId: string; plate: string; make?: string | null; model?: string | null; color?: string | null; owner?: string | null; status: string }
-  | { type: 'vehicle_removed'; actorUserId: string; plate: string; make?: string | null; model?: string | null; owner?: string | null };
+  | { type: 'vehicle_removed'; actorUserId: string; plate: string; make?: string | null; model?: string | null; owner?: string | null }
+  | {
+      type: 'operation_logged';
+      actorUserId: string;
+      name: string;
+      kind: string;
+      location?: string | null;
+      occurredAt: string;
+      crew: string[];
+      loot: { itemTypeName: string; quantity: string; unit: string }[];
+      factionCutPercent: string;
+    }
+  | { type: 'operation_reverted'; actorUserId: string; name: string; occurredAt: string };
+
+/** What each operation kind is called in a message, spelled for a reader. */
+const OPERATION_KIND_LABEL: Record<string, string> = {
+  bank: 'Bank job',
+  jewelry: 'Jewellery store',
+  store: 'Store robbery',
+  house: 'House robbery',
+  convoy: 'Convoy',
+  contract: 'Contract',
+  territory: 'Territory',
+  other: 'Job',
+};
 
 /** Discord's own blurple, plus a green/red/amber for direction and trouble. */
 const COLOR = {
@@ -80,6 +104,8 @@ const EMOJI: Record<DiscordEvent['type'], string> = {
   announcement_removed: '\u{1F5D1}\u{FE0F}',
   vehicle_added: '\u{1F697}',          // car
   vehicle_removed: '\u{1F5D1}\u{FE0F}',
+  operation_logged: '\u{1F3AF}',       // direct hit
+  operation_reverted: '\u{1F5D1}\u{FE0F}',
 };
 
 /**
@@ -561,6 +587,43 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         fields: event.owner ? [{ name: 'Owner', value: event.owner, inline: true }] : [],
       };
     }
+
+    // The crew and the haul, and nothing about who got what.
+    //
+    // A split has one line per person per item, which is a dozen rows for a
+    // four-man bank job — unreadable in a chat message, and half of it is
+    // somebody else's business anyway. What the channel wants is that the job
+    // happened, who was on it and what came back. The exact shares are on the
+    // screen that can lay them out in a table.
+    case 'operation_logged': {
+      const where = event.location ? ` \u{2022} ${event.location}` : '';
+      const haul = event.loot
+        .map((l) => `${formatAmount(l.quantity)} ${l.unit} ${l.itemTypeName}`)
+        .join('\n');
+      return {
+        title: 'Operation logged',
+        description: `### \u{1F3AF}  ${event.name}\n${OPERATION_KIND_LABEL[event.kind] ?? 'Job'}${where}`,
+        color: COLOR.in,
+        subject: names.actor(event.actorUserId),
+        byline: `Logged by ${names.user(event.actorUserId)}`,
+        fields: [
+          { name: `Crew (${event.crew.length})`, value: event.crew.join(', ') || '\u{2014}' },
+          { name: 'Haul', value: haul || '\u{2014}' },
+          ...(Number(event.factionCutPercent) > 0
+            ? [{ name: 'Faction cut', value: `${event.factionCutPercent}%`, inline: true }]
+            : []),
+        ],
+      };
+    }
+
+    case 'operation_reverted':
+      return {
+        title: 'Operation reverted',
+        description: `**${event.name}**\nEvery share it credited has been taken back out.`,
+        color: COLOR.removed,
+        subject: names.actor(event.actorUserId),
+        byline: `Reverted by ${names.user(event.actorUserId)}`,
+      };
   }
 }
 

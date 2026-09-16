@@ -925,6 +925,7 @@ export const FACTION_PERMISSIONS = [
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
   'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell', 'manage_vehicles',
+  'log_operations', 'manage_operations',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -946,6 +947,8 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_prices: 'permission.managePrices',
   sell: 'permission.sell',
   manage_vehicles: 'permission.manageVehicles',
+  log_operations: 'permission.logOperations',
+  manage_operations: 'permission.manageOperations',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1667,6 +1670,8 @@ export const DISCORD_EVENT_TYPES = [
   'craft_reverted',
   'vehicle_removed',
   'vehicle_added',
+  'operation_reverted',
+  'operation_logged',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1685,6 +1690,7 @@ export const DISCORD_REMOVAL_EVENTS: readonly DiscordEventType[] = [
   'announcement_removed',
   'craft_reverted',
   'vehicle_removed',
+  'operation_reverted',
 ];
 
 export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> = {
@@ -1708,6 +1714,8 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   craft_reverted: 'discord.event.craftReverted',
   vehicle_added: 'discord.event.vehicleAdded',
   vehicle_removed: 'discord.event.vehicleRemoved',
+  operation_logged: 'discord.event.operationLogged',
+  operation_reverted: 'discord.event.operationReverted',
 };
 
 export interface DiscordIntegration {
@@ -1977,4 +1985,97 @@ export interface MapMarkerInput {
   color?: string;
   icon?: string;
   points: GameCoordinate[];
+}
+
+
+// ── operations ─────────────────────────────────────────
+// A job the crew ran together, and the split of what they brought back.
+
+export const OPERATION_KINDS = [
+  'bank', 'jewelry', 'store', 'house', 'convoy', 'contract', 'territory', 'other',
+] as const;
+export type OperationKind = (typeof OPERATION_KINDS)[number];
+
+export const OPERATION_KIND_KEYS: Record<OperationKind, TranslationKey> = {
+  bank: 'operation.kind.bank',
+  jewelry: 'operation.kind.jewelry',
+  store: 'operation.kind.store',
+  house: 'operation.kind.house',
+  convoy: 'operation.kind.convoy',
+  contract: 'operation.kind.contract',
+  territory: 'operation.kind.territory',
+  other: 'operation.kind.other',
+};
+
+/** One person on the crew, and how big a share they take. */
+export interface OperationParticipantInput {
+  userId: string;
+  /** A weight, not a percentage. Everybody on 1 is an even split. */
+  share?: number;
+}
+
+export interface OperationLootInput {
+  itemTypeId: string;
+  quantity: string;
+}
+
+export interface OperationSplitInput {
+  participants: OperationParticipantInput[];
+  loot: OperationLootInput[];
+  factionCutPercent?: string;
+}
+
+export interface OperationInput extends OperationSplitInput {
+  name: string;
+  kind?: OperationKind;
+  location?: string | null;
+  /** ISO instant. Omitted means now, which is the usual case. */
+  occurredAt?: string;
+  notes?: string | null;
+}
+
+/** One loot line, divided. The cut plus the shares equals the quantity. */
+export interface OperationSplitLine {
+  itemTypeId: string;
+  itemTypeName?: string;
+  unit?: string;
+  isCurrency?: boolean;
+  quantity: string;
+  factionCut: string;
+  shares: { userId: string; quantity: string }[];
+}
+
+export interface OperationSplit {
+  lines: OperationSplitLine[];
+  perMember: { userId: string; items: { itemTypeId: string; quantity: string }[] }[];
+}
+
+export interface Operation {
+  id: string;
+  name: string;
+  kind: OperationKind;
+  location: string | null;
+  occurredAt: string;
+  factionCutPercent: string;
+  notes: string | null;
+  loggedBy: string;
+  loggedByName: string;
+  revertedAt: string | null;
+  createdAt: string;
+  loot: {
+    id: string;
+    itemTypeId: string;
+    itemTypeName: string;
+    quantity: string;
+    unit: string;
+    isCurrency: boolean;
+  }[];
+  crew: { userId: string; share: number; name: string }[];
+  /** The ledger rows the split wrote: who was credited with what. */
+  movements: {
+    role: 'share' | 'faction_cut';
+    userId: string;
+    itemTypeId: string;
+    quantity: string;
+  }[];
 }
