@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { db } from '../db/index.js';
 import { entries, itemTypes, users, quotas } from '../db/schema.js';
 import { eq, and, sql, gte, lte, desc } from 'drizzle-orm';
@@ -8,7 +9,7 @@ import { buildWhere } from '../lib/query.js';
 import { todayDateString, formatDateValue, periodHasStarted } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

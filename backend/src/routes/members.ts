@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import { factionMembers, users, entries, factions, itemTypes, payouts, quotas, auditLogs } from '../db/schema.js';
@@ -14,7 +15,7 @@ import { daysSince, toDateString, periodHasStarted } from '../lib/date.js';
 import { countActiveStrikes, countActiveStrikesBySeverity } from '../lib/strikes.js';
 import { computeHeatmap, computeStreak, computePerformanceScore } from '../lib/analytics.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 /**
  * Thrown by the role update when the change would leave a faction with no

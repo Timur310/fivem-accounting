@@ -448,6 +448,18 @@ All routes are under `/api/v1`. Faction-scoped routes sit behind
 permission set their rank grants (§7.2); individual routes then add
 `requirePermission(...)`.
 
+**Every route file builds its router with `asyncRouter()`, never
+`express.Router()` directly.** Express 4 does not follow a rejected promise: a
+synchronous throw reaches `errorHandler`, an `async` handler that throws
+reaches nothing at all. No response is written and the caller waits until it
+gives up — which for the `schema.parse(req.body)` that guards nearly every
+write meant a mistyped amount answered with a spinner that never stopped.
+`asyncRouter` wraps each handler as it is registered so a rejection goes to
+`next`, preserving handler arity (Express counts declared parameters to spot an
+error handler) and leaving sub-routers alone. Express 5 does this itself; until
+this app moves, the rule is one import per file rather than something everybody
+has to remember at every handler.
+
 ### 6.1 Authentication
 
 | Method | Path | Who |

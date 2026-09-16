@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { sql } from 'drizzle-orm';
@@ -33,7 +34,7 @@ import { parsePagination } from '../lib/types.js';
  * A summary written in English at write time would be frozen in it. The client
  * renders `feed.<type>` through the i18n layer and interpolates `data`.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

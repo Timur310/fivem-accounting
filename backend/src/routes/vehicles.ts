@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -33,7 +34,7 @@ import { dispatchDiscord } from '../lib/discordDispatch.js';
  * that moved, and the vehicle's own history endpoint reads them back. A second
  * log would be a second thing to keep correct.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

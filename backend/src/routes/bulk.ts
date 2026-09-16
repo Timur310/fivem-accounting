@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import { factionMembers, users, entries, itemTypes, factions } from '../db/schema.js';
@@ -10,7 +11,7 @@ import { createAuditLog } from '../lib/audit.js';
 import { ledgerHoldMessage } from '../lib/ledgerHold.js';
 import { todayDateString } from '../lib/date.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // requireFactionMember must run first: it resolves req.factionRole, which the
 // permission guard then checks. Without it factionRole is undefined and every

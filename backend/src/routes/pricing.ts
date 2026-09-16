@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
@@ -48,7 +49,7 @@ import { compareQuantity } from '../lib/crafting.js';
  * ledger is the next phase, and building it as a side effect of a calculator
  * would mean every mistyped quantity landed in the books.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

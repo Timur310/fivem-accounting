@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { quotas, entries, itemTypes, users, factionMembers } from '../db/schema.js';
@@ -11,7 +12,7 @@ import { getPeriodRange, getPreviousPeriodRange, type PeriodRange } from '../lib
 import { toDateString, periodHasStarted, parseLocalDate } from '../lib/date.js';
 import { QUOTA_SCOPES, type QuotaScope } from '../db/schema.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

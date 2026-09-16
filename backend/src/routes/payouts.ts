@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import { payouts, itemTypes, users, factionMembers } from '../db/schema.js';
@@ -16,7 +17,7 @@ import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
 import { PAYOUT_STATUSES } from '../db/schema.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // Settling a payout is admin material: PATCH and DELETE, and creating one for
 // somebody else, all need `manage_payouts`. Asking for one is not — any member

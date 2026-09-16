@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { notifications, factions } from '../db/schema.js';
@@ -15,7 +16,7 @@ import { requireAuth } from '../middleware/auth.js';
  * superadmin included: this is the one place in the app where that would be
  * reading someone's mail rather than auditing a faction.
  */
-const router = Router();
+const router = asyncRouter();
 
 router.use(requireAuth);
 

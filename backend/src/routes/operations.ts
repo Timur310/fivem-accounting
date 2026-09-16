@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
@@ -37,7 +38,7 @@ import { splitHaul, type SplitLine } from '../lib/operations.js';
  * Taking a whole split back out of everybody's totals is leadership, the same
  * way reverting a sale is.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 
@@ -82,24 +83,6 @@ const operationSchema = splitInputSchema.extend({
   occurredAt: z.string().datetime().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
-
-/**
- * Read the body, or answer 400 and stop.
- *
- * Not `schema.parse`, which is what the rest of the app uses: a Zod throw
- * inside an `async` handler is an unhandled rejection under Express 4, and the
- * request never gets an answer at all — the caller sits there until it times
- * out. Every async route in this app has that hole; this one does not, and
- * closing it everywhere is a change for the error handler, not for a feature.
- */
-function read<T>(schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false; error: { issues: { path: (string | number)[]; message: string }[] } } }, req: Request, res: Response): T | null {
-  const parsed = schema.safeParse(req.body);
-  if (parsed.success) return parsed.data;
-  const issue = parsed.error.issues[0];
-  error(res, 'VALIDATION_ERROR',
-    issue ? `${issue.path.join('.')}: ${issue.message}` : 'Validation failed', 400);
-  return null;
-}
 
 /** One person can only be on the crew once, however the client built the list. */
 function dedupeParticipants(list: { userId: string; share?: number }[]) {
@@ -183,9 +166,7 @@ function perMember(lines: SplitLine[]) {
 // that what the crew sees before they agree is what actually gets written.
 
 router.post('/preview', async (req: Request, res: Response) => {
-  const body = read(splitInputSchema, req, res);
-  if (!body) return;
-
+  const body = splitInputSchema.parse(req.body);
   const prepared = await prepare(factionId(req), body);
   if (!prepared.ok) {
     error(res, prepared.code, prepared.message, prepared.status);
@@ -206,9 +187,7 @@ router.post('/preview', async (req: Request, res: Response) => {
 // ── POST / — log it and book the split ────────────────
 
 router.post('/', requirePermission('log_operations'), async (req: Request, res: Response) => {
-  const body = read(operationSchema, req, res);
-  if (!body) return;
-
+  const body = operationSchema.parse(req.body);
   const id = factionId(req);
 
   const prepared = await prepare(id, body);

@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -16,7 +17,7 @@ import {
   type ReminderSchedule,
 } from '../lib/reminderSchedule.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // Same gate as the rest of the Discord screen: scheduling a message into the
 // faction's server is the same kind of reach as routing events there.

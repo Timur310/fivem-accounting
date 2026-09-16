@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { entries, users, factions } from '../db/schema.js';
@@ -8,7 +9,7 @@ import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
 import { buildWhere } from '../lib/query.js';
 import { resolvePeriod } from './leaderboard.js';
 
-const router = Router();
+const router = asyncRouter();
 
 const querySchema = z.object({
   period: z.enum(['week', 'month', 'all']).default('month'),

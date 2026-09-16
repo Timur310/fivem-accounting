@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import { eq, desc, sql } from 'drizzle-orm';
@@ -17,7 +18,7 @@ import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
  *
  * Superadmin only. It exposes every player's Discord ID.
  */
-const router = Router();
+const router = asyncRouter();
 
 router.use(requireAuth, requireSuperadmin);
 

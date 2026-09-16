@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
@@ -43,7 +44,7 @@ import { balancesFor, lockItemTypes } from '../lib/treasury.js';
  * laundering desk does it, so every balance, report and export in the app
  * counts a craft correctly without knowing crafting exists.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

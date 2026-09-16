@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { payouts, expenses, itemTypes, users, entries, treasuryChecks } from '../db/schema.js';
@@ -11,7 +12,7 @@ import { requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 import { toDateString } from '../lib/date.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // Readable by any faction member: the treasury view is aggregate only and
 // exposes no individual payout records.
