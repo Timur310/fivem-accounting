@@ -34,7 +34,7 @@ const EXPENSE_CATEGORY_LABELS = {
 } as const;
 import { useToast } from '@/hooks/use-toast';
 import { useAppStore } from '@/lib/store';
-import type { ItemCategory, ItemType, Quota, Member, FactionRank } from '@/lib/api-types';
+import type { ItemCategory, ItemType, Quota, Member, FactionRank, RankTemplate } from '@/lib/api-types';
 import {
   FACTION_PERMISSIONS,
   PERMISSION_LABEL_KEYS,
@@ -43,6 +43,9 @@ import {
   MODULE_HINT_KEYS,
   PERMISSION_MODULE,
   isModuleEnabled,
+  RANK_TEMPLATE_LABEL_KEYS,
+  RANK_TEMPLATE_HINT_KEYS,
+  RANK_NAME_KEYS,
   type FactionPermission,
 } from '@/lib/api-types';
 import { useEffect, useMemo, useRef } from 'react';
@@ -1348,6 +1351,7 @@ function FactionSettingsSection({
   // null on the server, which means everything — expanded here so the boxes
   // render ticked, and sent back as a list once they touch it.
   const [modules, setModules] = useState<string[]>([...FACTION_MODULES]);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1378,6 +1382,24 @@ function FactionSettingsSection({
 
   const updateRank = (idx: number, field: 'name' | 'level', value: string | number) => {
     setRanks(ranks.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    markChanged();
+  };
+
+  /**
+   * Fill the editor from a template.
+   *
+   * Applied into the form rather than saved: they see the ranks and the
+   * permissions, change whatever they disagree with, and press Save like any
+   * other edit. A starting point somebody can argue with beats a decision made
+   * on their behalf.
+   */
+  const applyTemplate = (template: RankTemplate) => {
+    setRanks(template.ranks.map((r) => ({
+      name: t(RANK_NAME_KEYS[r.nameKey] ?? 'settings.rankNamePlaceholder'),
+      level: r.level,
+      permissions: [...r.permissions],
+    })));
+    setTemplatesOpen(false);
     markChanged();
   };
 
@@ -1482,6 +1504,15 @@ function FactionSettingsSection({
         </Card>
       )}
 
+      {templatesOpen && (
+        <RankTemplateDialog
+          factionId={factionId}
+          hasRanks={ranks.length > 0}
+          onApply={applyTemplate}
+          onClose={() => setTemplatesOpen(false)}
+        />
+      )}
+
       {/* ── Ranks ── */}
       <Card>
         <CardHeader>
@@ -1489,6 +1520,11 @@ function FactionSettingsSection({
             <CardTitle className="text-sm text-zinc-200">{t('settings.rankHierarchy')}</CardTitle>
             <div className="flex items-center gap-2">
               <ConfigIoButtons factionId={factionId} resource="ranks" canManage={canManage} />
+              {isFactionAdmin && (
+                <Button size="sm" variant="outline" onClick={() => setTemplatesOpen(true)}>
+                  <Shield className="mr-1.5 h-3.5 w-3.5" /> {t('settings.useTemplate')}
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={addRank}><Plus className="mr-1.5 h-3.5 w-3.5" /> {t('settings.addRank')}</Button>
             </div>
           </div>
@@ -1499,8 +1535,17 @@ function FactionSettingsSection({
         </CardHeader>
         <CardContent>
           {ranks.length === 0 ? (
-            <EmptyState icon={Shield} title={t('settings.noRanksYet')}
-              hint={t('settings.noRanksYetHint')} compact />
+            <div className="space-y-3">
+              <EmptyState icon={Shield} title={t('settings.noRanksYet')}
+                hint={t('settings.noRanksYetHint')} compact />
+              {isFactionAdmin && (
+                <div className="flex justify-center">
+                  <Button size="sm" onClick={() => setTemplatesOpen(true)}>
+                    {t('settings.startFromTemplate')}
+                  </Button>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="space-y-3">
               {[...ranks].sort((a, b) => a.level - b.level).map((r, sortedIdx) => {
@@ -1715,5 +1760,85 @@ function FactionSettingsSection({
         </div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Pick a starting point for the rank list.
+ *
+ * Shows what each template would actually create — the rank names and how many
+ * permissions each one carries — because "Organisation" on its own tells
+ * nobody whether the Lieutenant may approve a payout.
+ */
+function RankTemplateDialog({
+  factionId,
+  hasRanks,
+  onApply,
+  onClose,
+}: {
+  factionId: string;
+  hasRanks: boolean;
+  onApply: (template: RankTemplate) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['rank-templates', factionId],
+    queryFn: () => factionSettingsApi.rankTemplates(factionId),
+  });
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t('settings.templateTitle')}</DialogTitle>
+          <DialogDescription>
+            {hasRanks ? t('settings.templateReplaces') : t('settings.templateDescription')}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading && <Skeleton className="h-48 w-full" />}
+        {isError && <ErrorState error={error} onRetry={() => refetch()} />}
+
+        <div className="space-y-3">
+          {(data?.templates ?? []).map((template) => (
+            <button
+              key={template.key}
+              type="button"
+              onClick={() => onApply(template)}
+              className="w-full rounded-lg border border-[var(--line-1)] p-3 text-left transition-colors hover:border-[var(--line-2)] hover:bg-[var(--fill-1)]"
+            >
+              <span className="block text-sm text-zinc-200">
+                {t(RANK_TEMPLATE_LABEL_KEYS[template.key] ?? 'settings.rankHierarchy')}
+              </span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                {t(RANK_TEMPLATE_HINT_KEYS[template.key] ?? 'settings.rankHierarchyHint')}
+              </span>
+              <span className="mt-2 flex flex-wrap gap-1.5">
+                {template.ranks.map((rank) => (
+                  <span
+                    key={rank.level}
+                    className="rounded-md border border-[var(--line-1)] bg-[var(--fill-1)] px-2 py-1 text-micro text-zinc-400"
+                  >
+                    {t(RANK_NAME_KEYS[rank.nameKey] ?? 'settings.rankNamePlaceholder')}
+                    <span className="ml-1 text-zinc-600">
+                      {rank.permissions.length === 0
+                        ? t('settings.templateNoPermissions')
+                        : t('settings.templatePermissionCount', { count: rank.permissions.length })}
+                    </span>
+                  </span>
+                ))}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

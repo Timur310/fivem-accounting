@@ -2164,3 +2164,50 @@ export function isModuleEnabled(
 ): boolean {
   return enabled == null || enabled.includes(module);
 }
+
+
+// ── rank templates ─────────────────────────────────────
+// A starting point for a faction's rank list, computed by the server from the
+// modules that faction runs. Nothing is stored: applying one fills the rank
+// editor, and saving it is an ordinary settings save.
+
+export interface RankTemplateRank {
+  /** A key, not a name: the suggested titles follow the interface language. */
+  nameKey: string;
+  level: number;
+  tier: 'none' | 'crew' | 'officer' | 'leadership';
+  permissions: FactionPermission[];
+}
+
+export interface RankTemplate {
+  key: string;
+  ranks: RankTemplateRank[];
+}
+
+/** The suggested rank titles, and the shapes they come in. */
+export const RANK_TEMPLATE_LABEL_KEYS: Record<string, TranslationKey> = {
+  crew: 'rankTemplate.crew',
+  organisation: 'rankTemplate.organisation',
+  business: 'rankTemplate.business',
+};
+
+export const RANK_TEMPLATE_HINT_KEYS: Record<string, TranslationKey> = {
+  crew: 'rankTemplate.crewHint',
+  organisation: 'rankTemplate.organisationHint',
+  business: 'rankTemplate.businessHint',
+};
+
+export const RANK_NAME_KEYS: Record<string, TranslationKey> = {
+  boss: 'rankTemplate.role.boss',
+  underboss: 'rankTemplate.role.underboss',
+  rightHand: 'rankTemplate.role.rightHand',
+  lieutenant: 'rankTemplate.role.lieutenant',
+  soldier: 'rankTemplate.role.soldier',
+  member: 'rankTemplate.role.member',
+  associate: 'rankTemplate.role.associate',
+  recruit: 'rankTemplate.role.recruit',
+  owner: 'rankTemplate.role.owner',
+  manager: 'rankTemplate.role.manager',
+  staff: 'rankTemplate.role.staff',
+  trainee: 'rankTemplate.role.trainee',
+};
