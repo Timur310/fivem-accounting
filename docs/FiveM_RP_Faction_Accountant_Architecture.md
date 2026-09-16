@@ -1707,6 +1707,13 @@ get at the audit trail through a side door.
 Deletion is real, not soft. A registry describes what exists now; `sold` and
 `scrapped` are there for the ones worth keeping.
 
+Adding and deleting a vehicle are routable Discord events (§8.13), the plate as
+the headline because it is the one thing a reader can match against a car in
+front of them. A linked owner is resolved to a name before it is sent: nobody
+reading the channel has this app's roster open. `vehicle_added` sits outside
+the removals group in `DISCORD_EVENT_TYPES` — a car arriving is news in the
+same way a car leaving is, and a faction will want both in the same channel.
+
 ---
 
 ## 9. Frontend Architecture

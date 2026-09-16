@@ -802,6 +802,10 @@ record may see who changed it before them.
 **Deleting is permanent.** If the car is simply gone, set it to sold or
 scrapped instead — that keeps the record and its history.
 
+**Discord.** Adding and deleting a vehicle can both be announced in a channel,
+like the rest of the activity — switch them on under Settings → Discord. The
+message leads with the plate.
+
 ---
 
 ### 6.11 The price calculator (`manage_prices`)

@@ -429,6 +429,66 @@ describe('through the routes that raise the events', () => {
     expect(postMock).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * The vehicle registry reports to the channel too.
+   *
+   * Reported as missing from the field: a car could be added or deleted with
+   * nothing said in Discord, while every other kind of change was announced.
+   */
+  it('announces a vehicle being added', async () => {
+    await link();
+    await route('vehicle_added');
+
+    const res = await api().post(`${f()}/vehicles`).set('Cookie', w.admin.cookie)
+      .send({ plate: '45ABC123', make: 'Bravado', model: 'Banshee', color: 'Black', ownerName: 'Marco Vega' });
+    expect(res.status).toBe(201);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    const embed = sentEmbed();
+    expect(embed.title).toContain('Vehicle added');
+    expect(embed.description).toContain('45ABC123');
+    expect(embed.description).toContain('Bravado Banshee');
+  });
+
+  it('announces a vehicle being deleted', async () => {
+    await link();
+    await route('vehicle_removed');
+
+    const created = await api().post(`${f()}/vehicles`).set('Cookie', w.admin.cookie)
+      .send({ plate: 'GONE01' });
+    await api().delete(`${f()}/vehicles/${created.body.data.id}`).set('Cookie', w.admin.cookie);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toContain('Vehicle removed');
+  });
+
+  // A linked owner is a row in this app's database, and nobody reading the
+  // channel has that in front of them.
+  it('names a linked owner rather than sending an id', async () => {
+    await link();
+    await route('vehicle_added');
+
+    await api().post(`${f()}/vehicles`).set('Cookie', w.admin.cookie)
+      .send({ plate: 'LINK01', ownerUserId: w.member.id });
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    const [, payload] = postMock.mock.calls[0] as unknown as [
+      string, { embeds: { fields?: { name: string; value: string }[] }[] },
+    ];
+    const owner = payload.embeds[0]!.fields?.find((x) => x.name === 'Owner');
+    expect(owner?.value).toBe(w.member.username);
+  });
+
+  it('says nothing when the faction has not routed vehicles anywhere', async () => {
+    await link();
+    await route('entry_logged');
+
+    const res = await api().post(`${f()}/vehicles`).set('Cookie', w.admin.cookie)
+      .send({ plate: 'QUIET1' });
+    expect(res.status).toBe(201);
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
   // The request must answer whatever Discord does. This is the whole reason
   // the dispatch is fire-and-forget and never throws.
   it('still answers 201 when Discord is down', async () => {

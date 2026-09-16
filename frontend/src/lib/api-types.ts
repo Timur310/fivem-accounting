@@ -1665,6 +1665,8 @@ export const DISCORD_EVENT_TYPES = [
   'strike_revoked',
   'announcement_removed',
   'craft_reverted',
+  'vehicle_removed',
+  'vehicle_added',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1682,6 +1684,7 @@ export const DISCORD_REMOVAL_EVENTS: readonly DiscordEventType[] = [
   'strike_revoked',
   'announcement_removed',
   'craft_reverted',
+  'vehicle_removed',
 ];
 
 export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> = {
@@ -1703,6 +1706,8 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   strike_revoked: 'discord.event.strikeRevoked',
   announcement_removed: 'discord.event.announcementRemoved',
   craft_reverted: 'discord.event.craftReverted',
+  vehicle_added: 'discord.event.vehicleAdded',
+  vehicle_removed: 'discord.event.vehicleRemoved',
 };
 
 export interface DiscordIntegration {

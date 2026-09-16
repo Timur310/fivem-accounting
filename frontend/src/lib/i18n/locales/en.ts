@@ -1436,6 +1436,9 @@ export const en = {
   'vehicle.category.boat': 'Boat',
   'vehicle.category.aircraft': 'Aircraft',
   'vehicle.category.other': 'Other',
+
+  'discord.event.vehicleAdded': 'Vehicle added',
+  'discord.event.vehicleRemoved': 'Vehicle removed',
 };
 
 /** Every key the interface may ask for. */

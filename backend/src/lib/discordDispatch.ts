@@ -36,7 +36,9 @@ export type DiscordEvent =
   | { type: 'payout_deleted'; actorUserId: string; recipientUserId: string; itemTypeId: string; amount: string; status: string; selfCancelled?: boolean }
   | { type: 'expense_deleted'; actorUserId: string; itemTypeId: string; amount: string; category: string }
   | { type: 'strike_revoked'; actorUserId: string; targetUserId: string; severity: string }
-  | { type: 'announcement_removed'; actorUserId: string; title: string };
+  | { type: 'announcement_removed'; actorUserId: string; title: string }
+  | { type: 'vehicle_added'; actorUserId: string; plate: string; make?: string | null; model?: string | null; color?: string | null; owner?: string | null; status: string }
+  | { type: 'vehicle_removed'; actorUserId: string; plate: string; make?: string | null; model?: string | null; owner?: string | null };
 
 /** Discord's own blurple, plus a green/red/amber for direction and trouble. */
 const COLOR = {
@@ -76,6 +78,8 @@ const EMOJI: Record<DiscordEvent['type'], string> = {
   expense_deleted: '\u{1F5D1}\u{FE0F}',
   strike_revoked: '\u{1F54A}\u{FE0F}', // dove
   announcement_removed: '\u{1F5D1}\u{FE0F}',
+  vehicle_added: '\u{1F697}',          // car
+  vehicle_removed: '\u{1F5D1}\u{FE0F}',
 };
 
 /**
@@ -525,6 +529,38 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         subject: names.actor(event.actorUserId),
         byline: `Removed by ${names.user(event.actorUserId)}`,
       };
+
+    // The plate is the headline, because it is the one thing somebody reading
+    // the channel can match against a car in front of them. Everything else is
+    // a field, and a field with nothing in it is left out rather than printed
+    // empty — most registry rows know the plate and little else.
+    case 'vehicle_added': {
+      const describe = [event.make, event.model].filter(Boolean).join(' ');
+      return {
+        title: 'Vehicle added',
+        description: `### \u{1F697}  ${event.plate}${describe ? `\n${describe}` : ''}`,
+        color: COLOR.info,
+        subject: names.actor(event.actorUserId),
+        byline: `Added by ${names.user(event.actorUserId)}`,
+        fields: [
+          ...(event.color ? [{ name: 'Colour', value: event.color, inline: true }] : []),
+          ...(event.owner ? [{ name: 'Owner', value: event.owner, inline: true }] : []),
+          { name: 'Status', value: event.status, inline: true },
+        ],
+      };
+    }
+
+    case 'vehicle_removed': {
+      const describe = [event.make, event.model].filter(Boolean).join(' ');
+      return {
+        title: 'Vehicle removed',
+        description: `### \u{1F697}  ${event.plate}${describe ? `\n${describe}` : ''}`,
+        color: COLOR.removed,
+        subject: names.actor(event.actorUserId),
+        byline: `Removed by ${names.user(event.actorUserId)}`,
+        fields: event.owner ? [{ name: 'Owner', value: event.owner, inline: true }] : [],
+      };
+    }
   }
 }
 

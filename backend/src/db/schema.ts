@@ -724,6 +724,11 @@ export const DISCORD_EVENT_TYPES = [
   'strike_revoked',
   'announcement_removed',
   'craft_reverted',
+  'vehicle_removed',
+  // Not in the removals group above: the registry is a description of what the
+  // faction has, so a car arriving is news in the same way a car leaving is,
+  // and factions will want both in the same channel.
+  'vehicle_added',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 

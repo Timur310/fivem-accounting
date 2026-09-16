@@ -14,6 +14,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { dispatchDiscord } from '../lib/discordDispatch.js';
 
 /**
  * The faction's vehicle registry.
@@ -72,6 +73,23 @@ async function ownsMember(id: string, userId: string): Promise<boolean> {
     .where(and(eq(factionMembers.factionId, id), eq(factionMembers.userId, userId)))
     .limit(1);
   return !!row;
+}
+
+/**
+ * The owner as a name, for a message that has no roster beside it.
+ *
+ * The table resolves this in SQL for the screen; a Discord embed is read by
+ * people who may not be in the app at all, so the linked member is turned into
+ * a name here rather than sent as an id.
+ */
+async function ownerLabel(row: { ownerUserId: string | null; ownerName: string | null }) {
+  if (!row.ownerUserId) return row.ownerName;
+  const [owner] = await db
+    .select({ username: users.username, inGameName: users.inGameName })
+    .from(users)
+    .where(eq(users.id, row.ownerUserId))
+    .limit(1);
+  return owner ? owner.inGameName || owner.username : row.ownerName;
 }
 
 /** One vehicle with its owner's display name resolved. */
@@ -299,6 +317,19 @@ router.post('/', requirePermission('manage_vehicles'), async (req: Request, res:
     req,
   });
 
+  // Not awaited, like every other dispatch in the app: Discord being slow or
+  // unreachable must not make adding a vehicle feel slow or fail.
+  void dispatchDiscord(id, {
+    type: 'vehicle_added',
+    actorUserId: req.user!.id,
+    plate: row!.plate,
+    make: row!.make,
+    model: row!.model,
+    color: row!.color,
+    owner: await ownerLabel(row!),
+    status: row!.status,
+  });
+
   success(res, row, 201);
 });
 
@@ -398,6 +429,15 @@ router.delete('/:vehicleId', requirePermission('manage_vehicles'), async (req: R
     entityId: row.id,
     details: { plate: row.plate, make: row.make, model: row.model },
     req,
+  });
+
+  void dispatchDiscord(id, {
+    type: 'vehicle_removed',
+    actorUserId: req.user!.id,
+    plate: row.plate,
+    make: row.make,
+    model: row.model,
+    owner: await ownerLabel(row),
   });
 
   success(res, { deleted: true });

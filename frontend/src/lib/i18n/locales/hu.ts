@@ -1415,4 +1415,7 @@ export const hu: Translations = {
   'vehicle.category.boat': 'Hajó',
   'vehicle.category.aircraft': 'Légijármű',
   'vehicle.category.other': 'Egyéb',
+
+  'discord.event.vehicleAdded': 'Jármű felvéve',
+  'discord.event.vehicleRemoved': 'Jármű törölve',
 };
