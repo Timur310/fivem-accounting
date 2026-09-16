@@ -8,6 +8,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
+import { FACTION_MODULES } from '../lib/modules.js';
 
 const router = asyncRouter({ mergeParams: true });
 
@@ -15,6 +16,20 @@ const router = asyncRouter({ mergeParams: true });
 // Deliberately separate from PATCH /factions/:id, which is superadmin-only and
 // governs the faction's existence (name, active flag) rather than how it is run.
 router.use(requireAuth, requireFactionMember);
+
+/**
+ * A faction admin, or a global superadmin.
+ *
+ * `factionRole` follows the membership, which is what lets a superadmin who
+ * joined as a plain member log entries — so the global role is checked
+ * separately, or they would lose this authority in the one faction they
+ * actually belong to.
+ */
+function isFactionAdmin(req: Request): boolean {
+  return req.factionRole === 'admin'
+    || req.factionRole === 'superadmin'
+    || req.user!.role === 'superadmin';
+}
 
 const updateSettingsSchema = z.object({
   ranks: z.array(z.object({
@@ -44,6 +59,15 @@ const updateSettingsSchema = z.object({
     other: z.number().min(0).nullable(),
   }).optional(),
   brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  /**
+   * Which parts of the app this faction uses.
+   *
+   * Sent as the whole list every time, because a checkbox screen knows the
+   * whole list and a patch of "turn this one off" would need a second shape
+   * for "turn it back on". `null` restores the default of everything, which is
+   * also what a faction that has never touched this has.
+   */
+  enabledModules: z.array(z.enum(FACTION_MODULES)).nullable().optional(),
   customFields: z.array(z.object({
     name: z.string().min(1).max(100),
     required: z.boolean(),
@@ -68,6 +92,7 @@ router.get('/', async (req: Request, res: Response) => {
       expenseBudgets: factions.expenseBudgets,
       brandColor: factions.brandColor,
       customFields: factions.customFields,
+      enabledModules: factions.enabledModules,
     })
     .from(factions)
     .where(eq(factions.id, factionId))
@@ -88,6 +113,10 @@ router.get('/', async (req: Request, res: Response) => {
     expenseBudgets: faction.expenseBudgets ?? { warehouse: null, utilities: null, supplies: null, other: null },
     brandColor: faction.brandColor,
     customFields: faction.customFields ?? [],
+    // Handed back exactly as stored: null means every module, and a screen
+    // given an invented list could not tell that apart from a faction that
+    // deliberately ticked all of them.
+    enabledModules: faction.enabledModules,
   });
 });
 
@@ -123,6 +152,7 @@ router.patch(
         expenseBudgets: factions.expenseBudgets,
         brandColor: factions.brandColor,
         customFields: factions.customFields,
+        enabledModules: factions.enabledModules,
       })
       .from(factions)
       .where(eq(factions.id, factionId))
@@ -134,6 +164,18 @@ router.patch(
 
     const updates: Record<string, unknown> = {};
     let removedRanks: string[] = [];
+
+    // Switching a module off takes a screen away from everybody in the
+    // faction, so it is an admin decision rather than a delegable one — the
+    // same line the rank permissions draw, and for the same reason.
+    if (parsed.data.enabledModules !== undefined) {
+      if (!isFactionAdmin(req)) {
+        error(res, 'FORBIDDEN',
+          'Only a faction admin can change which features this faction uses', 403);
+        return;
+      }
+      updates.enabledModules = parsed.data.enabledModules;
+    }
 
     if (parsed.data.ranks !== undefined) {
       const names = parsed.data.ranks.map((r) => r.name);
@@ -155,11 +197,7 @@ router.patch(
       // A global superadmin counts as an admin here even in a faction they
       // joined as a plain member — `factionRole` follows the membership, which
       // is what entry creation needs, but it is not the whole authority story.
-      const isAdmin =
-        req.factionRole === 'admin' ||
-        req.factionRole === 'superadmin' ||
-        req.user!.role === 'superadmin';
-      if (!isAdmin) {
+      if (!isFactionAdmin(req)) {
         const before = new Map(
           (existing.ranks ?? []).map((r) => [r.name, [...(r.permissions ?? [])].sort()]),
         );
@@ -216,6 +254,7 @@ router.patch(
           expenseBudgets: factions.expenseBudgets,
           brandColor: factions.brandColor,
           customFields: factions.customFields,
+          enabledModules: factions.enabledModules,
         });
 
       // Clearing removed ranks off members happens in the same transaction as
@@ -266,6 +305,7 @@ router.patch(
     expenseBudgets: updated?.expenseBudgets ?? { warehouse: null, utilities: null, supplies: null, other: null },
       brandColor: updated?.brandColor ?? null,
       customFields: updated?.customFields ?? [],
+      enabledModules: updated?.enabledModules ?? null,
       ...(removedRanks.length > 0 ? { clearedFromMembers: removedRanks } : {}),
     });
   },

@@ -7,12 +7,13 @@ import { eq, and, sql, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { toDateString, todayDateString } from '../lib/date.js';
 import { getPeriodRange } from '../lib/period.js';
 
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('reports'));
 
 const summaryQuerySchema = z.object({
   period: z.enum(['this_week', 'last_week', 'this_month', 'last_month', 'last_30d', 'last_90d', 'all']).default('this_month'),

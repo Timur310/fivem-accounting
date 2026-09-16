@@ -1374,6 +1374,8 @@ export interface LaunderResult {
 
 export interface FactionSettings {
   ranks: FactionRank[];
+  /** Which modules this faction uses; null means all of them. */
+  enabledModules: string[] | null;
   inactivityThresholdDays: number;
   strikeExpiryDays: {
     warning: number | null;
@@ -2078,4 +2080,87 @@ export interface Operation {
     itemTypeId: string;
     quantity: string;
   }[];
+}
+
+
+// ── faction modules ────────────────────────────────────
+// Which parts of the app a faction uses. See backend lib/modules.ts: the two
+// lists are the same list, and the rank editor and navigation filter through
+// this one.
+
+export const FACTION_MODULES = [
+  'entries', 'payouts', 'treasury', 'expenses', 'quotas', 'strikes',
+  'laundering', 'crafting', 'pricing', 'operations', 'vehicles', 'map',
+  'leaderboard', 'announcements', 'feed', 'reports',
+] as const;
+export type FactionModule = (typeof FACTION_MODULES)[number];
+
+export const MODULE_LABEL_KEYS: Record<FactionModule, TranslationKey> = {
+  entries: 'nav.entries',
+  payouts: 'nav.withdrawals',
+  treasury: 'nav.treasury',
+  expenses: 'module.expenses',
+  quotas: 'module.quotas',
+  strikes: 'nav.strikes',
+  laundering: 'nav.laundering',
+  crafting: 'nav.crafting',
+  pricing: 'nav.pricing',
+  operations: 'nav.operations',
+  vehicles: 'nav.vehicles',
+  map: 'nav.map',
+  leaderboard: 'nav.leaderboard',
+  announcements: 'nav.announcements',
+  feed: 'nav.feed',
+  reports: 'nav.reports',
+};
+
+export const MODULE_HINT_KEYS: Record<FactionModule, TranslationKey> = {
+  entries: 'module.hint.entries',
+  payouts: 'module.hint.payouts',
+  treasury: 'module.hint.treasury',
+  expenses: 'module.hint.expenses',
+  quotas: 'module.hint.quotas',
+  strikes: 'module.hint.strikes',
+  laundering: 'module.hint.laundering',
+  crafting: 'module.hint.crafting',
+  pricing: 'module.hint.pricing',
+  operations: 'module.hint.operations',
+  vehicles: 'module.hint.vehicles',
+  map: 'module.hint.map',
+  leaderboard: 'module.hint.leaderboard',
+  announcements: 'module.hint.announcements',
+  feed: 'module.hint.feed',
+  reports: 'module.hint.reports',
+};
+
+/** Which module each permission belongs to; the rest govern the faction itself. */
+export const PERMISSION_MODULE: Partial<Record<FactionPermission, FactionModule>> = {
+  manage_entries: 'entries',
+  manage_payouts: 'payouts',
+  manage_quotas: 'quotas',
+  manage_strikes: 'strikes',
+  manage_expenses: 'expenses',
+  manage_laundering: 'laundering',
+  manage_crafting: 'crafting',
+  craft: 'crafting',
+  manage_prices: 'pricing',
+  sell: 'pricing',
+  log_operations: 'operations',
+  manage_operations: 'operations',
+  manage_vehicles: 'vehicles',
+  manage_map: 'map',
+  view_reports: 'reports',
+};
+
+/**
+ * Is this module on for this faction?
+ *
+ * `null` means all of them — what every faction had before this existed, and
+ * what a faction that has never opened the setting still has.
+ */
+export function isModuleEnabled(
+  enabled: string[] | null | undefined,
+  module: FactionModule,
+): boolean {
+  return enabled == null || enabled.includes(module);
 }

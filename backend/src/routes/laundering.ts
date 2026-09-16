@@ -7,6 +7,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
@@ -26,7 +27,7 @@ import { todayDateString } from '../lib/date.js';
  */
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember, requirePermission('manage_laundering'));
+router.use(requireAuth, requireFactionMember, requireModule('laundering'), requirePermission('manage_laundering'));
 
 const amountField = z
   .string()

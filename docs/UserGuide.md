@@ -1175,6 +1175,22 @@ request through Support (§5.8) if you would like it turned on.
 
 ---
 
+### 8.7 Features this faction uses
+
+Not every faction wants every part of this app. A faction that only wants plates
+and a map should not be reading a menu of twenty-three screens.
+
+In **Settings → Features this faction uses**, tick what you need. Whatever you
+untick disappears from the menu for everybody, and its permissions disappear
+from the rank editor above — which is what makes setting up ranks short.
+
+**Nothing is deleted.** A switched-off feature stops accepting new records and
+keeps showing the old ones to anything that asks, and ticking it again finds
+everything exactly where you left it. Turn something off for a month and back
+on, and your ledger is untouched.
+
+Only a faction admin can change this.
+
 ## 9. For superadmins
 
 ### 9.1 Factions

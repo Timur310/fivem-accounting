@@ -9,6 +9,7 @@ import { parsePagination } from '../lib/types.js';
 import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { ledgerHoldMessage } from '../lib/ledgerHold.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
@@ -24,7 +25,7 @@ const router = asyncRouter({ mergeParams: true });
 // may request a withdrawal for themselves, and read the ones they asked for.
 // What the permission buys is reach: over other people's names, and over the
 // status of anything already in the queue.
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('payouts'));
 
 /** Whether the caller may act on other people's payouts, not just their own. */
 const canManagePayouts = (req: Request) =>

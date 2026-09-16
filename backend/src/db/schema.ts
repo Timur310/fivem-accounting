@@ -102,6 +102,15 @@ export const factions = pgTable('factions', {
    * from them should not reveal it.
    */
   marginMinRankLevel: integer('margin_min_rank_level'),
+  /**
+   * Which parts of the app this faction uses, or null for all of them.
+   *
+   * Null rather than a filled-in default, and no backfill: every faction that
+   * existed before modules did keeps every screen it had, and a module added
+   * after a faction was configured arrives switched on rather than silently
+   * missing. See lib/modules.ts.
+   */
+  enabledModules: jsonb('enabled_modules').$type<string[]>(),
   createdBy:    uuid('created_by').notNull().references(() => users.id),
   createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   isActive:     boolean('is_active').notNull().default(true),

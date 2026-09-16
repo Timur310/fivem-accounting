@@ -1,0 +1,1 @@
+ALTER TABLE "factions" ADD COLUMN "enabled_modules" jsonb;

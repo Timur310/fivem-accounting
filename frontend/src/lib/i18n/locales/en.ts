@@ -1494,6 +1494,29 @@ export const en = {
   'operations.save': 'Log it',
   'operations.savedToast': 'Operation logged and split',
   'operations.saveFailed': 'Could not log it',
+
+  // ── modules: which parts of the app a faction uses ──
+  'settings.modules': 'Features this faction uses',
+  'settings.modulesHint': 'Turn off what you do not need. A feature that is off disappears from the menu, and its permissions disappear from the ranks above.',
+  'settings.modulesDataSafe': 'Nothing is deleted. Turning a feature back on finds everything exactly where it was left.',
+  'module.expenses': 'Expenses',
+  'module.quotas': 'Quotas',
+  'module.hint.entries': 'Members log what they bring in',
+  'module.hint.payouts': 'Paying members out of the vault',
+  'module.hint.treasury': 'What the vault holds, and what it spends',
+  'module.hint.expenses': 'Rent, supplies and the monthly budgets',
+  'module.hint.quotas': 'Targets members are expected to hit',
+  'module.hint.strikes': 'Discipline, warnings and escalation',
+  'module.hint.laundering': 'Turning dirty money into clean',
+  'module.hint.crafting': 'Recipes that turn materials into goods',
+  'module.hint.pricing': 'The price list, quotes and recorded sales',
+  'module.hint.operations': 'Jobs the crew ran together, split between them',
+  'module.hint.vehicles': 'The plate registry',
+  'module.hint.map': 'Places the faction keeps track of',
+  'module.hint.leaderboard': 'Who contributed most this week',
+  'module.hint.announcements': 'The faction noticeboard',
+  'module.hint.feed': 'A timeline of what the faction has been doing',
+  'module.hint.reports': 'Reports, charts and exports',
 };
 
 /** Every key the interface may ask for. */

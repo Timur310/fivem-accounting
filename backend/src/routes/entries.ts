@@ -15,6 +15,7 @@ import { parsePagination } from '../lib/types.js';
 import { resolveSort } from '../lib/sort.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { ledgerHoldMessage } from '../lib/ledgerHold.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
@@ -24,7 +25,7 @@ import { todayDateString } from '../lib/date.js';
 
 const router = asyncRouter({ mergeParams: true });
 
-router.use(requireAuth, requireFactionMember);
+router.use(requireAuth, requireFactionMember, requireModule('entries'));
 
 /** Escape a user-supplied search string for safe use inside an ilike('%...%')
  *  pattern. Backslash, %, and _ are escaped so they match literally. */

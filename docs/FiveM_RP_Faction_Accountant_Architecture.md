@@ -1786,6 +1786,45 @@ message and half of it somebody else's business. `operation_logged` and
 `operation_reverted` are separately routable, and the entries the split writes
 are not announced one by one.
 
+### 8.21 Modules — what a faction actually uses
+
+This app grew into a set of tools rather than one program: a ledger, a price
+book, a vehicle registry, a map, a crew log. Most factions want some of them. A
+faction running plates and a map was still handed a navigation list of
+twenty-three screens and a rank editor with twenty-one permissions, nineteen of
+them about an accounting system nobody there opens.
+
+Each faction now says which modules it uses, in Settings, and everything that
+enumerates features filters through that list: the navigation, the rank
+editor's permission chips, and the Discord routing list.
+
+**Off hides the tool; it never touches the data.** A switched-off module
+refuses writes and keeps answering reads, so a report or an export covering old
+data goes on working, and switching it back on finds everything exactly as it
+was left. Nothing here deletes anything, and no faction can lose a ledger to a
+checkbox. The middleware makes that distinction on the request method, in one
+place: `requireModule` mounted on each module's router, after
+`requireFactionMember` so it never tells an outsider which modules a faction
+runs.
+
+**The column is nullable and nothing backfilled it.** `null` means every
+module: every faction that existed before this shipped kept every screen it
+had, with no migration touching a row, and a module added next year arrives
+switched on rather than silently missing from factions configured before it
+existed.
+
+**There are no dependencies between modules, deliberately.** Booking a sale
+writes entries, and it goes on doing that with the entries screen switched off,
+because those entries are still counted by the treasury and the leaderboard —
+the module hid a screen, not a number. A dependency graph would be a rule
+engine standing between a faction and a checkbox, and it would be wrong the
+first time somebody combined two features in a way nobody predicted.
+
+**Switching modules is an admin decision**, not a delegable one: it takes a
+screen away from everybody in the faction. The same line the rank permissions
+draw, for the same reason. A permission a rank already holds stays visible in
+the editor even when its module is off, so nothing in force is ever hidden.
+
 ## 9. Frontend Architecture
 
 ### 9.1 Shape

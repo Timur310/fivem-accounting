@@ -12,6 +12,7 @@ import {
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
+import { EVENT_MODULE, factionModules, isModuleEnabled } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import {
   buildBotInviteUrl,
@@ -52,6 +53,8 @@ router.get('/', async (req: Request, res: Response) => {
     .where(eq(discordIntegrations.factionId, factionId))
     .limit(1);
 
+  const enabledModules = await factionModules(factionId);
+
   const routes = integration
     ? await db
         .select({
@@ -71,7 +74,13 @@ router.get('/', async (req: Request, res: Response) => {
     configured: isDiscordConfigured(),
     integration: integration ?? null,
     routes,
-    eventTypes: DISCORD_EVENT_TYPES,
+    // Only the events this faction's modules can actually produce. A
+    // routing list offering "Vehicle added" to a faction with no registry is
+    // a channel picker for a message that will never be sent.
+    eventTypes: DISCORD_EVENT_TYPES.filter((e) => {
+      const module = EVENT_MODULE[e];
+      return !module || isModuleEnabled(enabledModules, module);
+    }),
   });
 });
 
