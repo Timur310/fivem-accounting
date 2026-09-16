@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { LogIn, Flame, Trophy, Target as TargetIcon, Coins, Check } from 'lucide-react';
 import type { ItemType } from '@/lib/api-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useFactionModules } from '@/hooks/use-faction-modules';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,11 @@ interface Props {
 const TREASURY_PREVIEW_COUNT = 8;
 
 export function DashboardView({ factionId, canLogEntries = false, isFactionMember = false }: Props) {
+  // The dashboard is the one screen that shows every other screen's work, so
+  // it is the one place where a switched-off module would otherwise still be
+  // on display — and its quick-log box would earn a 403 from a server that
+  // has been told this faction does not log entries any more.
+  const { isOn } = useFactionModules(factionId);
   const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const brandColor = useAppStore((s) => s.brandColor);
@@ -301,7 +307,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
       </div>
 
       {/* ══ Quick Log ══ */}
-      {canLogEntries && (
+      {canLogEntries && isOn('entries') && (
         <Card className={quickJustLogged ? 'row-flash' : ''}>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
@@ -530,7 +536,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
       </div>
 
       {/* ══ Quota Progress — Energy Bars ══ */}
-      {activeQuotas.length > 0 && (
+      {activeQuotas.length > 0 && isOn('quotas') && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
@@ -588,7 +594,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
       )}
 
       {/* ══ Quota periods that ended unmet ══ */}
-      {missedQuotas.length > 0 && (
+      {missedQuotas.length > 0 && isOn('quotas') && (
         <Card className="border-amber-500/15">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
@@ -627,6 +633,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
       {/* ══ Two Column: Top Contributors + Recent Activity ══ */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Top Contributors */}
+        {isOn('leaderboard') && (
         <Card>
           <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm text-zinc-200">
@@ -658,8 +665,10 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Recent Activity */}
+        {isOn('entries') && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-sm text-zinc-200">
@@ -707,6 +716,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* ══ Totals by Type — compact grid (with treasury balance if available) ══ */}

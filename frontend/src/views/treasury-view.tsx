@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { treasuryApi, expensesApi, itemTypesApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
+import { useFactionModules } from '@/hooks/use-faction-modules';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -56,6 +57,10 @@ type SortField = 'name' | 'balance';
 type SortDirection = 'asc' | 'desc';
 
 export function TreasuryView({ factionId, canManageExpenses = false, canManageChecks = false }: Props) {
+  // Expenses live on this screen but are their own module: a faction that
+  // switched them off would otherwise still be offered the form, and the
+  // server would refuse what it submitted.
+  const { isOn } = useFactionModules(factionId);
   const { t } = useTranslation();
   const brandColor = useAppStore((s) => s.brandColor);
 
@@ -240,7 +245,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
       )}
 
       {/* ══ Running Expenses ══ */}
-      <ExpensesSection factionId={factionId} canManage={canManageExpenses} />
+      {isOn('expenses') && <ExpensesSection factionId={factionId} canManage={canManageExpenses} />}
 
       {/* ══ Balance Cards per Item Type ══ */}
       <Card>
