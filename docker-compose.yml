@@ -5,7 +5,10 @@ services:
       - pgdata:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: faction_accountant
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1313}
+      # No fallback: a default password in a public repository is not a
+      # default, it is a published credential. Set it in .env (see
+      # .env.example) and compose will say so if you have not.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -16,7 +19,7 @@ services:
   pgbouncer:
     image: edoburu/pgbouncer
     environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-1313}@db:5432/faction_accountant
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/faction_accountant
       AUTH_TYPE: scram-sha-256
       LISTEN_PORT: 5432
       POOL_MODE: transaction
@@ -35,12 +38,12 @@ services:
       - path: ./backend/.env
         required: false
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-1313}@pgbouncer:5432/faction_accountant
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@pgbouncer:5432/faction_accountant
       # pg_dump and pg_restore go straight to Postgres. They cannot work
       # through pgbouncer in transaction pooling mode: a dump is one session
       # holding one snapshot across thousands of statements, and transaction
       # pooling hands that session to somebody else between them.
-      BACKUP_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-1313}@db:5432/faction_accountant
+      BACKUP_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/faction_accountant
       PORT: "8000"
     depends_on:
       pgbouncer:
@@ -60,7 +63,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://152.53.185.62
+        # Baked into the bundle at build time, so this is the address the
+        # player's browser uses, not one inside the compose network.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env}
     env_file:
       - path: ./frontend/.env
         required: false
@@ -72,11 +77,18 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nginx
+    environment:
+      SERVER_NAME: ${SERVER_NAME:?set SERVER_NAME in .env}
+      # Usually the same name; separate for a certificate issued under another.
+      CERT_NAME: ${CERT_NAME:-${SERVER_NAME}}
+      # Substitute these two and nothing else, so nginx's own $$host and
+      # $$remote_addr survive the pass untouched.
+      NGINX_ENVSUBST_FILTER: "^(SERVER_NAME|CERT_NAME)$$"
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
     depends_on:

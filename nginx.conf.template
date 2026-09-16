@@ -1,6 +1,13 @@
+# nginx, as a template.
+#
+# The image's entrypoint fills ${SERVER_NAME} and ${CERT_NAME} from the
+# environment before nginx reads this, which is why they are the only two
+# names substituted — NGINX_ENVSUBST_FILTER in docker-compose.yml pins that
+# down, so $host, $remote_addr and the rest reach nginx untouched.
+
 server {
     listen 80;
-    server_name 152.53.185.62;
+    server_name ${SERVER_NAME};
 
     # Handle ACME challenge for automated renewals
     location /.well-known/acme-challenge/ {
@@ -15,10 +22,10 @@ server {
 
 server {
     listen 443 ssl;
-    server_name 152.53.185.62;
+    server_name ${SERVER_NAME};
 
-    ssl_certificate /etc/letsencrypt/live/152.53.185.62/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/152.53.185.62/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/${CERT_NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CERT_NAME}/privkey.pem;
 
     # Database backup and restore, which the general /api/ block cannot carry:
     # a dump is one large response streamed out of pg_dump and a restore is one
