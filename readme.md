@@ -137,15 +137,21 @@ Grouped the way the app's own sidebar groups them.
 git clone https://github.com/Timur310/fivem-accounting.git
 cd fivem-accounting
 
-cp backend/.env.example backend/.env    # Discord OAuth, JWT secret, DB
-cp frontend/.env.example frontend/.env  # where the browser finds the API
+cp .env.example .env                    # host name, DB password, API URL
+cp backend/.env.example backend/.env    # Discord OAuth, JWT secret
+cp frontend/.env.example frontend/.env  # locales
 
 docker compose up -d
 ```
 
-One thing to change before the first build: `docker-compose.yml` passes the
-frontend its API URL as a build argument, and it is pinned to the author's
-host. Point `NEXT_PUBLIC_API_URL` at your own.
+The root `.env` is the one compose itself reads, and nothing in it has a
+default: `POSTGRES_PASSWORD`, `SERVER_NAME` (the host nginx answers for) and
+`NEXT_PUBLIC_API_URL` (what the browser calls the API). Compose stops with a
+message naming the missing one rather than starting on a guess.
+
+TLS is Let's Encrypt, mounted from the host at `/etc/letsencrypt`; set
+`CERT_NAME` if the certificate was issued under a different name from
+`SERVER_NAME`.
 
 Then open the app, sign in with Discord, and promote yourself:
 

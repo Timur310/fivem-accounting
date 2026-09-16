@@ -1,0 +1,21 @@
+# Compose reads this file automatically, and it is where every deployment
+# secret now lives: the database password, the host name, the public API URL.
+# There was no .gitignore at this level before, so a `.env` dropped here would
+# have been committed by the next `git add -A`.
+.env
+.env.*
+!.env.example
+
+# TLS material, and the ACME challenge directory nginx serves during renewal.
+certbot/
+*.pem
+*.key
+*.crt
+
+# Local database dumps. A backup taken from the Backup page is every faction's
+# books and every player's Discord ID in one file.
+*.dump
+*.sql.gz
+
+node_modules/
+.DS_Store
