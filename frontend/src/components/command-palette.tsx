@@ -12,15 +12,24 @@ import type { TranslationKey } from '@/lib/i18n';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Navigable views with their label keys, pre-filtered for visibility. */
-  views: { view: AppView; label: TranslationKey }[];
+  /**
+   * The navigable views, already filtered for visibility and grouped the way
+   * the sidebar groups them.
+   *
+   * Grouped rather than flat because the palette listed all twenty-three views
+   * under one heading, which is the same wall the sidebar had: fine when you
+   * are typing a name you know, useless when you are looking for something.
+   * The sections are the sidebar's, in the sidebar's order, so the two agree
+   * about where a screen lives.
+   */
+  sections: { label: TranslationKey; views: { view: AppView; label: TranslationKey }[] }[];
 }
 
 /**
  * Ctrl+K palette: jump to any view or member. Keyboard-first for the people
  * who live in the app, invisible for everyone else.
  */
-export function CommandPalette({ open, onOpenChange, views }: Props) {
+export function CommandPalette({ open, onOpenChange, sections }: Props) {
   const { t } = useTranslation();
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const setSelectedMemberUserId = useAppStore((s) => s.setSelectedMemberUserId);
@@ -80,18 +89,26 @@ export function CommandPalette({ open, onOpenChange, views }: Props) {
             {t('palette.empty')}
           </Command.Empty>
 
-          <Command.Group heading={t('palette.views')} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-zinc-600">
-            {views.map((v) => (
-              <Command.Item
-                key={v.view}
-                value={`view ${t(v.label)}`}
-                onSelect={() => go(v.view)}
-                className="px-2.5 py-2 rounded-md text-sm text-zinc-300 cursor-pointer data-[selected=true]:bg-[var(--fill-3)] data-[selected=true]:text-zinc-100"
-              >
-                {t(v.label)}
-              </Command.Item>
-            ))}
-          </Command.Group>
+          {sections.map((section) => (
+            <Command.Group
+              key={section.label}
+              heading={t(section.label)}
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-zinc-600"
+            >
+              {section.views.map((v) => (
+                <Command.Item
+                  key={v.view}
+                  // The section name is part of what a search matches, so
+                  // typing "ledger" brings back everything under it.
+                  value={`view ${t(section.label)} ${t(v.label)}`}
+                  onSelect={() => go(v.view)}
+                  className="px-2.5 py-2 rounded-md text-sm text-zinc-300 cursor-pointer data-[selected=true]:bg-[var(--fill-3)] data-[selected=true]:text-zinc-100"
+                >
+                  {t(v.label)}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          ))}
 
           {memberItems.length > 0 && (
             <Command.Group heading={t('palette.members')} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-zinc-600">
