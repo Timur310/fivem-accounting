@@ -488,6 +488,7 @@ Prefix: `/factions/:id`.
 | `/map`, `/map/layers` | the faction's maps and what is drawn on them — see §8.16 |
 | `/admin/backup` | the superadmin's database dump and restore — see §8.17 |
 | `/pricing` | the price list, and the calculator that reads it — see §8.18 |
+| `/vehicles` | the faction's vehicle registry — see §8.19 |
 | `/item-types`, `/quotas`, `/settings` | faction configuration |
 | `/discord` | connect a Discord server and route activity to its channels, `manage_discord` — see §8.13 |
 | `/config` | CSV export/import of item types, quotas and ranks — see §8.8 |
@@ -568,6 +569,9 @@ changing someone's `role` stays with the faction admin and the superadmin.
 | Revert a booked sale | Yes | Yes | `manage_prices` | No |
 | See cost and margin | Yes | Yes | rank at or above the faction's setting | No |
 | Set exchange rates, margin visibility | Yes | Yes | `manage_prices` | No |
+| Read the vehicle registry | Yes | Yes | Yes | No |
+| Add, edit, delete a vehicle | Yes | Yes | `manage_vehicles` | No |
+| Read a vehicle's change history | Yes | Yes | `manage_vehicles` or `view_audit_logs` | No |
 | Record / edit / delete running expenses | Yes | Yes | `manage_expenses` | No |
 | Connect a Discord server, route activity to it | Yes | Yes | `manage_discord` | No |
 | Item types / quotas / settings | Yes | Yes | matching permission | No |
@@ -1656,6 +1660,53 @@ guess, and a missing rate names both currencies so somebody can go and add it.
 `viewerRankLevel` moved to `lib/rank.ts`: the map asked it first, margins ask
 it now, and two copies of that question are two answers waiting to differ.
 
+### 8.19 The Vehicle Registry
+
+A plate goes in and everything known about the car comes back: make, model,
+colour, year, who drives it, where it currently is. The shape of the police
+registries these servers already run, which is what the request asked for.
+
+One table. **The owner is two columns, deliberately.** `owner_user_id` links a
+vehicle to somebody on the roster — it survives a rename and lets a member's
+record answer "what do they drive" — and `owner_name` is for everyone else: an
+ally, a front company, a name the faction only half knows. A registry that
+could only name members could not record the car parked outside; one that held
+only text would lose every link the day somebody changed their name. The API
+returns `ownerDisplay`, resolved server-side, so no screen has to decide which
+column is the answer.
+
+**Status and category are fixed lists, not free text.** The map took the
+opposite decision for its marker categories and was right to: every server has
+its own vocabulary for places. A vehicle's status is not vocabulary — it is a
+state the app filters on, colours by, and translates. Free text would make the
+filter a search box and "impounded" mean something slightly different in every
+faction. The cost is that adding a status is a code change, and that is the
+right cost.
+
+**The plate is unique per faction, case-insensitively** — `UNIQUE (faction_id,
+upper(plate))`. Two records for one car is precisely the failure a registry
+exists to prevent, and `45ABC123` and `45abc123` are one car. The stored value
+keeps the casing it was typed in: people read plates off a screen and compare
+them to a car, and normalising on the way in would show them something other
+than what they entered.
+
+**Changes go into the existing audit log, not a table of their own.** Every
+write records the fields that actually moved, as `{field: {from, to}}`, and the
+vehicle's own history endpoint reads them back filtered to that row. A log that
+wrote every field on every save would bury the one change somebody came looking
+for, and a second audit table would be a second thing to keep correct.
+
+Permission has two halves. **Reading the registry is open to every member** —
+the person who needs to look a plate up is usually staring at the car, and
+usually holds the fewest rights — while `manage_vehicles` gates every write.
+**The history is narrower than the registry**: it answers to `manage_vehicles`
+or `view_audit_logs`, because somebody trusted to change a record may see who
+changed it before them, but a member who may only read the registry should not
+get at the audit trail through a side door.
+
+Deletion is real, not soft. A registry describes what exists now; `sold` and
+`scrapped` are there for the ones worth keeping.
+
 ---
 
 ## 9. Frontend Architecture
@@ -2277,6 +2328,18 @@ See §8.17 for the design and the four guards in front of the restore.
 | 8 | Exchange rates | Quoting the same basket clean or dirty — **DONE** | Low |
 
 See §8.18 for the design and the three arithmetic decisions behind it.
+
+### Phase 14: The Vehicle Registry (Week 31) — COMPLETE
+
+| # | Feature | Description | Priority |
+|---|---------|-------------|----------|
+| 1 | The registry | Plate, make, model, colour, year, category, owner, notes — **DONE** | High |
+| 2 | Status | A fixed, filterable, translated list plus a free note — **DONE** | High |
+| 3 | Search and filters | One box over plate, owner, make and model; chips for status and category — **DONE** | High |
+| 4 | The card | Every field on one screen, editable with the permission — **DONE** | High |
+| 5 | Change history | Who changed what, when, read out of the audit log — **DONE** | Medium |
+
+See §8.19 for the design, and for why the owner is two columns.
 
 ---
 

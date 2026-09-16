@@ -60,6 +60,9 @@ Discord history.
   and bulk rungs; pick the buyer, read the total, paste it into Discord, and
   book the sale into the treasury in one click — with margins read straight
   out of your crafting recipes, and either currency at your own rate
+- 🚗 **Vehicle registry** — plate, make, colour, owner and status for every
+  car the faction tracks, searchable by plate or owner, with a per-vehicle
+  history of who changed what
 - 🧾 **Audit log** — append-only record of every write in the system, actor
   and timestamp included
 - 💾 **Database backup** — a superadmin downloads the whole database as one
@@ -106,7 +109,7 @@ backups) live in [`docs/FiveM_RP_Faction_Accountant_Architecture.md`](docs/FiveM
 
 ## Roadmap
 
-Actively developed. The price calculator shipped most recently; Discord bot commands,
+Actively developed. The vehicle registry shipped most recently; Discord bot commands,
 automated reports, webhooks and faction templates are next up — see the roadmap in the architecture doc for
 the full phase-by-phase plan and what's already shipped.
 

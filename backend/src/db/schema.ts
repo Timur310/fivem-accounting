@@ -155,6 +155,10 @@ export const FACTION_PERMISSIONS = [
   // The split mirrors crafting: `sell` runs the till, `manage_prices` is what
   // it takes to undo a booking, because a revert moves money back out.
   'sell',
+  // The vehicle registry. Reading it is open to the faction — the people who
+  // need to look a plate up are usually the ones with the fewest rights — so
+  // only changing it needs saying.
+  'manage_vehicles',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -178,6 +182,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_map: 'Manage Map',
   manage_prices: 'Manage Prices',
   sell: 'Record Sales',
+  manage_vehicles: 'Manage Vehicles',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -1424,3 +1429,100 @@ export const currencyRatesRelations = relations(currencyRates, ({ one }) => ({
 
 export type CurrencyRate = typeof currencyRates.$inferSelect;
 export type NewCurrencyRate = typeof currencyRates.$inferInsert;
+
+// ── vehicles ───────────────────────────────────────────
+// The faction's own vehicle registry: what it owns, who drives it, where each
+// one currently is.
+//
+// Modelled on the police registries these servers already run, which is what
+// was asked for — a plate goes in, everything known about the car comes back.
+//
+// **The owner is two columns, and that is deliberate.** `ownerUserId` links a
+// vehicle to somebody on the roster, which survives a rename and lets a
+// member's profile answer "what do they drive". `ownerName` is for everyone
+// else: an ally, a front company, a name the faction only half knows. A
+// registry that could only name members would be unable to record the car
+// parked outside, and one that could only hold text would lose every link the
+// day somebody changed their name.
+export const vehicles = pgTable('vehicles', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+
+  /**
+   * Stored exactly as typed, matched case-insensitively.
+   *
+   * Plates in these servers carry their own spacing and casing conventions and
+   * people read them off a screen; normalising on the way in would show them
+   * something other than what they entered. The unique index does the
+   * normalising instead, so `45ABC123` and `45abc123` cannot both exist.
+   */
+  plate:     varchar('plate', { length: 16 }).notNull(),
+  make:      varchar('make', { length: 60 }),
+  model:     varchar('model', { length: 60 }),
+  color:     varchar('color', { length: 40 }),
+  /** One of VEHICLE_CATEGORIES — car, suv, motorcycle, and so on. */
+  category:  varchar('category', { length: 20 }).notNull().default('car'),
+  /** Model year. Null where nobody wrote it down, which is most of them. */
+  year:      integer('year'),
+  /** One of VEHICLE_STATUSES. */
+  status:    varchar('status', { length: 20 }).notNull().default('in_service'),
+  /** A line beside the status: "impounded at Mission Row, released on the 14th". */
+  statusNote: varchar('status_note', { length: 200 }),
+
+  ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  ownerName:   varchar('owner_name', { length: 120 }),
+
+  notes:     text('notes'),
+
+  createdBy: uuid('created_by').notNull().references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').notNull().references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('vehicle_faction').on(table.factionId, table.plate),
+  statusIndex: index('vehicle_status').on(table.factionId, table.status),
+  ownerIndex: index('vehicle_owner').on(table.ownerUserId),
+  // Case-insensitive, because a plate is one car however it was typed.
+  uniquePlate: uniqueIndex('vehicle_unique_plate')
+    .on(table.factionId, sql`upper(${table.plate})`),
+}));
+
+/**
+ * Where a vehicle currently is, as a fixed list rather than free text.
+ *
+ * Fixed so the same word means the same thing in every faction, so the filter
+ * on the table can be a set of chips rather than a search box, and so both
+ * languages can name them. The cost is that adding one is a code change —
+ * accepted, because a registry whose statuses drift is a registry nobody can
+ * filter.
+ */
+export const VEHICLE_STATUSES = [
+  'in_service',
+  'in_repair',
+  'impounded',
+  'stolen',
+  'sold',
+  'scrapped',
+] as const;
+export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+
+export const VEHICLE_CATEGORIES = [
+  'car',
+  'suv',
+  'motorcycle',
+  'van',
+  'truck',
+  'boat',
+  'aircraft',
+  'other',
+] as const;
+export type VehicleCategory = (typeof VEHICLE_CATEGORIES)[number];
+
+export const vehiclesRelations = relations(vehicles, ({ one }) => ({
+  faction: one(factions, { fields: [vehicles.factionId], references: [factions.id] }),
+  owner:   one(users,    { fields: [vehicles.ownerUserId], references: [users.id] }),
+  creator: one(users,    { fields: [vehicles.createdBy], references: [users.id] }),
+}));
+
+export type Vehicle = typeof vehicles.$inferSelect;
+export type NewVehicle = typeof vehicles.$inferInsert;
