@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import { entries, payouts, itemTypes } from '../db/schema.js';
@@ -23,7 +24,7 @@ import { todayDateString } from '../lib/date.js';
  * The rate is whatever the two amounts say it is: the launderer's cut is not
  * the app's business, and it changes with who is doing the washing.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember, requirePermission('manage_laundering'));
 

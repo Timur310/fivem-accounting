@@ -84,6 +84,10 @@ import type {
   Quote,
   QuoteInput,
   Vehicle,
+  Operation,
+  OperationInput,
+  OperationSplit,
+  OperationSplitInput,
   VehicleInput,
   VehicleListResult,
   VehicleHistoryEntry,
@@ -1197,3 +1201,40 @@ export async function blobErrorMessage(err: unknown, fallback = 'Unknown error')
 }
 
 export { api };
+
+export const operationsApi = {
+  list: (factionId: string, limit?: number) =>
+    api
+      .get<ApiSuccessResponse<{ operations: Operation[] }>>(
+        `/factions/${factionId}/operations`,
+        { params: limit ? { limit } : undefined },
+      )
+      .then(unwrap),
+
+  /**
+   * What the split would look like, worked out by the server.
+   *
+   * The crew agrees to these numbers before anybody writes them down, so they
+   * have to be the same numbers the save produces — which means the same code
+   * computing them, not the browser's own arithmetic.
+   */
+  preview: (factionId: string, input: OperationSplitInput) =>
+    api
+      .post<ApiSuccessResponse<OperationSplit>>(`/factions/${factionId}/operations/preview`, input)
+      .then(unwrap),
+
+  create: (factionId: string, input: OperationInput) =>
+    api
+      .post<ApiSuccessResponse<{ operation: Operation } & OperationSplit>>(
+        `/factions/${factionId}/operations`,
+        input,
+      )
+      .then(unwrap),
+
+  revert: (factionId: string, id: string) =>
+    api
+      .post<ApiSuccessResponse<{ reverted: boolean }>>(
+        `/factions/${factionId}/operations/${id}/revert`,
+      )
+      .then(unwrap),
+};

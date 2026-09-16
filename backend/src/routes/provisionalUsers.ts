@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users, factionMembers } from '../db/schema.js';
@@ -20,7 +21,7 @@ import { createAuditLog } from '../lib/audit.js';
  * Superadmin only. Registering someone else's Discord ID decides who a stretch
  * of faction history belongs to, which is not a faction-level call.
  */
-const router = Router();
+const router = asyncRouter();
 
 router.use(requireAuth, requireSuperadmin);
 

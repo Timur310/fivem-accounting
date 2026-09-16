@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import { factions, factionMembers, users, itemTypes, auditLogs } from '../db/schema.js';
@@ -8,7 +9,7 @@ import { parsePagination } from '../lib/types.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // All routes require superadmin
 // NOTE: auth is applied per-route, not via router.use(). This router is mounted

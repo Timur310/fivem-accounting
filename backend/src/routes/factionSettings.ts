@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { factions, factionMembers, DEFAULT_STRIKE_EXPIRY_DAYS, FACTION_PERMISSIONS } from '../db/schema.js';
@@ -8,7 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // Operational settings a faction runs itself: ranks and the discipline knobs.
 // Deliberately separate from PATCH /factions/:id, which is superadmin-only and

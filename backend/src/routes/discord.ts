@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -23,7 +24,7 @@ import {
   recordDeliveryOutcome,
 } from '../lib/discord.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 // Every route here is administrative. There is no member-facing half of this
 // screen, so the permission is applied once for the whole router rather than

@@ -489,6 +489,74 @@ describe('through the routes that raise the events', () => {
     expect(postMock).not.toHaveBeenCalled();
   });
 
+  /**
+   * A job the crew ran together.
+   *
+   * The channel gets the job, the crew and the haul — never the per-person
+   * shares, which run to a dozen lines for a four-man bank job and are half
+   * somebody else's business.
+   */
+  it('announces an operation with its crew and haul', async () => {
+    await link();
+    await route('operation_logged');
+
+    const res = await api().post(`${f()}/operations`).set('Cookie', w.admin.cookie).send({
+      name: 'Pacific Standard',
+      kind: 'bank',
+      location: 'Vinewood',
+      participants: [{ userId: w.admin.id }, { userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '90000.00' }],
+    });
+    expect(res.status).toBe(201);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    const [, payload] = postMock.mock.calls[0] as unknown as [
+      string,
+      { embeds: { title: string; description: string; fields?: { name: string; value: string }[] }[] },
+    ];
+    const embed = payload.embeds[0]!;
+    expect(embed.title).toContain('Operation logged');
+    expect(embed.description).toContain('Pacific Standard');
+    expect(embed.description).toContain('Bank job');
+    expect(embed.description).toContain('Vinewood');
+
+    const crew = embed.fields?.find((x) => x.name.startsWith('Crew'));
+    expect(crew?.name).toBe('Crew (2)');
+    expect(crew?.value).toContain(w.member.username);
+    expect(embed.fields?.find((x) => x.name === 'Haul')?.value).toContain('90,000');
+  });
+
+  it('announces an operation being reverted', async () => {
+    await link();
+    await route('operation_reverted');
+
+    const created = await api().post(`${f()}/operations`).set('Cookie', w.admin.cookie).send({
+      name: 'Vangelico',
+      participants: [{ userId: w.admin.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '500.00' }],
+    });
+    await api().post(`${f()}/operations/${created.body.data.operation.id}/revert`)
+      .set('Cookie', w.admin.cookie);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toContain('Operation reverted');
+  });
+
+  // Every entry the split writes would otherwise be announced one by one: a
+  // four-man job with cash and gold is eight messages nobody asked for.
+  it('does not announce the split as a pile of entries', async () => {
+    await link();
+    await route('entry_logged');
+
+    const res = await api().post(`${f()}/operations`).set('Cookie', w.admin.cookie).send({
+      name: 'Quiet job',
+      participants: [{ userId: w.admin.id }, { userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '100.00' }],
+    });
+    expect(res.status).toBe(201);
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
   // The request must answer whatever Discord does. This is the whole reason
   // the dispatch is fire-and-forget and never throws.
   it('still answers 201 when Discord is down', async () => {

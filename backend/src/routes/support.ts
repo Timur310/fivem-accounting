@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import {
@@ -24,7 +25,7 @@ import { notify } from '../lib/notify.js';
  * Reading other people's tickets is the opposite: it crosses every faction
  * boundary at once, so it is superadmin and nothing else.
  */
-const router = Router();
+const router = asyncRouter();
 
 router.use(requireAuth);
 

@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
 import {
@@ -21,7 +22,7 @@ import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { buildWhere } from '../lib/query.js';
 import { todayDateString } from '../lib/date.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

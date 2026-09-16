@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { createWriteStream } from 'node:fs';
 import { mkdtemp, open, stat, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -32,7 +33,7 @@ import {
  * compressed, it restores with --clean in one transaction, and it can be
  * inspected or partially restored with pg_restore.
  */
-const router = Router();
+const router = asyncRouter();
 
 router.use(requireAuth, requireSuperadmin);
 

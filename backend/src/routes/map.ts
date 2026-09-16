@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -32,7 +33,7 @@ import { NO_RANK_LEVEL, viewerRankLevel } from '../lib/rank.js';
  * marker they may not see cannot be edited by id either, which is the hole the
  * first version of this file left open.
  */
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 

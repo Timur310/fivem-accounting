@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import axios from 'axios';
 import { db } from '../db/index.js';
@@ -21,7 +22,7 @@ import { resolveFactionAccess } from '../middleware/factionAccess.js';
 import { exchangeBotCode, verifyBotLinkState } from '../lib/discord.js';
 import { createAuditLog } from '../lib/audit.js';
 
-const router = Router();
+const router = asyncRouter();
 
 /**
  * Build the standard /me response shape from a user record.

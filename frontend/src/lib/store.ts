@@ -13,6 +13,7 @@ export type AppView =
   | 'crafting'
   | 'pricing'
   | 'vehicles'
+  | 'operations'
   | 'map'
   | 'members'
   | 'member-profile'

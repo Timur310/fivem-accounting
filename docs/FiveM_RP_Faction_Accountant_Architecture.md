@@ -448,6 +448,18 @@ All routes are under `/api/v1`. Faction-scoped routes sit behind
 permission set their rank grants (§7.2); individual routes then add
 `requirePermission(...)`.
 
+**Every route file builds its router with `asyncRouter()`, never
+`express.Router()` directly.** Express 4 does not follow a rejected promise: a
+synchronous throw reaches `errorHandler`, an `async` handler that throws
+reaches nothing at all. No response is written and the caller waits until it
+gives up — which for the `schema.parse(req.body)` that guards nearly every
+write meant a mistyped amount answered with a spinner that never stopped.
+`asyncRouter` wraps each handler as it is registered so a rejection goes to
+`next`, preserving handler arity (Express counts declared parameters to spot an
+error handler) and leaving sub-routers alone. Express 5 does this itself; until
+this app moves, the rule is one import per file rather than something everybody
+has to remember at every handler.
+
 ### 6.1 Authentication
 
 | Method | Path | Who |
@@ -1715,6 +1727,64 @@ the removals group in `DISCORD_EVENT_TYPES` — a car arriving is news in the
 same way a car leaving is, and a faction will want both in the same channel.
 
 ---
+
+### 8.20 Operations — a job the crew ran together
+
+Four people rob a bank. The takings land in one person's pockets, and the
+faction then wants four entries that add up to the haul. Done by hand, that is
+four people typing four numbers into the quick-log box at two in the morning:
+somebody rounds, somebody forgets the gold, somebody logs their share twice,
+and the treasury is wrong in a way nobody can find a week later.
+
+So the haul is recorded once, as one thing that happened — name, kind, where,
+when, who was on it, what came back — and the app does the dividing.
+
+**The entries it writes are ordinary entries.** Every balance, quota,
+leaderboard, report and export in the app already counts them, and not one of
+them had to learn what an operation is. The link lives in
+`operation_movements`, beside the split, rather than as a column on `entries`;
+the busiest table in the app is untouched.
+
+**Shares are weights, not percentages.** Three people on 1 each is an even
+three-way split; giving the driver 2 makes it a half and two quarters without
+anybody working out that 25 and 50 come to 100. Percentages that must sum to a
+round number are the thing people get wrong.
+
+**Every hundredth is handed out.** The split works in integer hundredths like
+the rest of the money in the app, and the remainder goes to the largest weights
+first, ties by listed order. 100.00 three ways is `33.34 / 33.33 / 33.33`, not
+three times 33.33 with a hundredth lost — and the same crew with the same haul
+always divides the same way, so re-logging a job that was typed in wrong
+produces the same numbers rather than new ones.
+
+**The faction's cut comes off the top, and belongs to nobody.** It is booked
+against the anonymous placeholder, like laundering and an uncredited sale: the
+treasury gains it and no leaderboard does. Without that, whoever fills the form
+in quietly tops the board every week.
+
+**The split is worked out by the server, including the preview.** `POST
+/operations/preview` changes nothing and returns exactly what `POST
+/operations` would write, from the same function. What the crew agrees to on
+screen is what gets written — the browser never does the arithmetic.
+
+**One share is not a thing on its own.** Editing one crew member's entry would
+leave the split no longer adding up to the haul, which is the state the feature
+exists to prevent, so those rows are held: `ledgerHold.ts` asks about crafts,
+sales and now operations in one question, and the way to change a split is to
+revert it and log it again. A revert soft-deletes every entry it wrote, and
+refuses if the faction has already spent the haul — a correction should not
+drive a balance below zero sideways.
+
+**Two permissions.** `log_operations` writes one down; `manage_operations`
+takes one back out. The crew records its own night's work; removing credit from
+several people at once is leadership. Reading is open to every member, because
+half a crew holds nothing and all of them want to see what it came to.
+
+**Discord gets the job, the crew and the haul — never the per-person shares.**
+A four-man job with cash and gold is a dozen lines, unreadable in a chat
+message and half of it somebody else's business. `operation_logged` and
+`operation_reverted` are separately routable, and the entries the split writes
+are not announced one by one.
 
 ## 9. Frontend Architecture
 

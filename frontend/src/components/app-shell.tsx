@@ -43,6 +43,7 @@ import {
   Hammer,
   Calculator,
   Car,
+  Crosshair,
   Map,
   BookOpen,
   Search,
@@ -67,6 +68,7 @@ import { LaunderingView } from '@/views/laundering-view';
 import { CraftingView } from '@/views/crafting-view';
 import { PricingView } from '@/views/pricing-view';
 import { VehiclesView } from '@/views/vehicles-view';
+import { OperationsView } from '@/views/operations-view';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
@@ -312,6 +314,10 @@ export function AppShell() {
       // one are different jobs, and the bench is the same page for both.
       anyPermission: ['manage_crafting', 'craft'],
     },
+    // No permission: the crew that ran the job wants to see what it came to,
+    // and half of them hold nothing. Logging and reverting are gated inside
+    // the view.
+    { group: 'play', view: 'operations', label: 'nav.operations', icon: Crosshair },
     // No permission: the person who needs to look a plate up is usually
     // staring at the car, and usually holds the fewest rights. Editing the
     // registry is gated inside the view.
@@ -501,6 +507,12 @@ export function AppShell() {
           /> : null;
       case 'vehicles':
         return selectedFactionId ? <VehiclesView factionId={selectedFactionId} canManage={hasPermission('manage_vehicles')} /> : null;
+      case 'operations':
+        return selectedFactionId ? <OperationsView
+            factionId={selectedFactionId}
+            canLog={hasPermission('log_operations') || hasPermission('manage_operations')}
+            canManage={hasPermission('manage_operations')}
+          /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView
             factionId={selectedFactionId}

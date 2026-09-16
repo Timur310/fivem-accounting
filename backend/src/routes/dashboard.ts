@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { asyncRouter } from '../lib/asyncRouter.js';
 import { db } from '../db/index.js';
 import { entries, itemTypes, users, factionMembers, factions } from '../db/schema.js';
 import { eq, and, sql, desc, sum } from 'drizzle-orm';
@@ -9,7 +10,7 @@ import { computeTreasuryBalances } from '../lib/treasury.js';
 import { countActiveStrikes } from '../lib/strikes.js';
 import { daysSince, toDateString } from '../lib/date.js';
 
-const router = Router({ mergeParams: true });
+const router = asyncRouter({ mergeParams: true });
 
 router.use(requireAuth, requireFactionMember);
 
