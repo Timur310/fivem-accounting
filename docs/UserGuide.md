@@ -182,6 +182,7 @@ sidebar shows exactly what your rank gives you:
 | `craft` | Running a saved recipe (§6.7). Safe to hand out widely — it spends materials, it does not define what they cost |
 | `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
 | `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11), and reverting a booked sale |
+| `manage_vehicles` | Adding, editing and deleting vehicles in the registry (§6.12). Reading it needs nothing |
 | `sell` | Booking a sale into the treasury (§6.11). Safe to hand out widely — it records what was sold, it does not decide what things cost |
 | *(rank, not a permission)* | Seeing cost and margin (§6.11). Set in the price list, and it works like a map's rank: at or above the level you pick |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
@@ -760,6 +761,48 @@ channel reads it. Pick a leadership-only channel, or leave strikes unrouted.
 The app's memory of who did what: actor, action, entity, timestamp, and
 before/after values for changes. Filterable and paginated. It is
 append-only — no editing, no deleting, for anyone. See §10.
+
+### 6.12 The vehicle registry (`manage_vehicles`)
+
+Every vehicle the faction keeps track of, in one searchable list. Anyone in the
+faction can open it and look a plate up; changing what is in it needs
+`manage_vehicles`.
+
+**The table** shows plate, make and model, colour, owner, year and status.
+Click any row for the full card, with the notes and the history.
+
+**Search is one box** over the four things you actually have in front of you:
+plate, owner, make, model. It matches part of a word, so `45AB` finds
+`45ABC123` and `vega` finds anything owned by Marco Vega — including vehicles
+whose owner is a member of the faction rather than a typed name.
+
+**Filters** sit beside it: status and category, with the number of vehicles in
+each status counted over the whole registry rather than the page you are
+looking at.
+
+**Status** is a fixed list, so that it means the same thing to everyone: in
+service, in repair, impounded, stolen, sold, scrapped. Beside it you can write
+a line of detail — "impounded at Mission Row, out on the 14th". The status is
+what colours the row, so a registry can be read down its right-hand edge.
+
+**The owner is either a member or a name.** Pick somebody from the roster and
+the link survives them changing their name; type a name for anyone who is not
+on it — an ally, a business, somebody you only half know.
+
+**Plates are unique.** The app refuses a second record for a plate it already
+holds, whatever the casing, and points you at the record that exists. Two cards
+for one car is the thing a registry is for preventing.
+
+**History** on each card says who added the vehicle, who changed it, when, and
+exactly what changed — "colour: Black → Red". Only the fields that actually
+moved are recorded, so the one change you are looking for is not buried. You
+need `manage_vehicles` or `view_audit_logs` to see it: whoever may change a
+record may see who changed it before them.
+
+**Deleting is permanent.** If the car is simply gone, set it to sold or
+scrapped instead — that keeps the record and its history.
+
+---
 
 ### 6.11 The price calculator (`manage_prices`)
 

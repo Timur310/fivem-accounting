@@ -83,6 +83,10 @@ import type {
   QuantityBreakInput,
   Quote,
   QuoteInput,
+  Vehicle,
+  VehicleInput,
+  VehicleListResult,
+  VehicleHistoryEntry,
   CurrencyRate,
   Sale,
   SaleInput,
@@ -1088,6 +1092,44 @@ export const pricingApi = {
         `/factions/${factionId}/pricing/sales/${id}/revert`,
       )
       .then(unwrap),
+};
+
+
+// ── Vehicles ──
+
+export const vehiclesApi = {
+  list: (factionId: string, params?: {
+    q?: string; status?: string; category?: string; owner?: string;
+    sort?: string; order?: 'asc' | 'desc'; page?: number; page_size?: number;
+  }) =>
+    api
+      .get<ApiSuccessResponse<VehicleListResult>>(`/factions/${factionId}/vehicles`, { params })
+      .then(unwrap),
+
+  get: (factionId: string, id: string) =>
+    api
+      .get<ApiSuccessResponse<Vehicle>>(`/factions/${factionId}/vehicles/${id}`)
+      .then(unwrap),
+
+  history: (factionId: string, id: string) =>
+    api
+      .get<ApiSuccessResponse<{ history: VehicleHistoryEntry[] }>>(
+        `/factions/${factionId}/vehicles/${id}/history`,
+      )
+      .then(unwrap),
+
+  create: (factionId: string, input: VehicleInput) =>
+    api
+      .post<ApiSuccessResponse<Vehicle>>(`/factions/${factionId}/vehicles`, input)
+      .then(unwrap),
+
+  update: (factionId: string, id: string, input: Partial<VehicleInput>) =>
+    api
+      .patch<ApiSuccessResponse<Vehicle>>(`/factions/${factionId}/vehicles/${id}`, input)
+      .then(unwrap),
+
+  remove: (factionId: string, id: string) =>
+    api.delete(`/factions/${factionId}/vehicles/${id}`),
 };
 
 // ── Database backup (superadmin) ──

@@ -42,6 +42,7 @@ import {
   WashingMachine,
   Hammer,
   Calculator,
+  Car,
   Map,
   BookOpen,
   Search,
@@ -65,6 +66,7 @@ import { StrikesView } from '@/views/strikes-view';
 import { LaunderingView } from '@/views/laundering-view';
 import { CraftingView } from '@/views/crafting-view';
 import { PricingView } from '@/views/pricing-view';
+import { VehiclesView } from '@/views/vehicles-view';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
 import { SupportView } from '@/views/support-view';
@@ -310,6 +312,10 @@ export function AppShell() {
       // one are different jobs, and the bench is the same page for both.
       anyPermission: ['manage_crafting', 'craft'],
     },
+    // No permission: the person who needs to look a plate up is usually
+    // staring at the car, and usually holds the fewest rights. Editing the
+    // registry is gated inside the view.
+    { group: 'manage', view: 'vehicles', label: 'nav.vehicles', icon: Car },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
@@ -493,6 +499,8 @@ export function AppShell() {
             canManage={hasPermission('manage_prices')}
             canSell={hasPermission('sell') || hasPermission('manage_prices')}
           /> : null;
+      case 'vehicles':
+        return selectedFactionId ? <VehiclesView factionId={selectedFactionId} canManage={hasPermission('manage_vehicles')} /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView
             factionId={selectedFactionId}

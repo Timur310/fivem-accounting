@@ -183,6 +183,13 @@
       "when": 1789474369726,
       "tag": "0025_margins_and_rates",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789544137011,
+      "tag": "0026_vehicles",
+      "breakpoints": true
     }
   ]
 }

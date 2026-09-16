@@ -924,7 +924,7 @@ export const FACTION_PERMISSIONS = [
   'manage_members', 'manage_payouts', 'manage_entries', 'manage_strikes',
   'manage_quotas', 'manage_item_types', 'manage_settings', 'manage_customization',
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
-  'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell',
+  'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell', 'manage_vehicles',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -945,6 +945,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_map: 'permission.manageMap',
   manage_prices: 'permission.managePrices',
   sell: 'permission.sell',
+  manage_vehicles: 'permission.manageVehicles',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -963,6 +964,95 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
  * postgresql-client, and `pooledConnection` is true when the tools would be
  * pointed at pgbouncer, which cannot carry a dump.
  */
+// ── Vehicles ───────────────────────────────────────────
+
+export const VEHICLE_STATUSES = [
+  'in_service', 'in_repair', 'impounded', 'stolen', 'sold', 'scrapped',
+] as const;
+export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+
+export const VEHICLE_CATEGORIES = [
+  'car', 'suv', 'motorcycle', 'van', 'truck', 'boat', 'aircraft', 'other',
+] as const;
+export type VehicleCategory = (typeof VEHICLE_CATEGORIES)[number];
+
+export const VEHICLE_STATUS_KEYS: Record<VehicleStatus, TranslationKey> = {
+  in_service: 'vehicle.status.in_service',
+  in_repair: 'vehicle.status.in_repair',
+  impounded: 'vehicle.status.impounded',
+  stolen: 'vehicle.status.stolen',
+  sold: 'vehicle.status.sold',
+  scrapped: 'vehicle.status.scrapped',
+};
+
+export const VEHICLE_CATEGORY_KEYS: Record<VehicleCategory, TranslationKey> = {
+  car: 'vehicle.category.car',
+  suv: 'vehicle.category.suv',
+  motorcycle: 'vehicle.category.motorcycle',
+  van: 'vehicle.category.van',
+  truck: 'vehicle.category.truck',
+  boat: 'vehicle.category.boat',
+  aircraft: 'vehicle.category.aircraft',
+  other: 'vehicle.category.other',
+};
+
+export interface Vehicle {
+  id: string;
+  plate: string;
+  make: string | null;
+  model: string | null;
+  color: string | null;
+  category: VehicleCategory;
+  year: number | null;
+  status: VehicleStatus;
+  statusNote: string | null;
+  /** Set when the owner is on the roster; `ownerName` covers everyone else. */
+  ownerUserId: string | null;
+  ownerName: string | null;
+  /** The linked member's name, or the typed one — whichever exists. */
+  ownerDisplay: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface VehicleListResult {
+  vehicles: Vehicle[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** Counts over the whole registry, not the page — the filter chips show them. */
+  statusCounts: Partial<Record<VehicleStatus, number>>;
+}
+
+export interface VehicleInput {
+  plate: string;
+  make?: string | null;
+  model?: string | null;
+  color?: string | null;
+  category?: VehicleCategory;
+  year?: number | null;
+  status?: VehicleStatus;
+  statusNote?: string | null;
+  ownerUserId?: string | null;
+  ownerName?: string | null;
+  notes?: string | null;
+}
+
+/** One line of a vehicle's history, read out of the audit log. */
+export interface VehicleHistoryEntry {
+  id: number;
+  action: 'create' | 'update' | 'delete';
+  actorName: string;
+  createdAt: string;
+  details: {
+    plate?: string;
+    changes?: Record<string, { from: unknown; to: unknown }>;
+  } | null;
+}
+
 // ── Pricing ────────────────────────────────────────────
 //
 // The price list and the calculator that reads it. Every amount is a decimal
