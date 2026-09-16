@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   membersApi, notesApi, memberStrikesApi, factionSettingsApi } from '@/lib/api-client';
+import { useFactionModules } from '@/hooks/use-faction-modules';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -101,6 +102,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   const { toast } = useToast();
   const brandColor = useAppStore((s) => s.brandColor);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  // Discipline is its own module. Offering the button to a faction that has
+  // switched strikes off would put them in front of a form the server refuses.
+  const { isOn } = useFactionModules(factionId);
 
   // The hierarchy, only so the rank badge knows where this rank sits in it.
   // Same query key the treasury and roster use, so it is usually already
@@ -300,7 +304,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             )}
           </p>
         </div>
-        {canManageStrikes && (
+        {canManageStrikes && isOn('strikes') && (
           <Button variant="outline" size="sm" onClick={() => setStrikeOpen(true)} className="text-amber-400 border-amber-500/20 hover:bg-amber-500/10">
             <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
             {t('strikes.issue')}
