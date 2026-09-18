@@ -6,7 +6,8 @@ import {
 } from './helpers.js';
 import { db } from '../src/db/index.js';
 import {
-  auditLogs, entries, operationLoot, operationMovements, operationParticipants, operations,
+  auditLogs, entries, factionMembers, operationLoot, operationMovements, operationParticipants,
+  operations,
 } from '../src/db/schema.js';
 import { splitQuantity, splitHaul } from '../src/lib/operations.js';
 import { toCents } from '../src/lib/treasury.js';
@@ -355,6 +356,133 @@ describe('reverting an operation', () => {
     const res = await api().post(`${base()}/${id}/revert`).set('Cookie', w.admin.cookie);
     expect(res.status).toBe(400);
     expect(res.body.error.message).toMatch(/treasury holds/i);
+  });
+});
+
+/**
+ * The board, which is the only place the ratings add up to anything.
+ *
+ * Every case here is about a way the numbers could mislead rather than about
+ * the arithmetic: a night that was taken back, a member marking their own
+ * homework, and one lucky five sitting above a long good record.
+ */
+describe('the operations leaderboard', () => {
+  const board = (params = '') =>
+    api().get(`${base()}/leaderboard${params}`).set('Cookie', w.admin.cookie);
+
+  const rowFor = (body: { data: { rankings: { userId: string }[] } }, userId: string) =>
+    body.data.rankings.find((r) => r.userId === userId);
+
+  it('counts the jobs each member was on', async () => {
+    await log({ name: 'One', participants: [{ userId: w.admin.id }, { userId: w.member.id }], loot: [] });
+    await log({ name: 'Two', participants: [{ userId: w.member.id }], loot: [] });
+
+    const res = await board('?period=all');
+    expect(res.status).toBe(200);
+    expect(rowFor(res.body, w.member.id)!.operationCount).toBe(2);
+    expect(rowFor(res.body, w.admin.id)!.operationCount).toBe(1);
+    expect(res.body.data.rankings[0].userId).toBe(w.member.id);
+  });
+
+  // A revert says the night did not count. It should not go on counting here.
+  it('leaves reverted operations out', async () => {
+    const created = await log({
+      name: 'Called off',
+      participants: [{ userId: w.member.id, rating: 5 }],
+      loot: [],
+    });
+    await api().post(`${base()}/${created.body.data.operation.id}/revert`).set('Cookie', w.admin.cookie);
+
+    const res = await board('?period=all');
+    expect(rowFor(res.body, w.member.id)).toBeUndefined();
+    expect(res.body.data.ratedCount).toBe(0);
+  });
+
+  // Whoever logs the operation writes the ratings, so their own star is the
+  // one number on this board they could simply choose.
+  it('ignores a rating somebody gave themselves', async () => {
+    await log({
+      name: 'Self portrait',
+      participants: [{ userId: w.admin.id, rating: 5 }, { userId: w.member.id, rating: 4 }],
+      loot: [],
+    });
+
+    const res = await board('?period=all&sort=rating');
+    expect(rowFor(res.body, w.admin.id)!.ratingCount).toBe(0);
+    expect(rowFor(res.body, w.admin.id)!.ratingScore).toBeNull();
+    expect(rowFor(res.body, w.member.id)!.ratingCount).toBe(1);
+    expect(rowFor(res.body, w.member.id)!.ratingAverage).toBe(4);
+  });
+
+  // The whole reason the board is not ordered by a plain average.
+  it('puts a long good record above one lucky five', async () => {
+    for (let i = 0; i < 6; i += 1) {
+      await log({ name: `Steady ${i}`, participants: [{ userId: w.member.id, rating: 5 }], loot: [] });
+    }
+    await log({ name: 'One night', participants: [{ userId: third.id, rating: 5 }], loot: [] });
+
+    const res = await board('?period=all&sort=rating');
+    expect(rowFor(res.body, w.member.id)!.ratingAverage).toBe(5);
+    expect(rowFor(res.body, third.id)!.ratingAverage).toBe(5);
+    expect(res.body.data.rankings[0].userId).toBe(w.member.id);
+    expect(rowFor(res.body, third.id)!.provisional).toBe(true);
+    expect(rowFor(res.body, w.member.id)!.provisional).toBe(false);
+  });
+
+  // Not having been judged is not the same as having been judged badly.
+  it('sorts unrated members last on the rating board', async () => {
+    await log({ name: 'Rated', participants: [{ userId: w.member.id, rating: 2 }], loot: [] });
+    await log({ name: 'Unrated', participants: [{ userId: third.id }], loot: [] });
+
+    const res = await board('?period=all&sort=rating');
+    const order = res.body.data.rankings.map((r: { userId: string }) => r.userId);
+    expect(order.indexOf(w.member.id)).toBeLessThan(order.indexOf(third.id));
+    expect(rowFor(res.body, third.id)!.ratingScore).toBeNull();
+  });
+
+  it('reports the haul per item type rather than as one number', async () => {
+    await log({
+      name: 'Vangelico',
+      participants: [{ userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '100.00' }, { itemTypeId: gold, quantity: '4.00' }],
+    });
+
+    const res = await board('?period=all');
+    const haul = rowFor(res.body, w.member.id)!.haul as { itemTypeName: string; total: string }[];
+    expect(haul).toHaveLength(2);
+    expect(haul.find((h) => h.itemTypeName === 'Gold Bar')!.total).toBe('4.00');
+  });
+
+  // The faction's own cut is booked against a placeholder, not a person.
+  it('keeps the anonymous placeholder off it', async () => {
+    await log({
+      name: 'With a cut',
+      participants: [{ userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '100.00' }],
+      factionCutPercent: '50',
+    });
+
+    const res = await board('?period=all');
+    expect(res.body.data.rankings).toHaveLength(1);
+    expect(res.body.data.rankings[0].userId).toBe(w.member.id);
+  });
+
+  it('lets any member read it', async () => {
+    expect((await api().get(`${base()}/leaderboard`).set('Cookie', w.member.cookie)).status).toBe(200);
+  });
+
+  it('counts how many different people rated somebody', async () => {
+    // A second person who may log, so the two ratings come from two people.
+    await db.update(factionMembers).set({ role: 'admin' })
+      .where(and(eq(factionMembers.factionId, w.faction.id), eq(factionMembers.userId, third.id)));
+
+    await log({ name: 'A', participants: [{ userId: w.member.id, rating: 4 }], loot: [] });
+    const b = await log({ name: 'B', participants: [{ userId: w.member.id, rating: 5 }], loot: [] }, third.cookie);
+    expect(b.status).toBe(201);
+
+    const res = await board('?period=all&sort=rating');
+    expect(rowFor(res.body, w.member.id)!.ratingCount).toBe(2);
+    expect(rowFor(res.body, w.member.id)!.raterCount).toBe(2);
   });
 });
 
