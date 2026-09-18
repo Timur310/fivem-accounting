@@ -172,10 +172,16 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['discord-reminders', factionId] });
 
+  // The id travels with the input rather than being read off `editing` when
+  // the request is built. It used to be read off `editing`, which is null for
+  // anything started outside the form — so the switch in the list, which sends
+  // the whole reminder back with `isEnabled` flipped, was posting it as a new
+  // one. Switching a reminder off duplicated it instead, and left the original
+  // running.
   const save = useMutation({
-    mutationFn: (input: ReminderInput) =>
-      editing
-        ? discordRemindersApi.update(factionId, editing.id, input)
+    mutationFn: ({ id, input }: { id: string | null; input: ReminderInput }) =>
+      id
+        ? discordRemindersApi.update(factionId, id, input)
         : discordRemindersApi.create(factionId, input),
     onSuccess: (saved) => {
       setDraft(null);
@@ -198,6 +204,17 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
       }
       toast({ title: t('reminder.saved') });
     },
+    onError: (e) =>
+      toast({ title: t('reminder.saveFailed'), description: apiErrorMessage(e), variant: 'destructive' }),
+  });
+
+  // Its own mutation rather than a call into `save`: the switch in the list
+  // never opens the form, so it has no draft to clear and nothing to say when
+  // it works. It is always an update of a reminder that already exists.
+  const toggle = useMutation({
+    mutationFn: ({ reminder, isEnabled }: { reminder: DiscordReminder; isEnabled: boolean }) =>
+      discordRemindersApi.update(factionId, reminder.id, { ...draftFrom(reminder), isEnabled }),
+    onSuccess: () => invalidate(),
     onError: (e) =>
       toast({ title: t('reminder.saveFailed'), description: apiErrorMessage(e), variant: 'destructive' }),
   });
@@ -315,7 +332,8 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                 <div className="flex shrink-0 items-center gap-1">
                   <Switch
                     checked={r.isEnabled}
-                    onCheckedChange={(isEnabled) => save.mutate({ ...draftFrom(r), isEnabled })}
+                    onCheckedChange={(isEnabled) => toggle.mutate({ reminder: r, isEnabled })}
+                    disabled={toggle.isPending}
                     aria-label={t('reminder.enabled')}
                   />
                   <Button variant="ghost" size="icon" onClick={() => sendNow.mutate(r.id)}
@@ -356,7 +374,7 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
           {draft && (
             <form
               className="space-y-4"
-              onSubmit={(e) => { e.preventDefault(); save.mutate(draft); }}
+              onSubmit={(e) => { e.preventDefault(); save.mutate({ id: editing?.id ?? null, input: draft }); }}
             >
               <div className="space-y-1">
                 <Label htmlFor="reminder-channel">{t('reminder.channel')}</Label>
