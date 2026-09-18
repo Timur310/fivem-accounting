@@ -49,6 +49,7 @@ export type DiscordEvent =
       crew: string[];
       loot: { itemTypeName: string; quantity: string; unit: string }[];
       factionCutPercent: string;
+      creditTo: string;
     }
   | { type: 'operation_reverted'; actorUserId: string; name: string; occurredAt: string };
 
@@ -608,10 +609,17 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         byline: `Logged by ${names.user(event.actorUserId)}`,
         fields: [
           { name: `Crew (${event.crew.length})`, value: event.crew.join(', ') || '\u{2014}' },
-          { name: 'Haul', value: haul || '\u{2014}' },
-          ...(Number(event.factionCutPercent) > 0
-            ? [{ name: 'Faction cut', value: `${event.factionCutPercent}%`, inline: true }]
-            : []),
+          // No haul, no field. A job that took nothing is an ordinary thing
+          // to log now, and an em dash there says less than silence does.
+          ...(haul ? [{ name: 'Haul', value: haul }] : []),
+          // How it was booked, but only when that is not the obvious
+          // answer: a crew split is what everybody assumes, and saying so
+          // every time trains people to stop reading the line.
+          ...(event.creditTo === 'faction'
+            ? [{ name: 'Credited to', value: 'The faction \u{2014} no shares', inline: true }]
+            : Number(event.factionCutPercent) > 0
+              ? [{ name: 'Faction cut', value: `${event.factionCutPercent}%`, inline: true }]
+              : []),
         ],
       };
     }

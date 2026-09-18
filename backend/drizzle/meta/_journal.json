@@ -204,6 +204,13 @@
       "when": 1789550452327,
       "tag": "0028_faction_modules",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789729838928,
+      "tag": "0029_operations_optional_loot",
+      "breakpoints": true
     }
   ]
 }

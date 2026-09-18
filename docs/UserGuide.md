@@ -487,6 +487,17 @@ Press **Log it** and everybody's share is written into the books as a normal
 entry — it counts for quotas, the leaderboard and the treasury like anything
 else you log.
 
+**Nothing to divide?** Leave the haul empty. A job that went wrong, a favour,
+a fight — log who was there and what happened, and nothing touches the books.
+
+**Takings, but nobody is owed a share?** Add the haul and pick **All to the
+faction**. It goes into the vault, and nobody is credited, so no leaderboard
+moves.
+
+**Rating the crew.** Each person on the job has five stars and a note beside
+them. Both are optional, both are part of that operation rather than a score
+that follows the member around, and clicking the same star again clears it.
+
 **Got it wrong?** Somebody with *Revert Operations* can take the whole thing
 back out in one go from the card, and then you log it again with the right
 numbers. You cannot edit one person's share on its own — that is how a split

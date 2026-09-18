@@ -1593,6 +1593,18 @@ export const operations = pgTable('operations', {
    */
   factionCutPercent: decimal('faction_cut_percent', { precision: 5, scale: 2 }).notNull().default('0'),
 
+  /**
+   * Who the haul is credited to: `crew` divides it, `faction` books all of it
+   * against the faction itself.
+   *
+   * The crews that asked for this said the same thing twice: an operation is
+   * often just a thing that happened. Nobody is owed a share, the takings go
+   * straight into the vault, and what the faction wants recorded is that it
+   * was run and who ran it. Splitting by default forced a number onto a night
+   * that had no number in it.
+   */
+  creditTo: varchar('credit_to', { length: 10 }).notNull().default('crew'),
+
   notes:    text('notes'),
   loggedBy: uuid('logged_by').notNull().references(() => users.id),
 
@@ -1630,6 +1642,19 @@ export const operationParticipants = pgTable('operation_participants', {
   operationId: uuid('operation_id').notNull().references(() => operations.id, { onDelete: 'cascade' }),
   userId:      uuid('user_id').notNull().references(() => users.id),
   share:       integer('share').notNull().default(1),
+
+  /**
+   * How this member did on the job, 1 to 5, or null for not rated.
+   *
+   * Asked for alongside the split being optional, and for the same reason: an
+   * operation with nothing to divide still has something worth recording
+   * about the people who ran it. Deliberately part of the operation rather
+   * than a score that follows the member around — it says how one night went,
+   * not what somebody is worth.
+   */
+  rating:      integer('rating'),
+  ratingNote:  varchar('rating_note', { length: 200 }),
+
   createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   uniqueMember: uniqueIndex('operation_participant_unique').on(table.operationId, table.userId),
@@ -1666,6 +1691,10 @@ export const operationMovements = pgTable('operation_movements', {
 }, (table) => ({
   operationIndex: index('operation_movement_operation').on(table.operationId),
 }));
+
+/** Who a haul is credited to. `crew` divides it; `faction` keeps all of it. */
+export const OPERATION_CREDIT = ['crew', 'faction'] as const;
+export type OperationCredit = (typeof OPERATION_CREDIT)[number];
 
 export const OPERATION_MOVEMENT_ROLES = ['share', 'faction_cut'] as const;
 export type OperationMovementRole = (typeof OPERATION_MOVEMENT_ROLES)[number];
