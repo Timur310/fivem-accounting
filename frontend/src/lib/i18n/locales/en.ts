@@ -1561,6 +1561,11 @@ export const en = {
   'operations.ratingNone': 'Not rated',
   'operations.creditedToFaction': 'Credited to the faction — no shares',
   'operations.nothingTaken': 'Nothing taken',
+  'operations.delete': 'Delete for good',
+  'operations.deleteTitle': 'Delete this operation for good?',
+  'operations.deleteBody': '{name} disappears from the list along with its crew, its haul and the ledger rows it wrote. This cannot be undone. The audit log keeps a note that you deleted it.',
+  'operations.deletedToast': 'Operation deleted',
+  'operations.deleteFailed': 'Could not delete it',
 };
 
 /** Every key the interface may ask for. */

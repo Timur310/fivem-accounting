@@ -5,7 +5,9 @@ import {
   createFaction, type BasicWorld,
 } from './helpers.js';
 import { db } from '../src/db/index.js';
-import { entries, operations } from '../src/db/schema.js';
+import {
+  auditLogs, entries, operationLoot, operationMovements, operationParticipants, operations,
+} from '../src/db/schema.js';
 import { splitQuantity, splitHaul } from '../src/lib/operations.js';
 import { toCents } from '../src/lib/treasury.js';
 
@@ -353,6 +355,85 @@ describe('reverting an operation', () => {
     const res = await api().post(`${base()}/${id}/revert`).set('Cookie', w.admin.cookie);
     expect(res.status).toBe(400);
     expect(res.body.error.message).toMatch(/treasury holds/i);
+  });
+});
+
+/**
+ * Erasing one, which a revert deliberately does not do.
+ *
+ * A revert leaves the night in the list where everybody can see it was taken
+ * back; a delete is for the rows that should never have been there at all.
+ */
+describe('deleting an operation for good', () => {
+  async function logged() {
+    const res = await log({
+      name: 'Test Run',
+      participants: [{ userId: w.admin.id }, { userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '1000.00' }],
+    });
+    expect(res.status).toBe(201);
+    return res.body.data.operation.id as string;
+  }
+
+  const del = (id: string, cookie = w.admin.cookie) =>
+    api().delete(`${base()}/${id}`).set('Cookie', cookie);
+
+  it('refuses while the operation is still booked', async () => {
+    const id = await logged();
+    const res = await del(id);
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/revert/i);
+
+    const [row] = await db.select().from(operations).where(eq(operations.id, id));
+    expect(row).toBeDefined();
+  });
+
+  it('removes the operation, its crew, its haul and its ledger rows', async () => {
+    const id = await logged();
+    await api().post(`${base()}/${id}/revert`).set('Cookie', w.admin.cookie);
+
+    const res = await del(id);
+    expect(res.status).toBe(200);
+
+    expect(await db.select().from(operations).where(eq(operations.id, id))).toHaveLength(0);
+    expect(await db.select().from(operationParticipants)
+      .where(eq(operationParticipants.operationId, id))).toHaveLength(0);
+    expect(await db.select().from(operationLoot)
+      .where(eq(operationLoot.operationId, id))).toHaveLength(0);
+    expect(await db.select().from(operationMovements)
+      .where(eq(operationMovements.operationId, id))).toHaveLength(0);
+    // Including the soft-deleted ones the revert left behind.
+    expect(await db.select().from(entries)).toHaveLength(0);
+  });
+
+  // The record goes; the fact that somebody removed it does not.
+  it('leaves an audit row behind', async () => {
+    const id = await logged();
+    await api().post(`${base()}/${id}/revert`).set('Cookie', w.admin.cookie);
+    await del(id);
+
+    const rows = await db.select().from(auditLogs)
+      .where(and(eq(auditLogs.entityType, 'operation'), eq(auditLogs.entityId, id)));
+    const erased = rows.filter((r) => (r.details as { hardDelete?: boolean } | null)?.hardDelete);
+    expect(erased).toHaveLength(1);
+    expect((erased[0]!.details as { name?: string }).name).toBe('Test Run');
+  });
+
+  it('refuses somebody who may only log', async () => {
+    const id = await logged();
+    await api().post(`${base()}/${id}/revert`).set('Cookie', w.admin.cookie);
+    await giveMemberRank(['log_operations']);
+    expect((await del(id, w.member.cookie)).status).toBe(403);
+  });
+
+  it('will not reach across factions', async () => {
+    const id = await logged();
+    await api().post(`${base()}/${id}/revert`).set('Cookie', w.admin.cookie);
+    const other = await createFaction('Other Crew', third.id);
+    const res = await api().delete(`/api/v1/factions/${other.id}/operations/${id}`)
+      .set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(403);
+    expect(await db.select().from(operations).where(eq(operations.id, id))).toHaveLength(1);
   });
 });
 

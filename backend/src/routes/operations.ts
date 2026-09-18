@@ -36,9 +36,9 @@ import { splitHaul, type SplitLine } from '../lib/operations.js';
  * per item that adds up to the haul exactly.
  *
  * **Reading is open to the faction; logging needs `log_operations`; reverting
- * needs `manage_operations`.** The crew can record their own night's work.
- * Taking a whole split back out of everybody's totals is leadership, the same
- * way reverting a sale is.
+ * and erasing need `manage_operations`.** The crew can record their own
+ * night's work. Taking a whole split back out of everybody's totals is
+ * leadership, the same way reverting a sale is.
  */
 const router = asyncRouter({ mergeParams: true });
 
@@ -556,6 +556,95 @@ router.post('/:operationId/revert', requirePermission('manage_operations'), asyn
   });
 
   success(res, { reverted: true });
+});
+
+// ── DELETE /:operationId — erase it for good ──────────────────
+//
+// A revert keeps the night in the list, greyed out, which is right for a job
+// that really happened and was booked wrong. It is not right for a test row,
+// a duplicate, or a job logged against the wrong faction — those should stop
+// existing, and until now nothing in the app could make one stop existing.
+//
+// Reverting first is required rather than folded in. Erasing a live operation
+// would move balances as a side effect of a delete button, and a two-step
+// path — take it back out, then remove the record — is both safer and easier
+// to explain: by the time this runs, the books no longer depend on the row.
+
+router.delete('/:operationId', requirePermission('manage_operations'), async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const operationId = req.params.operationId as string;
+
+  const outcome = await db.transaction(async (tx: TransactionLike) => {
+    const [operation] = await tx
+      .select()
+      .from(operations)
+      .where(and(eq(operations.id, operationId), eq(operations.factionId, id)))
+      .limit(1)
+      .for('update');
+
+    if (!operation) return { ok: false as const, code: 'NOT_FOUND' as const, message: 'Operation not found' };
+    if (!operation.revertedAt) {
+      return {
+        ok: false as const,
+        code: 'NOT_REVERTED' as const,
+        message: 'Revert this operation first. Deleting a live operation would change the treasury without saying so.',
+      };
+    }
+
+    const moves = await tx.select().from(operationMovements).where(eq(operationMovements.operationId, operationId));
+    const crew = await tx
+      .select()
+      .from(operationParticipants)
+      .where(eq(operationParticipants.operationId, operationId));
+
+    // The audit row is written before the tables it describes are gone, and
+    // carries enough of the operation to answer \"what was that one?\" later.
+    // It is the only thing that survives this, deliberately: somebody with
+    // `manage_operations` can erase the record, not the fact that they did.
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId: id,
+      action: 'delete',
+      entityType: 'operation',
+      entityId: operationId,
+      details: {
+        hardDelete: true,
+        name: operation.name,
+        kind: operation.kind,
+        occurredAt: operation.occurredAt.toISOString(),
+        crew: crew.length,
+        entries: moves.filter((m) => m.entryId).length,
+      },
+      req,
+      tx,
+    });
+
+    // The entries the split wrote were soft-deleted by the revert, so removing
+    // them now changes no balance — it only stops a deleted row pointing at an
+    // operation that no longer exists.
+    const entryIds = moves.map((m) => m.entryId).filter((x): x is string => !!x);
+    if (entryIds.length) {
+      await tx.delete(entries).where(inArray(entries.id, entryIds));
+    }
+
+    // Crew, loot and movements go with it: every one of them is declared
+    // `onDelete: 'cascade'` against this row.
+    await tx.delete(operations).where(eq(operations.id, operationId));
+
+    return { ok: true as const, operation };
+  });
+
+  if (!outcome.ok) {
+    error(
+      res,
+      outcome.code === 'NOT_FOUND' ? 'NOT_FOUND' : 'VALIDATION_ERROR',
+      outcome.message,
+      outcome.code === 'NOT_FOUND' ? 404 : 400,
+    );
+    return;
+  }
+
+  success(res, { deleted: true });
 });
 
 export default router;
