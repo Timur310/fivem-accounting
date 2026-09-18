@@ -112,6 +112,7 @@ export function OperationsView({
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reverting, setReverting] = useState<Operation | null>(null);
+  const [deleting, setDeleting] = useState<Operation | null>(null);
 
   const query = useQuery({
     queryKey: ['operations', factionId],
@@ -137,6 +138,21 @@ export function OperationsView({
     },
     onError: (err) => {
       toast({ title: t('operations.revertFailed'), description: apiErrorMessage(err), variant: 'destructive' });
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => operationsApi.remove(factionId, id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['operations', factionId] });
+      // The rows it wrote were already out of the books by the time it could
+      // be deleted, but the ledger screens still listed them as deleted rows.
+      void queryClient.invalidateQueries({ queryKey: ['entries'] });
+      setDeleting(null);
+      toast({ title: t('operations.deletedToast') });
+    },
+    onError: (err) => {
+      toast({ title: t('operations.deleteFailed'), description: apiErrorMessage(err), variant: 'destructive' });
     },
   });
 
@@ -181,6 +197,7 @@ export function OperationsView({
             operation={operation}
             canManage={canManage}
             onRevert={() => setReverting(operation)}
+            onDelete={() => setDeleting(operation)}
           />
         ))}
       </div>
@@ -192,6 +209,27 @@ export function OperationsView({
           onClose={() => setDialogOpen(false)}
         />
       )}
+
+      <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('operations.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('operations.deleteBody').replace('{name}', deleting?.name ?? '')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleting && remove.mutate(deleting.id)}
+              disabled={remove.isPending}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              {t('operations.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!reverting} onOpenChange={(open) => !open && setReverting(null)}>
         <AlertDialogContent>
@@ -227,10 +265,12 @@ function OperationCard({
   operation,
   canManage,
   onRevert,
+  onDelete,
 }: {
   operation: Operation;
   canManage: boolean;
   onRevert: () => void;
+  onDelete: () => void;
 }) {
   const { t } = useTranslation();
   const reverted = !!operation.revertedAt;
@@ -272,11 +312,25 @@ function OperationCard({
             {` · ${t('operations.loggedBy').replace('{name}', operation.loggedByName)}`}
           </p>
         </div>
-        {canManage && !reverted && (
-          <Button variant="outline" size="sm" onClick={onRevert}>
-            <Undo2 className="mr-2 h-4 w-4" />
-            {t('operations.revert')}
-          </Button>
+        {canManage && (
+          reverted ? (
+            // Only after the books are clear of it, which is also the only
+            // state the server will delete in.
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDelete}
+              className="border-red-900/60 text-red-300 hover:bg-red-950/40 hover:text-red-200"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {t('operations.delete')}
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={onRevert}>
+              <Undo2 className="mr-2 h-4 w-4" />
+              {t('operations.revert')}
+            </Button>
+          )
         )}
       </div>
 

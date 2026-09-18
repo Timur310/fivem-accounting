@@ -1540,4 +1540,9 @@ export const hu: Translations = {
   'operations.ratingNone': 'Nincs értékelve',
   'operations.creditedToFaction': 'A frakcióé — nincs elosztás',
   'operations.nothingTaken': 'Nem lett semmi',
+  'operations.delete': 'Végleges törlés',
+  'operations.deleteTitle': 'Véglegesen törlöd ezt az akciót?',
+  'operations.deleteBody': 'A(z) {name} eltűnik a listából a résztvevőkkel, a zsákmánnyal és a hozzá írt könyvelési sorokkal együtt. Ezt nem lehet visszavonni. A naplóban marad egy bejegyzés arról, hogy te törölted.',
+  'operations.deletedToast': 'Akció törölve',
+  'operations.deleteFailed': 'Nem sikerült törölni',
 };

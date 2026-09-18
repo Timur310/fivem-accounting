@@ -1250,4 +1250,15 @@ export const operationsApi = {
         `/factions/${factionId}/operations/${id}/revert`,
       )
       .then(unwrap),
+
+  /**
+   * Erase a reverted operation, rows and all.
+   *
+   * Only offered once it has been reverted, which the server insists on too:
+   * the books must already be free of it before the record can go.
+   */
+  remove: (factionId: string, id: string) =>
+    api
+      .delete<ApiSuccessResponse<{ deleted: boolean }>>(`/factions/${factionId}/operations/${id}`)
+      .then(unwrap),
 };
