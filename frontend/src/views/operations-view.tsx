@@ -21,16 +21,55 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatAmount, formatDateTime, displayName } from '@/lib/format';
-import { Crosshair, Plus, Trash2, Undo2, Users } from 'lucide-react';
+import { Crosshair, Plus, Star, Trash2, Undo2, Users } from 'lucide-react';
 import { OPERATION_KINDS, OPERATION_KIND_KEYS } from '@/lib/api-types';
 import type {
-  Operation, OperationKind, OperationSplit, OperationSplitInput,
+  Operation, OperationCredit, OperationKind, OperationSplit, OperationSplitInput,
 } from '@/lib/api-types';
 
-/** A row in the crew list: who, and how many shares. */
+/** A row in the crew list: who, how many shares, and how the night went. */
 interface CrewRow {
   userId: string;
   share: number;
+  /** 1 to 5, or null for not rated — which is most of the time. */
+  rating: number | null;
+  ratingNote: string;
+}
+
+/**
+ * Five stars, clicked to set and clicked again to clear.
+ *
+ * Clearing matters more than it sounds: rating somebody is optional, and a
+ * control you cannot take back turns a misclick into a permanent two out of
+ * five on a record other people read.
+ */
+function RatingStars({
+  value,
+  onChange,
+  label,
+}: {
+  value: number | null;
+  onChange: (value: number | null) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-0.5" role="group" aria-label={label}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(value === star ? null : star)}
+          aria-label={`${label}: ${star}`}
+          aria-pressed={value !== null && star <= value}
+          className="p-0.5 text-zinc-600 transition-colors hover:text-amber-300"
+        >
+          <Star
+            className={`h-4 w-4 ${value !== null && star <= value ? 'fill-amber-400 text-amber-400' : ''}`}
+          />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** A row in the haul list. Quantity stays a string — it is money. */
@@ -244,18 +283,27 @@ function OperationCard({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div>
           <p className="text-xs uppercase tracking-wide text-zinc-500">{t('operations.haul')}</p>
-          <ul className="mt-2 space-y-1 text-sm text-zinc-200">
-            {operation.loot.map((line) => (
-              <li key={line.id}>
-                {formatAmount(line.quantity, line.unit, line.isCurrency)} · {line.itemTypeName}
-              </li>
-            ))}
-          </ul>
-          {Number(operation.factionCutPercent) > 0 && (
+          {operation.loot.length === 0 ? (
+            <p className="mt-2 text-sm text-zinc-500">{t('operations.nothingTaken')}</p>
+          ) : (
+            <ul className="mt-2 space-y-1 text-sm text-zinc-200">
+              {operation.loot.map((line) => (
+                <li key={line.id}>
+                  {formatAmount(line.quantity, line.unit, line.isCurrency)} · {line.itemTypeName}
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* One line or the other: "credited to the faction" already says
+              the cut was all of it, and printing 100% underneath is the same
+              fact twice. */}
+          {operation.creditTo === 'faction' ? (
+            <p className="mt-2 text-xs text-zinc-500">{t('operations.creditedToFaction')}</p>
+          ) : Number(operation.factionCutPercent) > 0 ? (
             <p className="mt-2 text-xs text-zinc-500">
               {t('operations.cutTaken').replace('{percent}', operation.factionCutPercent)}
             </p>
-          )}
+          ) : null}
         </div>
 
         <div>
@@ -269,10 +317,22 @@ function OperationCard({
                 <li key={member.userId} className="flex flex-wrap justify-between gap-2">
                   <span>
                     {member.name}
-                    {member.share !== 1 && (
+                    {member.share !== 1 && operation.creditTo === 'crew' && (
                       <span className="ml-1 text-xs text-zinc-500">
                         ×{member.share}
                       </span>
+                    )}
+                    {member.rating !== null && (
+                      <span
+                        className="ml-2 text-xs text-amber-400"
+                        title={member.ratingNote ?? undefined}
+                      >
+                        {'★'.repeat(member.rating)}
+                        <span className="text-zinc-700">{'★'.repeat(5 - member.rating)}</span>
+                      </span>
+                    )}
+                    {member.ratingNote && (
+                      <span className="ml-2 text-xs text-zinc-500">{member.ratingNote}</span>
                     )}
                   </span>
                   <span className="text-zinc-400">
@@ -314,6 +374,7 @@ function LogOperationDialog({
   const [occurredAt, setOccurredAt] = useState(() => localInputValue(new Date()));
   const [notes, setNotes] = useState('');
   const [cut, setCut] = useState('0');
+  const [creditTo, setCreditTo] = useState<OperationCredit>('crew');
   const [crew, setCrew] = useState<CrewRow[]>([]);
   const [loot, setLoot] = useState<LootRow[]>([{ itemTypeId: '', quantity: '' }]);
   const [split, setSplit] = useState<OperationSplit | null>(null);
@@ -330,13 +391,23 @@ function LogOperationDialog({
   };
 
   const filledLoot = loot.filter((l) => l.itemTypeId && /^\d+(\.\d{1,2})?$/.test(l.quantity) && Number(l.quantity) > 0);
-  const ready = crew.length > 0 && filledLoot.length > 0;
+  // A crew and a name is the whole requirement. Plenty of jobs are worth
+  // recording and take nothing — that was the first thing people said about
+  // this screen — so the haul no longer holds the form shut.
+  const ready = crew.length > 0;
+  const splitting = filledLoot.length > 0 && creditTo === 'crew';
 
   const input: OperationSplitInput = useMemo(() => ({
-    participants: crew.map((c) => ({ userId: c.userId, share: c.share })),
+    participants: crew.map((c) => ({
+      userId: c.userId,
+      share: c.share,
+      rating: c.rating,
+      ratingNote: c.ratingNote.trim() || null,
+    })),
     loot: filledLoot.map((l) => ({ itemTypeId: l.itemTypeId, quantity: l.quantity })),
+    creditTo,
     factionCutPercent: cut || '0',
-  }), [crew, JSON.stringify(filledLoot), cut]);
+  }), [crew, JSON.stringify(filledLoot), cut, creditTo]);
 
   /**
    * The preview comes from the server, on a short delay.
@@ -347,7 +418,7 @@ function LogOperationDialog({
    * same function the save uses.
    */
   useEffect(() => {
-    if (!ready) {
+    if (!splitting) {
       setSplit(null);
       setPreviewError(null);
       return;
@@ -370,7 +441,7 @@ function LogOperationDialog({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [factionId, input, ready]);
+  }, [factionId, input, splitting]);
 
   const save = useMutation({
     mutationFn: () => operationsApi.create(factionId, {
@@ -452,37 +523,63 @@ function LogOperationDialog({
 
             <div className="space-y-2">
               {crew.map((row) => (
-                <div key={row.userId} className="flex items-center gap-2">
-                  <div className="flex-1 rounded-md border border-[var(--line-2)] px-3 py-2 text-sm text-zinc-200">
-                    {memberName(row.userId)}
+                <div
+                  key={row.userId}
+                  className="rounded-lg border border-[var(--line-1)] p-2 space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 truncate text-sm text-zinc-200">
+                      {memberName(row.userId)}
+                    </div>
+                    {/* Only when the shares actually decide something. */}
+                    {splitting && (
+                      <Input
+                        type="number"
+                        min={1}
+                        max={999}
+                        className="w-20"
+                        value={row.share}
+                        onChange={(e) => setCrew((prev) => prev.map((c) =>
+                          c.userId === row.userId
+                            ? { ...c, share: Math.max(1, Math.min(999, Number(e.target.value) || 1)) }
+                            : c))}
+                        aria-label={t('operations.share')}
+                      />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCrew((prev) => prev.filter((c) => c.userId !== row.userId))}
+                      aria-label={t('common.remove')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={999}
-                    className="w-20"
-                    value={row.share}
-                    onChange={(e) => setCrew((prev) => prev.map((c) =>
-                      c.userId === row.userId
-                        ? { ...c, share: Math.max(1, Math.min(999, Number(e.target.value) || 1)) }
-                        : c))}
-                    aria-label={t('operations.share')}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setCrew((prev) => prev.filter((c) => c.userId !== row.userId))}
-                    aria-label={t('common.remove')}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <RatingStars
+                      value={row.rating}
+                      label={`${t('operations.rating')} — ${memberName(row.userId)}`}
+                      onChange={(rating) => setCrew((prev) => prev.map((c) =>
+                        c.userId === row.userId ? { ...c, rating } : c))}
+                    />
+                    <Input
+                      className="h-8 flex-1 min-w-[10rem] text-sm"
+                      value={row.ratingNote}
+                      onChange={(e) => setCrew((prev) => prev.map((c) =>
+                        c.userId === row.userId ? { ...c, ratingNote: e.target.value } : c))}
+                      placeholder={t('operations.ratingNotePlaceholder')}
+                      aria-label={`${t('operations.ratingNote')} — ${memberName(row.userId)}`}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
 
             <SearchableSelect
               value=""
-              onValueChange={(userId) => setCrew((prev) => [...prev, { userId, share: 1 }])}
+              onValueChange={(userId) => setCrew((prev) =>
+                [...prev, { userId, share: 1, rating: null, ratingNote: '' }])}
               options={available.map((m) => ({ value: m.userId, label: displayName(m) }))}
               placeholder={t('operations.addMember')}
               searchPlaceholder={t('operations.searchMember')}
@@ -492,7 +589,10 @@ function LogOperationDialog({
 
           {/* ── the haul ── */}
           <div className="space-y-2">
-            <Label>{t('operations.haul')}</Label>
+            <div className="flex items-center justify-between">
+              <Label>{t('operations.haul')}</Label>
+              <span className="text-xs text-zinc-500">{t('operations.haulOptional')}</span>
+            </div>
             {loot.map((row, index) => (
               <div key={index} className="flex items-center gap-2">
                 <SearchableSelect
@@ -537,17 +637,50 @@ function LogOperationDialog({
             </Button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* ── where the haul goes ──
+              Only once there is one. A crew that took nothing has nothing to
+              decide here, and the question on screen would be the same
+              question this form was criticised for asking. */}
+          {filledLoot.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="op-cut">{t('operations.factionCut')}</Label>
-              <Input
-                id="op-cut"
-                inputMode="decimal"
-                value={cut}
-                onChange={(e) => setCut(e.target.value)}
-              />
-              <p className="text-xs text-zinc-500">{t('operations.factionCutHint')}</p>
+              <Label>{t('operations.creditTo')}</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(['crew', 'faction'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setCreditTo(option)}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      creditTo === option
+                        ? 'border-[var(--line-2)] bg-[var(--fill-1)]'
+                        : 'border-[var(--line-1)] opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <span className="block text-sm text-zinc-200">
+                      {t(option === 'crew' ? 'operations.creditCrew' : 'operations.creditFaction')}
+                    </span>
+                    <span className="block text-xs text-zinc-500">
+                      {t(option === 'crew' ? 'operations.creditCrewHint' : 'operations.creditFactionHint')}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {splitting && (
+              <div className="space-y-2">
+                <Label htmlFor="op-cut">{t('operations.factionCut')}</Label>
+                <Input
+                  id="op-cut"
+                  inputMode="decimal"
+                  value={cut}
+                  onChange={(e) => setCut(e.target.value)}
+                />
+                <p className="text-xs text-zinc-500">{t('operations.factionCutHint')}</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="op-notes">{t('operations.notes')}</Label>
               <Textarea
@@ -560,13 +693,16 @@ function LogOperationDialog({
           </div>
 
           {/* ── what everybody walks away with ── */}
+          {splitting && (
           <div className="rounded-lg border border-[var(--line-2)] bg-[var(--surface-2)] p-4">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-zinc-400" />
               <p className="text-sm font-medium text-zinc-200">{t('operations.splitTitle')}</p>
             </div>
 
-            {!ready && <p className="mt-2 text-sm text-zinc-500">{t('operations.splitHint')}</p>}
+            {!split && !previewError && (
+              <p className="mt-2 text-sm text-zinc-500">{t('operations.splitHint')}</p>
+            )}
             {previewError && <p className="mt-2 text-sm text-red-400">{previewError}</p>}
 
             {split && (
@@ -595,13 +731,14 @@ function LogOperationDialog({
               </div>
             )}
           </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             onClick={() => save.mutate()}
-            disabled={!ready || !name.trim() || !split || save.isPending}
+            disabled={!ready || !name.trim() || save.isPending}
           >
             {t('operations.save')}
           </Button>

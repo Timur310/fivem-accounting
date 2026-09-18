@@ -1526,4 +1526,18 @@ export const hu: Translations = {
   'rankTemplate.role.manager': 'Vezető',
   'rankTemplate.role.staff': 'Alkalmazott',
   'rankTemplate.role.trainee': 'Gyakornok',
+
+  // ── akciók: elosztás nélkül, és a csapat értékelése ──
+  'operations.haulOptional': 'Nem kötelező — az is akció, amiből nem lett semmi',
+  'operations.creditTo': 'Hová kerül a zsákmány',
+  'operations.creditCrew': 'Elosztás a csapat között',
+  'operations.creditCrewHint': 'Mindenki megkapja a saját részét az akcióból.',
+  'operations.creditFaction': 'Minden a frakcióé',
+  'operations.creditFactionHint': 'Bekerül a kasszába. Senkinek nem számít bele, a ranglista nem mozdul.',
+  'operations.rating': 'Hogy ment',
+  'operations.ratingNote': 'Megjegyzés',
+  'operations.ratingNotePlaceholder': 'Nem kötelező megjegyzés a tagról',
+  'operations.ratingNone': 'Nincs értékelve',
+  'operations.creditedToFaction': 'A frakcióé — nincs elosztás',
+  'operations.nothingTaken': 'Nem lett semmi',
 };

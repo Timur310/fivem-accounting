@@ -406,3 +406,138 @@ describe('a share cannot be edited on its own', () => {
     expect(edited.status).toBe(200);
   });
 });
+
+/**
+ * What the crews asked for after using it.
+ *
+ * The first version made a haul mandatory and always divided it, and the
+ * answer that came back was that plenty of nights have nothing to divide:
+ * a job that went wrong, a favour, a fight, or takings that go straight to
+ * the faction with nobody owed a share.
+ */
+describe('an operation without a split', () => {
+  it('records a job where nothing was taken', async () => {
+    const res = await log({
+      name: 'Turf scrap',
+      kind: 'territory',
+      participants: [{ userId: w.admin.id }, { userId: w.member.id }],
+      loot: [],
+      notes: 'Held the corner, took nothing.',
+    });
+    expect(res.status).toBe(201);
+
+    // Nothing to divide, so nothing reaches the ledger.
+    expect(await db.select().from(entries)).toHaveLength(0);
+
+    const [row] = (await api().get(base()).set('Cookie', w.member.cookie)).body.data.operations;
+    expect(row.name).toBe('Turf scrap');
+    expect(row.crew).toHaveLength(2);
+    expect(row.loot).toEqual([]);
+  });
+
+  it('takes an operation with the loot key left out entirely', async () => {
+    const res = await log({ name: 'Quiet night', participants: [{ userId: w.member.id }] });
+    expect(res.status).toBe(201);
+  });
+
+  // The takings go in the vault; nobody is owed a share of them.
+  it('books the whole haul to the faction when asked', async () => {
+    const res = await log({
+      name: 'Store job',
+      participants: [{ userId: w.admin.id }, { userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '5000.00' }],
+      creditTo: 'faction',
+    });
+    expect(res.status).toBe(201);
+
+    const rows = await db.select().from(entries);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.amount).toBe('5000.00');
+
+    // Against the placeholder, so the treasury moves and no leaderboard does.
+    const crew = [w.admin.id, w.member.id];
+    expect(crew).not.toContain(rows[0]!.userId);
+  });
+
+  it('still divides between the crew by default', async () => {
+    const res = await log({
+      name: 'Normal job',
+      participants: [{ userId: w.admin.id }, { userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '1000.00' }],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.operation.creditTo).toBe('crew');
+
+    const rows = await db.select().from(entries);
+    expect(rows).toHaveLength(2);
+    expect(sum(rows.map((e) => e.amount))).toBe(toCents('1000.00'));
+  });
+
+  // The record should say what happened, not what was typed: crediting the
+  // faction is the whole haul off the top, and the stored percentage says so.
+  it('records the cut it actually applied', async () => {
+    const res = await log({
+      name: 'All in',
+      participants: [{ userId: w.member.id }],
+      loot: [{ itemTypeId: w.itemTypeId, quantity: '100.00' }],
+      creditTo: 'faction',
+      factionCutPercent: '10',
+    });
+    expect(res.body.data.operation.factionCutPercent).toBe('100.00');
+  });
+
+  it('reverts a haulless operation without complaint', async () => {
+    const created = await log({
+      name: 'Nothing doing',
+      participants: [{ userId: w.member.id }],
+      loot: [],
+    });
+    const res = await api().post(`${base()}/${created.body.data.operation.id}/revert`)
+      .set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * How the night went for each person on it.
+ *
+ * Asked for alongside the split being optional, and for the same reason: an
+ * operation with nothing to divide still has something worth recording about
+ * the people who ran it.
+ */
+describe('rating the crew', () => {
+  it('keeps a rating and a note per member', async () => {
+    const res = await log({
+      name: 'Vangelico',
+      participants: [
+        { userId: w.admin.id, rating: 5, ratingNote: 'Drove clean' },
+        { userId: w.member.id, rating: 2, ratingNote: 'Late to the pickup' },
+      ],
+      loot: [],
+    });
+    expect(res.status).toBe(201);
+
+    const [row] = (await api().get(base()).set('Cookie', w.admin.cookie)).body.data.operations;
+    const crew = row.crew as { userId: string; rating: number | null; ratingNote: string | null }[];
+    expect(crew.find((c) => c.userId === w.admin.id)).toMatchObject({ rating: 5, ratingNote: 'Drove clean' });
+    expect(crew.find((c) => c.userId === w.member.id)?.rating).toBe(2);
+  });
+
+  // Most crews will rate nobody most of the time.
+  it('leaves an unrated member null rather than inventing a score', async () => {
+    await log({ name: 'Unrated', participants: [{ userId: w.member.id }], loot: [] });
+
+    const [row] = (await api().get(base()).set('Cookie', w.admin.cookie)).body.data.operations;
+    expect(row.crew[0].rating).toBeNull();
+    expect(row.crew[0].ratingNote).toBeNull();
+  });
+
+  it('refuses a rating outside one to five', async () => {
+    const res = await log({
+      name: 'Six stars',
+      participants: [{ userId: w.member.id, rating: 6 }],
+      loot: [],
+    });
+    expect(res.status).toBe(400);
+  });
+});

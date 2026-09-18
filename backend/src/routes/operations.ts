@@ -12,6 +12,7 @@ import {
   operationParticipants,
   operations,
   users,
+  OPERATION_CREDIT,
   OPERATION_KINDS,
 } from '../db/schema.js';
 import { success, error } from '../lib/response.js';
@@ -57,6 +58,10 @@ const participantSchema = z.object({
   // The weight, capped where it stops meaning anything: a crew member on 999
   // shares and one on 1 is already a rounding error away from taking it all.
   share: z.number().int().min(1).max(999).optional(),
+  // How the night went for this member. Null and absent mean the same thing —
+  // not rated — because most crews will rate nobody most of the time.
+  rating: z.number().int().min(1).max(5).nullable().optional(),
+  ratingNote: z.string().trim().max(200).nullable().optional(),
 });
 
 const lootSchema = z.object({
@@ -66,7 +71,24 @@ const lootSchema = z.object({
 
 const splitInputSchema = z.object({
   participants: z.array(participantSchema).min(1, 'An operation needs at least one person on it'),
-  loot: z.array(lootSchema).min(1, 'An operation needs at least one thing taken'),
+  /**
+   * What came back, and it may be nothing.
+   *
+   * The first version demanded at least one line, which turned out to be the
+   * feature's main complaint: plenty of nights are worth recording and have no
+   * takings to divide — a job that went wrong, a favour, a fight. An operation
+   * with an empty haul writes no ledger rows at all and is simply the record
+   * that it happened.
+   */
+  loot: z.array(lootSchema).default([]),
+  /**
+   * `crew` divides the haul between the people on it; `faction` books all of
+   * it against the faction, crediting nobody.
+   *
+   * The second half of the same complaint: sometimes the takings do go in the
+   * vault, and still nobody is owed a share of them.
+   */
+  creditTo: z.enum(OPERATION_CREDIT).optional(),
   factionCutPercent: z
     .string()
     .trim()
@@ -85,11 +107,24 @@ const operationSchema = splitInputSchema.extend({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+interface Participant {
+  userId: string;
+  share: number;
+  rating: number | null;
+  ratingNote: string | null;
+}
+
 /** One person can only be on the crew once, however the client built the list. */
-function dedupeParticipants(list: { userId: string; share?: number }[]) {
-  const seen = new Map<string, { userId: string; share: number }>();
+function dedupeParticipants(list: z.infer<typeof participantSchema>[]): Participant[] {
+  const seen = new Map<string, Participant>();
   for (const p of list) {
-    if (!seen.has(p.userId)) seen.set(p.userId, { userId: p.userId, share: p.share ?? 1 });
+    if (seen.has(p.userId)) continue;
+    seen.set(p.userId, {
+      userId: p.userId,
+      share: p.share ?? 1,
+      rating: p.rating ?? null,
+      ratingNote: p.ratingNote?.trim() || null,
+    });
   }
   return [...seen.values()];
 }
@@ -114,11 +149,23 @@ function mergeLoot(list: { itemTypeId: string; quantity: string }[]) {
  * same input, not by the browser and then trusted.
  */
 async function prepare(id: string, body: z.infer<typeof splitInputSchema>): Promise<
-  | { ok: true; participants: { userId: string; share: number }[]; loot: { itemTypeId: string; quantity: string }[]; names: Map<string, { name: string; unit: string; isCurrency: boolean; icon: string | null }>; lines: SplitLine[] }
+  | {
+      ok: true;
+      participants: Participant[];
+      loot: { itemTypeId: string; quantity: string }[];
+      names: Map<string, { name: string; unit: string; isCurrency: boolean; icon: string | null }>;
+      lines: SplitLine[];
+      /** What actually comes off the top, once creditTo has had its say. */
+      cutPercent: string;
+    }
   | { ok: false; status: number; code: 'NOT_FOUND' | 'VALIDATION_ERROR'; message: string }
 > {
   const participants = dedupeParticipants(body.participants);
   const loot = mergeLoot(body.loot);
+  // Crediting the faction is the whole haul off the top, which the split
+  // already knows how to do. One concept doing two jobs beats two concepts
+  // that have to agree with each other.
+  const cutPercent = body.creditTo === 'faction' ? '100' : (body.factionCutPercent ?? '0');
 
   const members = await db
     .select({ userId: factionMembers.userId })
@@ -142,8 +189,8 @@ async function prepare(id: string, body: z.infer<typeof splitInputSchema>): Prom
     return { ok: false, status: 404, code: 'NOT_FOUND', message: 'One of these items is not one the faction tracks' };
   }
 
-  const lines = splitHaul(loot, participants, body.factionCutPercent ?? '0');
-  return { ok: true, participants, loot, names, lines };
+  const lines = splitHaul(loot, participants, cutPercent);
+  return { ok: true, participants, loot, names, lines, cutPercent };
 }
 
 /** The split turned round: what each person walks away with, in one list. */
@@ -201,7 +248,8 @@ router.post('/', requirePermission('log_operations'), async (req: Request, res: 
   // The ledger works in dates, and the date that matters is the night of the
   // job — not the morning somebody finally wrote it down.
   const entryDate = occurredAt.toISOString().slice(0, 10);
-  const cut = body.factionCutPercent ?? '0';
+  const cut = prepared.cutPercent;
+  const creditTo = body.creditTo ?? 'crew';
 
   const result = await db.transaction(async (tx: TransactionLike) => {
     await lockItemTypes(tx, prepared.loot.map((l) => l.itemTypeId));
@@ -215,6 +263,7 @@ router.post('/', requirePermission('log_operations'), async (req: Request, res: 
         location: body.location?.trim() || null,
         occurredAt,
         factionCutPercent: cut,
+        creditTo,
         notes: body.notes?.trim() || null,
         loggedBy: req.user!.id,
       })
@@ -222,16 +271,24 @@ router.post('/', requirePermission('log_operations'), async (req: Request, res: 
     if (!operation) throw new Error('Failed to record the operation');
 
     await tx.insert(operationParticipants).values(
-      prepared.participants.map((p) => ({ operationId: operation.id, userId: p.userId, share: p.share })),
-    );
-    await tx.insert(operationLoot).values(
-      prepared.loot.map((l) => ({
+      prepared.participants.map((p) => ({
         operationId: operation.id,
-        itemTypeId: l.itemTypeId,
-        itemTypeName: prepared.names.get(l.itemTypeId)!.name,
-        quantity: l.quantity,
+        userId: p.userId,
+        share: p.share,
+        rating: p.rating,
+        ratingNote: p.ratingNote,
       })),
     );
+    if (prepared.loot.length > 0) {
+      await tx.insert(operationLoot).values(
+        prepared.loot.map((l) => ({
+          operationId: operation.id,
+          itemTypeId: l.itemTypeId,
+          itemTypeName: prepared.names.get(l.itemTypeId)!.name,
+          quantity: l.quantity,
+        })),
+      );
+    }
 
     const anonymousUserId = await resolveAnonymousUserId(tx);
     const movements: (typeof operationMovements.$inferInsert)[] = [];
@@ -280,6 +337,7 @@ router.post('/', requirePermission('log_operations'), async (req: Request, res: 
         name: operation.name,
         kind: operation.kind,
         crew: prepared.participants.length,
+        creditTo,
         factionCutPercent: cut,
         loot: prepared.loot.map((l) => ({ itemTypeName: prepared.names.get(l.itemTypeId)!.name, quantity: l.quantity })),
       },
@@ -306,6 +364,7 @@ router.post('/', requirePermission('log_operations'), async (req: Request, res: 
       unit: prepared.names.get(l.itemTypeId)!.unit,
     })),
     factionCutPercent: cut,
+    creditTo,
   });
 
   success(res, {
@@ -339,6 +398,7 @@ router.get('/', async (req: Request, res: Response) => {
       location: operations.location,
       occurredAt: operations.occurredAt,
       factionCutPercent: operations.factionCutPercent,
+      creditTo: operations.creditTo,
       notes: operations.notes,
       loggedBy: operations.loggedBy,
       loggedByName: sql<string>`COALESCE(${users.inGameName}, ${users.username})`,
@@ -379,6 +439,8 @@ router.get('/', async (req: Request, res: Response) => {
         operationId: operationParticipants.operationId,
         userId: operationParticipants.userId,
         share: operationParticipants.share,
+        rating: operationParticipants.rating,
+        ratingNote: operationParticipants.ratingNote,
         name: sql<string>`COALESCE(${users.inGameName}, ${users.username})`,
       })
       .from(operationParticipants)

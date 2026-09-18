@@ -2009,12 +2009,19 @@ export const OPERATION_KIND_KEYS: Record<OperationKind, TranslationKey> = {
   other: 'operation.kind.other',
 };
 
-/** One person on the crew, and how big a share they take. */
+/** One person on the crew: their share, and how the night went for them. */
 export interface OperationParticipantInput {
   userId: string;
   /** A weight, not a percentage. Everybody on 1 is an even split. */
   share?: number;
+  /** 1 to 5, or null for not rated — which is the usual case. */
+  rating?: number | null;
+  ratingNote?: string | null;
 }
+
+/** Who the haul goes to: divided between the crew, or all to the faction. */
+export const OPERATION_CREDIT = ['crew', 'faction'] as const;
+export type OperationCredit = (typeof OPERATION_CREDIT)[number];
 
 export interface OperationLootInput {
   itemTypeId: string;
@@ -2023,7 +2030,9 @@ export interface OperationLootInput {
 
 export interface OperationSplitInput {
   participants: OperationParticipantInput[];
+  /** May be empty: plenty of jobs are worth recording and take nothing. */
   loot: OperationLootInput[];
+  creditTo?: OperationCredit;
   factionCutPercent?: string;
 }
 
@@ -2059,6 +2068,7 @@ export interface Operation {
   location: string | null;
   occurredAt: string;
   factionCutPercent: string;
+  creditTo: OperationCredit;
   notes: string | null;
   loggedBy: string;
   loggedByName: string;
@@ -2072,7 +2082,13 @@ export interface Operation {
     unit: string;
     isCurrency: boolean;
   }[];
-  crew: { userId: string; share: number; name: string }[];
+  crew: {
+    userId: string;
+    share: number;
+    name: string;
+    rating: number | null;
+    ratingNote: string | null;
+  }[];
   /** The ledger rows the split wrote: who was credited with what. */
   movements: {
     role: 'share' | 'faction_cut';

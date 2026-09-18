@@ -1547,6 +1547,20 @@ export const en = {
   'rankTemplate.role.manager': 'Manager',
   'rankTemplate.role.staff': 'Staff',
   'rankTemplate.role.trainee': 'Trainee',
+
+  // ── operations: jobs without a split, and rating the crew ──
+  'operations.haulOptional': 'Optional — a job that took nothing is still worth logging',
+  'operations.creditTo': 'Where the haul goes',
+  'operations.creditCrew': 'Split between the crew',
+  'operations.creditCrewHint': 'Everyone on the job is credited with their share.',
+  'operations.creditFaction': 'All to the faction',
+  'operations.creditFactionHint': 'Goes into the vault. Nobody is credited, so no leaderboard moves.',
+  'operations.rating': 'How it went',
+  'operations.ratingNote': 'Note',
+  'operations.ratingNotePlaceholder': 'Optional note about this member',
+  'operations.ratingNone': 'Not rated',
+  'operations.creditedToFaction': 'Credited to the faction — no shares',
+  'operations.nothingTaken': 'Nothing taken',
 };
 
 /** Every key the interface may ask for. */

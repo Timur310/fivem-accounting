@@ -1775,6 +1775,25 @@ revert it and log it again. A revert soft-deletes every entry it wrote, and
 refuses if the faction has already spent the haul — a correction should not
 drive a balance below zero sideways.
 
+**A haul is optional, and so is dividing it.** The first version demanded at
+least one loot line and always split it, and that was the feature's main
+complaint from the crews using it: plenty of nights are worth recording and
+have nothing to divide — a job that went wrong, a favour, a fight — and plenty
+of hauls go straight to the faction with nobody owed a share. An operation
+with an empty haul writes no ledger rows at all and is simply the record that
+it happened. `creditTo` picks between dividing it and keeping it: `faction`
+is the whole haul off the top, which is what the faction cut already did, so
+one concept does both jobs rather than two that have to agree. The stored
+`faction_cut_percent` is the one actually applied, so the record says what
+happened rather than what was typed.
+
+**The crew can be rated, one to five, with a note.** Asked for in the same
+breath as the split becoming optional, and for the same reason: an operation
+with nothing to divide still has something worth recording about the people
+who ran it. The rating lives on the participant row rather than following the
+member around — it says how one night went, not what somebody is worth — and
+null means not rated, which is what most rows will be.
+
 **Two permissions.** `log_operations` writes one down; `manage_operations`
 takes one back out. The crew records its own night's work; removing credit from
 several people at once is leadership. Reading is open to every member, because
