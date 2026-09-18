@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
 import {
   entries,
@@ -25,6 +25,9 @@ import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { balancesFor, lockItemTypes, toCents } from '../lib/treasury.js';
 import { compareQuantity } from '../lib/crafting.js';
 import { splitHaul, type SplitLine } from '../lib/operations.js';
+import { buildWhere } from '../lib/query.js';
+import { getPeriodRange } from '../lib/period.js';
+import { todayDateString } from '../lib/date.js';
 
 /**
  * Jobs the crew ran together, and the split of what they brought back.
@@ -45,6 +48,27 @@ const router = asyncRouter({ mergeParams: true });
 router.use(requireAuth, requireFactionMember, requireModule('operations'));
 
 const factionId = (req: Request) => req.params.id as string;
+
+/**
+ * A period keyword as a pair of days, or no bounds at all.
+ *
+ * The same three windows the ledger leaderboard offers, so "this month" means
+ * one thing across the app, but resolved here because an operation is stamped
+ * with an instant rather than a ledger date.
+ */
+function resolveOperationPeriod(period: 'week' | 'month' | 'all'): { from: string | null; to: string | null } {
+  if (period === 'all') return { from: null, to: null };
+  const range = getPeriodRange(period === 'week' ? 'weekly' : 'monthly', new Date());
+  const today = todayDateString();
+  return { from: range.start, to: range.end > today ? today : range.end };
+}
+
+/** The midnight after a day, which is where an inclusive day range ends. */
+function nextMidnight(day: string): Date {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date;
+}
 
 /** A quantity as the ledger writes them: positive, two decimals, no commas. */
 const quantity = z
@@ -465,6 +489,185 @@ router.get('/', async (req: Request, res: Response) => {
       crew: crew.filter((c) => c.operationId === row.id),
       movements: moves.filter((m) => m.operationId === row.id),
     })),
+  });
+});
+
+// ── GET /leaderboard — who runs the jobs, and how they are rated ──
+//
+// Two questions on one payload, because they come off the same rows and a
+// screen that showed one without the other would be easy to misread: how much
+// somebody turns up, and how well the people logging the jobs thought it went.
+//
+// Three rules decide what counts, and all three are about not letting the
+// board be gamed or misread:
+//
+//  - **Reverted operations are out.** A revert says the night did not count;
+//    it should not go on counting here.
+//  - **A rating you gave yourself is out.** Whoever logs the operation fills
+//    in the ratings and is usually on the crew too. Their own star would be
+//    the one number on this board they could simply choose.
+//  - **A thin record is pulled towards the middle.** One 5★ is not a better
+//    record than nine averaging 4.8★, and a plain average says it is. The
+//    score counts the faction's own average as if it were three extra
+//    ratings, so a new member has to keep it up for a while to lead.
+
+/** How many imaginary average ratings every member starts with. */
+const RATING_PRIOR = 3;
+/** Below this many real ratings, the score is shown as still settling. */
+const RATING_PROVISIONAL_BELOW = 3;
+
+const leaderboardQuery = z.object({
+  period: z.enum(['week', 'month', 'all']).default('month'),
+  sort: z.enum(['operations', 'rating']).default('operations'),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+router.get('/leaderboard', async (req: Request, res: Response) => {
+  const id = factionId(req);
+
+  const query = leaderboardQuery.safeParse(req.query);
+  if (!query.success) {
+    error(res, 'VALIDATION_ERROR', query.error.issues[0]!.message);
+    return;
+  }
+  const { period, sort, limit } = query.data;
+
+  const range = resolveOperationPeriod(period);
+  // `occurredAt` is an instant and the range is a pair of days, so the end is
+  // exclusive on the following midnight rather than inclusive on a date.
+  const window = buildWhere([
+    eq(operations.factionId, id),
+    isNull(operations.revertedAt),
+    range.from ? gte(operations.occurredAt, new Date(`${range.from}T00:00:00.000Z`)) : undefined,
+    range.to ? lt(operations.occurredAt, nextMidnight(range.to)) : undefined,
+  ]);
+
+  /** A rating counts only when somebody other than the member gave it. */
+  const byAnother = sql`${operationParticipants.rating} IS NOT NULL AND ${operations.loggedBy} <> ${operationParticipants.userId}`;
+
+  const [rows, haul] = await Promise.all([
+    db
+      .select({
+        userId: operationParticipants.userId,
+        username: users.username,
+        inGameName: users.inGameName,
+        avatarUrl: users.avatarUrl,
+        operationCount: sql<number>`COUNT(*)::int`,
+        ratingCount: sql<number>`COUNT(*) FILTER (WHERE ${byAnother})::int`,
+        ratingSum: sql<number>`COALESCE(SUM(${operationParticipants.rating}) FILTER (WHERE ${byAnother}), 0)::int`,
+        // How many different people have had an opinion. One enthusiastic
+        // friend and eight separate crews are not the same evidence.
+        raterCount: sql<number>`COUNT(DISTINCT ${operations.loggedBy}) FILTER (WHERE ${byAnother})::int`,
+        lastOperationAt: sql<string | null>`MAX(${operations.occurredAt})`,
+        stars: sql<Record<string, number>>`json_build_object(
+          '1', COUNT(*) FILTER (WHERE ${byAnother} AND ${operationParticipants.rating} = 1)::int,
+          '2', COUNT(*) FILTER (WHERE ${byAnother} AND ${operationParticipants.rating} = 2)::int,
+          '3', COUNT(*) FILTER (WHERE ${byAnother} AND ${operationParticipants.rating} = 3)::int,
+          '4', COUNT(*) FILTER (WHERE ${byAnother} AND ${operationParticipants.rating} = 4)::int,
+          '5', COUNT(*) FILTER (WHERE ${byAnother} AND ${operationParticipants.rating} = 5)::int
+        )`,
+      })
+      .from(operationParticipants)
+      .innerJoin(operations, eq(operationParticipants.operationId, operations.id))
+      .innerJoin(users, eq(operationParticipants.userId, users.id))
+      // The anonymous placeholder holds the faction's own cut. It is not a
+      // person and does not belong on a board that ranks people.
+      .where(and(window, eq(users.isSystem, false)))
+      .groupBy(operationParticipants.userId, users.id, users.username, users.inGameName, users.avatarUrl),
+
+    // What each member was actually credited with, per item type. Kept apart
+    // from the counts because two currencies cannot be added into one number,
+    // and a single total across item types would be a lie dressed as a score.
+    db
+      .select({
+        userId: operationMovements.userId,
+        itemTypeName: itemTypes.name,
+        unit: itemTypes.unit,
+        isCurrency: itemTypes.isCurrency,
+        total: sql<string>`COALESCE(SUM(CAST(${operationMovements.quantity} AS NUMERIC)), 0)`,
+      })
+      .from(operationMovements)
+      .innerJoin(operations, eq(operationMovements.operationId, operations.id))
+      .innerJoin(itemTypes, eq(operationMovements.itemTypeId, itemTypes.id))
+      .where(and(window, eq(operationMovements.role, 'share')))
+      .groupBy(operationMovements.userId, itemTypes.name, itemTypes.unit, itemTypes.isCurrency),
+  ]);
+
+  // The faction's own average over the same window is what a thin record is
+  // pulled towards. With nothing rated at all it is the middle of the scale,
+  // which leaves every score identical — correct, and the screen says so.
+  const totalRatings = rows.reduce((a, r) => a + r.ratingCount, 0);
+  const totalStars = rows.reduce((a, r) => a + r.ratingSum, 0);
+  const factionAverage = totalRatings > 0 ? totalStars / totalRatings : 3;
+
+  const haulByUser = new Map<string, { itemTypeName: string; unit: string; isCurrency: boolean; total: string }[]>();
+  for (const line of haul) {
+    const bucket = haulByUser.get(line.userId) ?? [];
+    bucket.push({
+      itemTypeName: line.itemTypeName,
+      unit: line.unit,
+      isCurrency: line.isCurrency,
+      total: line.total,
+    });
+    haulByUser.set(line.userId, bucket);
+  }
+
+  const scored = rows.map((row) => ({
+    userId: row.userId,
+    username: row.username,
+    inGameName: row.inGameName,
+    avatarUrl: row.avatarUrl,
+    operationCount: row.operationCount,
+    ratingCount: row.ratingCount,
+    raterCount: row.raterCount,
+    /** The plain average, for the people who want to see it. */
+    ratingAverage: row.ratingCount > 0 ? row.ratingSum / row.ratingCount : null,
+    /** The weighted one, which is what the board is ordered by. */
+    ratingScore: row.ratingCount > 0
+      ? (RATING_PRIOR * factionAverage + row.ratingSum) / (RATING_PRIOR + row.ratingCount)
+      : null,
+    provisional: row.ratingCount > 0 && row.ratingCount < RATING_PROVISIONAL_BELOW,
+    stars: row.stars,
+    lastOperationAt: row.lastOperationAt,
+    haul: haulByUser.get(row.userId) ?? [],
+    isMe: row.userId === req.user!.id,
+  }));
+
+  // Unrated members sort last on the rating board rather than first: not
+  // having been judged is not the same as having been judged badly, and no
+  // descending order can say so.
+  scored.sort((a, b) => {
+    if (sort === 'rating') {
+      if (a.ratingScore === null || b.ratingScore === null) {
+        if (a.ratingScore === b.ratingScore) return b.operationCount - a.operationCount;
+        return a.ratingScore === null ? 1 : -1;
+      }
+      if (a.ratingScore !== b.ratingScore) return b.ratingScore - a.ratingScore;
+      return b.ratingCount - a.ratingCount;
+    }
+    if (a.operationCount !== b.operationCount) return b.operationCount - a.operationCount;
+    return (b.ratingScore ?? 0) - (a.ratingScore ?? 0);
+  });
+
+  // Equal records share a rank, the same as the ledger board.
+  const key = (r: (typeof scored)[number]) => (sort === 'rating' ? r.ratingScore : r.operationCount);
+  let lastKey: number | null | undefined;
+  let lastRank = 0;
+  const rankings = scored.slice(0, limit).map((row, index) => {
+    const value = key(row);
+    const rank = value === lastKey ? lastRank : index + 1;
+    lastKey = value;
+    lastRank = rank;
+    return { rank, ...row };
+  });
+
+  success(res, {
+    period: { from: range.from, to: range.to, key: period },
+    sort,
+    factionAverage: totalRatings > 0 ? factionAverage : null,
+    ratedCount: totalRatings,
+    rankings,
+    myRank: rankings.find((r) => r.isMe)?.rank ?? null,
   });
 });
 

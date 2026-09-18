@@ -2098,6 +2098,41 @@ export interface Operation {
   }[];
 }
 
+/** One member's record on the operations board. */
+export interface OperationRanking {
+  rank: number;
+  userId: string;
+  username: string;
+  inGameName: string | null;
+  avatarUrl: string | null;
+  operationCount: number;
+  /** Ratings given by somebody other than the member themselves. */
+  ratingCount: number;
+  /** How many different people those ratings came from. */
+  raterCount: number;
+  /** The plain average, or null when nobody has rated them. */
+  ratingAverage: number | null;
+  /** The weighted score the board is ordered by. Null until rated. */
+  ratingScore: number | null;
+  /** True while the score rests on fewer than three ratings. */
+  provisional: boolean;
+  /** How many of each star, '1' through '5'. */
+  stars: Record<string, number>;
+  lastOperationAt: string | null;
+  haul: { itemTypeName: string; unit: string; isCurrency: boolean; total: string }[];
+  isMe: boolean;
+}
+
+export interface OperationLeaderboard {
+  period: { from: string | null; to: string | null; key: 'week' | 'month' | 'all' };
+  sort: 'operations' | 'rating';
+  /** The faction's own average rating for the window, or null if nothing is rated. */
+  factionAverage: number | null;
+  ratedCount: number;
+  rankings: OperationRanking[];
+  myRank: number | null;
+}
+
 
 // ── faction modules ────────────────────────────────────
 // Which parts of the app a faction uses. See backend lib/modules.ts: the two

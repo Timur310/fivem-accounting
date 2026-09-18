@@ -21,7 +21,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatAmount, formatDateTime, displayName } from '@/lib/format';
-import { Crosshair, Plus, Star, Trash2, Undo2, Users } from 'lucide-react';
+import { Crosshair, Plus, Star, Trash2, Trophy, Undo2, Users } from 'lucide-react';
+import { OperationsLeaderboard } from '@/components/operations-leaderboard';
 import { OPERATION_KINDS, OPERATION_KIND_KEYS } from '@/lib/api-types';
 import type {
   Operation, OperationCredit, OperationKind, OperationSplit, OperationSplitInput,
@@ -111,6 +112,10 @@ export function OperationsView({
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  // The log and the board read the same rows and answer different questions,
+  // so they share a screen rather than another entry in a sidebar that was
+  // just trimmed down.
+  const [tab, setTab] = useState<'log' | 'board'>('log');
   const [reverting, setReverting] = useState<Operation | null>(null);
   const [deleting, setDeleting] = useState<Operation | null>(null);
 
@@ -165,24 +170,44 @@ export function OperationsView({
           <h1 className="text-2xl font-semibold text-zinc-100">{t('operations.title')}</h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-400">{t('operations.subtitle')}</p>
         </div>
-        {canLog && (
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t('operations.log')}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('operations.title')}>
+            {([['log', 'operations.tabLog'], ['board', 'operations.tabBoard']] as const).map(([value, key]) => (
+              <button
+                key={value}
+                role="tab"
+                aria-selected={tab === value}
+                onClick={() => setTab(value)}
+                className={`flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors ${
+                  tab === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {value === 'board' ? <Trophy className="h-3.5 w-3.5" /> : <Crosshair className="h-3.5 w-3.5" />}
+                {t(key)}
+              </button>
+            ))}
+          </div>
+          {canLog && (
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t('operations.log')}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {query.isLoading && (
+      {tab === 'board' && <OperationsLeaderboard factionId={factionId} />}
+
+      {tab === 'log' && query.isLoading && (
         <div className="space-y-3">
           <Skeleton className="h-28 w-full" />
           <Skeleton className="h-28 w-full" />
         </div>
       )}
 
-      {query.isError && <ErrorState error={query.error} onRetry={() => void query.refetch()} />}
+      {tab === 'log' && query.isError && <ErrorState error={query.error} onRetry={() => void query.refetch()} />}
 
-      {query.isSuccess && operations.length === 0 && (
+      {tab === 'log' && query.isSuccess && operations.length === 0 && (
         <EmptyState
           icon={Crosshair}
           title={t('operations.empty')}
@@ -191,7 +216,7 @@ export function OperationsView({
       )}
 
       <div className="space-y-3">
-        {operations.map((operation) => (
+        {tab === 'log' && operations.map((operation) => (
           <OperationCard
             key={operation.id}
             operation={operation}

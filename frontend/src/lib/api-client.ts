@@ -86,6 +86,7 @@ import type {
   Vehicle,
   RankTemplate,
   Operation,
+  OperationLeaderboard,
   OperationInput,
   OperationSplit,
   OperationSplitInput,
@@ -1248,6 +1249,17 @@ export const operationsApi = {
     api
       .post<ApiSuccessResponse<{ reverted: boolean }>>(
         `/factions/${factionId}/operations/${id}/revert`,
+      )
+      .then(unwrap),
+
+  leaderboard: (
+    factionId: string,
+    params: { period?: 'week' | 'month' | 'all'; sort?: 'operations' | 'rating' },
+  ) =>
+    api
+      .get<ApiSuccessResponse<OperationLeaderboard>>(
+        `/factions/${factionId}/operations/leaderboard`,
+        { params },
       )
       .then(unwrap),
 

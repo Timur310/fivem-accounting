@@ -1566,6 +1566,21 @@ export const en = {
   'operations.deleteBody': '{name} disappears from the list along with its crew, its haul and the ledger rows it wrote. This cannot be undone. The audit log keeps a note that you deleted it.',
   'operations.deletedToast': 'Operation deleted',
   'operations.deleteFailed': 'Could not delete it',
+  'operations.tabLog': 'Log',
+  'operations.tabBoard': 'Board',
+  'operations.board.title': 'Crew board',
+  'operations.board.subtitle': 'Who runs the jobs, and how the crew rate each other on them.',
+  'operations.board.sortBy': 'Ranked by',
+  'operations.board.byCount': 'Jobs run',
+  'operations.board.byRating': 'Rating',
+  'operations.board.operationCount': '{count} operations',
+  'operations.board.last': 'last {date}',
+  'operations.board.provisional': 'Still settling',
+  'operations.board.rawAverage': '{average} average from {count} ratings by {raters} people',
+  'operations.board.scoreHint': 'The score leans on the faction average of {average} from {count} ratings, so a handful of stars does not outrank a long record. Your own ratings of yourself do not count.',
+  'operations.board.noRatingsYet': 'Nobody has been rated in this period yet, so the board is ordered by jobs run.',
+  'operations.board.empty': 'Nothing to rank yet',
+  'operations.board.emptyHint': 'Log an operation with a crew on it and the board fills in from there.',
 };
 
 /** Every key the interface may ask for. */
