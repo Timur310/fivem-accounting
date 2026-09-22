@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
-import type { NoteCategory, StrikeEffectiveStatus } from '@/lib/api-types';
+import { StrikeDetailDialog } from '@/components/strike-detail-dialog';
+import type { NoteCategory, Strike, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName, formatDate, formatNumber, formatCount } from '@/lib/format';
 import { ItemIcon } from '@/components/item-icon';
@@ -131,6 +132,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
 
   // Strike dialog
   const [strikeOpen, setStrikeOpen] = useState(false);
+  const [viewingStrike, setViewingStrike] = useState<Strike | null>(null);
   const [strikeReason, setStrikeReason] = useState('');
   const [strikeSeverity, setStrikeSeverity] = useState<'warning' | 'minor' | 'major'>('warning');
 
@@ -489,7 +491,22 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 ) : (
                   <div className="space-y-2 max-h-[240px] overflow-y-auto">
                     {strikes.slice(0, 5).map((s) => (
-                      <div key={s.id} className="rounded-lg border border-[var(--line-1)] p-3 space-y-1.5">
+                      // Clicking it opens the reason in full. Two clamped
+                      // lines is a summary, and the person carrying the strike
+                      // needs the rest of the sentence.
+                      <div
+                        key={s.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setViewingStrike(s)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setViewingStrike(s);
+                          }
+                        }}
+                        className="cursor-pointer rounded-lg border border-[var(--line-1)] p-3 space-y-1.5 transition-colors hover:border-[var(--line-2)] hover:bg-[var(--fill-1)]"
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Badge className={`text-micro border ${SEVERITY_COLORS[s.severity] || ''}`} variant="outline">{SEVERITY_KEYS[s.severity] ? t(SEVERITY_KEYS[s.severity]) : s.severity}</Badge>
@@ -498,8 +515,11 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                           <span className="text-micro text-zinc-600">{formatDate(s.createdAt)}</span>
                         </div>
                         <p className="text-xs text-zinc-400 line-clamp-2">{s.reason}</p>
+                        <span className="text-micro text-zinc-600">{t('strikes.readInFull')}</span>
                         {canManageStrikes && s.effectiveStatus === 'active' && (
-                          <div className="flex gap-1 pt-1">
+                          // The buttons act on the strike; they must not also
+                          // open it.
+                          <div className="flex gap-1 pt-1" onClick={(e) => e.stopPropagation()}>
                             <Button variant="ghost" size="sm" className="h-6 text-meta text-blue-400 hover:text-blue-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'appealed' })}>{t('strikes.appeal')}</Button>
                             <Button variant="ghost" size="sm" className="h-6 text-meta text-zinc-500 hover:text-zinc-300" onClick={() => updateStrikeMutation.mutate({ strikeId: s.id, status: 'revoked' })}>{t('strikes.revoke')}</Button>
                           </div>
@@ -768,6 +788,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StrikeDetailDialog strike={viewingStrike} onClose={() => setViewingStrike(null)} />
     </div>
   );
 }
