@@ -632,6 +632,7 @@ export const hu: Translations = {
   'strikes.detailTitle': 'Fegyelmi',
   'strikes.readInFull': 'Kattints a teljes indokért',
   'strikes.issuedBy': 'Kiadta: {name}',
+  'strikes.issuerUnknown': 'A kiállító fiók már nem létezik',
   'strikes.reasonPlaceholder': 'Írd le, miért kapja ezt a fegyelmit...',
   'strikes.severityColumn': 'Súlyosság',
   'strikes.expiresOn': 'lejár: {date}',

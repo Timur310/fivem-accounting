@@ -653,6 +653,7 @@ export const en = {
   'strikes.detailTitle': 'Strike',
   'strikes.readInFull': 'Click to read it in full',
   'strikes.issuedBy': 'Issued by {name}',
+  'strikes.issuerUnknown': 'The account that issued it is gone',
   'strikes.reasonPlaceholder': 'Describe the reason for this strike...',
   'strikes.severityColumn': 'Severity',
   'strikes.expiresOn': 'exp {date}',

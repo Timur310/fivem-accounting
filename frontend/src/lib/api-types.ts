@@ -889,9 +889,14 @@ export interface Strike {
   createdAt: string;
   updatedAt: string | null;
   issuedBy: string;
-  issuerUsername: string;
-  issuerInGameName: string | null;
-  issuerAvatarUrl: string | null;
+  /**
+   * Who wrote it, which can be missing: a strike outlives the account that
+   * issued it, and the faction list joins that account loosely for exactly
+   * that reason.
+   */
+  issuerUsername?: string | null;
+  issuerInGameName?: string | null;
+  issuerAvatarUrl?: string | null;
   targetUserId?: string;
   targetUsername?: string;
   targetInGameName?: string | null;
