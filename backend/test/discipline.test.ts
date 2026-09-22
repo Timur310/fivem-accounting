@@ -379,6 +379,24 @@ describe('GET /strikes — the difference between no filter and all', () => {
     expect(row.effectiveStatus).toBe('revoked');
   });
 
+  // Both lists feed the same detail view, so both have to carry the same
+  // fields. This one did not name the issuer at all, and opening a strike
+  // from the faction list threw as soon as the dialog tried to read it.
+  it('names who issued each strike, the same as the member list does', async () => {
+    await revokedStrike();
+
+    const faction = await api().get(`${f()}/strikes?status=all`).set('Cookie', w.admin.cookie);
+    const row = faction.body.data.strikes[0];
+    expect(row.issuedBy).toBe(w.admin.id);
+    expect(row.issuerUsername).toBe(w.admin.username);
+    expect(row).toHaveProperty('issuerInGameName');
+    expect(row).toHaveProperty('issuerAvatarUrl');
+
+    const member = await api().get(`${f()}/members/${w.member.id}/strikes`)
+      .set('Cookie', w.admin.cookie);
+    expect(member.body.data[0].issuerUsername).toBe(w.admin.username);
+  });
+
   // The member's own profile reads the whole history, which is where the two
   // screens looked inconsistent from.
   it('shows the member their own revoked strike', async () => {

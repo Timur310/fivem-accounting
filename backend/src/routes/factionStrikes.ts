@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db/index.js';
 import { strikes, users, STRIKE_SEVERITIES, STRIKE_STATUSES } from '../db/schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { resolveSort } from '../lib/sort.js';
@@ -14,6 +15,10 @@ import { buildWhere } from '../lib/query.js';
 import { isActiveStrike, effectiveStatus } from '../lib/strikes.js';
 
 const router = asyncRouter({ mergeParams: true });
+
+// The same table twice: a strike names the member it is against and the
+// member who wrote it, and both are people on this roster.
+const issuers = alias(users, 'issuers');
 
 // Membership is enough to reach this route — what it answers with depends on
 // who is asking. A member has to be able to see the strikes held against them,
@@ -96,9 +101,18 @@ router.get('/', async (req: Request, res: Response) => {
         targetInGameName: users.inGameName,
         targetAvatarUrl: users.avatarUrl,
         issuedBy: strikes.issuedBy,
+        // Who wrote it, which the detail view shows and this list used to
+        // leave out entirely.
+        issuerUsername: issuers.username,
+        issuerInGameName: issuers.inGameName,
+        issuerAvatarUrl: issuers.avatarUrl,
       })
       .from(strikes)
       .innerJoin(users, eq(strikes.targetUserId, users.id))
+      // Left, not inner: a strike outlives the account that issued it, and
+      // losing rows from a discipline record because an admin was deleted
+      // would be a worse bug than a missing name.
+      .leftJoin(issuers, eq(strikes.issuedBy, issuers.id))
       .where(where)
       .orderBy(...resolveSort(
         query.data,

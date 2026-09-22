@@ -58,10 +58,12 @@ export function StrikeDetailDialog({
   const { t } = useTranslation();
   if (!strike) return null;
 
-  const issuer = displayName({
-    username: strike.issuerUsername,
-    inGameName: strike.issuerInGameName,
-  });
+  // A strike outlives the account that issued it, and one list joins the
+  // issuer loosely because of that. Reading a name off nothing is what made
+  // this dialog throw the first time it was opened from the strikes page.
+  const issuer = strike.issuerUsername
+    ? displayName({ username: strike.issuerUsername, inGameName: strike.issuerInGameName })
+    : null;
 
   return (
     <Dialog open={!!strike} onOpenChange={(open) => !open && onClose()}>
@@ -98,13 +100,19 @@ export function StrikeDetailDialog({
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--line-1)] pt-3">
             <div className="flex items-center gap-2">
-              <Avatar className="h-6 w-6">
-                <AvatarImage src={strike.issuerAvatarUrl ?? undefined} alt="" />
-                <AvatarFallback className="text-[8px]">{issuer.slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <span className="text-xs text-zinc-400">
-                {t('strikes.issuedBy').replace('{name}', issuer)}
-              </span>
+              {issuer ? (
+                <>
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={strike.issuerAvatarUrl ?? undefined} alt="" />
+                    <AvatarFallback className="text-[8px]">{issuer.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs text-zinc-400">
+                    {t('strikes.issuedBy').replace('{name}', issuer)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-zinc-500">{t('strikes.issuerUnknown')}</span>
+              )}
             </div>
             <span className="text-xs tabular-nums text-zinc-600">{formatDateTime(strike.createdAt)}</span>
           </div>
