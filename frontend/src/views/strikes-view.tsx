@@ -19,7 +19,8 @@ import {
 } from '@/components/ui/table';
 import { AlertTriangle, Ban, RotateCcw, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { StrikeEffectiveStatus } from '@/lib/api-types';
+import { StrikeDetailDialog } from '@/components/strike-detail-dialog';
+import type { Strike, StrikeEffectiveStatus } from '@/lib/api-types';
 import { formatDate } from '@/lib/format';
 import { useTranslation } from '@/providers/i18n-provider';
 import type { TranslationKey } from '@/lib/i18n';
@@ -69,6 +70,7 @@ const ACTIVE_SUMMARY_KEYS: Record<string, TranslationKey> = {
 
 export function StrikesView({ factionId, canManageStrikes }: Props) {
   const { t } = useTranslation();
+  const [viewing, setViewing] = useState<Strike | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -204,14 +206,21 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
                   <SortableHeader field="status" state={sort} onChange={(n) => { setSort(n); setPage(1); }} defaultDir="asc">
                     {t('common.status')}
                   </SortableHeader>
-                  <TableHead className="hidden md:table-cell">{t('strikes.reason')}</TableHead>
+                  <TableHead>{t('strikes.reason')}</TableHead>
                   <TableHead>{t('strikes.issued')}</TableHead>
                   <TableHead className="w-[100px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {strikes.map((s) => (
-                  <TableRow key={s.id}>
+                  // The whole row opens the strike, because on a phone the
+                  // reason is the column that had to give way and there was
+                  // then nothing left to click.
+                  <TableRow
+                    key={s.id}
+                    onClick={() => setViewing(s)}
+                    className="cursor-pointer"
+                  >
                     {canManageStrikes && (
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -232,11 +241,13 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
                         <p className="text-micro text-zinc-600">{t('strikes.expiresOn', { date: formatDate(s.expiresAt) })}</p>
                       )}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <p className="text-xs text-zinc-400 max-w-[250px] truncate">{s.reason}</p>
+                    <TableCell>
+                      <p className="max-w-[250px] truncate text-xs text-zinc-400">{s.reason}</p>
+                      <span className="text-micro text-zinc-600">{t('strikes.readInFull')}</span>
                     </TableCell>
                     <TableCell className="text-xs text-zinc-600 tabular-nums">{formatDate(s.createdAt)}</TableCell>
-                    <TableCell>
+                    {/* The buttons act on the row; they must not also open it. */}
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {canManageStrikes && s.effectiveStatus === 'active' && s.targetUserId && (
                         <div className="flex gap-0.5">
                           <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-amber-400" title={t('strikes.reinstate')} onClick={() => updateMutation.mutate({ strikeId: s.id, targetUserId: s.targetUserId!, status: 'active' })}>
@@ -265,6 +276,8 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <StrikeDetailDialog strike={viewing} onClose={() => setViewing(null)} />
 
       {/* Pagination */}
       {totalPages > 1 && (
