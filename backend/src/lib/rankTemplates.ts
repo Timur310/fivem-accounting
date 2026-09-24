@@ -38,6 +38,7 @@ export const PERMISSION_TIER: Record<FactionPermission, 'crew' | 'officer' | 'le
   craft: 'crew',
   sell: 'crew',
   log_operations: 'crew',
+  log_shifts: 'crew',
   manage_vehicles: 'crew',
   manage_map: 'crew',
 
@@ -45,6 +46,10 @@ export const PERMISSION_TIER: Record<FactionPermission, 'crew' | 'officer' | 'le
   manage_payouts: 'officer',
   view_reports: 'officer',
   manage_operations: 'officer',
+  // Reading the rota and correcting it are both watching over the work rather
+  // than doing it, and a shop-floor rank clocks itself in without either.
+  view_shifts: 'officer',
+  manage_shifts: 'officer',
   manage_expenses: 'officer',
 
   manage_members: 'leadership',

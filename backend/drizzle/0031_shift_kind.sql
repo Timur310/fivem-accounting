@@ -1,0 +1,1 @@
+ALTER TABLE "shifts" ADD COLUMN "kind" varchar(10) DEFAULT 'faction' NOT NULL;

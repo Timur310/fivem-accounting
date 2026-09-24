@@ -43,6 +43,7 @@ import {
   Hammer,
   Calculator,
   Car,
+  CalendarClock,
   Crosshair,
   Map,
   BookOpen,
@@ -69,6 +70,7 @@ import { CraftingView } from '@/views/crafting-view';
 import { PricingView } from '@/views/pricing-view';
 import { VehiclesView } from '@/views/vehicles-view';
 import { OperationsView } from '@/views/operations-view';
+import { ShiftsView } from '@/views/shifts-view';
 import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
@@ -362,6 +364,10 @@ export function AppShell() {
     // staring at the car, and usually holds the fewest rights. Editing the
     // registry is gated inside the view.
     { group: 'field', view: 'vehicles', label: 'nav.vehicles', icon: Car, module: 'vehicles' },
+    // No permission: everybody with a timesheet has one of their own to read,
+    // and the screen narrows itself to it. Whose hours you can see and whose
+    // you can correct are decided inside the view.
+    { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts' },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
@@ -559,6 +565,13 @@ export function AppShell() {
             factionId={selectedFactionId}
             canLog={hasPermission('log_operations') || hasPermission('manage_operations')}
             canManage={hasPermission('manage_operations')}
+          /> : null;
+      case 'shifts':
+        return selectedFactionId ? <ShiftsView
+            factionId={selectedFactionId}
+            canLog={hasPermission('log_shifts') || hasPermission('manage_shifts')}
+            canViewAll={hasPermission('view_shifts') || hasPermission('manage_shifts')}
+            canManage={hasPermission('manage_shifts')}
           /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView

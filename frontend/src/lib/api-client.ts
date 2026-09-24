@@ -87,6 +87,12 @@ import type {
   RankTemplate,
   Operation,
   OperationLeaderboard,
+  Shift,
+  ShiftInput,
+  ShiftKind,
+  ShiftList,
+  ShiftOnDuty,
+  ShiftSummary,
   OperationInput,
   OperationSplit,
   OperationSplitInput,
@@ -1215,6 +1221,63 @@ export async function blobErrorMessage(err: unknown, fallback = 'Unknown error')
 }
 
 export { api };
+
+export const shiftsApi = {
+  list: (
+    factionId: string,
+    params: { from?: string; to?: string; userId?: string; position?: string } = {},
+  ) =>
+    api
+      .get<ApiSuccessResponse<ShiftList>>(`/factions/${factionId}/shifts`, { params })
+      .then(unwrap),
+
+  /** Who is working right now, and whether the caller is one of them. */
+  onDuty: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<ShiftOnDuty>>(`/factions/${factionId}/shifts/on-duty`)
+      .then(unwrap),
+
+  /** Job titles this faction has used before, offered instead of a setup screen. */
+  positions: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ positions: string[] }>>(`/factions/${factionId}/shifts/positions`)
+      .then(unwrap),
+
+  summary: (factionId: string, params: { from?: string; to?: string; userId?: string } = {}) =>
+    api
+      .get<ApiSuccessResponse<ShiftSummary>>(`/factions/${factionId}/shifts/summary`, { params })
+      .then(unwrap),
+
+  clockIn: (
+    factionId: string,
+    body: {
+      kind?: ShiftKind;
+      position?: string | null;
+      location?: string | null;
+      notes?: string | null;
+    } = {},
+  ) =>
+    api
+      .post<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts/clock-in`, body)
+      .then(unwrap),
+
+  clockOut: (factionId: string, body: { breakMinutes?: number; notes?: string | null } = {}) =>
+    api
+      .post<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts/clock-out`, body)
+      .then(unwrap),
+
+  /** A whole shift at once, for the one somebody forgot to clock at all. */
+  create: (factionId: string, input: ShiftInput) =>
+    api.post<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts`, input).then(unwrap),
+
+  update: (factionId: string, id: string, input: Partial<ShiftInput> & { endedAt?: string | null }) =>
+    api.patch<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts/${id}`, input).then(unwrap),
+
+  remove: (factionId: string, id: string) =>
+    api
+      .delete<ApiSuccessResponse<{ deleted: boolean }>>(`/factions/${factionId}/shifts/${id}`)
+      .then(unwrap),
+};
 
 export const operationsApi = {
   list: (factionId: string, limit?: number) =>
