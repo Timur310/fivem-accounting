@@ -51,7 +51,29 @@ export type DiscordEvent =
       factionCutPercent: string;
       creditTo: string;
     }
-  | { type: 'operation_reverted'; actorUserId: string; name: string; occurredAt: string };
+  | { type: 'operation_reverted'; actorUserId: string; name: string; occurredAt: string }
+  | {
+      type: 'shift_started';
+      actorUserId: string;
+      /** Faction work, or something the character does on the side. */
+      kind: string;
+      /** What they are working as, in their own words. */
+      position?: string | null;
+      location?: string | null;
+      startedAt: string;
+    }
+  | {
+      type: 'shift_ended';
+      actorUserId: string;
+      kind: string;
+      position?: string | null;
+      location?: string | null;
+      startedAt: string;
+      endedAt: string;
+      /** Worked time less the break, which is the point of the message. */
+      workedMinutes: number;
+      breakMinutes: number;
+    };
 
 /** What each operation kind is called in a message, spelled for a reader. */
 const OPERATION_KIND_LABEL: Record<string, string> = {
@@ -107,6 +129,8 @@ const EMOJI: Record<DiscordEvent['type'], string> = {
   vehicle_removed: '\u{1F5D1}\u{FE0F}',
   operation_logged: '\u{1F3AF}',       // direct hit
   operation_reverted: '\u{1F5D1}\u{FE0F}',
+  shift_started: '\u{1F7E2}',          // green circle
+  shift_ended: '\u{1F3C1}',            // chequered flag
 };
 
 /**
@@ -632,7 +656,50 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         subject: names.actor(event.actorUserId),
         byline: `Reverted by ${names.user(event.actorUserId)}`,
       };
+
+    case 'shift_started':
+      return {
+        // What they typed, not what the app calls it. A faction running a
+        // restaurant wants to read "Kitchen", and a character driving a taxi
+        // on their own time is not the faction's shift at all.
+        title: event.kind === 'side' ? 'On a side job' : 'On duty',
+        description: shiftLine(event.position, event.location),
+        color: COLOR.in,
+        subject: names.actor(event.actorUserId),
+        byline: `${names.user(event.actorUserId)} clocked in`,
+      };
+
+    case 'shift_ended':
+      return {
+        title: event.kind === 'side' ? 'Side job finished' : 'Off duty',
+        description: shiftLine(event.position, event.location),
+        color: COLOR.info,
+        subject: names.actor(event.actorUserId),
+        byline: `${names.user(event.actorUserId)} clocked out`,
+        fields: [
+          { name: 'Worked', value: shiftDuration(event.workedMinutes), inline: true },
+          ...(event.breakMinutes > 0
+            ? [{ name: 'Break', value: `${event.breakMinutes} min`, inline: true }]
+            : []),
+        ],
+      };
   }
+}
+
+/** The job and the place as one line, skipping whichever was left blank. */
+function shiftLine(position?: string | null, location?: string | null): string {
+  const parts = [position?.trim(), location?.trim()].filter((p): p is string => !!p);
+  if (parts.length === 0) return '_No job given_';
+  return `**${parts[0]}**${parts[1] ? ` \u{2022} ${parts[1]}` : ''}`;
+}
+
+/** `3h 20m`, which is how anybody talks about a shift. */
+function shiftDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 /**

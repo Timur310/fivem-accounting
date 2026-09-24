@@ -174,6 +174,15 @@ export const FACTION_PERMISSIONS = [
   // till and the recipe book.
   'log_operations',
   'manage_operations',
+  // The timesheet, and the one place in the app that needs three permissions
+  // rather than two. Clocking yourself in is the shop floor. Reading everybody
+  // else's hours is a different thing again — a rota is mildly sensitive, it
+  // says who was around and when — and correcting somebody's hours after the
+  // fact is a third. A faction that wants its crew to see the rota can grant
+  // the middle one without handing out the ability to rewrite it.
+  'log_shifts',
+  'view_shifts',
+  'manage_shifts',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -200,6 +209,9 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_vehicles: 'Manage Vehicles',
   log_operations: 'Log Operations',
   manage_operations: 'Revert Operations',
+  log_shifts: 'Clock In and Out',
+  view_shifts: "See Everyone's Shifts",
+  manage_shifts: "Edit Everyone's Shifts",
 };
 
 // ── faction_members ────────────────────────────────────
@@ -748,6 +760,13 @@ export const DISCORD_EVENT_TYPES = [
   // and factions will want both in the same channel.
   'vehicle_added',
   'operation_logged',
+  // Clocking in and out. Noisier than anything else here by some distance —
+  // a restaurant with eight staff is sixteen messages an evening — which is
+  // exactly why they are two separate routes: a faction can post the starts in
+  // a duty channel and leave the finishes off, or send only the finishes,
+  // where the hours are.
+  'shift_started',
+  'shift_ended',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1711,3 +1730,78 @@ export type Operation = typeof operations.$inferSelect;
 export type NewOperation = typeof operations.$inferInsert;
 export type OperationParticipant = typeof operationParticipants.$inferSelect;
 export type OperationLoot = typeof operationLoot.$inferSelect;
+
+// ── shifts ─────────────────────────────────────────────
+// Clock in, clock out. A timesheet for the factions that run a business in the
+// city rather than a crew: a restaurant with a kitchen rota, a garage with
+// mechanics on shift, a taxi firm, a hospital.
+//
+// Deliberately not connected to the ledger. A shift is time, not value, and
+// tying it to money would force every faction using it to have an hourly rate
+// and an item type for wages before they could record that somebody worked
+// Tuesday evening. What a faction pays for the hours is a decision it can make
+// with the hours in front of it.
+export const shifts = pgTable('shifts', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  /**
+   * What they worked as, free text rather than a configured list.
+   *
+   * Every faction's roles are its own — cook, waiter, mechanic, driver, medic,
+   * dispatcher — and asking a faction to define its job titles before anybody
+   * can clock in is a setup screen standing in front of a button. The screen
+   * suggests whatever this faction has typed before, which converges on a list
+   * without anybody having to write one.
+   */
+  /**
+   * Faction work, or something the character did on the side.
+   *
+   * Asked for as soon as the screen existed: people clock in for the faction,
+   * and they also drive a taxi or do a delivery run that has nothing to do
+   * with it, and both are hours worth keeping. Splitting them keeps a rota
+   * honest — a faction reading its own hours should not be counting somebody's
+   * night at a different job.
+   */
+  kind:      varchar('kind', { length: 10 }).notNull().default('faction'),
+
+  position:  varchar('position', { length: 60 }),
+  /** Where the shift was worked: the restaurant, the garage, a district. */
+  location:  varchar('location', { length: 120 }),
+
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  /** Null while somebody is still on shift, which is what "on duty" means. */
+  endedAt:   timestamp('ended_at', { withTimezone: true }),
+  /** Unpaid time inside the shift, subtracted from the hours it counts for. */
+  breakMinutes: integer('break_minutes').notNull().default(0),
+
+  notes:     text('notes'),
+
+  /**
+   * Who last changed it, when that was not the person who worked it.
+   *
+   * A timesheet somebody else corrected is a different thing from one that was
+   * clocked, and the person whose hours they are should be able to see which
+   * they are looking at.
+   */
+  editedBy:  uuid('edited_by').references(() => users.id, { onDelete: 'set null' }),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionStart: index('shift_faction_started').on(table.factionId, table.startedAt),
+  memberStart:  index('shift_member_started').on(table.userId, table.startedAt),
+}));
+
+export const shiftsRelations = relations(shifts, ({ one }) => ({
+  faction: one(factions, { fields: [shifts.factionId], references: [factions.id] }),
+  member:  one(users,    { fields: [shifts.userId],    references: [users.id] }),
+}));
+
+/** Whose work it was. Free text says *what*; this says *for whom*. */
+export const SHIFT_KINDS = ['faction', 'side'] as const;
+export type ShiftKind = (typeof SHIFT_KINDS)[number];
+
+export type Shift = typeof shifts.$inferSelect;
+export type NewShift = typeof shifts.$inferInsert;

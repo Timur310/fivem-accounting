@@ -931,6 +931,7 @@ export const FACTION_PERMISSIONS = [
   'view_audit_logs', 'view_reports', 'manage_laundering', 'manage_expenses',
   'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell', 'manage_vehicles',
   'log_operations', 'manage_operations',
+  'log_shifts', 'view_shifts', 'manage_shifts',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -954,6 +955,9 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_vehicles: 'permission.manageVehicles',
   log_operations: 'permission.logOperations',
   manage_operations: 'permission.manageOperations',
+  log_shifts: 'permission.logShifts',
+  view_shifts: 'permission.viewShifts',
+  manage_shifts: 'permission.manageShifts',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1679,6 +1683,8 @@ export const DISCORD_EVENT_TYPES = [
   'vehicle_added',
   'operation_reverted',
   'operation_logged',
+  'shift_started',
+  'shift_ended',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1723,6 +1729,8 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   vehicle_removed: 'discord.event.vehicleRemoved',
   operation_logged: 'discord.event.operationLogged',
   operation_reverted: 'discord.event.operationReverted',
+  shift_started: 'discord.event.shiftStarted',
+  shift_ended: 'discord.event.shiftEnded',
 };
 
 export interface DiscordIntegration {
@@ -2138,6 +2146,69 @@ export interface OperationLeaderboard {
   myRank: number | null;
 }
 
+// ── shifts ───────────────────────────────────────
+
+/** Faction work, or something the character does on their own time. */
+export const SHIFT_KINDS = ['faction', 'side'] as const;
+export type ShiftKind = (typeof SHIFT_KINDS)[number];
+
+/** One clocked shift. `endedAt` null means the person is still on duty. */
+export interface Shift {
+  id: string;
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+  kind: ShiftKind;
+  position: string | null;
+  location: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  breakMinutes: number;
+  notes: string | null;
+  /** Set when somebody other than the member last changed the times. */
+  editedBy: string | null;
+  createdAt: string;
+  /** Worked time less the break, or null while the shift is still running. */
+  workedMinutes: number | null;
+}
+
+export interface ShiftList {
+  shifts: Shift[];
+  /** False means the list is the caller's own, whatever was asked for. */
+  seesEveryone: boolean;
+}
+
+export interface ShiftOnDuty {
+  onDuty: Shift[];
+  /** The caller's own open shift, which is what the clock button reads. */
+  mine: Shift | null;
+  seesEveryone: boolean;
+}
+
+export interface ShiftSummary {
+  members: {
+    userId: string;
+    userName: string;
+    avatarUrl: string | null;
+    shiftCount: number;
+    minutes: number;
+    lastShiftAt: string | null;
+  }[];
+  totalMinutes: number;
+  seesEveryone: boolean;
+}
+
+export interface ShiftInput {
+  userId?: string;
+  kind?: ShiftKind;
+  position?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  startedAt: string;
+  endedAt: string;
+  breakMinutes?: number;
+}
+
 
 // ── faction modules ────────────────────────────────────
 // Which parts of the app a faction uses. See backend lib/modules.ts: the two
@@ -2146,7 +2217,7 @@ export interface OperationLeaderboard {
 
 export const FACTION_MODULES = [
   'entries', 'payouts', 'treasury', 'expenses', 'quotas', 'strikes',
-  'laundering', 'crafting', 'pricing', 'operations', 'vehicles', 'map',
+  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'vehicles', 'map',
   'leaderboard', 'announcements', 'feed', 'reports',
 ] as const;
 export type FactionModule = (typeof FACTION_MODULES)[number];
@@ -2162,6 +2233,7 @@ export const MODULE_LABEL_KEYS: Record<FactionModule, TranslationKey> = {
   crafting: 'nav.crafting',
   pricing: 'nav.pricing',
   operations: 'nav.operations',
+  shifts: 'nav.shifts',
   vehicles: 'nav.vehicles',
   map: 'nav.map',
   leaderboard: 'nav.leaderboard',
@@ -2181,6 +2253,7 @@ export const MODULE_HINT_KEYS: Record<FactionModule, TranslationKey> = {
   crafting: 'module.hint.crafting',
   pricing: 'module.hint.pricing',
   operations: 'module.hint.operations',
+  shifts: 'module.hint.shifts',
   vehicles: 'module.hint.vehicles',
   map: 'module.hint.map',
   leaderboard: 'module.hint.leaderboard',
@@ -2203,6 +2276,9 @@ export const PERMISSION_MODULE: Partial<Record<FactionPermission, FactionModule>
   sell: 'pricing',
   log_operations: 'operations',
   manage_operations: 'operations',
+  log_shifts: 'shifts',
+  view_shifts: 'shifts',
+  manage_shifts: 'shifts',
   manage_vehicles: 'vehicles',
   manage_map: 'map',
   view_reports: 'reports',

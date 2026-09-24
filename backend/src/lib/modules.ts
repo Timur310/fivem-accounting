@@ -41,6 +41,7 @@ export const FACTION_MODULES = [
   'crafting',
   'pricing',
   'operations',
+  'shifts',
   'vehicles',
   'map',
   'leaderboard',
@@ -70,6 +71,9 @@ export const PERMISSION_MODULE: Partial<Record<string, FactionModule>> = {
   sell: 'pricing',
   log_operations: 'operations',
   manage_operations: 'operations',
+  log_shifts: 'shifts',
+  view_shifts: 'shifts',
+  manage_shifts: 'shifts',
   manage_vehicles: 'vehicles',
   manage_map: 'map',
   view_reports: 'reports',
@@ -97,6 +101,8 @@ export const EVENT_MODULE: Partial<Record<string, FactionModule>> = {
   vehicle_removed: 'vehicles',
   operation_logged: 'operations',
   operation_reverted: 'operations',
+  shift_started: 'shifts',
+  shift_ended: 'shifts',
 };
 
 /**

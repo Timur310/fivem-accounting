@@ -54,7 +54,15 @@ function sentEmbed() {
   expect(postMock).toHaveBeenCalledTimes(1);
   const [, payload] = postMock.mock.calls[0] as unknown as [
     string,
-    { embeds: { title: string; description: string; author?: { name: string }; footer?: { text: string } }[] },
+    {
+      embeds: {
+        title: string;
+        description: string;
+        fields?: { name: string; value: string }[];
+        author?: { name: string };
+        footer?: { text: string };
+      }[],
+    },
   ];
   return payload.embeds[0]!;
 }
@@ -524,6 +532,65 @@ describe('through the routes that raise the events', () => {
     expect(crew?.name).toBe('Crew (2)');
     expect(crew?.value).toContain(w.member.username);
     expect(embed.fields?.find((x) => x.name === 'Haul')?.value).toContain('90,000');
+  });
+
+  /**
+   * Clocking in and out, which is the noisiest pair of events in the app.
+   *
+   * Routed separately for that reason, and the test says so: a faction that
+   * wants a duty board without sixteen messages an evening routes one and
+   * leaves the other alone.
+   */
+  it('announces a clock-in without announcing the clock-out', async () => {
+    await link();
+    await route('shift_started');
+
+    const inRes = await api().post(`${f()}/shifts/clock-in`).set('Cookie', w.admin.cookie)
+      .send({ position: 'Kitchen', location: 'Burgershot' });
+    expect(inRes.status).toBe(201);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toContain('On duty');
+    expect(sentEmbed().description).toContain('Kitchen');
+    expect(sentEmbed().description).toContain('Burgershot');
+
+    const outRes = await api().post(`${f()}/shifts/clock-out`).set('Cookie', w.admin.cookie).send({});
+    expect(outRes.status).toBe(200);
+    // Still one: the clock-out has no route, so it goes nowhere.
+    expect(postMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the hours worked on the clock-out', async () => {
+    await link();
+    await route('shift_ended');
+
+    await api().post(`${f()}/shifts/clock-in`).set('Cookie', w.admin.cookie).send({
+      position: 'Tow truck',
+      startedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    });
+    const res = await api().post(`${f()}/shifts/clock-out`).set('Cookie', w.admin.cookie)
+      .send({ breakMinutes: 20 });
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    const embed = sentEmbed();
+    expect(embed.title).toContain('Off duty');
+    expect(embed.fields?.find((x) => x.name === 'Worked')?.value).toBe('1h 40m');
+    expect(embed.fields?.find((x) => x.name === 'Break')?.value).toBe('20 min');
+  });
+
+  // A character driving a taxi on their own time is not the faction's shift,
+  // and the channel should not read as though it were.
+  it('says when the shift was a side job', async () => {
+    await link();
+    await route('shift_started');
+
+    await api().post(`${f()}/shifts/clock-in`).set('Cookie', w.admin.cookie)
+      .send({ kind: 'side', position: 'Taxi' });
+
+    await vi.waitFor(() => expect(postMock).toHaveBeenCalledTimes(1));
+    expect(sentEmbed().title).toContain('side job');
+    expect(sentEmbed().description).toContain('Taxi');
   });
 
   it('announces an operation being reverted', async () => {
