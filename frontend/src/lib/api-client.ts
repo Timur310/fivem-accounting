@@ -87,6 +87,11 @@ import type {
   RankTemplate,
   Operation,
   OperationLeaderboard,
+  Complaint,
+  ComplaintCategory,
+  ComplaintInput,
+  ComplaintList,
+  ComplaintStatus,
   Shift,
   ShiftInput,
   ShiftKind,
@@ -1221,6 +1226,36 @@ export async function blobErrorMessage(err: unknown, fallback = 'Unknown error')
 }
 
 export { api };
+
+export const complaintsApi = {
+  list: (
+    factionId: string,
+    params: { status?: ComplaintStatus; category?: ComplaintCategory; mine?: 'true' } = {},
+  ) =>
+    api
+      .get<ApiSuccessResponse<ComplaintList>>(`/factions/${factionId}/complaints`, { params })
+      .then(unwrap),
+
+  create: (factionId: string, input: ComplaintInput) =>
+    api
+      .post<ApiSuccessResponse<Complaint>>(`/factions/${factionId}/complaints`, input)
+      .then(unwrap),
+
+  /**
+   * Settle one, or — for the author — withdraw it.
+   *
+   * The server decides which of those the caller is allowed to do; the screen
+   * only offers what fits.
+   */
+  update: (
+    factionId: string,
+    id: string,
+    input: { status?: ComplaintStatus; resolutionNote?: string | null },
+  ) =>
+    api
+      .patch<ApiSuccessResponse<Complaint>>(`/factions/${factionId}/complaints/${id}`, input)
+      .then(unwrap),
+};
 
 export const shiftsApi = {
   list: (

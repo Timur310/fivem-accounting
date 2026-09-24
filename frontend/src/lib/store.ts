@@ -15,6 +15,7 @@ export type AppView =
   | 'vehicles'
   | 'operations'
   | 'shifts'
+  | 'complaints'
   | 'map'
   | 'members'
   | 'member-profile'

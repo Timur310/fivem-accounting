@@ -932,6 +932,7 @@ export const FACTION_PERMISSIONS = [
   'manage_discord', 'manage_crafting', 'craft', 'manage_map', 'manage_prices', 'sell', 'manage_vehicles',
   'log_operations', 'manage_operations',
   'log_shifts', 'view_shifts', 'manage_shifts',
+  'manage_complaints',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -958,6 +959,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   log_shifts: 'permission.logShifts',
   view_shifts: 'permission.viewShifts',
   manage_shifts: 'permission.manageShifts',
+  manage_complaints: 'permission.manageComplaints',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1685,6 +1687,7 @@ export const DISCORD_EVENT_TYPES = [
   'operation_logged',
   'shift_started',
   'shift_ended',
+  'complaint_filed',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1731,6 +1734,7 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   operation_reverted: 'discord.event.operationReverted',
   shift_started: 'discord.event.shiftStarted',
   shift_ended: 'discord.event.shiftEnded',
+  complaint_filed: 'discord.event.complaintFiled',
 };
 
 export interface DiscordIntegration {
@@ -2209,6 +2213,70 @@ export interface ShiftInput {
   breakMinutes?: number;
 }
 
+// ── complaints ─────────────────────────────────
+
+export const COMPLAINT_CATEGORIES = ['conduct', 'rules', 'money', 'suggestion', 'other'] as const;
+export type ComplaintCategory = (typeof COMPLAINT_CATEGORIES)[number];
+
+export const COMPLAINT_STATUSES = ['open', 'in_review', 'resolved', 'dismissed', 'withdrawn'] as const;
+export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number];
+
+export const COMPLAINT_CATEGORY_KEYS: Record<ComplaintCategory, TranslationKey> = {
+  conduct: 'complaints.category.conduct',
+  rules: 'complaints.category.rules',
+  money: 'complaints.category.money',
+  suggestion: 'complaints.category.suggestion',
+  other: 'complaints.category.other',
+};
+
+export const COMPLAINT_STATUS_KEYS: Record<ComplaintStatus, TranslationKey> = {
+  open: 'complaints.status.open',
+  in_review: 'complaints.status.inReview',
+  resolved: 'complaints.status.resolved',
+  dismissed: 'complaints.status.dismissed',
+  withdrawn: 'complaints.status.withdrawn',
+};
+
+/** One thing a member raised with their leadership. */
+export interface Complaint {
+  id: string;
+  /** Null for an anonymous complaint, where no author was ever stored. */
+  authorUserId: string | null;
+  authorName: string | null;
+  authorAvatarUrl: string | null;
+  isAnonymous: boolean;
+  /** Null means the complaint is about the faction rather than a person. */
+  targetUserId: string | null;
+  targetName: string | null;
+  targetAvatarUrl: string | null;
+  category: ComplaintCategory;
+  subject: string;
+  body: string;
+  status: ComplaintStatus;
+  /** What leadership decided, which the author reads. */
+  resolutionNote: string | null;
+  handledBy: string | null;
+  handlerName: string | null;
+  handledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ComplaintList {
+  complaints: Complaint[];
+  /** False means the list is only what the caller filed themselves. */
+  handlesQueue: boolean;
+  openCount: number;
+}
+
+export interface ComplaintInput {
+  targetUserId?: string | null;
+  category?: ComplaintCategory;
+  subject: string;
+  body: string;
+  isAnonymous?: boolean;
+}
+
 
 // ── faction modules ────────────────────────────────────
 // Which parts of the app a faction uses. See backend lib/modules.ts: the two
@@ -2217,7 +2285,7 @@ export interface ShiftInput {
 
 export const FACTION_MODULES = [
   'entries', 'payouts', 'treasury', 'expenses', 'quotas', 'strikes',
-  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'vehicles', 'map',
+  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'complaints', 'vehicles', 'map',
   'leaderboard', 'announcements', 'feed', 'reports',
 ] as const;
 export type FactionModule = (typeof FACTION_MODULES)[number];
@@ -2234,6 +2302,7 @@ export const MODULE_LABEL_KEYS: Record<FactionModule, TranslationKey> = {
   pricing: 'nav.pricing',
   operations: 'nav.operations',
   shifts: 'nav.shifts',
+  complaints: 'nav.complaints',
   vehicles: 'nav.vehicles',
   map: 'nav.map',
   leaderboard: 'nav.leaderboard',
@@ -2254,6 +2323,7 @@ export const MODULE_HINT_KEYS: Record<FactionModule, TranslationKey> = {
   pricing: 'module.hint.pricing',
   operations: 'module.hint.operations',
   shifts: 'module.hint.shifts',
+  complaints: 'module.hint.complaints',
   vehicles: 'module.hint.vehicles',
   map: 'module.hint.map',
   leaderboard: 'module.hint.leaderboard',
@@ -2279,6 +2349,7 @@ export const PERMISSION_MODULE: Partial<Record<FactionPermission, FactionModule>
   log_shifts: 'shifts',
   view_shifts: 'shifts',
   manage_shifts: 'shifts',
+  manage_complaints: 'complaints',
   manage_vehicles: 'vehicles',
   manage_map: 'map',
   view_reports: 'reports',
