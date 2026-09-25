@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shiftsApi, membersApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
@@ -24,11 +24,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
-import { formatDateTime, displayName } from '@/lib/format';
+import { displayName } from '@/lib/format';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, Clock, Pencil, Play, Plus, Square, Trash2, Users,
+  AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, Users,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import {
+  ShiftClock, hoursAndMinutes, likelyEnd, shiftQueryKeys, toLocalInput,
+} from '@/components/shift-clock';
 import type { Shift, ShiftKind } from '@/lib/api-types';
 
 interface Props {
@@ -39,15 +42,6 @@ interface Props {
   canViewAll: boolean;
   /** May correct and remove anybody's shift. */
   canManage: boolean;
-}
-
-/** `1h 45m`, which is how anybody talks about a shift. */
-function hoursAndMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
 }
 
 /** The local day a moment falls on, as `YYYY-MM-DD`. */
@@ -62,14 +56,6 @@ function timeOnly(value: string): string {
   const d = new Date(value);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** An ISO instant as the value a `datetime-local` input expects. */
-function toLocalInput(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /**
@@ -95,14 +81,6 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
   const [editing, setEditing] = useState<Shift | null>(null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Shift | null>(null);
-
-  // What the clock-in form is holding before anybody has clocked in.
-  const [position, setPosition] = useState('');
-  const [location, setLocation] = useState('');
-  const [breakMinutes, setBreakMinutes] = useState('0');
-  // Faction work by default, because that is what most people clocking in are
-  // doing — the side job is the deliberate choice, not the other way round.
-  const [kind, setKind] = useState<ShiftKind>('faction');
 
   const monthStart = dayKey(new Date(month.getFullYear(), month.getMonth(), 1));
   const monthEnd = dayKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
@@ -146,44 +124,13 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
   });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['shifts', factionId] });
-    void queryClient.invalidateQueries({ queryKey: ['shifts-on-duty', factionId] });
-    void queryClient.invalidateQueries({ queryKey: ['shifts-summary', factionId] });
-    void queryClient.invalidateQueries({ queryKey: ['shift-positions', factionId] });
+    for (const key of shiftQueryKeys(factionId)) {
+      void queryClient.invalidateQueries({ queryKey: key });
+    }
   };
 
   const fail = (err: unknown) =>
     toast({ title: t('shifts.failed'), description: apiErrorMessage(err), variant: 'destructive' });
-
-  const clockIn = useMutation({
-    mutationFn: () => shiftsApi.clockIn(factionId, {
-      kind,
-      position: position.trim() || null,
-      location: location.trim() || null,
-    }),
-    onSuccess: () => {
-      invalidate();
-      toast({ title: t('shifts.clockedIn') });
-    },
-    onError: fail,
-  });
-
-  const clockOut = useMutation({
-    mutationFn: () => shiftsApi.clockOut(factionId, {
-      breakMinutes: Math.max(0, Number(breakMinutes) || 0),
-    }),
-    onSuccess: (shift) => {
-      invalidate();
-      setBreakMinutes('0');
-      toast({
-        title: t('shifts.clockedOut'),
-        description: shift.workedMinutes !== null
-          ? t('shifts.workedToast').replace('{time}', hoursAndMinutes(shift.workedMinutes))
-          : undefined,
-      });
-    },
-    onError: fail,
-  });
 
   const remove = useMutation({
     mutationFn: (id: string) => shiftsApi.remove(factionId, id),
@@ -195,7 +142,6 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
     onError: fail,
   });
 
-  const mine = onDuty.data?.mine ?? null;
   const shifts = list.data?.shifts ?? [];
 
   // One pass over the month, so the calendar and the day list read the same
@@ -237,102 +183,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
       </div>
 
       {/* ── The clock ───────────────────────────────── */}
-      {canLog && (
-        <Card>
-          <CardContent className="py-4">
-            {mine ? (
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                    </span>
-                    <span className="text-sm font-medium text-zinc-100">{t('shifts.onDutySince')
-                      .replace('{time}', formatDateTime(mine.startedAt))}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {[mine.position, mine.location].filter(Boolean).join(' · ') || t('shifts.noPosition')}
-                  </p>
-                  <Elapsed since={mine.startedAt} />
-                </div>
-
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="break-minutes" className="text-xs">{t('shifts.breakMinutes')}</Label>
-                    <Input
-                      id="break-minutes"
-                      type="number"
-                      min={0}
-                      className="w-24"
-                      value={breakMinutes}
-                      onChange={(e) => setBreakMinutes(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    onClick={() => clockOut.mutate()}
-                    disabled={clockOut.isPending}
-                    className="bg-red-600 text-white hover:bg-red-500"
-                  >
-                    <Square className="mr-2 h-4 w-4" />
-                    {t('shifts.clockOut')}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">{t('shifts.forWhom')}</Label>
-                  <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('shifts.forWhom')}>
-                    {(['faction', 'side'] as const).map((value) => (
-                      <button
-                        key={value}
-                        role="tab"
-                        type="button"
-                        aria-selected={kind === value}
-                        onClick={() => setKind(value)}
-                        className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${
-                          kind === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                        }`}
-                      >
-                        {t(value === 'faction' ? 'shifts.kindFaction' : 'shifts.kindSide')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="min-w-[10rem] flex-1 space-y-1">
-                  <Label htmlFor="shift-position" className="text-xs">{t('shifts.position')}</Label>
-                  <Input
-                    id="shift-position"
-                    list="shift-positions"
-                    value={position}
-                    onChange={(e) => setPosition(e.target.value)}
-                    placeholder={t('shifts.positionPlaceholder')}
-                  />
-                  {/* Whatever this faction has typed before, so a list of job
-                      titles appears without anybody configuring one. */}
-                  <datalist id="shift-positions">
-                    {(positions.data?.positions ?? []).map((p) => <option key={p} value={p} />)}
-                  </datalist>
-                </div>
-                <div className="min-w-[10rem] flex-1 space-y-1">
-                  <Label htmlFor="shift-location" className="text-xs">{t('shifts.location')}</Label>
-                  <Input
-                    id="shift-location"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder={t('shifts.locationPlaceholder')}
-                  />
-                </div>
-                <Button onClick={() => clockIn.mutate()} disabled={clockIn.isPending}>
-                  <Play className="mr-2 h-4 w-4" />
-                  {t('shifts.clockIn')}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {canLog && <ShiftClock factionId={factionId} />}
 
       {/* ── Who else is working ─────────────────────── */}
       {canViewAll && (onDuty.data?.onDuty.length ?? 0) > 0 && (
@@ -341,16 +192,37 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
             <Users className="h-3.5 w-3.5" />
             {t('shifts.onDutyNow')}
           </span>
-          {onDuty.data!.onDuty.map((shift) => (
-            <Badge key={shift.id} variant="outline" className="gap-1.5 py-1">
-              <Avatar className="h-4 w-4">
-                <AvatarImage src={shift.avatarUrl ?? undefined} alt="" />
-                <AvatarFallback className="text-[7px]">{shift.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              {shift.userName}
-              <span className="text-zinc-500">{timeOnly(shift.startedAt)}</span>
-            </Badge>
-          ))}
+          {onDuty.data!.onDuty.map((shift) => {
+            const chip = (
+              <Badge
+                variant="outline"
+                className={`gap-1.5 py-1 ${shift.stale ? 'border-amber-500/40 bg-amber-500/10 text-amber-300' : ''}`}
+              >
+                <Avatar className="h-4 w-4">
+                  <AvatarImage src={shift.avatarUrl ?? undefined} alt="" />
+                  <AvatarFallback className="text-[7px]">{shift.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                {shift.userName}
+                <span className={shift.stale ? 'text-amber-400/80' : 'text-zinc-500'}>{timeOnly(shift.startedAt)}</span>
+                {shift.stale && <AlertTriangle className="h-3 w-3" aria-label={t('shifts.probablyForgotten')} />}
+              </Badge>
+            );
+            // A forgotten shift is somebody still showing as on duty who went
+            // to bed. The person who can correct it gets to do so from here,
+            // rather than hunting for the row in a month of them.
+            return shift.stale && canManage ? (
+              <button
+                key={shift.id}
+                type="button"
+                title={t('shifts.closeForgotten')}
+                onClick={() => setEditing(shift)}
+              >
+                {chip}
+              </button>
+            ) : (
+              <span key={shift.id}>{chip}</span>
+            );
+          })}
         </div>
       )}
 
@@ -512,29 +384,6 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
   );
 }
 
-/**
- * How long the open shift has been running, counted on screen.
- *
- * The server never sends a length for a shift that has not finished — a number
- * that changes while you look at it does not belong in a stored total — but
- * the person watching the clock wants exactly that number, so it is counted
- * here and nowhere else.
- */
-function Elapsed({ since }: { since: string }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
-  const minutes = Math.max(0, Math.floor((now - new Date(since).getTime()) / 60_000));
-  return (
-    <p className="mt-2 flex items-center gap-1.5 text-2xl font-semibold tabular-nums text-zinc-100">
-      <Clock className="h-5 w-5 text-zinc-500" />
-      {hoursAndMinutes(minutes)}
-    </p>
-  );
-}
-
 /** The month as a grid, each day carrying what was worked on it. */
 function MonthGrid({
   month,
@@ -656,9 +505,14 @@ function ShiftRow({
               {t('shifts.kindSide')}
             </Badge>
           )}
-          {running && (
+          {running && !shift.stale && (
             <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-400">
               {t('shifts.onDuty')}
+            </Badge>
+          )}
+          {shift.stale && (
+            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-300">
+              {t('shifts.probablyForgotten')}
             </Badge>
           )}
           {/* A timesheet somebody else corrected is a different thing from one
@@ -723,7 +577,16 @@ function ShiftDialog({
   const [startedAt, setStartedAt] = useState(
     toLocalInput(shift?.startedAt ?? new Date(Date.now() - 3_600_000).toISOString()),
   );
-  const [endedAt, setEndedAt] = useState(toLocalInput(shift?.endedAt ?? new Date().toISOString()));
+  // Editing a shift that is still running used to close it: the end field was
+  // always filled — with "now" if it had no end — and always sent. Correcting
+  // the position on your own open shift quietly clocked you out. An open shift
+  // now stays open unless the box is unticked, except a forgotten one, which
+  // is opened in this dialog precisely so that it can be closed.
+  const isOpen = !!shift && !shift.endedAt;
+  const [stillRunning, setStillRunning] = useState(isOpen && !shift?.stale);
+  const [endedAt, setEndedAt] = useState(toLocalInput(
+    shift?.endedAt ?? (shift ? likelyEnd(shift.startedAt) : new Date().toISOString()),
+  ));
   const [breakMinutes, setBreakMinutes] = useState(String(shift?.breakMinutes ?? 0));
 
   const save = useMutation({
@@ -734,12 +597,19 @@ function ShiftDialog({
         location: location.trim() || null,
         notes: notes.trim() || null,
         startedAt: new Date(startedAt).toISOString(),
-        endedAt: new Date(endedAt).toISOString(),
         breakMinutes: Math.max(0, Number(breakMinutes) || 0),
       };
-      return shift
-        ? shiftsApi.update(factionId, shift.id, body)
-        : shiftsApi.create(factionId, { ...body, userId: userId || undefined });
+      if (shift) {
+        return shiftsApi.update(factionId, shift.id, {
+          ...body,
+          endedAt: stillRunning ? null : new Date(endedAt).toISOString(),
+        });
+      }
+      return shiftsApi.create(factionId, {
+        ...body,
+        endedAt: new Date(endedAt).toISOString(),
+        userId: userId || undefined,
+      });
     },
     onSuccess: () => {
       toast({ title: t('shifts.saved') });
@@ -749,7 +619,8 @@ function ShiftDialog({
       toast({ title: t('shifts.failed'), description: apiErrorMessage(err), variant: 'destructive' }),
   });
 
-  const valid = !!startedAt && !!endedAt && new Date(endedAt) > new Date(startedAt);
+  const valid = !!startedAt
+    && (stillRunning || (!!endedAt && new Date(endedAt) > new Date(startedAt)));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -788,10 +659,22 @@ function ShiftDialog({
                 id="dialog-ended"
                 type="datetime-local"
                 value={endedAt}
+                disabled={stillRunning}
                 onChange={(e) => setEndedAt(e.target.value)}
               />
             </div>
           </div>
+
+          {isOpen && (
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                checked={stillRunning}
+                onChange={(e) => setStillRunning(e.target.checked)}
+              />
+              {t('shifts.stillRunningBox')}
+            </label>
+          )}
 
           <div className="space-y-1">
             <Label>{t('shifts.forWhom')}</Label>

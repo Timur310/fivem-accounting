@@ -41,6 +41,20 @@ const factionId = (req: Request) => req.params.id as string;
 const MAX_SHIFT_HOURS = 24;
 
 /**
+ * When an open shift starts to look forgotten rather than long.
+ *
+ * Half the hard cap. A twelve-hour stint is possible in a game people play all
+ * evening, so this only flags it — the person, or a manager, closes it with the
+ * time it really ended. Without the flag a forgotten shift sat on the duty
+ * board as "on duty" indefinitely, and the clock-out refused it once it passed
+ * the cap, so there was no obvious way out.
+ */
+const STALE_SHIFT_HOURS = 12;
+
+/** A minute of slack for clocks that disagree about what "now" is. */
+const CLOCK_SLACK_MS = 60_000;
+
+/**
  * Does the caller hold this permission?
  *
  * Read off what `requireFactionMember` already resolved, and admits admins the
@@ -138,6 +152,11 @@ function validateSpan(startedAt: Date, endedAt: Date, breakMinutes: number):
   if (endedAt.getTime() <= startedAt.getTime()) {
     return { ok: false, message: 'A shift has to end after it started' };
   }
+  // Nothing checked this before, so a clock-out could be dated tomorrow and
+  // count hours nobody had worked yet.
+  if (endedAt.getTime() > Date.now() + CLOCK_SLACK_MS) {
+    return { ok: false, message: 'A shift cannot end in the future' };
+  }
   const gross = (endedAt.getTime() - startedAt.getTime()) / 3_600_000;
   if (gross > MAX_SHIFT_HOURS) {
     return { ok: false, message: `A shift cannot run longer than ${MAX_SHIFT_HOURS} hours` };
@@ -187,7 +206,12 @@ type ShiftRow = {
 
 /** The row as the client reads it, with the arithmetic already done. */
 function present<T extends ShiftRow>(row: T) {
-  return { ...row, workedMinutes: workedMinutes(row) };
+  return {
+    ...row,
+    workedMinutes: workedMinutes(row),
+    /** Still open after long enough that it was probably forgotten. */
+    stale: !row.endedAt && Date.now() - row.startedAt.getTime() > STALE_SHIFT_HOURS * 3_600_000,
+  };
 }
 
 // ── GET / — the shifts in a window ────────────────────
@@ -585,6 +609,12 @@ router.patch('/:shiftId', async (req: Request, res: Response) => {
       error(res, 'VALIDATION_ERROR', span.message);
       return;
     }
+  } else if (breakMinutes > 0 && breakMinutes * 60_000 >= Date.now() - startedAt.getTime()) {
+    // An open shift's break is added to as it happens now, from the buttons
+    // on the clock. It still cannot outrun the shift, or the clock-out would
+    // refuse it later for a reason nobody could see coming.
+    error(res, 'VALIDATION_ERROR', 'The break cannot be longer than the shift so far');
+    return;
   }
 
   const [row] = await db

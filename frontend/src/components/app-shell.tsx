@@ -44,6 +44,7 @@ import {
   Calculator,
   Car,
   CalendarClock,
+  Sun,
   MessageSquareWarning,
   Crosshair,
   Map,
@@ -73,6 +74,7 @@ import { VehiclesView } from '@/views/vehicles-view';
 import { OperationsView } from '@/views/operations-view';
 import { ShiftsView } from '@/views/shifts-view';
 import { ComplaintsView } from '@/views/complaints-view';
+import { MyDayView } from '@/views/my-day-view';
 import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
@@ -336,6 +338,10 @@ export function AppShell() {
   const openTicketCount = openTickets?.open ?? 0;
 
   const navItems: NavItem[] = [
+    // First in the list: what is going on with *me*, before what is going on
+    // with the faction. Members-only because it is all about the caller's own
+    // record, and a superadmin browsing a faction has none there.
+    { group: 'overview', view: 'my-day', label: 'nav.myDay', icon: Sun, membersOnly: true },
     { group: 'overview', view: 'dashboard', label: 'nav.dashboard', icon: LayoutDashboard },
     { group: 'ledger', view: 'entries', label: 'nav.entries', icon: List, module: 'entries' },
     { group: 'ledger', view: 'payouts', label: 'nav.withdrawals', icon: ArrowDownToLine, module: 'payouts' },
@@ -578,6 +584,11 @@ export function AppShell() {
             canLog={hasPermission('log_shifts') || hasPermission('manage_shifts')}
             canViewAll={hasPermission('view_shifts') || hasPermission('manage_shifts')}
             canManage={hasPermission('manage_shifts')}
+          /> : null;
+      case 'my-day':
+        return selectedFactionId ? <MyDayView
+            factionId={selectedFactionId}
+            canLogShifts={hasPermission('log_shifts') || hasPermission('manage_shifts')}
           /> : null;
       case 'complaints':
         return selectedFactionId ? <ComplaintsView

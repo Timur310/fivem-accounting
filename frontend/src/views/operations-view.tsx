@@ -21,7 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatAmount, formatDateTime, displayName } from '@/lib/format';
-import { Crosshair, Plus, Star, Trash2, Trophy, Undo2, Users } from 'lucide-react';
+import { Crosshair, Plus, Repeat, Star, Trash2, Trophy, Undo2, Users } from 'lucide-react';
 import { OperationsLeaderboard } from '@/components/operations-leaderboard';
 import { OPERATION_KINDS, OPERATION_KIND_KEYS } from '@/lib/api-types';
 import type {
@@ -112,6 +112,7 @@ export function OperationsView({
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [repeating, setRepeating] = useState<Operation | null>(null);
   // The log and the board read the same rows and answer different questions,
   // so they share a screen rather than another entry in a sidebar that was
   // just trimmed down.
@@ -223,6 +224,7 @@ export function OperationsView({
             canManage={canManage}
             onRevert={() => setReverting(operation)}
             onDelete={() => setDeleting(operation)}
+            onRepeat={canLog ? () => { setRepeating(operation); setDialogOpen(true); } : undefined}
           />
         ))}
       </div>
@@ -231,7 +233,8 @@ export function OperationsView({
         <LogOperationDialog
           factionId={factionId}
           members={members.data ?? []}
-          onClose={() => setDialogOpen(false)}
+          from={repeating}
+          onClose={() => { setDialogOpen(false); setRepeating(null); }}
         />
       )}
 
@@ -291,11 +294,14 @@ function OperationCard({
   canManage,
   onRevert,
   onDelete,
+  onRepeat,
 }: {
   operation: Operation;
   canManage: boolean;
   onRevert: () => void;
   onDelete: () => void;
+  /** Absent for somebody who may not log operations. */
+  onRepeat?: () => void;
 }) {
   const { t } = useTranslation();
   const reverted = !!operation.revertedAt;
@@ -337,6 +343,13 @@ function OperationCard({
             {` · ${t('operations.loggedBy').replace('{name}', operation.loggedByName)}`}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {onRepeat && (
+          <Button variant="outline" size="sm" onClick={onRepeat}>
+            <Repeat className="mr-2 h-4 w-4" />
+            {t('operations.logAgain')}
+          </Button>
+        )}
         {canManage && (
           reverted ? (
             // Only after the books are clear of it, which is also the only
@@ -357,6 +370,7 @@ function OperationCard({
             </Button>
           )
         )}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -437,24 +451,40 @@ function OperationCard({
 function LogOperationDialog({
   factionId,
   members,
+  from,
   onClose,
 }: {
   factionId: string;
   members: { userId: string; username: string; inGameName: string | null }[];
+  /**
+   * An earlier operation to start from — the "same again" button.
+   *
+   * Most crews run the same few jobs with the same few people, and retyping
+   * four names and a cut for the third Fleeca of the night is the bit of this
+   * form nobody enjoys. What carries over is what repeats: the job, where, the
+   * crew and their shares, how it is booked. What does not is what is new each
+   * time: when, the haul, the ratings and the notes.
+   */
+  from?: Operation | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState('');
-  const [kind, setKind] = useState<OperationKind>('bank');
-  const [location, setLocation] = useState('');
+  const [name, setName] = useState(from?.name ?? '');
+  const [kind, setKind] = useState<OperationKind>(from?.kind ?? 'bank');
+  const [location, setLocation] = useState(from?.location ?? '');
   const [occurredAt, setOccurredAt] = useState(() => localInputValue(new Date()));
   const [notes, setNotes] = useState('');
-  const [cut, setCut] = useState('0');
-  const [creditTo, setCreditTo] = useState<OperationCredit>('crew');
-  const [crew, setCrew] = useState<CrewRow[]>([]);
+  const [cut, setCut] = useState(from ? String(Number(from.factionCutPercent)) : '0');
+  const [creditTo, setCreditTo] = useState<OperationCredit>(from?.creditTo ?? 'crew');
+  const [crew, setCrew] = useState<CrewRow[]>(() =>
+    // Only people still on the roster. Somebody who has left since the last
+    // run cannot be credited, and the server would refuse the whole form.
+    (from?.crew ?? [])
+      .filter((c) => members.some((m) => m.userId === c.userId))
+      .map((c) => ({ userId: c.userId, share: c.share, rating: null, ratingNote: '' })));
   const [loot, setLoot] = useState<LootRow[]>([{ itemTypeId: '', quantity: '' }]);
   const [split, setSplit] = useState<OperationSplit | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);

@@ -21,7 +21,11 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatDateTime, displayName } from '@/lib/format';
-import { MessageSquareWarning, Plus, ShieldOff, UserX } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { MessageSquareWarning, Plus, ShieldOff, Trash2, UserX } from 'lucide-react';
 import {
   COMPLAINT_CATEGORIES, COMPLAINT_CATEGORY_KEYS, COMPLAINT_STATUS_KEYS,
 } from '@/lib/api-types';
@@ -383,6 +387,17 @@ function ReadDialog({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [note, setNote] = useState(complaint.resolutionNote ?? '');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const remove = useMutation({
+    mutationFn: () => complaintsApi.remove(factionId, complaint.id),
+    onSuccess: () => {
+      toast({ title: t('complaints.deleted') });
+      onChanged();
+    },
+    onError: (err) =>
+      toast({ title: t('complaints.failed'), description: apiErrorMessage(err), variant: 'destructive' }),
+  });
 
   const settle = useMutation({
     mutationFn: (status: ComplaintStatus) =>
@@ -485,6 +500,18 @@ function ReadDialog({
           )}
           {canHandle && (
             <>
+              {/* Set apart on the left and plainly red: dismissing keeps it on
+                  file, this does not, and the two should never be mistaken
+                  for each other. */}
+              <Button
+                variant="ghost"
+                onClick={() => setConfirmDelete(true)}
+                disabled={remove.isPending}
+                className="mr-auto text-red-400 hover:bg-red-950/40 hover:text-red-300"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('complaints.delete')}
+              </Button>
               {complaint.status === 'open' && (
                 <Button variant="outline" onClick={() => settle.mutate('in_review')} disabled={settle.isPending}>
                   {t('complaints.markInReview')}
@@ -503,6 +530,25 @@ function ReadDialog({
             </>
           )}
         </DialogFooter>
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('complaints.deleteTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('complaints.deleteBody')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => remove.mutate()}
+                disabled={remove.isPending}
+                className="bg-red-600 text-white hover:bg-red-500"
+              >
+                {t('complaints.delete')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

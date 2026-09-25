@@ -255,6 +255,71 @@ describe('correcting and removing a shift', () => {
   });
 });
 
+describe('breaks and forgotten shifts', () => {
+  // Breaks are saved as they happen now, from the buttons on the clock, and
+  // the clock-out uses what is already on the shift.
+  it('keeps a break added during the shift through the clock-out', async () => {
+    const opened = await clockIn({ startedAt: hoursAgo(2) });
+    const id = opened.body.data.id as string;
+
+    const patched = await api().patch(`${base()}/${id}`).set('Cookie', w.admin.cookie)
+      .send({ breakMinutes: 30 });
+    expect(patched.status).toBe(200);
+    expect(patched.body.data.endedAt).toBeNull();
+
+    const closed = await clockOut();
+    expect(closed.body.data.breakMinutes).toBe(30);
+    expect(closed.body.data.workedMinutes).toBeGreaterThanOrEqual(89);
+    expect(closed.body.data.workedMinutes).toBeLessThanOrEqual(91);
+  });
+
+  it('refuses a break longer than the shift has run so far', async () => {
+    const opened = await clockIn({ startedAt: hoursAgo(0.25) });
+    const res = await api().patch(`${base()}/${opened.body.data.id}`).set('Cookie', w.admin.cookie)
+      .send({ breakMinutes: 60 });
+    expect(res.status).toBe(400);
+  });
+
+  it('flags a shift open for more than twelve hours', async () => {
+    await clockIn({ startedAt: hoursAgo(13) });
+    const res = await api().get(`${base()}/on-duty`).set('Cookie', w.admin.cookie);
+    expect(res.body.data.mine.stale).toBe(true);
+  });
+
+  it('does not flag an ordinary evening', async () => {
+    await clockIn({ startedAt: hoursAgo(3) });
+    const res = await api().get(`${base()}/on-duty`).set('Cookie', w.admin.cookie);
+    expect(res.body.data.mine.stale).toBe(false);
+  });
+
+  // Past the cap "now" is refused, so the way out of a forgotten shift is to
+  // say when it really ended.
+  it('closes a forgotten shift at the time it really ended', async () => {
+    await clockIn({ startedAt: hoursAgo(30) });
+    const res = await clockOut({ endedAt: hoursAgo(22) });
+    expect(res.status).toBe(200);
+    expect(res.body.data.workedMinutes).toBe(480);
+  });
+
+  it('refuses a shift that ends in the future', async () => {
+    await clockIn({ startedAt: hoursAgo(1) });
+    const res = await clockOut({ endedAt: new Date(Date.now() + 3_600_000).toISOString() });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/future/i);
+  });
+
+  // The dialog bug this guards: editing an open shift's details must not
+  // quietly close it.
+  it('leaves an open shift open when only its details change', async () => {
+    const opened = await clockIn({ position: 'Kitchen' });
+    const res = await api().patch(`${base()}/${opened.body.data.id}`).set('Cookie', w.admin.cookie)
+      .send({ position: 'Bar', endedAt: null });
+    expect(res.status).toBe(200);
+    expect(res.body.data.position).toBe('Bar');
+    expect(res.body.data.endedAt).toBeNull();
+  });
+});
+
 describe('faction work and side jobs', () => {
   it('records faction work unless told otherwise', async () => {
     const res = await clockIn({ position: 'Kitchen' });
