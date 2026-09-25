@@ -44,6 +44,7 @@ import {
   Calculator,
   Car,
   CalendarClock,
+  MessageSquareWarning,
   Crosshair,
   Map,
   BookOpen,
@@ -71,6 +72,7 @@ import { PricingView } from '@/views/pricing-view';
 import { VehiclesView } from '@/views/vehicles-view';
 import { OperationsView } from '@/views/operations-view';
 import { ShiftsView } from '@/views/shifts-view';
+import { ComplaintsView } from '@/views/complaints-view';
 import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
 import { MapView } from '@/views/map-view';
 import { LeaderboardView } from '@/views/leaderboard-view';
@@ -368,6 +370,10 @@ export function AppShell() {
     // and the screen narrows itself to it. Whose hours you can see and whose
     // you can correct are decided inside the view.
     { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts' },
+    // No permission: anybody may raise something, and the screen narrows to
+    // what they filed unless they hold manage_complaints. A complaints box
+    // only some ranks can open is not one.
+    { group: 'people', view: 'complaints', label: 'nav.complaints', icon: MessageSquareWarning, module: 'complaints' },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
@@ -572,6 +578,11 @@ export function AppShell() {
             canLog={hasPermission('log_shifts') || hasPermission('manage_shifts')}
             canViewAll={hasPermission('view_shifts') || hasPermission('manage_shifts')}
             canManage={hasPermission('manage_shifts')}
+          /> : null;
+      case 'complaints':
+        return selectedFactionId ? <ComplaintsView
+            factionId={selectedFactionId}
+            canHandle={hasPermission('manage_complaints')}
           /> : null;
       case 'crafting':
         return selectedFactionId ? <CraftingView

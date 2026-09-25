@@ -73,6 +73,20 @@ export type DiscordEvent =
       /** Worked time less the break, which is the point of the message. */
       workedMinutes: number;
       breakMinutes: number;
+    }
+  | {
+      /**
+       * Somebody has raised something with leadership.
+       *
+       * Carries no subject, no names and no body on purpose: a Discord channel
+       * is read by whoever was given the link, and the complaint itself is
+       * read in the app by the people who may read it. This message exists to
+       * say the queue is not empty.
+       */
+      type: 'complaint_filed';
+      category: string;
+      aboutMember: boolean;
+      isAnonymous: boolean;
     };
 
 /** What each operation kind is called in a message, spelled for a reader. */
@@ -131,6 +145,7 @@ const EMOJI: Record<DiscordEvent['type'], string> = {
   operation_reverted: '\u{1F5D1}\u{FE0F}',
   shift_started: '\u{1F7E2}',          // green circle
   shift_ended: '\u{1F3C1}',            // chequered flag
+  complaint_filed: '\u{1F4E3}',        // megaphone
 };
 
 /**
@@ -669,6 +684,21 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         byline: `${names.user(event.actorUserId)} clocked in`,
       };
 
+    case 'complaint_filed':
+      return {
+        title: 'A complaint was filed',
+        description: [
+          `**${COMPLAINT_CATEGORY_LABEL[event.category] ?? 'Something else'}**`,
+          event.aboutMember ? 'About a member.' : 'About the faction.',
+          event.isAnonymous ? 'Filed anonymously.' : '',
+          'Read it in the app \u{2014} nothing about it is posted here.',
+        ].filter(Boolean).join('\n'),
+        color: COLOR.trouble,
+        // No subject and no byline: this is the one event with nobody's face
+        // on it, because the whole point is that the contents — including who
+        // raised them — stay where the permissions are.
+      };
+
     case 'shift_ended':
       return {
         title: event.kind === 'side' ? 'Side job finished' : 'Off duty',
@@ -685,6 +715,15 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
       };
   }
 }
+
+/** What each complaint category is called in a message. */
+const COMPLAINT_CATEGORY_LABEL: Record<string, string> = {
+  conduct: 'Conduct',
+  rules: 'Rules',
+  money: 'Money',
+  suggestion: 'Suggestion',
+  other: 'Something else',
+};
 
 /** The job and the place as one line, skipping whichever was left blank. */
 function shiftLine(position?: string | null, location?: string | null): string {
@@ -737,7 +776,10 @@ function render(event: DiscordEvent, names: Names, faction: FactionRef): Discord
 
 /** The ids each event mentions, so they can be looked up in one go. */
 function referencedIds(event: DiscordEvent): { userIds: string[]; itemTypeIds: string[] } {
-  const userIds = [event.actorUserId];
+  // Not every event has an actor. A filed complaint deliberately carries no
+  // user at all, which is the only way the message can be sent to a channel
+  // without saying something about who is in it.
+  const userIds = 'actorUserId' in event ? [event.actorUserId] : [];
   const itemTypeIds: string[] = [];
 
   if ('recipientUserId' in event) userIds.push(event.recipientUserId);

@@ -46,6 +46,7 @@ import backupRoutes from './routes/backup.js';
 import pricingRoutes from './routes/pricing.js';
 import operationRoutes from './routes/operations.js';
 import shiftRoutes from './routes/shifts.js';
+import complaintRoutes from './routes/complaints.js';
 import vehicleRoutes from './routes/vehicles.js';
 
 const app = express();
@@ -181,6 +182,7 @@ app.use('/api/v1/factions/:id/crafting', craftingRoutes);
 app.use('/api/v1/factions/:id/pricing', pricingRoutes);
 app.use('/api/v1/factions/:id/operations', operationRoutes);
 app.use('/api/v1/factions/:id/shifts', shiftRoutes);
+app.use('/api/v1/factions/:id/complaints', complaintRoutes);
 app.use('/api/v1/factions/:id/vehicles', vehicleRoutes);
 app.use('/api/v1/factions/:id/map', mapRoutes);
 app.use('/api/v1/factions/:id/announcements', announcementRoutes);

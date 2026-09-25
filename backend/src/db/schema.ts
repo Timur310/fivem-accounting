@@ -183,6 +183,11 @@ export const FACTION_PERMISSIONS = [
   'log_shifts',
   'view_shifts',
   'manage_shifts',
+  // Reading and settling what members raise about each other and about the
+  // faction. Writing one needs nothing but membership — a complaints box only
+  // the trusted may write into is not one — so there is a single permission
+  // here rather than the usual pair.
+  'manage_complaints',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -212,6 +217,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   log_shifts: 'Clock In and Out',
   view_shifts: "See Everyone's Shifts",
   manage_shifts: "Edit Everyone's Shifts",
+  manage_complaints: 'Handle Complaints',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -767,6 +773,10 @@ export const DISCORD_EVENT_TYPES = [
   // where the hours are.
   'shift_started',
   'shift_ended',
+  // Somebody has raised something. The message carries the category and
+  // whether it is about a member or the faction, and nothing else: the
+  // complaint itself is read in the app, by the people who may read it.
+  'complaint_filed',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1805,3 +1815,74 @@ export type ShiftKind = (typeof SHIFT_KINDS)[number];
 
 export type Shift = typeof shifts.$inferSelect;
 export type NewShift = typeof shifts.$inferInsert;
+
+// ── faction_reports ────────────────────────────────────
+// A member raising something with their own leadership: a complaint about
+// another member, or about how the faction is being run.
+//
+// Named "complaints" everywhere a person sees it, because the app already has
+// a Reports screen and that one is charts. Two screens called Reports would be
+// a worse problem than a slightly narrower word.
+//
+// The rule that shapes the whole table: **a complaint is never visible to the
+// person it is about.** Not as a setting — there is no code path that shows it
+// to them. A complaints box the accused can read is not a complaints box.
+export const factionReports = pgTable('faction_reports', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+
+  /**
+   * Who wrote it. Null when the account is gone, or when it was filed
+   * anonymously — in that case nothing is written here at all, rather than
+   * written and hidden. A name kept in a column somebody can eventually query
+   * is not anonymity, it is a promise with a leak in it.
+   */
+  authorUserId: uuid('author_user_id').references(() => users.id, { onDelete: 'set null' }),
+  isAnonymous:  boolean('is_anonymous').notNull().default(false),
+
+  /** Who it is about. Null means the faction itself rather than a person. */
+  targetUserId: uuid('target_user_id').references(() => users.id, { onDelete: 'set null' }),
+
+  category: varchar('category', { length: 20 }).notNull().default('other'),
+  subject:  varchar('subject', { length: 140 }).notNull(),
+  body:     text('body').notNull(),
+
+  status:   varchar('status', { length: 20 }).notNull().default('open'),
+  /**
+   * What leadership decided, and the author reads it.
+   *
+   * A complaint that closes in silence teaches people not to file the next
+   * one, which is the only way a box like this actually fails.
+   */
+  resolutionNote: text('resolution_note'),
+  handledBy: uuid('handled_by').references(() => users.id, { onDelete: 'set null' }),
+  handledAt: timestamp('handled_at', { withTimezone: true }),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionCreated: index('faction_report_created').on(table.factionId, table.createdAt),
+  factionStatus:  index('faction_report_status').on(table.factionId, table.status),
+}));
+
+/** Rough buckets, because a complaint's real content is what was typed. */
+export const FACTION_REPORT_CATEGORIES = ['conduct', 'rules', 'money', 'suggestion', 'other'] as const;
+export type FactionReportCategory = (typeof FACTION_REPORT_CATEGORIES)[number];
+
+/**
+ * `withdrawn` is the author taking it back; `dismissed` is leadership saying
+ * no. Kept apart for the same reason a support ticket keeps them apart —
+ * collapsing them would make "resolved" the only outcome that looks honest.
+ */
+export const FACTION_REPORT_STATUSES = ['open', 'in_review', 'resolved', 'dismissed', 'withdrawn'] as const;
+export type FactionReportStatus = (typeof FACTION_REPORT_STATUSES)[number];
+
+export const factionReportsRelations = relations(factionReports, ({ one }) => ({
+  faction: one(factions, { fields: [factionReports.factionId],    references: [factions.id] }),
+  author:  one(users,    { fields: [factionReports.authorUserId], references: [users.id] }),
+  target:  one(users,    { fields: [factionReports.targetUserId], references: [users.id] }),
+  handler: one(users,    { fields: [factionReports.handledBy],    references: [users.id] }),
+}));
+
+export type FactionReport = typeof factionReports.$inferSelect;
+export type NewFactionReport = typeof factionReports.$inferInsert;
