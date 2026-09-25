@@ -489,8 +489,11 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   <EmptyState icon={AlertTriangle} title={t('strikes.none')}
               hint={t('strikes.noneHint')} compact />
                 ) : (
-                  <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                    {strikes.slice(0, 5).map((s) => (
+                  // Every strike, not the newest five. The list already scrolls,
+                  // and a member reading their own record should not find the
+                  // oldest ones missing from it with nothing saying so.
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                    {strikes.map((s) => (
                       // Clicking it opens the reason in full. Two clamped
                       // lines is a summary, and the person carrying the strike
                       // needs the rest of the sentence.

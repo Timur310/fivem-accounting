@@ -6,6 +6,7 @@ import type { User } from './api-types';
 export type AppView =
   | 'login'
   | 'dashboard'
+  | 'my-day'
   | 'entries'
   | 'payouts'
   | 'treasury'

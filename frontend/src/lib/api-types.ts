@@ -2174,6 +2174,8 @@ export interface Shift {
   createdAt: string;
   /** Worked time less the break, or null while the shift is still running. */
   workedMinutes: number | null;
+  /** Still open after twelve hours, which usually means somebody forgot. */
+  stale: boolean;
 }
 
 export interface ShiftList {

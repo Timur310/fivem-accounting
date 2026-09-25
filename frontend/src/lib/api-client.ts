@@ -1255,6 +1255,12 @@ export const complaintsApi = {
     api
       .patch<ApiSuccessResponse<Complaint>>(`/factions/${factionId}/complaints/${id}`, input)
       .then(unwrap),
+
+  /** Erase one for good. Only for the people who settle them. */
+  remove: (factionId: string, id: string) =>
+    api
+      .delete<ApiSuccessResponse<{ deleted: boolean }>>(`/factions/${factionId}/complaints/${id}`)
+      .then(unwrap),
 };
 
 export const shiftsApi = {
@@ -1296,7 +1302,11 @@ export const shiftsApi = {
       .post<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts/clock-in`, body)
       .then(unwrap),
 
-  clockOut: (factionId: string, body: { breakMinutes?: number; notes?: string | null } = {}) =>
+  /** `endedAt` for a shift somebody forgot to close; otherwise it ends now. */
+  clockOut: (
+    factionId: string,
+    body: { endedAt?: string; breakMinutes?: number; notes?: string | null } = {},
+  ) =>
     api
       .post<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts/clock-out`, body)
       .then(unwrap),
@@ -1305,7 +1315,7 @@ export const shiftsApi = {
   create: (factionId: string, input: ShiftInput) =>
     api.post<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts`, input).then(unwrap),
 
-  update: (factionId: string, id: string, input: Partial<ShiftInput> & { endedAt?: string | null }) =>
+  update: (factionId: string, id: string, input: Partial<Omit<ShiftInput, 'endedAt'>> & { endedAt?: string | null }) =>
     api.patch<ApiSuccessResponse<Shift>>(`/factions/${factionId}/shifts/${id}`, input).then(unwrap),
 
   remove: (factionId: string, id: string) =>

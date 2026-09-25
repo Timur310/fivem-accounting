@@ -236,6 +236,47 @@ describe('settling one', () => {
   });
 });
 
+describe('deleting one for good', () => {
+  async function aComplaint(body: Record<string, unknown> = {}) {
+    const res = await file({ targetUserId: third.id, subject: 'Spam', body: 'Test test.', ...body });
+    expect(res.status).toBe(201);
+    return res.body.data.id as string;
+  }
+
+  it('lets somebody with manage_complaints erase it', async () => {
+    const id = await aComplaint();
+    const res = await api().delete(`${base()}/${id}`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+    expect(await db.select().from(factionReports).where(eq(factionReports.id, id))).toHaveLength(0);
+  });
+
+  // The author has withdraw. Erasing their own would let them file, watch the
+  // reaction, and take it out of the record.
+  it('refuses the author', async () => {
+    const id = await aComplaint();
+    expect((await api().delete(`${base()}/${id}`).set('Cookie', w.member.cookie)).status).toBe(404);
+    expect(await db.select().from(factionReports).where(eq(factionReports.id, id))).toHaveLength(1);
+  });
+
+  // 404 rather than 403, so the person named cannot learn one exists.
+  it('refuses the person it is about without admitting it exists', async () => {
+    const id = await aComplaint();
+    const res = await api().delete(`${base()}/${id}`).set('Cookie', third.cookie);
+    expect(res.status).toBe(404);
+  });
+
+  it('records that it happened, and nothing it said', async () => {
+    const id = await aComplaint({ subject: 'Very specific subject', body: 'Very specific body' });
+    await api().delete(`${base()}/${id}`).set('Cookie', w.admin.cookie);
+
+    const [row] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'delete'));
+    expect(row!.entityId).toBe(id);
+    const details = JSON.stringify(row!.details);
+    expect(details).toContain('hardDelete');
+    expect(details).not.toContain('Very specific');
+  });
+});
+
 describe('the module switch', () => {
   it('refuses new complaints when the faction has them off, and still answers reads', async () => {
     const off = await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie)

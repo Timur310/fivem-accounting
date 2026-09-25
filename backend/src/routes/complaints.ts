@@ -353,4 +353,59 @@ router.patch('/:complaintId', async (req: Request, res: Response) => {
   success(res, present(full!));
 });
 
+// ── DELETE /:complaintId — erase it for good ──────────
+//
+// For the ones that should never have been in the queue: spam, a test, a
+// complaint filed in the wrong faction, or one so personal that leadership
+// decides the record itself does more harm than good. Dismissing keeps it on
+// file; this does not.
+//
+// Only the people who settle complaints may do it. The author already has
+// "withdraw", and a complaint its author could erase would be one they could
+// file, see the reaction to, and quietly take out of the record.
+
+router.delete('/:complaintId', async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const complaintId = req.params.complaintId as string;
+
+  if (!canHandle(req)) {
+    // Not 403: the caller may be the person the complaint is about, and a
+    // distinct answer would confirm that one exists.
+    error(res, 'NOT_FOUND', 'Complaint not found', 404);
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(factionReports)
+    .where(and(eq(factionReports.id, complaintId), eq(factionReports.factionId, id)))
+    .limit(1);
+  if (!existing) {
+    error(res, 'NOT_FOUND', 'Complaint not found', 404);
+    return;
+  }
+
+  // The fact of the deletion survives; what it said does not. No subject, no
+  // body and no author in the audit row — keeping them here would make this
+  // an archive with a different name, and would undo an anonymous filing.
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId: id,
+    action: 'delete',
+    entityType: 'complaint',
+    entityId: complaintId,
+    details: {
+      hardDelete: true,
+      category: existing.category,
+      status: existing.status,
+      aboutMember: !!existing.targetUserId,
+    },
+    req,
+  });
+
+  await db.delete(factionReports).where(eq(factionReports.id, complaintId));
+
+  success(res, { deleted: true });
+});
+
 export default router;
