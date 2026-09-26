@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shiftsApi, membersApi, apiErrorMessage } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import {
   AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, Users,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { dayKey, minutesByDay } from '@/lib/shift-days';
 import {
   ShiftClock, hoursAndMinutes, likelyEnd, shiftQueryKeys, toLocalInput,
 } from '@/components/shift-clock';
@@ -44,11 +45,23 @@ interface Props {
   canManage: boolean;
 }
 
-/** The local day a moment falls on, as `YYYY-MM-DD`. */
-function dayKey(value: string | Date): string {
-  const d = value instanceof Date ? value : new Date(value);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** What the calendar knows about one day. */
+interface DayBucket {
+  /** Every shift with at least a minute on this day. */
+  shifts: Shift[];
+  /** The worked minutes that fall on this day, break shared out. */
+  minutes: number;
+  running: boolean;
+}
+
+/** The current time, refreshed on an interval. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
 }
 
 /** Just the clock part of an instant: `19:30`. */
@@ -82,8 +95,11 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Shift | null>(null);
 
-  const monthStart = dayKey(new Date(month.getFullYear(), month.getMonth(), 1));
-  const monthEnd = dayKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+  // The month as exact instants in the viewer's own timezone. Sending bare
+  // days had the server read them as UTC midnight — two in the morning in
+  // Hungary — so the first two hours of every month belonged to neither view.
+  const monthStart = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
+  const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
 
   const list = useQuery({
     queryKey: ['shifts', factionId, monthStart, memberFilter],
@@ -144,18 +160,30 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
 
   const shifts = list.data?.shifts ?? [];
 
+  // Ticks once a minute so a shift still running keeps growing on the
+  // calendar, including onto the next day once it passes midnight.
+  const now = useNow(60_000);
+
   // One pass over the month, so the calendar and the day list read the same
   // rows rather than filtering the array once per cell.
+  //
+  // A shift belongs to *every* day it touches. Filing it under the day it
+  // started was the midnight bug: 18:00 to 02:00 put all eight hours on the
+  // first day, the second day showed nothing, and opening it did not even
+  // list the shift.
   const byDay = useMemo(() => {
-    const map = new Map<string, Shift[]>();
+    const map = new Map<string, DayBucket>();
     for (const shift of shifts) {
-      const key = dayKey(shift.startedAt);
-      const bucket = map.get(key) ?? [];
-      bucket.push(shift);
-      map.set(key, bucket);
+      for (const [key, minutes] of minutesByDay(shift, now)) {
+        const bucket = map.get(key) ?? { shifts: [], minutes: 0, running: false };
+        bucket.shifts.push(shift);
+        bucket.minutes += minutes;
+        bucket.running ||= !shift.endedAt;
+        map.set(key, bucket);
+      }
     }
     return map;
-  }, [shifts]);
+  }, [shifts, now]);
 
   const memberOptions = useMemo<SearchableSelectOption[]>(() => [
     { value: '', label: t('shifts.everyone') },
@@ -165,7 +193,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
     })),
   ], [members.data, t]);
 
-  const dayShifts = selectedDay ? (byDay.get(selectedDay) ?? []) : shifts;
+  const dayShifts = selectedDay ? (byDay.get(selectedDay)?.shifts ?? []) : shifts;
 
   return (
     <div className="space-y-6">
@@ -341,6 +369,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
             <ShiftRow
               key={shift.id}
               shift={shift}
+              day={selectedDay}
               // Your own, or anybody's with manage_shifts. Reading somebody
               // else's rota does not come with a pencil on it.
               canEdit={canManage || (canLog && shift.userId === user?.id)}
@@ -392,7 +421,7 @@ function MonthGrid({
   onSelect,
 }: {
   month: Date;
-  byDay: Map<string, Shift[]>;
+  byDay: Map<string, DayBucket>;
   selectedDay: string | null;
   onSelect: (day: string) => void;
 }) {
@@ -431,9 +460,10 @@ function MonthGrid({
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, index) => {
           if (!day) return <div key={`pad-${index}`} />;
-          const dayShifts = byDay.get(day) ?? [];
-          const minutes = dayShifts.reduce((a, s) => a + (s.workedMinutes ?? 0), 0);
-          const running = dayShifts.some((s) => !s.endedAt);
+          const bucket = byDay.get(day);
+          const dayShifts = bucket?.shifts ?? [];
+          const minutes = bucket?.minutes ?? 0;
+          const running = bucket?.running ?? false;
           const isToday = day === today;
           const isSelected = day === selectedDay;
 
@@ -478,14 +508,23 @@ function ShiftRow({
   canEdit,
   onEdit,
   onRemove,
+  day,
 }: {
   shift: Shift;
   canEdit: boolean;
   onEdit: () => void;
   onRemove: () => void;
+  /** The day being looked at, if one is selected. */
+  day?: string | null;
 }) {
   const { t } = useTranslation();
   const running = !shift.endedAt;
+  const startDay = dayKey(shift.startedAt);
+  const endDay = dayKey(shift.endedAt ?? new Date());
+  // On a selected day, say which end of a night shift this is — otherwise a
+  // row reading "18:00 – 02:00" under the second day looks like a mistake.
+  const fromDayBefore = !!day && startDay < day;
+  const intoNextDay = !!day ? endDay > day : endDay > startDay;
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--line-2)] bg-[var(--surface-1)] p-3">
@@ -523,7 +562,10 @@ function ShiftRow({
           )}
         </div>
         <p className="mt-0.5 text-xs text-zinc-500">
-          {timeOnly(shift.startedAt)} – {shift.endedAt ? timeOnly(shift.endedAt) : '…'}
+          {timeOnly(shift.startedAt)}{fromDayBefore ? ` (${t('shifts.dayBefore')})` : ''}
+          {' – '}
+          {shift.endedAt ? timeOnly(shift.endedAt) : '…'}
+          {intoNextDay && shift.endedAt ? ` (${t('shifts.nextDay')})` : ''}
           {shift.location ? ` · ${shift.location}` : ''}
           {shift.breakMinutes > 0
             ? ` · ${t('shifts.breakOf').replace('{minutes}', String(shift.breakMinutes))}`
@@ -589,6 +631,14 @@ function ShiftDialog({
   ));
   const [breakMinutes, setBreakMinutes] = useState(String(shift?.breakMinutes ?? 0));
 
+  // An end time earlier than the start means the next morning. People type
+  // "18:00 to 02:00" by changing the clock and leaving the date alone, and
+  // the form used to answer that with "a shift has to end after it started".
+  const rawEnd = endedAt ? new Date(endedAt).getTime() : NaN;
+  const rawStart = startedAt ? new Date(startedAt).getTime() : NaN;
+  const rollsOver = !Number.isNaN(rawEnd) && !Number.isNaN(rawStart) && rawEnd <= rawStart;
+  const effectiveEnd = rollsOver ? new Date(rawEnd + 24 * 3_600_000) : new Date(rawEnd);
+
   const save = useMutation({
     mutationFn: () => {
       const body = {
@@ -602,12 +652,12 @@ function ShiftDialog({
       if (shift) {
         return shiftsApi.update(factionId, shift.id, {
           ...body,
-          endedAt: stillRunning ? null : new Date(endedAt).toISOString(),
+          endedAt: stillRunning ? null : effectiveEnd.toISOString(),
         });
       }
       return shiftsApi.create(factionId, {
         ...body,
-        endedAt: new Date(endedAt).toISOString(),
+        endedAt: effectiveEnd.toISOString(),
         userId: userId || undefined,
       });
     },
@@ -619,8 +669,7 @@ function ShiftDialog({
       toast({ title: t('shifts.failed'), description: apiErrorMessage(err), variant: 'destructive' }),
   });
 
-  const valid = !!startedAt
-    && (stillRunning || (!!endedAt && new Date(endedAt) > new Date(startedAt)));
+  const valid = !!startedAt && (stillRunning || (!!endedAt && !Number.isNaN(effectiveEnd.getTime())));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -662,6 +711,9 @@ function ShiftDialog({
                 disabled={stillRunning}
                 onChange={(e) => setEndedAt(e.target.value)}
               />
+              {rollsOver && !stillRunning && (
+                <p className="text-[11px] text-sky-300">{t('shifts.endsNextDay')}</p>
+              )}
             </div>
           </div>
 

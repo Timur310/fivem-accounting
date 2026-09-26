@@ -320,6 +320,80 @@ describe('breaks and forgotten shifts', () => {
   });
 });
 
+/**
+ * Night shifts, which is where "which day is this" stopped being obvious.
+ *
+ * Fixed instants rather than "hours ago", so a run just after midnight cannot
+ * change what the test means.
+ */
+describe('a shift across midnight', () => {
+  const eveningStart = '2026-09-25T16:00:00.000Z'; // 18:00 in Budapest
+  const morningEnd = '2026-09-26T00:00:00.000Z';   // 02:00 in Budapest
+  // The viewer's own day, as the screen now sends it: Budapest midnights.
+  const secondDayFrom = '2026-09-25T22:00:00.000Z';
+  const secondDayTo = '2026-09-26T22:00:00.000Z';
+
+  async function nightShift(breakMinutes = 0) {
+    const res = await api().post(base()).set('Cookie', w.admin.cookie).send({
+      position: 'Night bar', startedAt: eveningStart, endedAt: morningEnd, breakMinutes,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.workedMinutes).toBe(480 - breakMinutes);
+    return res.body.data.id as string;
+  }
+
+  // The reported bug: the second day did not see the shift at all.
+  it('lists the shift on the day it ended as well as the day it started', async () => {
+    const id = await nightShift();
+    const res = await api().get(`${base()}?from=${secondDayFrom}&to=${secondDayTo}`)
+      .set('Cookie', w.admin.cookie);
+    expect(res.body.data.shifts.map((s: { id: string }) => s.id)).toContain(id);
+  });
+
+  it('counts only the hours inside the window', async () => {
+    await nightShift();
+    const second = await api().get(`${base()}/summary?from=${secondDayFrom}&to=${secondDayTo}`)
+      .set('Cookie', w.admin.cookie);
+    expect(second.body.data.totalMinutes).toBe(120);
+
+    const first = await api()
+      .get(`${base()}/summary?from=2026-09-24T22:00:00.000Z&to=${secondDayFrom}`)
+      .set('Cookie', w.admin.cookie);
+    expect(first.body.data.totalMinutes).toBe(360);
+  });
+
+  // Nothing records when a break was taken, so it is shared in proportion —
+  // the same way the calendar on the screen shares it.
+  it('shares the break between the windows in proportion', async () => {
+    await nightShift(40);
+    const second = await api().get(`${base()}/summary?from=${secondDayFrom}&to=${secondDayTo}`)
+      .set('Cookie', w.admin.cookie);
+    expect(second.body.data.totalMinutes).toBe(110);
+  });
+
+  it('counts the whole shift once when the window holds all of it', async () => {
+    await nightShift();
+    const res = await api()
+      .get(`${base()}/summary?from=2026-09-24T22:00:00.000Z&to=${secondDayTo}`)
+      .set('Cookie', w.admin.cookie);
+    expect(res.body.data.totalMinutes).toBe(480);
+  });
+
+  // A running shift that started before the window is still on duty in it.
+  it('lists a shift still running from before the window', async () => {
+    const started = await clockIn({ startedAt: hoursAgo(5) });
+    const from = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    const res = await api().get(`${base()}?from=${from}`).set('Cookie', w.admin.cookie);
+    expect(res.body.data.shifts.map((s: { id: string }) => s.id)).toContain(started.body.data.id);
+  });
+
+  // Old clients and hand-written URLs send bare days; those still work.
+  it('still accepts a bare day', async () => {
+    const res = await api().get(`${base()}?from=2026-09-01&to=2026-09-30`).set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('faction work and side jobs', () => {
   it('records faction work unless told otherwise', async () => {
     const res = await clockIn({ position: 'Kitchen' });

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
-import { and, asc, desc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
 import { shifts, users, SHIFT_KINDS } from '../db/schema.js';
 import { success, error } from '../lib/response.js';
@@ -122,10 +122,25 @@ const editSchema = z.object({
   breakMinutes: z.number().int().min(0).max(24 * 60).optional(),
 });
 
+/**
+ * A window bound: an exact instant, or a bare `YYYY-MM-DD`.
+ *
+ * The screen sends instants — the start and end of the month *in the viewer's
+ * own timezone*. A bare day was all this took at first, and the server read it
+ * as UTC midnight, which in Hungary is two in the morning: a shift started at
+ * one a.m. on the first of the month was in neither month's view. Bare days
+ * are still accepted so an old client or a hand-written URL keeps working.
+ */
+const windowBound = z.union([
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  z.string().datetime({ offset: true }),
+]);
+
 const listSchema = z.object({
-  /** Inclusive day, in the caller's own reckoning: `YYYY-MM-DD`. */
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /** Where the window starts; inclusive. */
+  from: windowBound.optional(),
+  /** Where it ends: a bare day is inclusive, an instant is exclusive. */
+  to: windowBound.optional(),
   userId: z.string().uuid().optional(),
   position: z.string().trim().max(60).optional(),
   kind: z.enum(SHIFT_KINDS).optional(),
@@ -167,16 +182,52 @@ function validateSpan(startedAt: Date, endedAt: Date, breakMinutes: number):
   return { ok: true };
 }
 
-/** A day string as the instant that day begins, in the server's own zone. */
-function dayStart(day: string): Date {
-  return new Date(`${day}T00:00:00.000Z`);
+const BARE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Where a window starts, as an instant. */
+function windowStart(bound: string): Date {
+  return BARE_DAY.test(bound) ? new Date(`${bound}T00:00:00.000Z`) : new Date(bound);
 }
 
-/** The midnight after a day, so an inclusive range can be asked exclusively. */
-function dayAfter(day: string): Date {
-  const date = dayStart(day);
+/** Where a window ends, exclusively: the midnight after a bare day. */
+function windowEnd(bound: string): Date {
+  if (!BARE_DAY.test(bound)) return new Date(bound);
+  const date = new Date(`${bound}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + 1);
   return date;
+}
+
+/**
+ * Shifts that *overlap* the window, not only the ones that started inside it.
+ *
+ * Asking "did it start this month" was the midnight bug. A shift from 18:00 to
+ * 02:00 started yesterday, so today's view never saw it, and the two hours
+ * after midnight belonged to no day but the one before. A shift is in a window
+ * if any minute of it is — including one still running.
+ */
+function overlaps(from?: string, to?: string) {
+  return [
+    to ? lt(shifts.startedAt, windowEnd(to)) : undefined,
+    from
+      ? sql`(${shifts.endedAt} IS NULL OR ${shifts.endedAt} > ${windowStart(from)})`
+      : undefined,
+  ];
+}
+
+/**
+ * The worked minutes of a finished shift that fall inside the window.
+ *
+ * A shift that crosses the window's edge counts only its part inside — so a
+ * night shift on the last day of the month is split between the two months
+ * rather than counted twice or dropped from one. The break is shared out in
+ * proportion to the time inside, because nothing records *when* it was taken.
+ */
+function clippedMinutes(from?: string, to?: string) {
+  const start = from ? sql`GREATEST(${shifts.startedAt}, ${windowStart(from)})` : sql`${shifts.startedAt}`;
+  const end = to ? sql`LEAST(${shifts.endedAt}, ${windowEnd(to)})` : sql`${shifts.endedAt}`;
+  const inside = sql`GREATEST(0, EXTRACT(EPOCH FROM (${end} - ${start})) / 60)`;
+  const gross = sql`NULLIF(EXTRACT(EPOCH FROM (${shifts.endedAt} - ${shifts.startedAt})) / 60, 0)`;
+  return sql`GREATEST(0, ROUND(${inside} - ${shifts.breakMinutes} * ${inside} / ${gross}))`;
 }
 
 const memberName = sql<string>`COALESCE(${users.inGameName}, ${users.username})`;
@@ -239,8 +290,7 @@ router.get('/', async (req: Request, res: Response) => {
       scopeUserId ? eq(shifts.userId, scopeUserId) : undefined,
       query.data.position ? eq(shifts.position, query.data.position) : undefined,
       query.data.kind ? eq(shifts.kind, query.data.kind) : undefined,
-      query.data.from ? gte(shifts.startedAt, dayStart(query.data.from)) : undefined,
-      query.data.to ? lt(shifts.startedAt, dayAfter(query.data.to)) : undefined,
+      ...overlaps(query.data.from, query.data.to),
     ]))
     .orderBy(desc(shifts.startedAt))
     .limit(query.data.limit);
@@ -319,9 +369,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       userName: memberName,
       avatarUrl: users.avatarUrl,
       shiftCount: sql<number>`COUNT(*)::int`,
-      minutes: sql<number>`COALESCE(SUM(
-        GREATEST(0, (EXTRACT(EPOCH FROM (${shifts.endedAt} - ${shifts.startedAt})) / 60)::int - ${shifts.breakMinutes})
-      ), 0)::int`,
+      minutes: sql<number>`COALESCE(SUM(${clippedMinutes(query.data.from, query.data.to)}), 0)::int`,
       lastShiftAt: sql<string | null>`MAX(${shifts.startedAt})`,
     })
     .from(shifts)
@@ -332,13 +380,10 @@ router.get('/summary', async (req: Request, res: Response) => {
       scopeUserId ? eq(shifts.userId, scopeUserId) : undefined,
       query.data.position ? eq(shifts.position, query.data.position) : undefined,
       query.data.kind ? eq(shifts.kind, query.data.kind) : undefined,
-      query.data.from ? gte(shifts.startedAt, dayStart(query.data.from)) : undefined,
-      query.data.to ? lt(shifts.startedAt, dayAfter(query.data.to)) : undefined,
+      ...overlaps(query.data.from, query.data.to),
     ]))
     .groupBy(shifts.userId, users.username, users.inGameName, users.avatarUrl)
-    .orderBy(desc(sql`SUM(
-      GREATEST(0, (EXTRACT(EPOCH FROM (${shifts.endedAt} - ${shifts.startedAt})) / 60)::int - ${shifts.breakMinutes})
-    )`));
+    .orderBy(desc(sql`SUM(${clippedMinutes(query.data.from, query.data.to)})`));
 
   success(res, {
     members: rows,
