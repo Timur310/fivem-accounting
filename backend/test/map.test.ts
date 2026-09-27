@@ -117,6 +117,160 @@ describe('placing markers', () => {
  * them: filtering in the client would put the faction's stash in a network
  * response anybody can open devtools and read.
  */
+describe('how many corners a shape may have', () => {
+  const corners = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ x: i * 10, y: i * 5 }));
+
+  // 200 was reached well before the end of a road traced by hand.
+  it('takes a route of 500 points', async () => {
+    const res = await place({ kind: 'route', name: 'Long way round', points: corners(500) });
+    expect(res.status).toBe(201);
+    expect(res.body.data.points).toHaveLength(500);
+  });
+
+  it('refuses 501, and says why in words', async () => {
+    const res = await place({ kind: 'route', name: 'Too long', points: corners(501) });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/at most 500 points/);
+  });
+});
+
+describe('placing many points at once', () => {
+  const bulk = (body: Record<string, unknown>, cookie = w.admin.cookie) =>
+    api().post(`${map()}/bulk`).set('Cookie', cookie).send({
+      layerId: openLayerId,
+      name: 'Pay phone',
+      icon: '📞',
+      category: 'phones',
+      ...body,
+    });
+
+  it('makes one ordinary point marker per click, all alike', async () => {
+    const res = await bulk({ points: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] });
+    expect(res.status).toBe(201);
+    expect(res.body.data.count).toBe(3);
+
+    const markers = (await api().get(map()).set('Cookie', w.admin.cookie)).body.data.markers;
+    expect(markers).toHaveLength(3);
+    for (const m of markers) {
+      expect(m.kind).toBe('point');
+      expect(m.name).toBe('Pay phone');
+      expect(m.icon).toBe('📞');
+      expect(m.points).toHaveLength(1);
+    }
+  });
+
+  // Each is its own marker afterwards, so one can be moved or removed alone.
+  it('leaves each pin editable on its own', async () => {
+    const res = await bulk({ points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] });
+    const [first] = res.body.data.markers;
+    const renamed = await api().patch(`${map()}/${first.id}`).set('Cookie', w.admin.cookie)
+      .send({ name: 'Broken phone' });
+    expect(renamed.status).toBe(200);
+    expect(await visibleTo(w.admin.cookie)).toEqual(expect.arrayContaining(['Broken phone', 'Pay phone']));
+  });
+
+  it('needs manage_map', async () => {
+    await setRank('Soldier');
+    expect((await bulk({ points: [{ x: 1, y: 1 }] }, w.member.cookie)).status).toBe(403);
+  });
+
+  it('refuses a layer the placer may not open', async () => {
+    await setRank('Underboss');
+    const secret = await makeLayer('Boss only', 1);
+    const res = await bulk({ layerId: secret.body.data.id, points: [{ x: 1, y: 1 }] }, w.member.cookie);
+    expect(res.status).toBe(404);
+  });
+
+  it('refuses more than 200 at once', async () => {
+    const points = Array.from({ length: 201 }, (_, i) => ({ x: i, y: i }));
+    const res = await bulk({ points });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/200/);
+  });
+
+  it('refuses an empty batch', async () => {
+    expect((await bulk({ points: [] })).status).toBe(400);
+  });
+});
+
+describe('how many corners a shape may have', () => {
+  const corners = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ x: i * 10, y: i * 5 }));
+
+  // 200 was reached well before the end of a road traced by hand.
+  it('takes a route of 500 points', async () => {
+    const res = await place({ kind: 'route', name: 'Long way round', points: corners(500) });
+    expect(res.status).toBe(201);
+    expect(res.body.data.points).toHaveLength(500);
+  });
+
+  it('refuses 501, and says why in words', async () => {
+    const res = await place({ kind: 'route', name: 'Too long', points: corners(501) });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/at most 500 points/);
+  });
+});
+
+describe('placing many points at once', () => {
+  const bulk = (body: Record<string, unknown>, cookie = w.admin.cookie) =>
+    api().post(`${map()}/bulk`).set('Cookie', cookie).send({
+      layerId: openLayerId,
+      name: 'Pay phone',
+      icon: '📞',
+      category: 'phones',
+      ...body,
+    });
+
+  it('makes one ordinary point marker per click, all alike', async () => {
+    const res = await bulk({ points: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] });
+    expect(res.status).toBe(201);
+    expect(res.body.data.count).toBe(3);
+
+    const markers = (await api().get(map()).set('Cookie', w.admin.cookie)).body.data.markers;
+    expect(markers).toHaveLength(3);
+    for (const m of markers) {
+      expect(m.kind).toBe('point');
+      expect(m.name).toBe('Pay phone');
+      expect(m.icon).toBe('📞');
+      expect(m.points).toHaveLength(1);
+    }
+  });
+
+  // Each is its own marker afterwards, so one can be moved or removed alone.
+  it('leaves each pin editable on its own', async () => {
+    const res = await bulk({ points: [{ x: 1, y: 1 }, { x: 2, y: 2 }] });
+    const [first] = res.body.data.markers;
+    const renamed = await api().patch(`${map()}/${first.id}`).set('Cookie', w.admin.cookie)
+      .send({ name: 'Broken phone' });
+    expect(renamed.status).toBe(200);
+    expect(await visibleTo(w.admin.cookie)).toEqual(expect.arrayContaining(['Broken phone', 'Pay phone']));
+  });
+
+  it('needs manage_map', async () => {
+    await setRank('Soldier');
+    expect((await bulk({ points: [{ x: 1, y: 1 }] }, w.member.cookie)).status).toBe(403);
+  });
+
+  it('refuses a layer the placer may not open', async () => {
+    await setRank('Underboss');
+    const secret = await makeLayer('Boss only', 1);
+    const res = await bulk({ layerId: secret.body.data.id, points: [{ x: 1, y: 1 }] }, w.member.cookie);
+    expect(res.status).toBe(404);
+  });
+
+  it('refuses more than 200 at once', async () => {
+    const points = Array.from({ length: 201 }, (_, i) => ({ x: i, y: i }));
+    const res = await bulk({ points });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/200/);
+  });
+
+  it('refuses an empty batch', async () => {
+    expect((await bulk({ points: [] })).status).toBe(400);
+  });
+});
+
 describe('who sees what', () => {
   it('shows an unrestricted marker to everybody', async () => {
     await setRank('Soldier');

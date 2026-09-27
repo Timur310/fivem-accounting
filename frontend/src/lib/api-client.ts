@@ -704,6 +704,18 @@ export const mapApi = {
       .post<ApiSuccessResponse<MapMarker>>(`/factions/${factionId}/map`, input)
       .then(unwrap),
 
+  /**
+   * Many pins sharing one name, icon and description — one per point. Each
+   * comes back as an ordinary point marker that can be edited on its own.
+   */
+  createBulk: (factionId: string, input: Omit<MapMarkerInput, 'kind'>) =>
+    api
+      .post<ApiSuccessResponse<{ markers: MapMarker[]; count: number }>>(
+        `/factions/${factionId}/map/bulk`,
+        input,
+      )
+      .then(unwrap),
+
   update: (factionId: string, id: string, input: Partial<MapMarkerInput>) =>
     api
       .patch<ApiSuccessResponse<MapMarker>>(`/factions/${factionId}/map/${id}`, input)
