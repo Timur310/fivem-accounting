@@ -20,7 +20,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  MapPin, Route, Hexagon, Trash2, Pencil, Lock, X, Check, Plus, Layers, Eye, EyeOff,
+  MapPin, MapPinPlus, Route, Hexagon, Trash2, Pencil, Lock, X, Check, Plus, Layers, Eye, EyeOff,
+  Undo2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -38,8 +39,25 @@ interface Props {
   canManage: boolean;
 }
 
-/** What the map is waiting for the next click to mean. */
-type DrawMode = null | MapMarkerKind;
+/**
+ * What the map is waiting for the next click to mean.
+ *
+ * `bulk` is many separate pins that will share one name and look — every
+ * stash, every pay phone — rather than one shape with many corners.
+ */
+type DrawMode = null | MapMarkerKind | 'bulk';
+
+/** Matches the server: the most corners one route or area may have. */
+const MAX_SHAPE_POINTS = 500;
+/** Matches the server: the most pins one bulk placement may create. */
+const MAX_BULK_POINTS = 200;
+
+/** How many clicks this mode will take before it stops accepting more. */
+function pointLimit(mode: DrawMode): number {
+  if (mode === 'point') return 1;
+  if (mode === 'bulk') return MAX_BULK_POINTS;
+  return MAX_SHAPE_POINTS;
+}
 
 /**
  * The faction's map.
@@ -76,6 +94,8 @@ export function MapView({ factionId, canManage }: Props) {
   const [drawn, setDrawn] = useState<GamePoint[]>([]);
   const [editing, setEditing] = useState<MapMarker | null>(null);
   const [pending, setPending] = useState<MapMarkerInput | null>(null);
+  /** The editor is naming a batch of pins rather than one marker. */
+  const [pendingBulk, setPendingBulk] = useState(false);
   const [deleting, setDeleting] = useState<MapMarker | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [editingLayer, setEditingLayer] = useState<MapLayer | 'new' | null>(null);
@@ -141,16 +161,35 @@ export function MapView({ factionId, canManage }: Props) {
     void queryClient.invalidateQueries({ queryKey: ['map-layers', factionId] });
   };
 
+  // What to do travels with the call — an id to update, a batch, or a new
+  // marker — rather than being read off `editing` when the request is built.
+  // The reminders screen had exactly that bug: a call made from outside the
+  // form read a stale "am I editing?" and did the wrong thing.
   const save = useMutation({
-    mutationFn: (input: MapMarkerInput) =>
-      editing ? mapApi.update(factionId, editing.id, input) : mapApi.create(factionId, input),
-    onSuccess: () => {
+    mutationFn: async ({ input, editId, bulk }: {
+      input: MapMarkerInput;
+      editId: string | null;
+      bulk: boolean;
+    }): Promise<number> => {
+      if (editId) {
+        await mapApi.update(factionId, editId, input);
+        return 1;
+      }
+      if (bulk) {
+        const { kind: _kind, ...shared } = input;
+        return (await mapApi.createBulk(factionId, shared)).count;
+      }
+      await mapApi.create(factionId, input);
+      return 1;
+    },
+    onSuccess: (count, { bulk }) => {
       setPending(null);
+      setPendingBulk(false);
       setEditing(null);
       setDrawn([]);
       setDrawMode(null);
       invalidate();
-      toast({ title: t('map.saved') });
+      toast({ title: bulk ? t('map.savedBulk', { count }) : t('map.saved') });
     },
     onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
   });
@@ -342,16 +381,53 @@ export function MapView({ factionId, canManage }: Props) {
     const onClick = (e: L.LeafletMouseEvent) => {
       if (!drawMode) return;
       const point = fromLatLng(e.latlng);
-      setDrawn((previous) => (drawMode === 'point' ? [point] : [...previous, point]));
+      setDrawn((previous) => {
+        if (drawMode === 'point') return [point];
+        // Stop at the limit here rather than letting the save fail at the end
+        // with the whole drawing still unsaved. The bar says it is full.
+        if (previous.length >= pointLimit(drawMode)) return previous;
+        return [...previous, point];
+      });
+    };
+    // Right-click takes the last point back, the way most drawing tools do.
+    const onContext = (e: L.LeafletMouseEvent) => {
+      if (!drawMode) return;
+      e.originalEvent.preventDefault();
+      setDrawn((previous) => previous.slice(0, -1));
     };
 
     map.on('mousemove', onMove);
     map.on('click', onClick);
+    map.on('contextmenu', onContext);
     return () => {
       map.off('mousemove', onMove);
       map.off('click', onClick);
+      map.off('contextmenu', onContext);
     };
   }, [ready, drawMode]);
+
+  // ── undo from the keyboard while drawing ─────────────
+  //
+  // One misclick used to mean cancelling and starting the whole route again.
+  // Backspace and Ctrl/Cmd+Z take the last point back. Ignored while focus is
+  // in a text field, so typing a marker's name never eats a corner.
+  useEffect(() => {
+    // Not while the naming dialog is open: Backspace on one of its buttons
+    // would quietly take a point off the drawing underneath.
+    if (!drawMode || pending) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = !!target
+        && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (typing) return;
+      const undo = e.key === 'Backspace' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z');
+      if (!undo) return;
+      e.preventDefault();
+      setDrawn((previous) => previous.slice(0, -1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawMode, pending]);
 
   // ── redraw whenever the data or the draft changes ───
   useEffect(() => {
@@ -438,9 +514,18 @@ export function MapView({ factionId, canManage }: Props) {
     if (drawn.length > 0) {
       const coords = drawn.map(toLatLng).filter((c): c is L.LatLng => c !== null);
       const draftStyle = { color: '#f59e0b', weight: 2, dashArray: '4 4', fillOpacity: 0.15 };
-      for (const c of coords) {
-        leaflet.circleMarker(c, { radius: 4, color: '#f59e0b', fillOpacity: 1 }).addTo(layer);
-      }
+      coords.forEach((c, index) => {
+        // The newest point is ringed in white, so after an undo it is obvious
+        // which one the next undo will take.
+        const newest = index === coords.length - 1;
+        leaflet.circleMarker(c, {
+          radius: drawMode === 'bulk' ? 6 : 4,
+          color: newest ? '#fff' : '#f59e0b',
+          weight: newest ? 2 : 1,
+          fillColor: '#f59e0b',
+          fillOpacity: 1,
+        }).addTo(layer);
+      });
       if (drawMode === 'route' && coords.length > 1) {
         leaflet.polyline(coords, draftStyle).addTo(layer);
       }
@@ -450,7 +535,7 @@ export function MapView({ factionId, canManage }: Props) {
     }
   }, [markers, drawn, drawMode, selected, ready, layerById]);
 
-  const startDraw = (kind: MapMarkerKind) => {
+  const startDraw = (kind: Exclude<DrawMode, null>) => {
     setDrawMode(kind);
     setDrawn([]);
     setSelected(null);
@@ -458,13 +543,24 @@ export function MapView({ factionId, canManage }: Props) {
 
   const enoughDrawn =
     drawMode === 'point' ? drawn.length === 1
-      : drawMode === 'route' ? drawn.length >= 2
-        : drawn.length >= 3;
+      : drawMode === 'bulk' ? drawn.length >= 1
+        : drawMode === 'route' ? drawn.length >= 2
+          : drawn.length >= 3;
+
+  const limit = pointLimit(drawMode);
+  const atLimit = drawMode !== 'point' && drawn.length >= limit;
 
   const openEditorForDrawn = () => {
     if (!drawMode || !enoughDrawn || !targetLayerId) return;
     setEditing(null);
-    setPending({ layerId: targetLayerId, kind: drawMode, name: '', points: drawn });
+    setPendingBulk(drawMode === 'bulk');
+    setPending({
+      layerId: targetLayerId,
+      // A batch is saved as point markers, one per click.
+      kind: drawMode === 'bulk' ? 'point' : drawMode,
+      name: '',
+      points: drawn,
+    });
   };
 
   const ranks = useMemo(
@@ -489,7 +585,7 @@ export function MapView({ factionId, canManage }: Props) {
         </div>
         {canManage && (
           <div className="flex flex-wrap gap-2">
-            {(['point', 'route', 'area'] as const).map((kind) => (
+            {(['point', 'bulk', 'route', 'area'] as const).map((kind) => (
               <Button
                 key={kind}
                 size="sm"
@@ -500,9 +596,10 @@ export function MapView({ factionId, canManage }: Props) {
                 onClick={() => (drawMode === kind ? setDrawMode(null) : startDraw(kind))}
               >
                 {kind === 'point' && <MapPin className="h-4 w-4" />}
+                {kind === 'bulk' && <MapPinPlus className="h-4 w-4" />}
                 {kind === 'route' && <Route className="h-4 w-4" />}
                 {kind === 'area' && <Hexagon className="h-4 w-4" />}
-                {t(`map.kind.${kind}` as never)}
+                {kind === 'bulk' ? t('map.bulkMode') : t(`map.kind.${kind}` as never)}
               </Button>
             ))}
           </div>
@@ -513,10 +610,26 @@ export function MapView({ factionId, canManage }: Props) {
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/[0.04] px-3 py-2">
           <span className="text-xs text-amber-300">
             {t(`map.drawHint.${drawMode}` as never)}
-            {drawn.length > 0 && ` · ${t('map.pointsPlaced', { count: drawn.length })}`}
+            {drawn.length > 0 && drawMode === 'point' && ` · ${t('map.pointsPlaced', { count: drawn.length })}`}
+            {drawn.length > 0 && drawMode !== 'point' && ` · ${t('map.pointsOfMax', { count: drawn.length, max: limit })}`}
             {targetLayerId && ` · ${t('map.drawingOnto', { layer: layerById.get(targetLayerId)?.name ?? '' })}`}
           </span>
+          {atLimit && (
+            <span className="text-xs font-medium text-red-300">{t('map.limitReached')}</span>
+          )}
           <div className="ml-auto flex gap-2">
+            {drawMode !== 'point' && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={drawn.length === 0}
+                onClick={() => setDrawn((previous) => previous.slice(0, -1))}
+                title={t('map.undoHint')}
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                {t('map.undo')}
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => { setDrawMode(null); setDrawn([]); }}>
               <X className="h-3.5 w-3.5" />
               {t('common.cancel')}
@@ -723,10 +836,11 @@ export function MapView({ factionId, canManage }: Props) {
         <MarkerEditor
           value={pending}
           isEdit={!!editing}
+          bulkCount={pendingBulk ? pending.points.length : undefined}
           layers={layers}
           saving={save.isPending}
-          onCancel={() => { setPending(null); setEditing(null); }}
-          onSave={(input) => save.mutate(input)}
+          onCancel={() => { setPending(null); setPendingBulk(false); setEditing(null); }}
+          onSave={(input) => save.mutate({ input, editId: editing?.id ?? null, bulk: pendingBulk })}
         />
       )}
 
@@ -960,10 +1074,12 @@ function PasteCoordinates({ onPlace }: { onPlace: (point: GamePoint) => void }) 
 
 /** Name it, describe it, and decide who may see it. */
 function MarkerEditor({
-  value, isEdit, layers, saving, onCancel, onSave,
+  value, isEdit, bulkCount, layers, saving, onCancel, onSave,
 }: {
   value: MapMarkerInput;
   isEdit: boolean;
+  /** Set when this names a batch: how many pins will share these details. */
+  bulkCount?: number;
   layers: MapLayer[];
   saving: boolean;
   onCancel: () => void;
@@ -977,7 +1093,9 @@ function MarkerEditor({
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t('map.editMarker') : t('map.newMarker')}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? t('map.editMarker') : bulkCount ? t('map.newBulk', { count: bulkCount }) : t('map.newMarker')}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -1081,10 +1199,14 @@ function MarkerEditor({
             <p className="text-micro text-zinc-500">{t('map.layerHint')}</p>
           </div>
 
-          <p className="text-micro text-zinc-500">
-            {t('map.coordCount', { count: draft.points.length })} ·{' '}
-            <span className="font-mono">{draft.points[0] ? formatGamePoint(draft.points[0]) : ''}</span>
-          </p>
+          {bulkCount ? (
+            <p className="text-micro text-zinc-500">{t('map.bulkWillCreate', { count: bulkCount })}</p>
+          ) : (
+            <p className="text-micro text-zinc-500">
+              {t('map.coordCount', { count: draft.points.length })} ·{' '}
+              <span className="font-mono">{draft.points[0] ? formatGamePoint(draft.points[0]) : ''}</span>
+            </p>
+          )}
         </div>
 
         <DialogFooter>

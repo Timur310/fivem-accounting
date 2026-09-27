@@ -47,6 +47,23 @@ const coordinate = z.object({
   z: z.number().finite().min(-2000).max(5000).optional(),
 });
 
+/**
+ * The most corners one route or area may have.
+ *
+ * Was 200, which somebody tracing a road across the map by hand hits well
+ * before the road ends. 500 is still a few kilobytes and draws instantly.
+ */
+export const MAX_SHAPE_POINTS = 500;
+
+/**
+ * The most pins one bulk placement may create.
+ *
+ * Lower than a shape's corners because each one is a row and a list entry of
+ * its own. Enough to mark every stash on a map in one go; not enough to bury
+ * a layer by holding the mouse button down.
+ */
+export const MAX_BULK_POINTS = 200;
+
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colour must be a hex value like #a855f7');
 
 const layerSchema = z.object({
@@ -66,9 +83,22 @@ const markerSchema = z.object({
   category: z.string().max(40).optional(),
   color: hexColor.optional(),
   icon: z.string().max(16).optional(),
-  points: z.array(coordinate).min(1).max(200),
+  points: z.array(coordinate).min(1)
+    .max(MAX_SHAPE_POINTS, `A shape can have at most ${MAX_SHAPE_POINTS} points`),
 });
 const markerUpdateSchema = markerSchema.partial();
+
+/**
+ * Many pins at once, all named and styled alike: every stash, every pay
+ * phone, every garage the faction uses. Each becomes an ordinary point marker
+ * and can be edited or deleted on its own afterwards.
+ */
+const bulkSchema = markerSchema
+  .omit({ kind: true, points: true })
+  .extend({
+    points: z.array(coordinate).min(1, 'Place at least one point')
+      .max(MAX_BULK_POINTS, `At most ${MAX_BULK_POINTS} points can be placed at once`),
+  });
 
 /** A shape has to have enough corners to be the shape it claims to be. */
 function shapeError(kind: string, points: unknown[]): string | null {
@@ -350,6 +380,57 @@ router.post('/', requirePermission('manage_map'), async (req: Request, res: Resp
   });
 
   success(res, row, 201);
+});
+
+// ── POST /bulk — many pins, one description ──────────
+router.post('/bulk', requirePermission('manage_map'), async (req: Request, res: Response) => {
+  const factionId = req.params.id as string;
+
+  const parsed = bulkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+  const data = parsed.data;
+
+  const level = await viewerRankLevel(factionId, req);
+  if (!(await openLayer(factionId, data.layerId, level))) {
+    error(res, 'NOT_FOUND', 'Map not found', 404);
+    return;
+  }
+
+  // One statement, so the batch lands whole or not at all — half a set of
+  // stash markers is worse than none, because it looks complete.
+  const rows = await db
+    .insert(mapMarkers)
+    .values(data.points.map((point) => ({
+      factionId,
+      layerId: data.layerId,
+      kind: 'point' as const,
+      name: data.name,
+      description: data.description?.trim() || null,
+      category: data.category?.trim() || null,
+      color: data.color ?? null,
+      icon: data.icon || null,
+      points: [point],
+      createdBy: req.user!.id,
+    })))
+    .returning();
+
+  // One audit row for the batch rather than one per pin: fifty identical
+  // lines in the log would bury everything around them. No coordinates, for
+  // the same reason a single marker leaves them out.
+  await createAuditLog({
+    userId: req.user!.id,
+    factionId,
+    action: 'create',
+    entityType: 'map_marker',
+    entityId: rows[0]!.id,
+    details: { kind: 'point', name: data.name, layerId: data.layerId, bulk: rows.length },
+    req,
+  });
+
+  success(res, { markers: rows, count: rows.length }, 201);
 });
 
 /** The marker, if this viewer may open the layer it sits on. */
