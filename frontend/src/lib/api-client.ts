@@ -96,6 +96,9 @@ import type {
   Shift,
   ShiftInput,
   ShiftRate,
+  CommissionRate,
+  Takings,
+  WagePayLine,
   ShiftKind,
   ShiftList,
   ShiftOnDuty,
@@ -1371,6 +1374,38 @@ export const shiftsApi = {
       .post<ApiSuccessResponse<{ created: number; status: 'completed' | 'pending' }>>(
         `/factions/${factionId}/shifts/payroll`,
         { from, to },
+      )
+      .then(unwrap),
+};
+
+/** Wages from takings: a percentage of what each member brought in. */
+export const wagesApi = {
+  rates: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ rates: CommissionRate[] }>>(`/factions/${factionId}/wages/rates`)
+      .then(unwrap),
+
+  /** The whole table at once, like the hourly rates. */
+  saveRates: (factionId: string, rates: CommissionRate[]) =>
+    api
+      .put<ApiSuccessResponse<{ saved: number }>>(`/factions/${factionId}/wages/rates`, {
+        rates: rates.map((r) => ({ rank: r.rank, itemTypeId: r.itemTypeId, percent: r.percent })),
+      })
+      .then(unwrap),
+
+  /** Dates are days, both ends included. No items means every item. */
+  takings: (factionId: string, from: string, to: string, items: string[]) =>
+    api
+      .get<ApiSuccessResponse<Takings>>(`/factions/${factionId}/wages`, {
+        params: { from, to, ...(items.length ? { items: items.join(',') } : {}) },
+      })
+      .then(unwrap),
+
+  pay: (factionId: string, from: string, to: string, lines: WagePayLine[]) =>
+    api
+      .post<ApiSuccessResponse<{ created: number; status: 'completed' | 'pending' }>>(
+        `/factions/${factionId}/wages/pay`,
+        { from, to, lines },
       )
       .then(unwrap),
 };

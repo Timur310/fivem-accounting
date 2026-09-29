@@ -59,6 +59,7 @@ export const PERMISSION_TIER: Record<FactionPermission, 'crew' | 'officer' | 'le
   manage_quotas: 'leadership',
   manage_strikes: 'leadership',
   manage_complaints: 'leadership',
+  manage_wages: 'leadership',
   manage_crafting: 'leadership',
   manage_prices: 'leadership',
   manage_laundering: 'leadership',

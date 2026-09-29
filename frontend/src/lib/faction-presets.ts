@@ -41,7 +41,7 @@ export const FACTION_PRESETS: FactionPreset[] = [
     label: 'preset.garage',
     hint: 'preset.garageHint',
     icon: '🔧',
-    modules: [...COMMON, 'entries', 'treasury', 'expenses', 'pricing', 'shifts', 'vehicles', 'payouts', 'reports'],
+    modules: [...COMMON, 'entries', 'treasury', 'expenses', 'pricing', 'shifts', 'vehicles', 'payouts', 'wages', 'reports'],
     rankTemplate: 'business',
   },
   {
@@ -49,7 +49,7 @@ export const FACTION_PRESETS: FactionPreset[] = [
     label: 'preset.gang',
     hint: 'preset.gangHint',
     icon: '🔫',
-    modules: [...COMMON, 'entries', 'treasury', 'payouts', 'laundering', 'crafting', 'operations', 'map', 'vehicles', 'leaderboard', 'strikes', 'quotas'],
+    modules: [...COMMON, 'entries', 'treasury', 'payouts', 'laundering', 'crafting', 'operations', 'map', 'vehicles', 'leaderboard', 'strikes', 'quotas', 'wages'],
     rankTemplate: 'crew',
   },
   {
@@ -57,7 +57,7 @@ export const FACTION_PRESETS: FactionPreset[] = [
     label: 'preset.organisation',
     hint: 'preset.organisationHint',
     icon: '🎩',
-    modules: [...COMMON, 'entries', 'treasury', 'expenses', 'payouts', 'laundering', 'crafting', 'pricing', 'operations', 'map', 'vehicles', 'leaderboard', 'strikes', 'quotas', 'reports'],
+    modules: [...COMMON, 'entries', 'treasury', 'expenses', 'payouts', 'laundering', 'crafting', 'pricing', 'operations', 'map', 'vehicles', 'leaderboard', 'strikes', 'quotas', 'wages', 'reports'],
     rankTemplate: 'organisation',
   },
   {

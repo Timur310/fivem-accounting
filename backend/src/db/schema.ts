@@ -188,6 +188,10 @@ export const FACTION_PERMISSIONS = [
   // the trusted may write into is not one — so there is a single permission
   // here rather than the usual pair.
   'manage_complaints',
+  // Working out what members have earned from what they brought in, and
+  // paying it. Leadership: a percentage is a decision about the faction's
+  // money, and the screen shows every member's takings side by side.
+  'manage_wages',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -218,6 +222,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   view_shifts: "See Everyone's Shifts",
   manage_shifts: "Edit Everyone's Shifts",
   manage_complaints: 'Handle Complaints',
+  manage_wages: 'Calculate Wages',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -305,6 +310,14 @@ export const entries = pgTable('entries', {
   createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp('updated_at', { withTimezone: true }),
   isDeleted:  boolean('is_deleted').notNull().default(false),
+  /**
+   * The wage payout that paid a share of this entry, if one has.
+   *
+   * What stops the same money earning somebody a cut twice. Like a shift's
+   * payoutId it only counts while that payout is live: rejecting or deleting
+   * the payout clears it, and the entry is waiting to be paid again.
+   */
+  commissionPayoutId: uuid('commission_payout_id').references(() => payouts.id, { onDelete: 'set null' }),
 });
 
 export const entriesRelations = relations(entries, ({ one }) => ({
@@ -1847,6 +1860,26 @@ export const shiftRates = pgTable('shift_rates', {
 }));
 
 export type ShiftRate = typeof shiftRates.$inferSelect;
+
+// ── commission_rates ───────────────────────────────────
+// A member's cut of what they bring in, per rank and per item: "a Soldier
+// keeps 30% of the dirty money he brings in". A row with no rank is the cut
+// for every rank without one of its own. The wages screen starts from these
+// and lets whoever pays change any line before paying it.
+export const commissionRates = pgTable('commission_rates', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  /** A rank name from factions.ranks, or null for everyone else. */
+  rank:       varchar('rank', { length: 100 }),
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  /** 0 to 100, two decimals. */
+  percent:    decimal('percent', { precision: 5, scale: 2 }).notNull(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('commission_rate_faction').on(table.factionId),
+}));
+
+export type CommissionRate = typeof commissionRates.$inferSelect;
 
 /** Whose work it was. Free text says *what*; this says *for whom*. */
 export const SHIFT_KINDS = ['faction', 'side'] as const;

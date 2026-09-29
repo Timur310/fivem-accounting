@@ -239,6 +239,13 @@
       "when": 1790677796282,
       "tag": "0033_shift_wages",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790679653466,
+      "tag": "0034_commission_wages",
+      "breakpoints": true
     }
   ]
 }
