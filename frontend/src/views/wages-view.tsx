@@ -7,7 +7,6 @@ import { factionSettingsApi, itemTypesApi, wagesApi, apiErrorMessage } from '@/l
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Segmented } from '@/components/ui/segmented';
@@ -58,22 +57,25 @@ const lineKey = (l: { userId: string; itemTypeId: string }) => `${l.userId}:${l.
  * Wages from takings: what each member brought in over a week or a month, the
  * percentage they keep, and what stays with the faction — and paying it.
  *
+ * One item at a time. The first version showed every item's lines at once,
+ * with per-line checkboxes and a filter wall of every item the faction owns,
+ * and it read as a spreadsheet. Now the tabs are only the items somebody
+ * actually brought in, and each is three numbers, a short table and a button.
+ *
  * The percentages start from the saved table (per rank, per item, with a row
  * for everyone else) and every line can be changed on the spot, so the page
- * also works as a plain calculator for a faction that never saves any. Paying
- * sends exactly the lines on screen; if the takings changed meanwhile the
- * server refuses, and the page refreshes rather than paying on numbers nobody
- * looked at.
+ * also works as a plain calculator. A member at 0% is not paid. Paying sends
+ * exactly the lines on screen; if the takings changed meanwhile the server
+ * refuses, and the page refreshes rather than paying on numbers nobody saw.
  */
 export function WagesView({ factionId, canPayDirect }: { factionId: string; canPayDirect: boolean }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [period, setPeriod] = usePersistedState<Period>(`wages.period.${factionId}`, 'last-week');
-  const [itemFilter, setItemFilter] = usePersistedState<string[]>(`wages.items.${factionId}`, []);
+  const [pickedItem, setPickedItem] = usePersistedState<string>(`wages.item.${factionId}`, '');
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
-  const [setAll, setSetAll] = useState('');
+  const [everyone, setEveryone] = useState('');
   const [ratesOpen, setRatesOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -83,53 +85,47 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
     queryKey: ['item-types', factionId],
     queryFn: () => itemTypesApi.list(factionId),
   });
-  const items = useMemo(() => (itemsQuery.data ?? []).filter((i: ItemType) => i.isActive !== false), [itemsQuery.data]);
   const itemById = useMemo(() => new Map((itemsQuery.data ?? []).map((i: ItemType) => [i.id, i])), [itemsQuery.data]);
-  // Items that were removed since they were picked are simply not asked for.
-  const chosen = useMemo(() => itemFilter.filter((id) => itemById.has(id)), [itemFilter, itemById]);
 
   const takings = useQuery({
-    queryKey: ['wages', factionId, range.from, range.to, chosen.join(',')],
-    queryFn: () => wagesApi.takings(factionId, range.from, range.to, chosen),
+    queryKey: ['wages', factionId, range.from, range.to],
+    queryFn: () => wagesApi.takings(factionId, range.from, range.to, []),
   });
 
-  // What was typed belongs to the numbers it was typed against.
-  const scope = `${range.from}|${range.to}|${chosen.join(',')}`;
+  // What was typed belongs to the period it was typed against.
   useEffect(() => {
     setOverrides({});
-    setExcluded(new Set());
-  }, [scope]);
+    setEveryone('');
+  }, [range.from, range.to]);
 
   const lines = useMemo(() => takings.data?.lines ?? [], [takings.data]);
 
-  const rows = useMemo(() => lines.map((line) => {
-    const item = itemById.get(line.itemTypeId);
-    const isCurrency = item?.isCurrency ?? true;
-    const percent = overrides[lineKey(line)] ?? line.ratePercent ?? '';
-    const share = shareCents(line.brought, percent || '0', isCurrency);
-    return { line, item, isCurrency, percent, share, keeps: cents(line.brought) - share, included: !excluded.has(lineKey(line)) };
-  }), [lines, itemById, overrides, excluded]);
+  // Only the items somebody brought in, biggest haul of members first.
+  const presentItems = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of lines) counts.set(l.itemTypeId, (counts.get(l.itemTypeId) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(([id, members]) => ({ id, members, item: itemById.get(id) }))
+      .sort((a, b) => b.members - a.members || (a.item?.name ?? '').localeCompare(b.item?.name ?? ''));
+  }, [lines, itemById]);
 
-  const byMember = useMemo(() => {
-    const groups = new Map<string, typeof rows>();
-    for (const row of rows) groups.set(row.line.userId, [...(groups.get(row.line.userId) ?? []), row]);
-    return [...groups.values()];
-  }, [rows]);
+  const itemId = presentItems.some((p) => p.id === pickedItem) ? pickedItem : presentItems[0]?.id ?? '';
+  const item = itemById.get(itemId);
+  const isCurrency = item?.isCurrency ?? true;
 
-  const totals = useMemo(() => {
-    const perItem = new Map<string, { brought: number; share: number }>();
-    for (const row of rows) {
-      if (!row.included) continue;
-      const total = perItem.get(row.line.itemTypeId) ?? { brought: 0, share: 0 };
-      total.brought += cents(row.line.brought);
-      total.share += row.share;
-      perItem.set(row.line.itemTypeId, total);
-    }
-    return [...perItem.entries()];
-  }, [rows]);
+  const rows = useMemo(() => lines
+    .filter((l) => l.itemTypeId === itemId)
+    .map((line) => {
+      const percent = overrides[lineKey(line)] ?? line.ratePercent ?? '';
+      const share = shareCents(line.brought, percent || '0', isCurrency);
+      return { line, percent, share };
+    }), [lines, itemId, overrides, isCurrency]);
 
-  const payable = rows.filter((r) => r.included && r.share > 0 && isPercent(r.percent));
-  const invalid = rows.some((r) => r.included && r.percent !== '' && !isPercent(r.percent));
+  const brought = rows.reduce((sum, r) => sum + cents(r.line.brought), 0);
+  const shares = rows.reduce((sum, r) => sum + r.share, 0);
+  const payable = rows.filter((r) => r.share > 0 && isPercent(r.percent));
+  const invalid = rows.some((r) => r.percent !== '' && !isPercent(r.percent));
+  const missingRates = rows.some((r) => r.line.ratePercent === null && overrides[lineKey(r.line)] === undefined);
 
   const pay = useMutation({
     mutationFn: () => wagesApi.pay(factionId, range.from, range.to, payable.map((r) => ({
@@ -161,18 +157,18 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
     },
   });
 
-  const toggleItem = (id: string) =>
-    setItemFilter((current) => (current.includes(id) ? current.filter((i) => i !== id) : [...current, id]));
-
-  const applyToAll = () => {
-    if (!isPercent(setAll)) return;
-    setOverrides(Object.fromEntries(lines.map((l) => [lineKey(l), setAll.trim()])));
+  const applyToEveryone = () => {
+    if (!isPercent(everyone)) return;
+    setOverrides((current) => ({
+      ...current,
+      ...Object.fromEntries(rows.map((r) => [lineKey(r.line), everyone.trim()])),
+    }));
   };
 
-  const amount = (value: number, itemTypeId: string) => {
-    const item = itemById.get(itemTypeId);
-    return formatAmount(fromCents(value), item?.unit ?? '', item?.isCurrency ?? true);
-  };
+  const amount = (value: number) => formatAmount(fromCents(value), item?.unit ?? '', isCurrency);
+  const payLabel = canPayDirect
+    ? t('wages.pay', { count: payable.length })
+    : t('wages.request', { count: payable.length });
 
   return (
     <div className="space-y-6">
@@ -181,216 +177,173 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
           <h1 className="text-2xl font-semibold text-zinc-100">{t('wages.title')}</h1>
           <p className="mt-1 max-w-2xl text-sm text-zinc-400">{t('wages.subtitle')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented
-            label={t('payroll.period')}
-            value={period}
-            onChange={setPeriod}
-            options={[
-              { value: 'this-week', label: t('payroll.thisWeek') },
-              { value: 'last-week', label: t('payroll.lastWeek') },
-              { value: 'this-month', label: t('payroll.thisMonth') },
-              { value: 'last-month', label: t('payroll.lastMonth') },
-            ]}
-          />
-          <Button variant="outline" size="sm" onClick={() => setRatesOpen(true)}>
-            <Percent className="mr-1.5 h-3.5 w-3.5" /> {t('wages.rates')}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => setRatesOpen(true)}>
+          <Percent className="mr-1.5 h-3.5 w-3.5" /> {t('wages.rates')}
+        </Button>
       </div>
 
-      {/* Which items count. None picked is every item. */}
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('wages.items')}>
-        <button
-          type="button"
-          onClick={() => setItemFilter([])}
-          className={cn(
-            'rounded-full border px-3 py-1 text-xs transition-colors',
-            chosen.length === 0
-              ? 'border-[var(--brand-color)] bg-[var(--brand-color-light)] text-zinc-100'
-              : 'border-zinc-800 text-zinc-400 hover:text-zinc-200',
-          )}
-          aria-pressed={chosen.length === 0}
-        >
-          {t('wages.allItems')}
-        </button>
-        {items.map((item: ItemType) => {
-          const on = chosen.includes(item.id);
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => toggleItem(item.id)}
-              aria-pressed={on}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                on
-                  ? 'border-[var(--brand-color)] bg-[var(--brand-color-light)] text-zinc-100'
-                  : 'border-zinc-800 text-zinc-400 hover:text-zinc-200',
-              )}
-            >
-              <ItemIcon src={item.imageUrl} icon={item.icon} category={item.category} className="size-4" />
-              {item.name}
-            </button>
-          );
-        })}
-      </div>
+      <Segmented
+        label={t('payroll.period')}
+        value={period}
+        onChange={setPeriod}
+        options={[
+          { value: 'this-week', label: t('payroll.thisWeek') },
+          { value: 'last-week', label: t('payroll.lastWeek') },
+          { value: 'this-month', label: t('payroll.thisMonth') },
+          { value: 'last-month', label: t('payroll.lastMonth') },
+        ]}
+      />
 
       {takings.isLoading ? (
         <div className="space-y-3">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-48 w-full" />
         </div>
       ) : takings.isError ? (
         <ErrorState error={takings.error} onRetry={() => void takings.refetch()} />
-      ) : lines.length === 0 ? (
+      ) : presentItems.length === 0 ? (
         <EmptyState icon={HandCoins} title={t('wages.empty')} hint={t('wages.emptyHint')} />
       ) : (
         <>
-          {/* What it comes to, per item. */}
-          <div className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {totals.map(([itemTypeId, total]) => {
-              const item = itemById.get(itemTypeId);
-              return (
-                <Card key={itemTypeId}>
-                  <CardContent className="space-y-2 py-4">
-                    <p className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                      <ItemIcon src={item?.imageUrl} icon={item?.icon} category={item?.category} className="size-5" />
-                      {item?.name}
-                    </p>
-                    <dl className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <dt className="text-zinc-500">{t('wages.brought')}</dt>
-                        <dd className="tabular-nums text-zinc-200">{amount(total.brought, itemTypeId)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-zinc-500">{t('wages.memberGets')}</dt>
-                        <dd className="tabular-nums text-emerald-300">{amount(total.share, itemTypeId)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-zinc-500">{t('wages.factionKeeps')}</dt>
-                        <dd className="tabular-nums text-zinc-200">{amount(total.brought - total.share, itemTypeId)}</dd>
-                      </div>
-                    </dl>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {!takings.data?.hasRates ? (
-              <p className="text-xs text-amber-300">{t('wages.noRatesHint')}</p>
-            ) : <span />}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500">{t('wages.setAll')}</span>
-              <Input
-                className="w-20"
-                inputMode="decimal"
-                value={setAll}
-                onChange={(e) => setSetAll(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyToAll()}
-                placeholder="30"
-                aria-label={t('wages.setAll')}
-              />
-              <span className="text-xs text-zinc-500">%</span>
-              <Button size="sm" variant="outline" onClick={applyToAll} disabled={!isPercent(setAll)}>
-                {t('wages.apply')}
-              </Button>
+          {/* One tab per item that was brought in. */}
+          {presentItems.length > 1 && (
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={t('wages.item')}>
+              {presentItems.map((p) => {
+                const on = p.id === itemId;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setPickedItem(p.id)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+                      on
+                        ? 'border-[var(--brand-color)] bg-[var(--brand-color-light)] text-zinc-100'
+                        : 'border-zinc-800 text-zinc-400 hover:text-zinc-200',
+                    )}
+                  >
+                    <ItemIcon src={p.item?.imageUrl} icon={p.item?.icon} category={p.item?.category} className="size-5" />
+                    {p.item?.name}
+                    <span className="text-xs text-zinc-500">{p.members}</span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          )}
 
-          <div className="stagger space-y-3">
-            {byMember.map((group) => {
-              const first = group[0]!.line;
-              return (
-                <Card key={first.userId}>
-                  <CardContent className="space-y-2 py-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-7 w-7">
-                        <AvatarImage src={first.avatarUrl ?? undefined} alt="" />
-                        <AvatarFallback className="text-[9px]">{first.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <span className="truncate text-sm font-medium text-zinc-100">{first.userName}</span>
-                      {first.rank && <Badge variant="outline" className="text-[10px]">{first.rank}</Badge>}
-                    </div>
+          <Card key={itemId} className="animate-fade-in">
+            <CardContent className="space-y-5 py-5">
+              {/* The three numbers that matter. */}
+              <dl className="grid grid-cols-3 gap-3">
+                <div>
+                  <dt className="text-xs text-zinc-500">{t('wages.brought')}</dt>
+                  <dd className="text-lg font-semibold tabular-nums text-zinc-100 sm:text-2xl">{amount(brought)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-zinc-500">{t('wages.memberGets')}</dt>
+                  <dd className="text-lg font-semibold tabular-nums text-emerald-300 sm:text-2xl">{amount(shares)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-zinc-500">{t('wages.factionKeeps')}</dt>
+                  <dd className="text-lg font-semibold tabular-nums text-zinc-100 sm:text-2xl">{amount(brought - shares)}</dd>
+                </div>
+              </dl>
 
-                    {group.map((row) => {
-                      const key = lineKey(row.line);
-                      const bad = row.percent !== '' && !isPercent(row.percent);
-                      return (
-                        <div
-                          key={key}
-                          className={cn(
-                            'grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1 rounded-md border border-zinc-800/60 px-3 py-2 sm:grid-cols-[auto_minmax(0,1fr)_7rem_6rem_8rem_8rem]',
-                            !row.included && 'opacity-50',
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            className="size-4 accent-[var(--brand-color)]"
-                            checked={row.included}
-                            onChange={() => setExcluded((current) => {
-                              const next = new Set(current);
-                              if (next.has(key)) next.delete(key); else next.add(key);
-                              return next;
-                            })}
-                            aria-label={t('wages.include')}
+              <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4">
+                <span className="text-sm text-zinc-400">{t('wages.everyoneGets')}</span>
+                <Input
+                  className="h-8 w-20"
+                  inputMode="decimal"
+                  value={everyone}
+                  onChange={(e) => setEveryone(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && applyToEveryone()}
+                  placeholder="30"
+                  aria-label={t('wages.everyoneGets')}
+                />
+                <span className="text-sm text-zinc-500">%</span>
+                <Button size="sm" variant="outline" onClick={applyToEveryone} disabled={!isPercent(everyone)}>
+                  {t('wages.apply')}
+                </Button>
+                {missingRates && (
+                  <span className="w-full text-xs text-amber-300 sm:ml-auto sm:w-auto">{t('wages.noRatesHint')}</span>
+                )}
+              </div>
+
+              <div>
+                <div className="hidden grid-cols-[minmax(0,1fr)_8rem_6.5rem_8rem] gap-3 px-2 pb-2 text-xs text-zinc-500 sm:grid">
+                  <span>{t('wages.member')}</span>
+                  <span className="text-right">{t('wages.brought')}</span>
+                  <span>{t('wages.percent')}</span>
+                  <span className="text-right">{t('wages.gets')}</span>
+                </div>
+                <div className="stagger divide-y divide-zinc-800/70">
+                  {rows.map((row) => {
+                    const key = lineKey(row.line);
+                    const bad = row.percent !== '' && !isPercent(row.percent);
+                    return (
+                      <div
+                        key={key}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-2 py-2.5 sm:grid-cols-[minmax(0,1fr)_8rem_6.5rem_8rem]"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={row.line.avatarUrl ?? undefined} alt="" />
+                            <AvatarFallback className="text-[9px]">{row.line.userName.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm text-zinc-100">{row.line.userName}</span>
+                            {row.line.rank && <span className="block truncate text-[11px] text-zinc-500">{row.line.rank}</span>}
+                          </span>
+                        </span>
+                        <span className="text-right text-sm tabular-nums text-zinc-300">
+                          {amount(cents(row.line.brought))}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Input
+                            className={cn('h-8 w-16', bad && 'border-red-500/60')}
+                            inputMode="decimal"
+                            value={row.percent}
+                            placeholder="0"
+                            onChange={(e) => setOverrides((current) => ({ ...current, [key]: e.target.value }))}
+                            aria-label={`${t('wages.percent')} — ${row.line.userName}`}
                           />
-                          <span className="flex min-w-0 items-center gap-2 text-sm text-zinc-300">
-                            <ItemIcon src={row.item?.imageUrl} icon={row.item?.icon} category={row.item?.category} className="size-5" />
-                            <span className="truncate">{row.item?.name}</span>
-                            <span className="hidden text-[11px] text-zinc-500 md:inline">
-                              {t('wages.entries', { count: row.line.entryCount })}
-                            </span>
-                          </span>
-                          <span className="text-right text-sm tabular-nums text-zinc-200 sm:text-left">
-                            {amount(cents(row.line.brought), row.line.itemTypeId)}
-                          </span>
-                          <span className="col-span-3 flex items-center gap-1 sm:col-span-1">
-                            <Input
-                              className={cn('h-8 w-20', bad && 'border-red-500/60')}
-                              inputMode="decimal"
-                              value={row.percent}
-                              placeholder="0"
-                              title={row.line.ratePercent === null ? t('wages.noRate') : undefined}
-                              onChange={(e) => setOverrides((current) => ({ ...current, [key]: e.target.value }))}
-                              aria-label={t('wages.percent')}
-                            />
-                            <span className="text-xs text-zinc-500">%</span>
-                          </span>
-                          <span className="col-span-2 text-sm tabular-nums text-emerald-300 sm:col-span-1 sm:text-right">
-                            <span className="mr-1 text-[11px] text-zinc-500 sm:hidden">{t('wages.keeps')}</span>
-                            {amount(row.share, row.line.itemTypeId)}
-                          </span>
-                          <span className="text-right text-sm tabular-nums text-zinc-400">
-                            <span className="mr-1 text-[11px] text-zinc-500 sm:hidden">{t('wages.faction')}</span>
-                            {amount(row.keeps, row.line.itemTypeId)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                          <span className="text-xs text-zinc-500">%</span>
+                        </span>
+                        <span className={cn(
+                          'text-right text-sm font-medium tabular-nums',
+                          row.share > 0 ? 'text-emerald-300' : 'text-zinc-600',
+                        )}>
+                          {amount(row.share)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            {rows.some((r) => !r.isCurrency) && (
-              <p className="text-[11px] text-zinc-500">{t('wages.wholeUnits')}</p>
-            )}
-            <Button onClick={() => setConfirming(true)} disabled={payable.length === 0 || invalid || pay.isPending}>
-              <HandCoins className="mr-2 h-4 w-4" />
-              {canPayDirect
-                ? t('wages.pay', { count: payable.length })
-                : t('wages.request', { count: payable.length })}
-            </Button>
-          </div>
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800 pt-4">
+                <p className="mr-auto text-[11px] text-zinc-500">
+                  {t('wages.zeroSkipped')}{!isCurrency && ` ${t('wages.wholeUnits')}`}
+                </p>
+                <Button onClick={() => setConfirming(true)} disabled={payable.length === 0 || invalid || pay.isPending}>
+                  <HandCoins className="mr-2 h-4 w-4" />
+                  {payLabel}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
 
-      {ratesOpen && <RatesDialog factionId={factionId} items={items} onClose={() => setRatesOpen(false)} />}
+      {ratesOpen && (
+        <RatesDialog
+          factionId={factionId}
+          items={(itemsQuery.data ?? []).filter((i: ItemType) => i.isActive !== false)}
+          onClose={() => setRatesOpen(false)}
+        />
+      )}
 
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
@@ -400,16 +353,14 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
             </AlertDialogTitle>
             <AlertDialogDescription>
               {canPayDirect
-                ? t('wages.confirmPayBody', { count: payable.length })
-                : t('wages.confirmRequestBody', { count: payable.length })}
+                ? t('wages.confirmPayBody', { count: payable.length, amount: amount(shares), item: item?.name ?? '' })
+                : t('wages.confirmRequestBody', { count: payable.length, amount: amount(shares), item: item?.name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => pay.mutate()} disabled={pay.isPending}>
-              {canPayDirect
-                ? t('wages.pay', { count: payable.length })
-                : t('wages.request', { count: payable.length })}
+              {payLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
