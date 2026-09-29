@@ -18,6 +18,7 @@ import { requireFactionMember, requirePermission } from '../middleware/factionAc
 import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { ledgerHoldMessage } from '../lib/ledgerHold.js';
+import { notifyQuotaCrossings } from '../lib/quotaReached.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { buildWhere } from '../lib/query.js';
@@ -279,6 +280,18 @@ router.post('/', async (req: Request, res: Response) => {
     description: entry.description,
     anonymous,
   });
+
+  // An anonymous entry belongs to the faction, not to the person who typed
+  // it, so it moves nobody's personal quota.
+  if (!anonymous) {
+    void notifyQuotaCrossings({
+      factionId,
+      userId: entry.userId,
+      itemTypeId: entry.itemTypeId,
+      amount: entry.amount,
+      entryDate: entry.entryDate,
+    });
+  }
 
   success(res, entry, 201);
 });

@@ -610,6 +610,14 @@ export const NOTIFICATION_TYPES = [
   'support_resolved',
   'support_declined',
   'announcement_posted',
+  // Things that happen *to* a member without them being the one who did it.
+  // Each was a thing somebody could only find out by going and looking.
+  'complaint_answered',
+  'shift_corrected',
+  'shift_removed',
+  'operation_credited',
+  'operation_rated',
+  'quota_reached',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

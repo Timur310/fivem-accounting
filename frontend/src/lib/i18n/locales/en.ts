@@ -234,6 +234,14 @@ export const en = {
   'notification.strike_issued': 'You were given a {severity} strike.',
   'notification.support_resolved': 'Your report "{subject}" was resolved.',
   'notification.support_declined': 'Your report "{subject}" was declined.',
+  'notification.complaint_answered': 'Your complaint "{subject}" was {status}. The answer is waiting for you.',
+  'notification.shift_corrected': 'Your shift on {date} was corrected by a manager.',
+  'notification.shift_removed': 'Your shift on {date} was removed by a manager.',
+  'notification.operation_credited': 'You were put on the crew for "{name}".',
+  'notification.operation_rated': 'You were on "{name}" and rated {rating}/5.',
+  'notification.quota_reached': 'You reached your {period} {itemTypeName} quota.',
+  'notification.period.weekly': 'weekly',
+  'notification.period.monthly': 'monthly',
   'nav.supportInbox': 'Support Inbox',
 
   // -- Support tickets --

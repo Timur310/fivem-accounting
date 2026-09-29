@@ -216,6 +216,14 @@ export const hu: Translations = {
   'notification.strike_issued': '{severity} fokozatú figyelmeztetést kaptál.',
   'notification.support_resolved': 'A(z) „{subject}” bejelentésedet megoldották.',
   'notification.support_declined': 'A(z) „{subject}” bejelentésedet elutasították.',
+  'notification.complaint_answered': 'Válasz érkezett a(z) „{subject}” panaszodra ({status}).',
+  'notification.shift_corrected': 'A(z) {date} napi műszakodat egy vezető javította.',
+  'notification.shift_removed': 'A(z) {date} napi műszakodat egy vezető törölte.',
+  'notification.operation_credited': 'Bekerültél a(z) „{name}” akció csapatába.',
+  'notification.operation_rated': 'A(z) „{name}” akción {rating}/5 értékelést kaptál.',
+  'notification.quota_reached': 'Elérted a(z) {period} {itemTypeName} kvótádat.',
+  'notification.period.weekly': 'heti',
+  'notification.period.monthly': 'havi',
   'nav.supportInbox': 'Beérkezett bejelentések',
 
   // -- Hibajelentések és ötletek --

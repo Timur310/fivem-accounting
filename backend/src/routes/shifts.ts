@@ -10,6 +10,7 @@ import { requireFactionMember, requirePermission } from '../middleware/factionAc
 import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
+import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
 
 /**
@@ -605,6 +606,16 @@ router.post('/', requirePermission('log_shifts'), async (req: Request, res: Resp
     req,
   });
 
+  if (targetUserId !== req.user!.id) {
+    await notify({
+      userId: targetUserId,
+      type: 'shift_corrected',
+      factionId: id,
+      linkView: 'shifts',
+      data: { date: row!.startedAt.toISOString() },
+    });
+  }
+
   success(res, present(row!), 201);
 });
 
@@ -690,6 +701,18 @@ router.patch('/:shiftId', async (req: Request, res: Response) => {
     req,
   });
 
+  // A timesheet somebody else rewrote is something its owner should hear
+  // about when it happens, not discover at the end of the week.
+  if (!mine) {
+    await notify({
+      userId: existing.userId,
+      type: 'shift_corrected',
+      factionId: id,
+      linkView: 'shifts',
+      data: { date: row!.startedAt.toISOString() },
+    });
+  }
+
   success(res, present(row!));
 });
 
@@ -734,6 +757,16 @@ router.delete('/:shiftId', async (req: Request, res: Response) => {
   });
 
   await db.delete(shifts).where(eq(shifts.id, shiftId));
+
+  if (existing.userId !== req.user!.id) {
+    await notify({
+      userId: existing.userId,
+      type: 'shift_removed',
+      factionId: id,
+      linkView: 'shifts',
+      data: { date: existing.startedAt.toISOString() },
+    });
+  }
 
   success(res, { deleted: true });
 });

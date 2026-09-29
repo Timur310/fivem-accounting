@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Bell, Check, Trash2 } from 'lucide-react';
 import { useTranslation } from '@/providers/i18n-provider';
-import { formatAmount, formatDateTime } from '@/lib/format';
+import { formatAmount, formatDate, formatDateTime } from '@/lib/format';
 import type { AppNotification } from '@/lib/api-types';
 import type { TranslationKey, TranslationParams } from '@/lib/i18n';
 
@@ -23,6 +23,12 @@ const TONE: Record<string, string> = {
   strike_issued: 'bg-red-500/15 text-red-300',
   support_resolved: 'bg-emerald-500/15 text-emerald-300',
   support_declined: 'bg-zinc-500/15 text-zinc-300',
+  complaint_answered: 'bg-sky-500/15 text-sky-300',
+  shift_corrected: 'bg-amber-500/15 text-amber-300',
+  shift_removed: 'bg-amber-500/15 text-amber-300',
+  operation_credited: 'bg-emerald-500/15 text-emerald-300',
+  operation_rated: 'bg-amber-500/15 text-amber-300',
+  quota_reached: 'bg-emerald-500/15 text-emerald-300',
 };
 
 /**
@@ -111,6 +117,15 @@ export function NotificationBell() {
     }
     if (d.severity) {
       params.severity = t(`strikes.severity.${d.severity}` as TranslationKey);
+    }
+    // Dates travel as instants and are written in the reader's own locale.
+    if (typeof d.date === 'string' && d.date) params.date = formatDate(d.date);
+    // A complaint's outcome, and a quota's period, in the reader's language.
+    if (d.status === 'resolved' || d.status === 'dismissed') {
+      params.status = t(`complaints.status.${d.status}` as TranslationKey).toLowerCase();
+    }
+    if (d.period === 'weekly' || d.period === 'monthly') {
+      params.period = t(`notification.period.${d.period}` as TranslationKey);
     }
     // The payout sentences name it `itemType`; the server sends `itemTypeName`.
     if (d.itemTypeName !== undefined) params.itemType = String(d.itemTypeName ?? '');
