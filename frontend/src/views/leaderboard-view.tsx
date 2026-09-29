@@ -117,7 +117,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           <h3 className="text-lg font-medium text-zinc-200">{t('nav.leaderboard')}</h3>
           <p className="text-sm text-zinc-500">{periodLabel}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isSuperadmin && (
             <Button
               variant={showGlobal ? 'default' : 'outline'}

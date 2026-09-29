@@ -49,7 +49,9 @@ export function Segmented<T extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className={cn('flex rounded-lg border border-[var(--line-2)] p-0.5', className)}
+      // Scrolls sideways rather than overflowing when there are more choices
+      // than a phone is wide — the complaint filter has five.
+      className={cn('flex max-w-full overflow-x-auto rounded-lg border border-[var(--line-2)] p-0.5', className)}
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -61,7 +63,7 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              'relative flex items-center justify-center gap-1.5 rounded-md px-3 font-medium transition-colors',
+              'relative flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 font-medium transition-colors',
               size === 'sm' ? 'h-7 text-xs' : 'h-8 text-xs',
               fill && 'flex-1',
               active ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300',

@@ -26,7 +26,9 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center dot-grid p-4">
+    // Clipped: the ambient glow below is 500px wide, wider than a phone, and
+    // without this the whole login page scrolled sideways on one.
+    <div className="relative min-h-screen overflow-hidden flex items-center justify-center dot-grid p-4">
       {/* Ambient glow behind the mark — the only flourish on the screen, and
           chrome rather than data, which is what §9.3 allows the accent on. */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-[var(--brand-color,#6366f1)]/[0.06] rounded-full blur-[120px] pointer-events-none" />

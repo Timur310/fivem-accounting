@@ -684,7 +684,9 @@ function ShiftDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Stacked on a phone: a date-and-time input will not fit in half
+              of one. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="dialog-started">{t('shifts.startedAt')}</Label>
               <Input
