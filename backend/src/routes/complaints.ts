@@ -17,6 +17,7 @@ import { requireFactionMember } from '../middleware/factionAccess.js';
 import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
+import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
 
 /**
@@ -345,6 +346,21 @@ router.patch('/:complaintId', async (req: Request, res: Response) => {
     details: { status, settled },
     req,
   });
+
+  // The author hears the outcome the moment it is decided, rather than on
+  // the day they happen to reopen the screen. Not for an anonymous one —
+  // there is nobody on record to tell, which is the point — and not when the
+  // author is the one who settled it.
+  const newlySettled = settled && existing.status !== status;
+  if (newlySettled && existing.authorUserId && existing.authorUserId !== req.user!.id) {
+    await notify({
+      userId: existing.authorUserId,
+      type: 'complaint_answered',
+      factionId: id,
+      linkView: 'complaints',
+      data: { subject: existing.subject, status },
+    });
+  }
 
   const [full] = await selectComplaints()
     .where(eq(factionReports.id, complaintId))

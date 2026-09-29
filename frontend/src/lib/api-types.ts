@@ -933,6 +933,7 @@ export const FACTION_PERMISSIONS = [
   'log_operations', 'manage_operations',
   'log_shifts', 'view_shifts', 'manage_shifts',
   'manage_complaints',
+  'manage_wages',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -960,6 +961,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   view_shifts: 'permission.viewShifts',
   manage_shifts: 'permission.manageShifts',
   manage_complaints: 'permission.manageComplaints',
+  manage_wages: 'permission.manageWages',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1567,6 +1569,12 @@ export const NOTIFICATION_TYPES = [
   'support_resolved',
   'support_declined',
   'announcement_posted',
+  'complaint_answered',
+  'shift_corrected',
+  'shift_removed',
+  'operation_credited',
+  'operation_rated',
+  'quota_reached',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -2176,6 +2184,76 @@ export interface Shift {
   workedMinutes: number | null;
   /** Still open after twelve hours, which usually means somebody forgot. */
   stale: boolean;
+  /** The payout that paid for it, once payroll has run over it. */
+  payoutId: string | null;
+}
+
+/** What an hour is worth at one position; `position` null is the default. */
+export interface ShiftRate {
+  position: string | null;
+  itemTypeId: string;
+  hourlyRate: string;
+  itemTypeName?: string;
+  unit?: string;
+  isCurrency?: boolean;
+}
+
+export interface PayrollLine {
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+  itemTypeId: string;
+  itemTypeName: string;
+  unit: string;
+  isCurrency: boolean;
+  /** Decimal string, exact. */
+  amount: string;
+  minutes: number;
+  shiftCount: number;
+}
+
+export interface Payroll {
+  hasRates: boolean;
+  lines: PayrollLine[];
+  /** Worked and recorded, but no rate covers it. */
+  unrated: { userId: string; userName: string; minutes: number; shiftCount: number }[];
+}
+
+// ── wages from takings ─────────────────────────────────
+
+/** A member's cut of an item, for a rank or (rank null) everyone else. */
+export interface CommissionRate {
+  rank: string | null;
+  itemTypeId: string;
+  /** "30" or "12.5". */
+  percent: string;
+  itemTypeName?: string;
+}
+
+/** What one member brought in of one item, unpaid, in the window. */
+export interface TakingsLine {
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+  rank: string | null;
+  itemTypeId: string;
+  /** Decimal string, exact. */
+  brought: string;
+  /** The saved rate that applies, or null when none does. */
+  ratePercent: string | null;
+  entryCount: number;
+}
+
+export interface Takings {
+  hasRates: boolean;
+  lines: TakingsLine[];
+}
+
+export interface WagePayLine {
+  userId: string;
+  itemTypeId: string;
+  percent: string;
+  brought: string;
 }
 
 export interface ShiftList {
@@ -2287,7 +2365,7 @@ export interface ComplaintInput {
 
 export const FACTION_MODULES = [
   'entries', 'payouts', 'treasury', 'expenses', 'quotas', 'strikes',
-  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'complaints', 'vehicles', 'map',
+  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'wages', 'complaints', 'vehicles', 'map',
   'leaderboard', 'announcements', 'feed', 'reports',
 ] as const;
 export type FactionModule = (typeof FACTION_MODULES)[number];
@@ -2304,6 +2382,7 @@ export const MODULE_LABEL_KEYS: Record<FactionModule, TranslationKey> = {
   pricing: 'nav.pricing',
   operations: 'nav.operations',
   shifts: 'nav.shifts',
+  wages: 'nav.wages',
   complaints: 'nav.complaints',
   vehicles: 'nav.vehicles',
   map: 'nav.map',
@@ -2325,6 +2404,7 @@ export const MODULE_HINT_KEYS: Record<FactionModule, TranslationKey> = {
   pricing: 'module.hint.pricing',
   operations: 'module.hint.operations',
   shifts: 'module.hint.shifts',
+  wages: 'module.hint.wages',
   complaints: 'module.hint.complaints',
   vehicles: 'module.hint.vehicles',
   map: 'module.hint.map',
@@ -2351,6 +2431,7 @@ export const PERMISSION_MODULE: Partial<Record<FactionPermission, FactionModule>
   log_shifts: 'shifts',
   view_shifts: 'shifts',
   manage_shifts: 'shifts',
+  manage_wages: 'wages',
   manage_complaints: 'complaints',
   manage_vehicles: 'vehicles',
   manage_map: 'map',

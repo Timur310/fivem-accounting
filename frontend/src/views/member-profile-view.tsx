@@ -1,5 +1,6 @@
 'use client';
 
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { CountUp } from '@/components/ui/count-up';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,10 +19,6 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   ArrowLeft, Flame, Trophy, Target, Calendar, FileText, AlertTriangle,
   Flag, Plus, Pencil, Trash2, Activity, Zap, Clock, StickyNote,
@@ -129,7 +126,6 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   const [noteCategory, setNoteCategory] = useState<NoteCategory>('general');
   const [noteFlagged, setNoteFlagged] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
 
   // Strike dialog
   const [strikeOpen, setStrikeOpen] = useState(false);
@@ -158,7 +154,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
   ];
   const activeTab: ProfileTab = visibleTabs.includes(tab) ? tab : 'overview';
 
-  const { data: notes = [], isLoading: notesLoading, isError: notesIsError, error: notesError, refetch: notesRefetch } = useQuery({
+  const { data: allNotes = [], isLoading: notesLoading, isError: notesIsError, error: notesError, refetch: notesRefetch } = useQuery({
     queryKey: ['member-notes', factionId, userId],
     queryFn: () => notesApi.list(factionId, userId),
     enabled: profile?.canViewNotes === true,
@@ -202,14 +198,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
     },
   });
 
-  const deleteNoteMutation = useMutation({
-    mutationFn: () => notesApi.remove(factionId, userId, deleteNoteId!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['member-notes', factionId, userId] });
-      setDeleteNoteId(null);
-      toast({ title: t('notes.deleted') });
-    },
+  // Deleted at once, with a few seconds to take it back. See useUndoableDelete.
+  const noteRemoval = useUndoableDelete({
+    run: (id) => notesApi.remove(factionId, userId, id),
+    onDone: () => queryClient.invalidateQueries({ queryKey: ['member-notes', factionId, userId] }),
   });
+  const notes = allNotes.filter((n) => !noteRemoval.hidden.has(n.id));
 
   const strikeMutation = useMutation({
     mutationFn: () => memberStrikesApi.issue(factionId, userId, { reason: strikeReason, severity: strikeSeverity }),
@@ -676,7 +670,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                       </div>
                       <div className="flex gap-0.5 shrink-0">
                         <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-zinc-200" onClick={() => { setEditingNoteId(n.id); setNoteContent(n.content); setNoteCategory(n.category); setNoteFlagged(n.isFlagged); setNoteOpen(true); }}><Pencil className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => setDeleteNoteId(n.id)}><Trash2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400" onClick={() => noteRemoval.request(n.id)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
                     </div>
                   </CardContent>
@@ -752,18 +746,6 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
       </Dialog>
 
       {/* ── Delete Note Confirmation ── */}
-      <AlertDialog open={!!deleteNoteId} onOpenChange={(open) => !open && setDeleteNoteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('notes.deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('notes.deleteConfirm')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteNoteMutation.mutate()} disabled={deleteNoteMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">{t('common.delete')}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* ── Strike Dialog ── */}
       <Dialog open={strikeOpen} onOpenChange={setStrikeOpen}>

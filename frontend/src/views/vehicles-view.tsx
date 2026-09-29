@@ -1,5 +1,6 @@
 'use client';
 
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vehiclesApi, membersApi, apiErrorMessage } from '@/lib/api-client';
@@ -16,10 +17,6 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatDateTime, displayName } from '@/lib/format';
@@ -75,7 +72,6 @@ export function VehiclesView({
 
   const [editing, setEditing] = useState<Vehicle | 'new' | null>(null);
   const [open, setOpen] = useState<Vehicle | null>(null);
-  const [deleting, setDeleting] = useState<Vehicle | null>(null);
 
   const listQuery = useQuery({
     queryKey: ['vehicles', factionId, search, status, category, page],
@@ -92,20 +88,18 @@ export function VehiclesView({
   });
 
   const data = listQuery.data;
-  const vehicles = useMemo(() => data?.vehicles ?? [], [data]);
+  // Deleted at once, with a few seconds to take it back. See useUndoableDelete.
+  const removal = useUndoableDelete({
+    run: (id) => vehiclesApi.remove(factionId, id),
+    onDone: () => invalidate(),
+  });
+  const vehicles = useMemo(
+    () => (data?.vehicles ?? []).filter((v) => !removal.hidden.has(v.id)),
+    [data, removal.hidden],
+  );
   const filtered = !!search.trim() || !!status || !!category;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['vehicles', factionId] });
-
-  const remove = useMutation({
-    mutationFn: (id: string) => vehiclesApi.remove(factionId, id),
-    onSuccess: () => {
-      setDeleting(null);
-      setOpen(null);
-      invalidate();
-    },
-    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
-  });
 
   const clearFilters = () => {
     setSearch('');
@@ -222,7 +216,7 @@ export function VehiclesView({
                           <Button variant="outline" size="sm" onClick={() => setEditing(vehicle)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => setDeleting(vehicle)}>
+                          <Button variant="outline" size="sm" onClick={() => { setOpen(null); removal.request(vehicle.id); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -281,25 +275,6 @@ export function VehiclesView({
         />
       )}
 
-      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('vehicle.deleteConfirm', { plate: deleting?.plate ?? '' })}
-            </AlertDialogTitle>
-            <AlertDialogDescription>{t('vehicle.deleteBody')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleting && remove.mutate(deleting.id)}
-              disabled={remove.isPending}
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

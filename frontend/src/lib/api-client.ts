@@ -92,8 +92,13 @@ import type {
   ComplaintInput,
   ComplaintList,
   ComplaintStatus,
+  Payroll,
   Shift,
   ShiftInput,
+  ShiftRate,
+  CommissionRate,
+  Takings,
+  WagePayLine,
   ShiftKind,
   ShiftList,
   ShiftOnDuty,
@@ -357,10 +362,15 @@ export const factionSettingsApi = {
    * modules. Read-only — applying one fills the editor, and saving it is an
    * ordinary settings update.
    */
-  rankTemplates: (factionId: string) =>
+  /**
+   * Starting rank lists. `modules` shapes them to a set not yet saved — a
+   * preset about to switch those modules on.
+   */
+  rankTemplates: (factionId: string, modules?: readonly string[]) =>
     api
       .get<ApiSuccessResponse<{ templates: RankTemplate[] }>>(
         `/factions/${factionId}/settings/rank-templates`,
+        { params: modules ? { modules: modules.join(',') } : undefined },
       )
       .then(unwrap),
 };
@@ -1339,6 +1349,64 @@ export const shiftsApi = {
   remove: (factionId: string, id: string) =>
     api
       .delete<ApiSuccessResponse<{ deleted: boolean }>>(`/factions/${factionId}/shifts/${id}`)
+      .then(unwrap),
+
+  rates: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ rates: ShiftRate[] }>>(`/factions/${factionId}/shifts/rates`)
+      .then(unwrap),
+
+  /** The whole table at once, so it is never saved half-changed. */
+  saveRates: (factionId: string, rates: ShiftRate[]) =>
+    api
+      .put<ApiSuccessResponse<{ saved: number }>>(`/factions/${factionId}/shifts/rates`, {
+        rates: rates.map((r) => ({ position: r.position, itemTypeId: r.itemTypeId, hourlyRate: r.hourlyRate })),
+      })
+      .then(unwrap),
+
+  payroll: (factionId: string, from: string, to: string) =>
+    api
+      .get<ApiSuccessResponse<Payroll>>(`/factions/${factionId}/shifts/payroll`, { params: { from, to } })
+      .then(unwrap),
+
+  runPayroll: (factionId: string, from: string, to: string) =>
+    api
+      .post<ApiSuccessResponse<{ created: number; status: 'completed' | 'pending' }>>(
+        `/factions/${factionId}/shifts/payroll`,
+        { from, to },
+      )
+      .then(unwrap),
+};
+
+/** Wages from takings: a percentage of what each member brought in. */
+export const wagesApi = {
+  rates: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ rates: CommissionRate[] }>>(`/factions/${factionId}/wages/rates`)
+      .then(unwrap),
+
+  /** The whole table at once, like the hourly rates. */
+  saveRates: (factionId: string, rates: CommissionRate[]) =>
+    api
+      .put<ApiSuccessResponse<{ saved: number }>>(`/factions/${factionId}/wages/rates`, {
+        rates: rates.map((r) => ({ rank: r.rank, itemTypeId: r.itemTypeId, percent: r.percent })),
+      })
+      .then(unwrap),
+
+  /** Dates are days, both ends included. No items means every item. */
+  takings: (factionId: string, from: string, to: string, items: string[]) =>
+    api
+      .get<ApiSuccessResponse<Takings>>(`/factions/${factionId}/wages`, {
+        params: { from, to, ...(items.length ? { items: items.join(',') } : {}) },
+      })
+      .then(unwrap),
+
+  pay: (factionId: string, from: string, to: string, lines: WagePayLine[]) =>
+    api
+      .post<ApiSuccessResponse<{ created: number; status: 'completed' | 'pending' }>>(
+        `/factions/${factionId}/wages/pay`,
+        { from, to, lines },
+      )
       .then(unwrap),
 };
 

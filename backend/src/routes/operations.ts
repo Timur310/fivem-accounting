@@ -21,6 +21,7 @@ import { requireFactionMember, requirePermission } from '../middleware/factionAc
 import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
+import { notify } from '../lib/notify.js';
 import { resolveAnonymousUserId } from '../lib/anonymous.js';
 import { balancesFor, lockItemTypes, toCents } from '../lib/treasury.js';
 import { compareQuantity } from '../lib/crafting.js';
@@ -373,6 +374,23 @@ router.post('/', requirePermission('log_operations'), async (req: Request, res: 
   });
 
   const crewNames = await displayNames(prepared.participants.map((p) => p.userId));
+
+  // Everybody the logger put on the crew hears about it — the ones who were
+  // there usually know, but the split, and a rating, are news. The logger is
+  // left out: telling someone about the thing they just did is noise.
+  for (const participant of prepared.participants) {
+    if (participant.userId === req.user!.id) continue;
+    const rated = participant.rating !== null;
+    await notify({
+      userId: participant.userId,
+      type: rated ? 'operation_rated' : 'operation_credited',
+      factionId: id,
+      linkView: 'operations',
+      data: rated
+        ? { name: result.name, rating: participant.rating }
+        : { name: result.name },
+    });
+  }
 
   void dispatchDiscord(id, {
     type: 'operation_logged',

@@ -193,7 +193,7 @@ export function PricingView({
         <p className="text-meta text-zinc-500 mt-1 max-w-2xl">{t('pricing.subtitle')}</p>
       </div>
 
-      <div className="flex gap-1 border-b border-[var(--line-2)]">
+      <div className="flex gap-1 overflow-x-auto border-b border-[var(--line-2)] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
         {tabs.map((item) => (
           <button
             key={item.id}

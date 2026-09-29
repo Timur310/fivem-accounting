@@ -36,8 +36,10 @@ const buttonVariants = cva(
         // Square, and matched to the heights above so an icon button never
         // disagrees with the field it sits next to.
         // 28px, for the edit/delete affordances inside dense table rows.
-        "icon-xs": "size-7",
-        "icon-sm": "size-8",
+        // A step bigger on touch screens: 28px is fine for a mouse and
+        // hard to hit with a thumb. Desktop layouts are untouched.
+        "icon-xs": "size-7 pointer-coarse:size-9",
+        "icon-sm": "size-8 pointer-coarse:size-10",
         icon: "size-9",
         "icon-lg": "size-10",
         "icon-touch": "size-11",

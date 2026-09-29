@@ -1,5 +1,6 @@
 'use client';
 
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { discordRemindersApi, discordApi, membersApi, apiErrorMessage } from '@/lib/api-client';
@@ -15,10 +16,6 @@ import { SearchableSelect, type SearchableSelectOption } from '@/components/ui/s
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -139,9 +136,8 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
 
   const [editing, setEditing] = useState<DiscordReminder | null>(null);
   const [draft, setDraft] = useState<ReminderInput | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<DiscordReminder | null>(null);
 
-  const { data: reminders, isLoading, error } = useQuery({
+  const { data: allReminders, isLoading, error } = useQuery({
     queryKey: ['discord-reminders', factionId],
     queryFn: () => discordRemindersApi.list(factionId),
   });
@@ -219,15 +215,12 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
       toast({ title: t('reminder.saveFailed'), description: apiErrorMessage(e), variant: 'destructive' }),
   });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => discordRemindersApi.remove(factionId, id),
-    onSuccess: () => {
-      setConfirmDelete(null);
-      invalidate();
-      toast({ title: t('reminder.removed') });
-    },
-    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
+  // Deleted at once, with a few seconds to take it back. See useUndoableDelete.
+  const removal = useUndoableDelete({
+    run: (id) => discordRemindersApi.remove(factionId, id),
+    onDone: () => invalidate(),
   });
+  const reminders = allReminders?.filter((r) => !removal.hidden.has(r.id));
 
   const sendNow = useMutation({
     mutationFn: (id: string) => discordRemindersApi.sendNow(factionId, id),
@@ -345,7 +338,7 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                     aria-label={t('reminder.edit')}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(r)}
+                  <Button variant="ghost" size="icon" onClick={() => removal.request(r.id)}
                     aria-label={t('common.delete')}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -627,23 +620,6 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('reminder.deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('reminder.deleteBody')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => confirmDelete && remove.mutate(confirmDelete.id)}
-              disabled={remove.isPending}
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 }

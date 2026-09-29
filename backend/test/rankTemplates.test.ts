@@ -116,6 +116,35 @@ describe('every permission is classified', () => {
   });
 });
 
+describe('shaped to modules not saved yet', () => {
+  // A preset is about to switch these on; its ranks should carry their
+  // permissions even though the faction has not saved them.
+  it('includes permissions for modules named in the request', async () => {
+    const off = await api().patch(`${f()}/settings`).set('Cookie', w.admin.cookie)
+      .send({ enabledModules: ['entries'] });
+    expect(off.status).toBe(200);
+
+    const saved = (await templates()).find((t) => t.key === 'business')!;
+    expect(saved.ranks.flatMap((r) => r.permissions)).not.toContain('log_shifts');
+
+    const res = await api().get(`${f()}/settings/rank-templates?modules=entries,shifts,pricing`)
+      .set('Cookie', w.admin.cookie);
+    const asked = (res.body.data.templates as { key: string; ranks: { permissions: string[] }[] }[])
+      .find((t) => t.key === 'business')!;
+    const perms = asked.ranks.flatMap((r) => r.permissions);
+    expect(perms).toContain('log_shifts');
+    expect(perms).toContain('sell');
+    // Still nothing for a module that was not named.
+    expect(perms).not.toContain('log_operations');
+  });
+
+  it('ignores names that are not modules', async () => {
+    const res = await api().get(`${f()}/settings/rank-templates?modules=entries,nonsense`)
+      .set('Cookie', w.admin.cookie);
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('who may read them', () => {
   it('lets a member see them, because the rank editor is readable', async () => {
     const res = await api().get(`${f()}/settings/rank-templates`).set('Cookie', w.member.cookie);

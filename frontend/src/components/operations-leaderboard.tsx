@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useState } from 'react';
@@ -40,8 +41,14 @@ const SORTS: { value: 'operations' | 'rating'; key: TranslationKey }[] = [
  */
 export function OperationsLeaderboard({ factionId }: { factionId: string }) {
   const { t } = useTranslation();
-  const [period, setPeriod] = useState<'week' | 'month' | 'all'>('month');
-  const [sort, setSort] = useState<'operations' | 'rating'>('operations');
+  const [period, setPeriod] = usePersistedState<'week' | 'month' | 'all'>(
+    `operations.board.period.${factionId}`,
+    'month',
+  );
+  const [sort, setSort] = usePersistedState<'operations' | 'rating'>(
+    `operations.board.sort.${factionId}`,
+    'operations',
+  );
 
   const query = useQuery({
     queryKey: ['operations-leaderboard', factionId, period, sort],

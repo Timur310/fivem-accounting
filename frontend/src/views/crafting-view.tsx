@@ -134,7 +134,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
         )}
       </div>
 
-      <div className="flex gap-1 border-b border-[var(--line-2)]">
+      <div className="flex gap-1 overflow-x-auto border-b border-[var(--line-2)] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
         {tabs.map((item) => (
           <button
             key={item.id}

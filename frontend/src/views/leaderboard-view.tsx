@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useMemo, useState } from 'react';
@@ -42,8 +43,8 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
     setSelectedMemberUserId(userId);
     setCurrentView('member-profile');
   };
-  const [period, setPeriod] = useState<string>('month');
-  const [itemTypeId, setItemTypeId] = useState<string>('');
+  const [period, setPeriod] = usePersistedState<string>(`leaderboard.period.${factionId}`, 'month');
+  const [itemTypeId, setItemTypeId] = usePersistedState<string>(`leaderboard.item.${factionId}`, '');
   const [showGlobal, setShowGlobal] = useState(false);
 
   const periodOptions = useMemo<SearchableSelectOption[]>(
@@ -116,7 +117,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
           <h3 className="text-lg font-medium text-zinc-200">{t('nav.leaderboard')}</h3>
           <p className="text-sm text-zinc-500">{periodLabel}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isSuperadmin && (
             <Button
               variant={showGlobal ? 'default' : 'outline'}

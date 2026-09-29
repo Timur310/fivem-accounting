@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { db, type TransactionLike } from '../db/index.js';
-import { payouts, itemTypes, users, factionMembers } from '../db/schema.js';
+import { payouts, itemTypes, users, factionMembers, shifts, entries } from '../db/schema.js';
 import { eq, and, sql, desc, gte, lte } from 'drizzle-orm';
 import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
@@ -524,6 +524,13 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
         .where(eq(payouts.id, payoutId))
         .returning();
 
+      // A rejected wage payout paid for nothing, so the shifts it covered are
+      // unpaid again and the next payroll picks them back up.
+      if (updates.status === 'rejected') {
+        await tx.update(shifts).set({ payoutId: null }).where(eq(shifts.payoutId, payoutId));
+        await tx.update(entries).set({ commissionPayoutId: null }).where(eq(entries.commissionPayoutId, payoutId));
+      }
+
       await createAuditLog({
         userId: req.user!.id,
         factionId,
@@ -659,6 +666,9 @@ router.delete('/:payoutId', async (req: Request, res: Response) => {
         .update(payouts)
         .set({ isDeleted: true, updatedAt: new Date() })
         .where(eq(payouts.id, payoutId));
+      // Same for a deleted one: its shifts go back to waiting for payroll.
+      await tx.update(shifts).set({ payoutId: null }).where(eq(shifts.payoutId, payoutId));
+      await tx.update(entries).set({ commissionPayoutId: null }).where(eq(entries.commissionPayoutId, payoutId));
 
       await createAuditLog({
         userId: req.user!.id,

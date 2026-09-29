@@ -2,6 +2,7 @@ import { db, type TransactionLike } from '../db/index.js';
 import { craftHolding, craftHoldingMessage } from './crafting.js';
 import { saleHolding, saleHoldingMessage } from './sales.js';
 import { operationHolding, operationHoldingMessage } from './operations.js';
+import { commissionHolding, COMMISSION_HOLDING_MESSAGE } from './commission.js';
 
 /**
  * Whether an entry or payout belongs to something bigger that owns it.
@@ -27,6 +28,8 @@ export async function ledgerHoldMessage(
 
   const operation = await operationHolding(rows, handle);
   if (operation) return operationHoldingMessage(operation);
+
+  if (await commissionHolding(rows, handle)) return COMMISSION_HOLDING_MESSAGE;
 
   return null;
 }

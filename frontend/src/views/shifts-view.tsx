@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useMemo, useState } from 'react';
@@ -20,10 +21,6 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { displayName } from '@/lib/format';
@@ -32,6 +29,8 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { dayKey, minutesByDay } from '@/lib/shift-days';
+import { ShiftPayroll } from '@/components/shift-payroll';
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import {
   ShiftClock, hoursAndMinutes, likelyEnd, shiftQueryKeys, toLocalInput,
 } from '@/components/shift-clock';
@@ -43,8 +42,10 @@ interface Props {
   canLog: boolean;
   /** May read the whole rota rather than only their own hours. */
   canViewAll: boolean;
-  /** May correct and remove anybody's shift. */
+  /** May correct and remove anybody's shift, and run payroll. */
   canManage: boolean;
+  /** May settle payouts, so payroll pays rather than requests. */
+  canPayDirect?: boolean;
 }
 
 /** What the calendar knows about one day. */
@@ -81,7 +82,7 @@ function timeOnly(value: string): string {
  * screen — the calendar, the rota, the totals — is there for the conversation
  * afterwards about who actually turned up.
  */
-export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) {
+export function ShiftsView({ factionId, canLog, canViewAll, canManage, canPayDirect = false }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -92,10 +93,9 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [memberFilter, setMemberFilter] = useState('');
+  const [memberFilter, setMemberFilter] = usePersistedState<string>(`shifts.member.${factionId}`, '');
   const [editing, setEditing] = useState<Shift | null>(null);
   const [adding, setAdding] = useState(false);
-  const [removing, setRemoving] = useState<Shift | null>(null);
 
   // The month as exact instants in the viewer's own timezone. Sending bare
   // days had the server read them as UTC midnight — two in the morning in
@@ -150,17 +150,14 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
   const fail = (err: unknown) =>
     toast({ title: t('shifts.failed'), description: apiErrorMessage(err), variant: 'destructive' });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => shiftsApi.remove(factionId, id),
-    onSuccess: () => {
-      invalidate();
-      setRemoving(null);
-      toast({ title: t('shifts.removed') });
-    },
-    onError: fail,
+  // Deleted at once, with a few seconds to take it back, instead of asked
+  // about first. See useUndoableDelete.
+  const removal = useUndoableDelete({
+    run: (id) => shiftsApi.remove(factionId, id),
+    onDone: invalidate,
   });
 
-  const shifts = list.data?.shifts ?? [];
+  const shifts = (list.data?.shifts ?? []).filter((s) => !removal.hidden.has(s.id));
 
   // Ticks once a minute so a shift still running keeps growing on the
   // calendar, including onto the next day once it passes midnight.
@@ -349,6 +346,8 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         </Card>
       )}
 
+      {canManage && <ShiftPayroll factionId={factionId} canPayDirect={canPayDirect} />}
+
       {/* ── The shifts themselves ───────────────────── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -379,7 +378,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
               // else's rota does not come with a pencil on it.
               canEdit={canManage || (canLog && shift.userId === user?.id)}
               onEdit={() => setEditing(shift)}
-              onRemove={() => setRemoving(shift)}
+              onRemove={() => removal.request(shift.id)}
             />
           ))}
           </div>
@@ -397,24 +396,6 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         />
       )}
 
-      <AlertDialog open={!!removing} onOpenChange={(open) => !open && setRemoving(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('shifts.removeTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('shifts.removeBody')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => removing && remove.mutate(removing.id)}
-              disabled={remove.isPending}
-              className="bg-red-600 text-white hover:bg-red-500"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -560,6 +541,11 @@ function ShiftRow({
               {t('shifts.probablyForgotten')}
             </Badge>
           )}
+          {shift.payoutId && (
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-400">
+              {t('payroll.paidBadge')}
+            </Badge>
+          )}
           {/* A timesheet somebody else corrected is a different thing from one
               that was clocked, and the person whose hours they are should be
               able to tell which they are looking at. */}
@@ -698,7 +684,9 @@ function ShiftDialog({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Stacked on a phone: a date-and-time input will not fit in half
+              of one. */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="dialog-started">{t('shifts.startedAt')}</Label>
               <Input

@@ -47,6 +47,7 @@ import {
   Calculator,
   Car,
   CalendarClock,
+  HandCoins,
   Sun,
   MessageSquareWarning,
   Crosshair,
@@ -76,6 +77,7 @@ import { PricingView } from '@/views/pricing-view';
 import { VehiclesView } from '@/views/vehicles-view';
 import { OperationsView } from '@/views/operations-view';
 import { ShiftsView } from '@/views/shifts-view';
+import { WagesView } from '@/views/wages-view';
 import { ComplaintsView } from '@/views/complaints-view';
 import { MyDayView } from '@/views/my-day-view';
 import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
@@ -411,6 +413,8 @@ export function AppShell() {
     // and the screen narrows itself to it. Whose hours you can see and whose
     // you can correct are decided inside the view.
     { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts', live: onShift },
+    // Leadership only: it lays every member's takings side by side.
+    { group: 'ledger', view: 'wages', label: 'nav.wages', icon: HandCoins, module: 'wages', anyPermission: ['manage_wages'] },
     // No permission: anybody may raise something, and the screen narrows to
     // what they filed unless they hold manage_complaints. A complaints box
     // only some ranks can open is not one.
@@ -626,6 +630,12 @@ export function AppShell() {
             canLog={hasPermission('log_shifts') || hasPermission('manage_shifts')}
             canViewAll={hasPermission('view_shifts') || hasPermission('manage_shifts')}
             canManage={hasPermission('manage_shifts')}
+            canPayDirect={hasPermission('manage_payouts')}
+          /> : null;
+      case 'wages':
+        return selectedFactionId ? <WagesView
+            factionId={selectedFactionId}
+            canPayDirect={hasPermission('manage_payouts')}
           /> : null;
       case 'my-day':
         return selectedFactionId ? <MyDayView

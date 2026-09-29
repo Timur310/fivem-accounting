@@ -188,6 +188,10 @@ export const FACTION_PERMISSIONS = [
   // the trusted may write into is not one — so there is a single permission
   // here rather than the usual pair.
   'manage_complaints',
+  // Working out what members have earned from what they brought in, and
+  // paying it. Leadership: a percentage is a decision about the faction's
+  // money, and the screen shows every member's takings side by side.
+  'manage_wages',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -218,6 +222,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   view_shifts: "See Everyone's Shifts",
   manage_shifts: "Edit Everyone's Shifts",
   manage_complaints: 'Handle Complaints',
+  manage_wages: 'Calculate Wages',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -305,6 +310,14 @@ export const entries = pgTable('entries', {
   createdAt:  timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp('updated_at', { withTimezone: true }),
   isDeleted:  boolean('is_deleted').notNull().default(false),
+  /**
+   * The wage payout that paid a share of this entry, if one has.
+   *
+   * What stops the same money earning somebody a cut twice. Like a shift's
+   * payoutId it only counts while that payout is live: rejecting or deleting
+   * the payout clears it, and the entry is waiting to be paid again.
+   */
+  commissionPayoutId: uuid('commission_payout_id').references(() => payouts.id, { onDelete: 'set null' }),
 });
 
 export const entriesRelations = relations(entries, ({ one }) => ({
@@ -610,6 +623,14 @@ export const NOTIFICATION_TYPES = [
   'support_resolved',
   'support_declined',
   'announcement_posted',
+  // Things that happen *to* a member without them being the one who did it.
+  // Each was a thing somebody could only find out by going and looking.
+  'complaint_answered',
+  'shift_corrected',
+  'shift_removed',
+  'operation_credited',
+  'operation_rated',
+  'quota_reached',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -1797,6 +1818,15 @@ export const shifts = pgTable('shifts', {
    */
   editedBy:  uuid('edited_by').references(() => users.id, { onDelete: 'set null' }),
 
+  /**
+   * The payout that paid for this shift, once payroll has been run over it.
+   *
+   * What stops a shift being paid twice. Only counts while that payout is
+   * live: a payout deleted or rejected afterwards leaves the shift unpaid
+   * again, so the next payroll picks it back up rather than losing it.
+   */
+  payoutId:  uuid('payout_id').references(() => payouts.id, { onDelete: 'set null' }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -1808,6 +1838,48 @@ export const shiftsRelations = relations(shifts, ({ one }) => ({
   faction: one(factions, { fields: [shifts.factionId], references: [factions.id] }),
   member:  one(users,    { fields: [shifts.userId],    references: [users.id] }),
 }));
+
+// ── shift_rates ────────────────────────────────────────
+// What an hour is worth, per position, for the factions that pay wages.
+//
+// Optional in every sense: a faction with no rates has a timesheet and nothing
+// else, exactly as before. The position is matched against the free text on
+// a shift, ignoring case; a row with no position is the rate for everything
+// that matches nothing else.
+export const shiftRates = pgTable('shift_rates', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  /** Null is the default rate, for any position without one of its own. */
+  position:   varchar('position', { length: 60 }),
+  /** Paid in this — one of the faction's currencies. */
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  hourlyRate: decimal('hourly_rate', { precision: 15, scale: 2 }).notNull(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('shift_rate_faction').on(table.factionId),
+}));
+
+export type ShiftRate = typeof shiftRates.$inferSelect;
+
+// ── commission_rates ───────────────────────────────────
+// A member's cut of what they bring in, per rank and per item: "a Soldier
+// keeps 30% of the dirty money he brings in". A row with no rank is the cut
+// for every rank without one of its own. The wages screen starts from these
+// and lets whoever pays change any line before paying it.
+export const commissionRates = pgTable('commission_rates', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  /** A rank name from factions.ranks, or null for everyone else. */
+  rank:       varchar('rank', { length: 100 }),
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  /** 0 to 100, two decimals. */
+  percent:    decimal('percent', { precision: 5, scale: 2 }).notNull(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('commission_rate_faction').on(table.factionId),
+}));
+
+export type CommissionRate = typeof commissionRates.$inferSelect;
 
 /** Whose work it was. Free text says *what*; this says *for whom*. */
 export const SHIFT_KINDS = ['faction', 'side'] as const;
