@@ -8,7 +8,7 @@ import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
 import { createAuditLog } from '../lib/audit.js';
-import { FACTION_MODULES, factionModules } from '../lib/modules.js';
+import { FACTION_MODULES, factionModules, type FactionModule } from '../lib/modules.js';
 import { templatesFor } from '../lib/rankTemplates.js';
 
 const router = asyncRouter({ mergeParams: true });
@@ -85,8 +85,17 @@ const updateSettingsSchema = z.object({
 // permissions this faction's modules can use, so a template never rebuilds the
 // twenty-one-chip wall that modules exist to pull down.
 
+//
+// `?modules=a,b,c` asks for templates shaped to a set of modules the faction
+// has not saved yet — a preset is about to switch them on, and its ranks
+// should carry those modules' permissions. Unknown names are dropped.
+
 router.get('/rank-templates', async (req: Request, res: Response) => {
-  const enabledModules = await factionModules(req.params.id as string);
+  const asked = typeof req.query.modules === 'string'
+    ? req.query.modules.split(',').filter((m): m is FactionModule =>
+        (FACTION_MODULES as readonly string[]).includes(m))
+    : null;
+  const enabledModules = asked ?? await factionModules(req.params.id as string);
   success(res, { templates: templatesFor(enabledModules) });
 });
 

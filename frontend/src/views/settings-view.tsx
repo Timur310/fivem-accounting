@@ -1,5 +1,6 @@
 'use client';
 
+import { FACTION_PRESETS, type FactionPreset } from '@/lib/faction-presets';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemTypesApi, quotasApi, factionSettingsApi, membersApi, configApi, apiErrorMessage } from '@/lib/api-client';
@@ -23,7 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History, MessageSquare, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Target, Palette, X, Shield, Download, Upload, History, MessageSquare, Check, Sparkles } from 'lucide-react';
 import { DiscordSettingsSection } from '@/components/discord-settings-section';
 
 const EXPENSE_CATEGORY_LABELS = {
@@ -1356,6 +1357,7 @@ function FactionSettingsSection({
   // render ticked, and sent back as a list once they touch it.
   const [modules, setModules] = useState<string[]>([...FACTION_MODULES]);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1405,6 +1407,20 @@ function FactionSettingsSection({
     })));
     setTemplatesOpen(false);
     markChanged();
+  };
+
+  /**
+   * Fill the form from a preset: its modules, and its ranks if asked for.
+   *
+   * Nothing is saved here, the same as a rank template — the admin sees the
+   * switches flip and the ranks appear, and presses Save if they agree.
+   */
+  const applyPreset = (preset: FactionPreset, template: RankTemplate | null) => {
+    setModules([...preset.modules]);
+    if (template) applyTemplate(template);
+    setPresetsOpen(false);
+    markChanged();
+    toast({ title: t('preset.applied', { name: t(preset.label) }) });
   };
 
   const togglePermission = (idx: number, perm: FactionPermission) => {
@@ -1468,7 +1484,12 @@ function FactionSettingsSection({
       {isFactionAdmin && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm text-zinc-200">{t('settings.modules')}</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-sm text-zinc-200">{t('settings.modules')}</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setPresetsOpen(true)}>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> {t('preset.open')}
+              </Button>
+            </div>
             <p className="text-xs text-zinc-500 mt-1">{t('settings.modulesHint')}</p>
           </CardHeader>
           <CardContent>
@@ -1506,6 +1527,15 @@ function FactionSettingsSection({
             <p className="mt-3 text-xs text-zinc-500">{t('settings.modulesDataSafe')}</p>
           </CardContent>
         </Card>
+      )}
+
+      {presetsOpen && (
+        <PresetDialog
+          factionId={factionId}
+          hasRanks={ranks.length > 0}
+          onApply={applyPreset}
+          onClose={() => setPresetsOpen(false)}
+        />
       )}
 
       {templatesOpen && (
@@ -1775,6 +1805,125 @@ function FactionSettingsSection({
  * permissions each one carries — because "Organisation" on its own tells
  * nobody whether the Lieutenant may approve a payout.
  */
+/**
+ * Pick what kind of faction this is.
+ *
+ * Ranks are only offered, never forced: a faction that already has ranks
+ * has members holding those rank names, and quietly replacing the list would
+ * leave people holding ranks that no longer exist. So the box starts ticked
+ * only when there are no ranks yet, and says what it will do when there are.
+ */
+function PresetDialog({
+  factionId,
+  hasRanks,
+  onApply,
+  onClose,
+}: {
+  factionId: string;
+  hasRanks: boolean;
+  onApply: (preset: FactionPreset, template: RankTemplate | null) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [chosen, setChosen] = useState<FactionPreset | null>(null);
+  const [withRanks, setWithRanks] = useState(!hasRanks);
+  const [busy, setBusy] = useState(false);
+
+  const apply = async () => {
+    if (!chosen) return;
+    if (!withRanks) {
+      onApply(chosen, null);
+      return;
+    }
+    setBusy(true);
+    try {
+      // Shaped to the preset's modules, not the ones saved now, so the ranks
+      // carry permissions for tools this preset is about to switch on.
+      const { templates } = await factionSettingsApi.rankTemplates(factionId, chosen.modules);
+      onApply(chosen, templates.find((tpl) => tpl.key === chosen.rankTemplate) ?? null);
+    } catch (err) {
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t('preset.title')}</DialogTitle>
+          <DialogDescription>{t('preset.description')}</DialogDescription>
+        </DialogHeader>
+
+        <div className="stagger grid gap-2 sm:grid-cols-2">
+          {FACTION_PRESETS.map((preset) => {
+            const on = chosen?.key === preset.key;
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => setChosen(preset)}
+                aria-pressed={on}
+                className={`lift rounded-lg border p-3 text-left ${
+                  on ? 'border-[var(--brand-color-light)] bg-[var(--fill-2)]' : 'border-[var(--line-2)] hover:bg-[var(--fill-1)]'
+                }`}
+              >
+                <p className="flex items-center gap-2 text-sm font-medium text-zinc-100">
+                  <span aria-hidden>{preset.icon}</span>
+                  {t(preset.label)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">{t(preset.hint)}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        {chosen && (
+          <div className="animate-fade-in space-y-3 rounded-lg border border-[var(--line-1)] p-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">{t('preset.switchesOn')}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {chosen.modules.map((module) => (
+                  <Badge key={module} variant="outline" className="text-[11px]">
+                    {t(MODULE_LABEL_KEYS[module])}
+                  </Badge>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">{t('preset.othersOff')}</p>
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={withRanks}
+                onChange={(e) => setWithRanks(e.target.checked)}
+              />
+              <span>
+                <span className="block text-sm text-zinc-200">
+                  {t('preset.withRanks', { template: t(RANK_TEMPLATE_LABEL_KEYS[chosen.rankTemplate] ?? 'rankTemplate.crew') })}
+                </span>
+                {hasRanks && (
+                  <span className="block text-xs text-amber-300/90">{t('preset.replacesRanks')}</span>
+                )}
+              </span>
+            </label>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={() => void apply()} disabled={!chosen || busy}>
+            {t('preset.fillIn')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RankTemplateDialog({
   factionId,
   hasRanks,

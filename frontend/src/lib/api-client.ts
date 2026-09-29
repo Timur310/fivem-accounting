@@ -357,10 +357,15 @@ export const factionSettingsApi = {
    * modules. Read-only — applying one fills the editor, and saving it is an
    * ordinary settings update.
    */
-  rankTemplates: (factionId: string) =>
+  /**
+   * Starting rank lists. `modules` shapes them to a set not yet saved — a
+   * preset about to switch those modules on.
+   */
+  rankTemplates: (factionId: string, modules?: readonly string[]) =>
     api
       .get<ApiSuccessResponse<{ templates: RankTemplate[] }>>(
         `/factions/${factionId}/settings/rank-templates`,
+        { params: modules ? { modules: modules.join(',') } : undefined },
       )
       .then(unwrap),
 };
