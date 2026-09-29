@@ -47,6 +47,7 @@ import pricingRoutes from './routes/pricing.js';
 import operationRoutes from './routes/operations.js';
 import shiftRoutes from './routes/shifts.js';
 import wageRoutes from './routes/wages.js';
+import storageRoutes from './routes/storage.js';
 import complaintRoutes from './routes/complaints.js';
 import vehicleRoutes from './routes/vehicles.js';
 
@@ -184,6 +185,7 @@ app.use('/api/v1/factions/:id/pricing', pricingRoutes);
 app.use('/api/v1/factions/:id/operations', operationRoutes);
 app.use('/api/v1/factions/:id/shifts', shiftRoutes);
 app.use('/api/v1/factions/:id/wages', wageRoutes);
+app.use('/api/v1/factions/:id/storage', storageRoutes);
 app.use('/api/v1/factions/:id/complaints', complaintRoutes);
 app.use('/api/v1/factions/:id/vehicles', vehicleRoutes);
 app.use('/api/v1/factions/:id/map', mapRoutes);

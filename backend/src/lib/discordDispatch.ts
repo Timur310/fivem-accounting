@@ -87,6 +87,16 @@ export type DiscordEvent =
       category: string;
       aboutMember: boolean;
       isAnonymous: boolean;
+    }
+  | {
+      /** A count in the storage planner fell below the minimum set for it. */
+      type: 'storage_low';
+      actorUserId: string;
+      roomName: string;
+      containerName: string;
+      label: string;
+      quantity: string;
+      minQuantity: string;
     };
 
 /** What each operation kind is called in a message, spelled for a reader. */
@@ -146,6 +156,7 @@ const EMOJI: Record<DiscordEvent['type'], string> = {
   shift_started: '\u{1F7E2}',          // green circle
   shift_ended: '\u{1F3C1}',            // chequered flag
   complaint_filed: '\u{1F4E3}',        // megaphone
+  storage_low: '\u{1F4E6}',            // package
 };
 
 /**
@@ -697,6 +708,15 @@ function describe(event: DiscordEvent, names: Names, faction: FactionRef): Spec 
         // No subject and no byline: this is the one event with nobody's face
         // on it, because the whole point is that the contents — including who
         // raised them — stay where the permissions are.
+      };
+
+    case 'storage_low':
+      return {
+        title: 'Running low in storage',
+        description: `**${event.label}**: ${event.quantity} left in ${event.containerName} (${event.roomName}). The minimum is ${event.minQuantity}.`,
+        color: COLOR.trouble,
+        subject: names.actor(event.actorUserId),
+        byline: `After ${names.user(event.actorUserId)} took some`,
       };
 
     case 'shift_ended':
