@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   MapPin, MapPinPlus, Route, Hexagon, Trash2, Pencil, Lock, X, Check, Plus, Layers, Eye, EyeOff,
-  Undo2,
+  Undo2, Search,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -142,10 +142,30 @@ export function MapView({ factionId, canManage }: Props) {
   const allMarkers = useMemo(() => markersQuery.data?.markers ?? [], [markersQuery.data]);
   // Hidden layers are a view setting, not a permission: the server already
   // withheld anything this viewer may not open.
-  const markers = useMemo(
-    () => allMarkers.filter((m) => !hiddenLayers.has(m.layerId)),
-    [allMarkers, hiddenLayers],
+  // Finding one marker among hundreds. Bulk placement made layers of fifty
+  // identical pins normal, and scrolling a list for "that one pay phone" is
+  // not finding it. The search and category narrow the pins on the map as
+  // well as the list, so what is left in view is what was asked for.
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = usePersistedState<string>(`map.category.${factionId}`, '');
+  const categories = useMemo(
+    () => [...new Set(allMarkers.map((m) => m.category).filter((c): c is string => !!c))]
+      .sort((a, b) => a.localeCompare(b)),
+    [allMarkers],
   );
+  const needle = search.trim().toLowerCase();
+
+  const markers = useMemo(
+    () => allMarkers.filter((m) =>
+      !hiddenLayers.has(m.layerId)
+      && (!category || m.category === category)
+      && (!needle
+        || m.name.toLowerCase().includes(needle)
+        || (m.description ?? '').toLowerCase().includes(needle)
+        || (m.category ?? '').toLowerCase().includes(needle))),
+    [allMarkers, hiddenLayers, category, needle],
+  );
+  const narrowed = !!needle || !!category;
   const layerById = useMemo(
     () => new Map(layers.map((l) => [l.id, l])),
     [layers],
@@ -792,10 +812,54 @@ export function MapView({ factionId, canManage }: Props) {
 
           {canManage && <PasteCoordinates onPlace={(p) => { setDrawMode('point'); setDrawn([p]); }} />}
 
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                // Enter goes straight to the first match, which is usually
+                // the one being looked for.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && markers[0]) focus(markers[0]);
+                  if (e.key === 'Escape') setSearch('');
+                }}
+                placeholder={t('map.searchPlaceholder')}
+                aria-label={t('map.searchPlaceholder')}
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+            {categories.length > 0 && (
+              <SearchableSelect
+                size="sm"
+                aria-label={t('map.filterCategory')}
+                value={category}
+                onValueChange={setCategory}
+                options={[
+                  { value: '', label: t('map.allCategories') },
+                  ...categories.map((c) => ({ value: c, label: c })),
+                ]}
+                placeholder={t('map.allCategories')}
+              />
+            )}
+            {narrowed && (
+              <div className="flex items-center justify-between px-1 text-micro text-zinc-500">
+                <span>{t('map.matchCount', { count: markers.length, total: allMarkers.length })}</span>
+                <button
+                  type="button"
+                  className="hover:text-zinc-300"
+                  onClick={() => { setSearch(''); setCategory(''); }}
+                >
+                  {t('map.clearFilter')}
+                </button>
+              </div>
+            )}
+          </div>
+
           {markersQuery.isLoading
             ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)
             : markers.length === 0
-              ? <p className="text-meta text-zinc-500 px-1">{t('map.none')}</p>
+              ? <p className="text-meta text-zinc-500 px-1">{narrowed ? t('map.noMatches') : t('map.none')}</p>
               : (
                 <div className="stagger space-y-2">
                 {markers.map((marker) => (
