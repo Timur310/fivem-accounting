@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useMemo, useState } from 'react';
@@ -92,7 +93,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [memberFilter, setMemberFilter] = useState('');
+  const [memberFilter, setMemberFilter] = usePersistedState<string>(`shifts.member.${factionId}`, '');
   const [editing, setEditing] = useState<Shift | null>(null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Shift | null>(null);

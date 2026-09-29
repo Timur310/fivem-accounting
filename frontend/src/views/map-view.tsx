@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type * as L from 'leaflet';
@@ -101,7 +102,13 @@ export function MapView({ factionId, canManage }: Props) {
   const [editingLayer, setEditingLayer] = useState<MapLayer | 'new' | null>(null);
   const [deletingLayer, setDeletingLayer] = useState<MapLayer | null>(null);
   /** Which maps are currently drawn. Absent means shown — everything starts on. */
-  const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
+  // Remembered per faction as a plain list, because a Set does not survive
+  // JSON; the Set is rebuilt from it for the lookups below.
+  const [hiddenLayerIds, setHiddenLayerIds] = usePersistedState<string[]>(
+    `map.hidden.${factionId}`,
+    [],
+  );
+  const hiddenLayers = useMemo(() => new Set(hiddenLayerIds), [hiddenLayerIds]);
   /** Where the next marker goes. */
   const [targetLayerId, setTargetLayerId] = useState<string | null>(null);
 
@@ -730,12 +737,10 @@ export function MapView({ factionId, canManage }: Props) {
                       type="button"
                       aria-label={shown ? t('map.hideLayer') : t('map.showLayer')}
                       onClick={() =>
-                        setHiddenLayers((current) => {
-                          const next = new Set(current);
-                          if (next.has(layer.id)) next.delete(layer.id);
-                          else next.add(layer.id);
-                          return next;
-                        })
+                        setHiddenLayerIds((current) =>
+                          current.includes(layer.id)
+                            ? current.filter((id) => id !== layer.id)
+                            : [...current, layer.id])
                       }
                       className="shrink-0 text-zinc-500 hover:text-zinc-200"
                     >

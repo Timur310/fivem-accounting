@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Segmented } from '@/components/ui/segmented';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -64,7 +65,10 @@ export function ComplaintsView({ factionId, canHandle }: Props) {
   const queryClient = useQueryClient();
 
   const [composing, setComposing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'' | ComplaintStatus>('');
+  const [statusFilter, setStatusFilter] = usePersistedState<'' | ComplaintStatus>(
+    `complaints.status.${factionId}`,
+    '',
+  );
   const [reading, setReading] = useState<Complaint | null>(null);
 
   const query = useQuery({

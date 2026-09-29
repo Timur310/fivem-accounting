@@ -1,5 +1,6 @@
 'use client';
 
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -117,7 +118,7 @@ export function OperationsView({
   // The log and the board read the same rows and answer different questions,
   // so they share a screen rather than another entry in a sidebar that was
   // just trimmed down.
-  const [tab, setTab] = useState<'log' | 'board'>('log');
+  const [tab, setTab] = usePersistedState<'log' | 'board'>(`operations.tab.${factionId}`, 'log');
   const [reverting, setReverting] = useState<Operation | null>(null);
   const [deleting, setDeleting] = useState<Operation | null>(null);
 
