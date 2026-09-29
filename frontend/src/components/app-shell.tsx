@@ -48,6 +48,7 @@ import {
   Car,
   CalendarClock,
   HandCoins,
+  Warehouse,
   Sun,
   MessageSquareWarning,
   Crosshair,
@@ -78,6 +79,7 @@ import { VehiclesView } from '@/views/vehicles-view';
 import { OperationsView } from '@/views/operations-view';
 import { ShiftsView } from '@/views/shifts-view';
 import { WagesView } from '@/views/wages-view';
+import { StorageView } from '@/views/storage-view';
 import { ComplaintsView } from '@/views/complaints-view';
 import { MyDayView } from '@/views/my-day-view';
 import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
@@ -163,6 +165,8 @@ interface NavItem {
   badgeCount?: number;
   /** Something is happening here right now: a breathing dot. */
   live?: boolean;
+  /** New and still settling: a small "Beta" tag, so nobody mistakes it for finished. */
+  beta?: boolean;
 }
 
 export function AppShell() {
@@ -413,6 +417,9 @@ export function AppShell() {
     // and the screen narrows itself to it. Whose hours you can see and whose
     // you can correct are decided inside the view.
     { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts', live: onShift },
+    // No permission to look: the person fetching from a bench is the one who
+    // needs to know which bench. Counting and drawing are gated inside.
+    { group: 'field', view: 'storage', label: 'nav.storage', icon: Warehouse, module: 'storage', beta: true },
     // Leadership only: it lays every member's takings side by side.
     { group: 'ledger', view: 'wages', label: 'nav.wages', icon: HandCoins, module: 'wages', anyPermission: ['manage_wages'] },
     // No permission: anybody may raise something, and the screen narrows to
@@ -632,6 +639,13 @@ export function AppShell() {
             canManage={hasPermission('manage_shifts')}
             canPayDirect={hasPermission('manage_payouts')}
           /> : null;
+      case 'storage':
+        return selectedFactionId ? <StorageView
+            factionId={selectedFactionId}
+            canUpdate={hasPermission('update_storage') || hasPermission('manage_storage')}
+            canManage={hasPermission('manage_storage')}
+            mapOn={moduleOn('map')}
+          /> : null;
       case 'wages':
         return selectedFactionId ? <WagesView
             factionId={selectedFactionId}
@@ -834,6 +848,11 @@ export function AppShell() {
                       )}
                       <item.icon className={`relative h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
                       {sidebarOpen && <span className="relative truncate">{t(item.label)}</span>}
+                      {sidebarOpen && item.beta && (
+                        <span className="relative ml-auto rounded border border-amber-500/40 px-1 text-[9px] font-medium uppercase tracking-wide text-amber-300">
+                          {t('common.beta')}
+                        </span>
+                      )}
                       {item.live && !item.badgeCount && (
                         <span
                           className={sidebarOpen ? 'relative ml-auto mr-1' : 'absolute right-2 top-2'}

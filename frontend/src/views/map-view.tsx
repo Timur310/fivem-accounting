@@ -2,6 +2,7 @@
 
 import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { usePersistedState } from '@/hooks/use-persisted-state';
+import { useAppStore } from '@/lib/store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type * as L from 'leaflet';
@@ -601,6 +602,19 @@ export function MapView({ factionId, canManage }: Props) {
     setSelected(marker.id);
     map.setView(first, Math.max(map.getZoom(), 3));
   };
+
+  // Another screen (a storage room's "Show on map") asked to open on a pin.
+  // Waits for the markers and the map, then forgets the request.
+  const focusMarkerId = useAppStore((s) => s.focusMarkerId);
+  const setFocusMarkerId = useAppStore((s) => s.setFocusMarkerId);
+  useEffect(() => {
+    if (!focusMarkerId || !mapRef.current) return;
+    const marker = allMarkers.find((m) => m.id === focusMarkerId);
+    if (!marker) return;
+    focus(marker);
+    setFocusMarkerId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusMarkerId, allMarkers]);
 
   return (
     <div className="space-y-4">
