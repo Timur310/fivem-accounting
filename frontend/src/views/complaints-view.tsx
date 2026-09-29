@@ -133,7 +133,7 @@ export function ComplaintsView({ factionId, canHandle }: Props) {
           hint={canHandle ? t('complaints.emptyHintHandler') : t('complaints.emptyHintMember')}
         />
       ) : (
-        <div className="space-y-2">
+        <div className="stagger space-y-2">
           {complaints.map((complaint) => (
             <ComplaintRow key={complaint.id} complaint={complaint} onOpen={() => setReading(complaint)} />
           ))}
@@ -175,7 +175,7 @@ function ComplaintRow({ complaint, onOpen }: { complaint: Complaint; onOpen: () 
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full flex-wrap items-center gap-3 rounded-lg border border-[var(--line-2)] bg-[var(--surface-1)] p-3 text-left transition-colors hover:bg-[var(--fill-1)]"
+      className="lift flex w-full flex-wrap items-center gap-3 rounded-lg border border-[var(--line-2)] bg-[var(--surface-1)] p-3 text-left hover:bg-[var(--fill-1)]"
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">

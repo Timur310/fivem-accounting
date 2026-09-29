@@ -216,7 +216,7 @@ export function OperationsView({
         />
       )}
 
-      <div className="space-y-3">
+      <div className="stagger space-y-3">
         {tab === 'log' && operations.map((operation) => (
           <OperationCard
             key={operation.id}

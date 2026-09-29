@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryProvider } from "@/providers/query-provider";
 import { I18nProvider } from "@/providers/i18n-provider";
+import { MotionProvider } from "@/providers/motion-provider";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 
 const geistSans = Geist({
@@ -37,8 +38,10 @@ export default function RootLayout({
       >
         <I18nProvider>
           <QueryProvider>
-            {children}
-            <Toaster />
+            <MotionProvider>
+              {children}
+              <Toaster />
+            </MotionProvider>
           </QueryProvider>
         </I18nProvider>
       </body>

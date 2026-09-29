@@ -264,7 +264,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                 })}
               </div>
             )}
-            <div className="divide-y divide-[var(--line-1)]">
+            <div className="stagger divide-y divide-[var(--line-1)]">
               {rankings.map((r) => {
                 const isMe = 'isMe' in r && r.isMe;
                 return (

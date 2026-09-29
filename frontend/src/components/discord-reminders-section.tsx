@@ -300,7 +300,8 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
         {!reminders?.length ? (
           <EmptyState icon={AlarmClock} title={t('reminder.none')} hint={t('reminder.noneHint')} />
         ) : (
-          reminders.map((r) => (
+          <div className="stagger space-y-2">
+          {reminders.map((r) => (
             <div key={r.id} className="space-y-2 rounded-md border p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 space-y-1">
@@ -360,7 +361,8 @@ export function DiscordRemindersSection({ factionId, channels }: Props) {
                 </p>
               )}
             </div>
-          ))
+          ))}
+          </div>
         )}
       </CardContent>
 

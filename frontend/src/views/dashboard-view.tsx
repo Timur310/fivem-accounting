@@ -545,7 +545,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {activeQuotas.map((q) => {
                 const pct = q.percentage ?? 0;
                 const met = pct >= 100;
@@ -575,7 +575,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                           one whose colour is red. Matches the quota bar in
                           Settings, which was already neutral. */}
                       <div
-                        className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`}
+                        className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`}
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
@@ -603,7 +603,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
+            <div className="stagger space-y-1">
               {missedQuotas.map((q) => {
                 const prev = q.previousPeriod!;
                 return (
@@ -646,7 +646,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               <EmptyState icon={Trophy} title={t('dashboard.noContributions')}
               hint={t('dashboard.noContributionsHint')} compact />
             ) : (
-              <div className="space-y-1">
+              <div className="stagger space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
                   <div key={c.userId} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">{i + 1}</span>
@@ -689,7 +689,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               <EmptyState icon={List} title={t('entries.noneYet')}
               hint={t('entries.noneYetHint')} compact />
             ) : (
-              <div className="space-y-1 max-h-[320px] overflow-y-auto">
+              <div className="stagger space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (
                   <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <Avatar className="h-7 w-7 shrink-0">
@@ -806,7 +806,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
+            <div className="stagger space-y-1">
               {inactiveMembers.slice(0, 5).map((m) => (
                 <div key={m.userId} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                   <Avatar className="h-6 w-6">

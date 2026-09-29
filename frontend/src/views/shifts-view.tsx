@@ -326,7 +326,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         <Card>
           <CardContent className="py-4">
             <p className="text-xs uppercase tracking-wide text-zinc-500">{t('shifts.hoursThisMonth')}</p>
-            <div className="mt-3 space-y-2">
+            <div className="stagger mt-3 space-y-2">
               {summary.data!.members.map((row) => (
                 <div key={row.userId} className="flex items-center gap-3">
                   <Avatar className="h-6 w-6">
@@ -365,7 +365,10 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         {dayShifts.length === 0 ? (
           <EmptyState icon={CalendarDays} title={t('shifts.empty')} hint={t('shifts.emptyHint')} />
         ) : (
-          dayShifts.map((shift) => (
+          // Keyed on the day, so picking another day on the calendar plays
+          // the list in again rather than swapping rows in place.
+          <div key={selectedDay ?? 'month'} className="stagger space-y-2">
+          {dayShifts.map((shift) => (
             <ShiftRow
               key={shift.id}
               shift={shift}
@@ -376,7 +379,8 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
               onEdit={() => setEditing(shift)}
               onRemove={() => setRemoving(shift)}
             />
-          ))
+          ))}
+          </div>
         )}
       </div>
 

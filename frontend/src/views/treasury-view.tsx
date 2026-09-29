@@ -312,7 +312,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
           ) : visibleBalances.length === 0 ? (
             <EmptyState icon={Search} title={t('itemTypes.noneMatch')} hint={t('itemTypes.noneMatchHint')} compact />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visibleBalances.map((b) => (
                 <div
                   key={b.itemTypeId}
@@ -419,7 +419,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
             <EmptyState icon={ArrowDownToLine} title={t('treasury.noCompletedWithdrawals')}
               hint={t('treasury.noCompletedWithdrawalsHint')} compact />
           ) : (
-            <div className="space-y-1">
+            <div className="stagger space-y-1">
               {recentPayouts.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                   <Avatar className="h-7 w-7 shrink-0">
@@ -639,7 +639,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
             other. A category is one tile: what it has cost, and how that sits
             against its cap when it has one. */}
         {categorySummary.length > 0 && (
-          <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="stagger mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {categorySummary.map((c) => {
               const over = c.pct !== null && c.pct >= 100;
               const near = c.pct !== null && c.pct >= 80 && !over;
@@ -662,7 +662,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
                     <>
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--fill-2)]">
                         <div
-                          className={`energy-bar h-full rounded-full transition-all duration-500 ${
+                          className={`bar-grow energy-bar h-full rounded-full transition-all duration-500 ${
                             over ? 'bg-red-500' : near ? 'bg-amber-500' : 'bg-emerald-500'
                           }`}
                           style={{ width: `${Math.min(c.pct ?? 0, 100)}%` }}
@@ -695,7 +695,7 @@ function ExpensesSection({ factionId, canManage }: { factionId: string; canManag
           // between a badge and the item name, so nothing lined up and the
           // figures — the only reason to open this tab — could not be scanned
           // down the page.
-          <div className="divide-y divide-[var(--line-1)]">
+          <div className="stagger divide-y divide-[var(--line-1)]">
             {expenses.map((e) => (
               <div
                 key={e.id}
@@ -969,7 +969,7 @@ function ChecksSection({ factionId, canManage }: { factionId: string; canManage:
           <EmptyState icon={ClipboardCheck} title={t('treasury.noChecks')}
               hint={t('treasury.noChecksHint')} compact />
         ) : (
-          <div className="space-y-1">
+          <div className="stagger space-y-1">
             {checks.map((c) => {
               const matches = Math.abs(c.variance) < 0.005;
               return (

@@ -366,6 +366,78 @@
   }
 }
 
+/* ── Lists arriving ──────────────────────────────────
+   Put `stagger` on a list's container and its children fade and rise in one
+   after another. Pure CSS on purpose: no JavaScript per row, so a
+   five-hundred-row ledger costs nothing extra.
+
+   It plays when a child is first inserted, never on a re-render — a refetch
+   leaves settled rows alone, and a row added later arrives on its own. The
+   delay stops growing after the twelfth child; the rest appear together
+   rather than keeping anybody waiting for the bottom of a long list. */
+@keyframes item-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > * {
+  /* `backwards`, not `both`: holds the starting state through the delay,
+     then lets go. With `both` the finished animation would keep overriding
+     the element's own transform, and a hover lift would never show. */
+  animation: item-in 180ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.stagger > :nth-child(2)  { animation-delay: 25ms; }
+.stagger > :nth-child(3)  { animation-delay: 50ms; }
+.stagger > :nth-child(4)  { animation-delay: 75ms; }
+.stagger > :nth-child(5)  { animation-delay: 100ms; }
+.stagger > :nth-child(6)  { animation-delay: 125ms; }
+.stagger > :nth-child(7)  { animation-delay: 150ms; }
+.stagger > :nth-child(8)  { animation-delay: 175ms; }
+.stagger > :nth-child(9)  { animation-delay: 200ms; }
+.stagger > :nth-child(10) { animation-delay: 225ms; }
+.stagger > :nth-child(11) { animation-delay: 250ms; }
+.stagger > :nth-child(n + 12) { animation-delay: 275ms; }
+
+/* ── Things you can click, lifting as you point at them ──
+   Only on cards that actually do something when clicked: a lift on a card
+   that does nothing promises an action that is not there. */
+.lift {
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out, border-color 120ms ease-out;
+}
+.lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -10px rgb(0 0 0 / 0.6);
+}
+.lift:active {
+  transform: translateY(0);
+  transition-duration: 60ms;
+}
+
+/* ── Bars growing to their value ─────────────────────
+   On a progress bar's fill. Scales from the left edge rather than animating
+   width, so it works whatever width the bar ends at and costs no layout. */
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+  to { transform: none; }
+}
+.bar-grow {
+  transform-origin: left center;
+  animation: bar-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Reduced motion, for everything CSS animates.
+   Motion-driven animations follow the same setting through MotionProvider;
+   this is the other half. Near-zero rather than none, so anything that waits
+   on an animationend or transitionend event still gets one. Individual rules
+   further down that already opt out stay as they are. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Print: the reports view prints as a clean sheet — chrome and controls
    stay on screen only. */
 @media print {

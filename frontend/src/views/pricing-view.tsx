@@ -630,7 +630,7 @@ function SalesTab({ factionId, canRevert }: { factionId: string; canRevert: bool
   }
 
   return (
-    <div className="space-y-2">
+    <div className="stagger space-y-2">
       {sales.map((sale) => {
         const money = (v: string) => formatAmount(v, sale.currencyUnit, sale.currencyIsCurrency);
         return (
@@ -783,7 +783,7 @@ function PricesTab({
         </Button>
       )}
 
-      <div className="space-y-2">
+      <div className="stagger space-y-2">
         {prices.map((price) => (
           <Card key={price.id} className={cn(!price.isActive && 'opacity-60')}>
             <CardContent className="p-4 flex flex-wrap items-start justify-between gap-4">

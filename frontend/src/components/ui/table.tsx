@@ -33,7 +33,9 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      // Every table in the app shares this, so its rows arrive one after
+      // another everywhere without each screen having to ask. See `.stagger`.
+      className={cn("stagger [&_tr:last-child]:border-0", className)}
       {...props}
     />
   )

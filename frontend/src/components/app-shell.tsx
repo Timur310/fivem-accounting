@@ -1,5 +1,7 @@
 'use client';
 
+import * as m from 'motion/react-m';
+import { glide, screenIn } from '@/lib/motion';
 import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
 import { APP_COPYRIGHT, APP_VERSION, APP_VERSION_LABEL } from '@/lib/app-meta';
 import { authApi, factionSettingsApi, supportApi } from '@/lib/api-client';
@@ -755,20 +757,33 @@ export function AppShell() {
                       key={item.view}
                       onClick={() => handleNavClick(item.view)}
                       aria-current={active ? 'page' : undefined}
-                      className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
+                      className={`relative w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-colors duration-150 ${
                         active
                           ? 'text-white font-medium'
                           : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--fill-2)]'
                       } ${!sidebarOpen ? 'justify-center' : ''}`}
-                      style={active ? {
-                        backgroundColor: `${brandColor}12`,
-                        boxShadow: `inset 0 0 0 1px ${brandColor}25`,
-                        color: brandColor,
-                      } : undefined}
+                      style={active ? { color: brandColor } : undefined}
                       title={!sidebarOpen ? t(item.label) : undefined}
                     >
-                      <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
-                      {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
+                      {/* One highlight for the whole sidebar, which slides to
+                          the item you pick instead of blinking off in one
+                          place and on in another. Shared by layoutId, so the
+                          movement is Motion's and the resting state is the
+                          same tint and ring the item always had. */}
+                      {active && (
+                        <m.span
+                          layoutId="nav-active"
+                          aria-hidden
+                          className="absolute inset-0 rounded-md"
+                          style={{
+                            backgroundColor: `${brandColor}12`,
+                            boxShadow: `inset 0 0 0 1px ${brandColor}25`,
+                          }}
+                          transition={glide}
+                        />
+                      )}
+                      <item.icon className={`relative h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
+                      {sidebarOpen && <span className="relative truncate">{t(item.label)}</span>}
                       {!!item.badgeCount && (
                         <span
                           className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-micro tabular-nums ${
@@ -919,9 +934,19 @@ export function AppShell() {
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           {/* Capped reading width: on a wide desktop the views otherwise
               stretch edge-to-edge and the first glance has nowhere to land. */}
-          <div className="animate-fade-in w-full max-w-7xl mx-auto">
+          {/* Keyed on the screen, so each one rises in as it opens. Enter
+              only, deliberately: an exit animation would hold the next screen
+              back until the last one had finished leaving, and nobody should
+              wait for a screen they have already left. */}
+          <m.div
+            key={`${selectedFactionId ?? ''}:${currentView}:${selectedMemberUserId ?? ''}`}
+            variants={screenIn}
+            initial="hidden"
+            animate="shown"
+            className="w-full max-w-7xl mx-auto"
+          >
             {renderView()}
-          </div>
+          </m.div>
         </main>
       </div>
     </div>

@@ -174,7 +174,7 @@ export function AdminSupportView() {
             <EmptyState icon={LifeBuoy} title={t('support.inboxEmpty')}
               hint={t('support.inboxEmptyHint')} />
           ) : (
-            <div className="divide-y divide-[var(--line-1)]">
+            <div className="stagger divide-y divide-[var(--line-1)]">
               {tickets.map((ticket) => (
                 <article key={ticket.id} className="p-4 space-y-2.5">
                   <div className="flex flex-wrap items-center gap-2">

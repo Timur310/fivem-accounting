@@ -165,7 +165,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
             hint={canManageRecipes ? t('crafting.recipes.noneHint') : t('crafting.recipes.noneMemberHint')}
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {runnable.map((recipe) => (
               <BenchCard
                 key={recipe.id}
@@ -183,7 +183,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
         recipes.length === 0 ? (
           <EmptyState icon={Hammer} title={t('crafting.recipes.none')} hint={t('crafting.recipes.noneHint')} />
         ) : (
-          <div className="space-y-3">
+          <div className="stagger space-y-3">
             {recipes.map((recipe) => (
               <Card key={recipe.id}>
                 <CardContent className="p-4 flex flex-wrap items-start justify-between gap-4">
@@ -223,7 +223,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
         ) : (historyQuery.data?.crafts.length ?? 0) === 0 ? (
           <EmptyState icon={Hammer} title={t('crafting.history.none')} hint={t('crafting.history.noneHint')} />
         ) : (
-          <div className="space-y-2">
+          <div className="stagger space-y-2">
             {historyQuery.data!.crafts.map((craft) => (
               <Card key={craft.id} className={cn(craft.revertedAt && 'opacity-60')}>
                 <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4">

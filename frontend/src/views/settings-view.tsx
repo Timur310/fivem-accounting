@@ -871,7 +871,7 @@ function QuotasSection({ factionId, canManage = false }: { factionId: string; ca
                             </div>
                             <div className={`meter-track h-2 bg-muted rounded-full overflow-hidden ${met ? 'meter-met' : ''}`}>
                               <div
-                                className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-green-500' : 'bg-primary'}`}
+                                className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-green-500' : 'bg-primary'}`}
                                 style={{ width: `${Math.min(pct, 100)}%` }}
                               />
                             </div>

@@ -82,7 +82,7 @@ export function AdminFactionDetailView() {
           <CardContent>
             {data.members.length === 0 ? (<EmptyState icon={Users} title={t('members.none')}
               hint={t('members.noneHint')} compact />) : (
-              <div className="space-y-1 max-h-96 overflow-y-auto">
+              <div className="stagger space-y-1 max-h-96 overflow-y-auto">
                 {data.members.map((m: Member) => (
                   <div key={m.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <Avatar className="h-7 w-7"><AvatarImage src={m.avatarUrl ?? undefined} /><AvatarFallback className="text-micro">{m.username.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
@@ -100,7 +100,7 @@ export function AdminFactionDetailView() {
           <CardContent>
             {data.itemTypes.length === 0 ? (<EmptyState icon={Package} title={t('itemTypes.none')}
               hint={t('itemTypes.noneHint')} compact />) : (
-              <div className="space-y-1 max-h-96 overflow-y-auto">
+              <div className="stagger space-y-1 max-h-96 overflow-y-auto">
                 {data.itemTypes.map((item: ItemType) => (
                   <div key={item.id} className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <div><p className="text-sm text-zinc-300">{item.name}</p><p className="text-meta text-zinc-600">{t('itemTypes.unitLabel')}: {item.unit}</p></div>

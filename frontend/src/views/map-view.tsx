@@ -791,7 +791,9 @@ export function MapView({ factionId, canManage }: Props) {
             ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)
             : markers.length === 0
               ? <p className="text-meta text-zinc-500 px-1">{t('map.none')}</p>
-              : markers.map((marker) => (
+              : (
+                <div className="stagger space-y-2">
+                {markers.map((marker) => (
                 <button
                   key={marker.id}
                   onClick={() => focus(marker)}
@@ -828,7 +830,9 @@ export function MapView({ factionId, canManage }: Props) {
                     {marker.points[0] ? ` · ${formatGamePoint(marker.points[0])}` : ''}
                   </p>
                 </button>
-              ))}
+                ))}
+                </div>
+              )}
         </div>
       </div>
 

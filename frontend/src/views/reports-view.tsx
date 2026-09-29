@@ -150,7 +150,7 @@ export function ReportsView({ factionId }: Props) {
                     {summary.byType.length === 0 ? (
                       <EmptyState icon={FileBarChart} title={t('common.noData')} compact />
                     ) : (
-                      <div className="space-y-2">
+                      <div className="stagger space-y-2">
                         {summary.byType.map((row) => (
                           <div key={row.itemTypeName} className="flex items-center justify-between rounded-lg border border-[var(--line-1)] p-3 transition-all duration-150 hover:border-[var(--line-3)]">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -174,7 +174,7 @@ export function ReportsView({ factionId }: Props) {
                     {summary.memberRanking.length === 0 ? (
                       <EmptyState icon={FileBarChart} title={t('common.noData')} compact />
                     ) : (
-                      <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                      <div className="stagger space-y-1 max-h-[400px] overflow-y-auto">
                         {summary.memberRanking.map((m, i) => (
                           <div key={m.username} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                             <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">#{i + 1}</span>

@@ -398,7 +398,7 @@ function VehicleCard({
             {historyQuery.data.history.length === 0 ? (
               <p className="text-meta text-zinc-500">{t('vehicle.historyNone')}</p>
             ) : (
-              <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <ul className="stagger space-y-2 max-h-56 overflow-y-auto pr-1">
                 {historyQuery.data.history.map((row) => (
                   <li key={row.id} className="text-meta">
                     <span className="text-zinc-300">

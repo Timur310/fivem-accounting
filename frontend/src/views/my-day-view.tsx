@@ -141,7 +141,7 @@ export function MyDayView({ factionId, canLogShifts }: Props) {
             action={t('myDay.readThem')}
             onAction={() => setCurrentView('announcements')}
           >
-            <ul className="space-y-1.5">
+            <ul className="stagger space-y-1.5">
               {unread.slice(0, 4).map((a) => (
                 <li key={a.id} className="flex items-center gap-2 text-sm text-zinc-200">
                   {a.priority === 'urgent' && (
@@ -164,7 +164,7 @@ export function MyDayView({ factionId, canLogShifts }: Props) {
             action={t('myDay.logEntry')}
             onAction={isOn('entries') ? () => setCurrentView('entries') : undefined}
           >
-            <div className="space-y-3">
+            <div className="stagger space-y-3">
               {myQuotas.slice(0, 4).map((q) => <QuotaLine key={q.id} quota={q} />)}
             </div>
           </Panel>
@@ -178,7 +178,7 @@ export function MyDayView({ factionId, canLogShifts }: Props) {
             action={t('myDay.openComplaints')}
             onAction={() => setCurrentView('complaints')}
           >
-            <ul className="space-y-2">
+            <ul className="stagger space-y-2">
               {myComplaints.slice(0, 4).map((c) => (
                 <li key={c.id} className="space-y-0.5">
                   <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export function MyDayView({ factionId, canLogShifts }: Props) {
             icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
             title={t('myDay.strikes').replace('{count}', String(activeStrikes.length))}
           >
-            <ul className="space-y-1.5">
+            <ul className="stagger space-y-1.5">
               {activeStrikes.map((s) => (
                 <li key={s.id}>
                   <button
@@ -290,7 +290,7 @@ function QuotaLine({ quota }: { quota: Quota }) {
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-[var(--fill-3)]">
         <div
-          className={`h-full rounded-full ${met ? 'bg-emerald-500' : 'bg-brand'}`}
+          className={`bar-grow h-full rounded-full ${met ? 'bg-emerald-500' : 'bg-brand'}`}
           style={{ width: `${percentage}%` }}
         />
       </div>
