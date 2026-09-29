@@ -183,6 +183,8 @@ sidebar shows exactly what your rank gives you:
 | `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
 | `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11), and reverting a booked sale |
 | `manage_vehicles` | Adding, editing and deleting vehicles in the registry (§6.12). Reading it needs nothing |
+| `update_storage` | Changing counts in the storage planner: putting in, taking out, moving between containers, min and max (§5.12) |
+| `manage_storage` | Drawing storage rooms: walls, doors, where each container stands and how much it holds (§6.13) |
 | `sell` | Booking a sale into the treasury (§6.11). Safe to hand out widely — it records what was sold, it does not decide what things cost |
 | *(rank, not a permission)* | Seeing cost and margin (§6.11). Set in the price list, and it works like a map's rank: at or above the level you pick |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
@@ -502,6 +504,46 @@ that follows the member around, and clicking the same star again clears it.
 back out in one go from the card, and then you log it again with the right
 numbers. You cannot edit one person's share on its own — that is how a split
 stops adding up.
+
+### 5.12 Storage — which bench holds what *(beta)*
+
+> **Beta.** Storage is new. It may still change, and the page says so at the
+> top. The counts here are the faction's own: they **never** change the
+> treasury, and nothing you log elsewhere changes them. Found something odd?
+> Use the link in the beta notice, or Support (§5.8).
+
+Your depot, drawn as a floor plan: walls, doors, and every bench, chest, safe
+and locker where it really stands. Each container shows what is in it and how
+much.
+
+**Finding something.** Type in *Where is…?* — say `pistol`. Every container in
+the room holding it lights up and the rest fade, and underneath you see which
+**other** rooms have it too; click one to jump there.
+
+**Reading the plan.** A bar along the bottom of a container shows how full it
+is (green, then amber, then red). A **red dot** means something inside is below
+the minimum leadership set for it. *List* shows the same containers as cards
+grouped by tag, which is easier on a phone.
+
+**Taking or putting things back** (needs *Update Storage*). Click the
+container. **−** and **+** change a line by one — most trips to a bench. Click
+the line itself for more:
+
+- an amount, then **Add**, **Take**, or **It is exactly this** after counting;
+- **Move to…** another container (it joins the same item there if it is already
+  listed);
+- **Warn below** and **At most** for that item in that container.
+
+A container may hold at most a set number of units in total. Going over it,
+or over an item's *At most*, is refused — just like a full chest in game.
+
+**History** in the container shows who put in, took out, moved or corrected
+what, and when. **Everything in here is counted right** records that you
+checked it (a stocktake).
+
+**Books vs storage**, folded at the bottom of the page, puts what the treasury
+says the faction owns next to what is counted in containers — so *40 pistols
+in the books, 32 in storage* shows up as *8 not put away*.
 
 ## 6. For leaders — running the faction
 
@@ -955,6 +997,32 @@ deal and you should be the one to say what it is.
 
 Without a rate the app refuses rather than inventing one, and the message names
 the two currencies so you know which rate is missing.
+
+### 6.13 Drawing storage rooms (`manage_storage`) *(beta)*
+
+**New room** starts from a template — an empty grid, walls only (any size), a
+small garage, a big depot or a stash house — and everything in it can be
+changed afterwards. **Room settings** renames or deletes a room and links it to
+a pin on the map, which gives the room a *Show on map* button.
+
+**Edit room** opens the drawing on a copy; nobody sees it until you **Save**.
+
+- **Wall**, **Door**, **Erase**: drag across the grid to paint.
+- **Move**: drag a container to place it, drag its corner to resize it. A red
+  outline means it cannot stand there (a wall, a door or another container),
+  and letting go puts it back.
+- **Add** a bench, chest, safe, fridge, locker, rack or crate. Click one to
+  set its name, colour, tags, **holds at most** (total units) and notes.
+- **R** rotates, **Delete** removes, **Ctrl+Z** / **Ctrl+Y** undo and redo.
+  **Pan** lets a phone scroll a big room without moving anything.
+
+Removing a container removes what is recorded inside it, so saving a drawing
+that does that asks first and names the containers.
+
+Two permissions, on purpose: *Update Storage* is for whoever fetches from the
+benches, *Manage Storage Rooms* for whoever decides the layout. Looking needs
+nothing. With Discord connected, the **Running low in storage** event (§8.6)
+posts once when an item drops below its minimum.
 
 ---
 
