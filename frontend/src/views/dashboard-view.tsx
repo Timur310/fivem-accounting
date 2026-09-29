@@ -563,7 +563,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       {/* Only "met" earns a colour. The percentage used to wear
                           the faction accent, which read as a verdict on the
                           number whenever that accent was green or red. */}
-                      <Badge variant="outline" className={met ? 'border-emerald-500/30 text-emerald-400' : 'text-zinc-300'}>
+                      <Badge variant="outline" className={met ? 'pop-in border-emerald-500/30 text-emerald-400' : 'text-zinc-300'}>
                         {met ? t('quota.met') : `${pct.toFixed(1)}%`}
                       </Badge>
                     </div>
@@ -576,7 +576,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                           one whose colour is red. Matches the quota bar in
                           Settings, which was already neutral. */}
                       <div
-                        className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`}
+                        className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500 bar-shine' : 'bg-primary'}`}
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>

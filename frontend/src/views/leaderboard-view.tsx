@@ -102,7 +102,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   const fmt = formatNumber;
 
   const rankIcon = (rank: number) => {
-    if (rank === 1) return <Crown className="h-4 w-4 text-amber-400" />;
+    if (rank === 1) return <Crown className="crown-pop h-4 w-4 text-amber-400" />;
     if (rank === 2) return <Medal className="h-4 w-4 text-zinc-300" />;
     if (rank === 3) return <Medal className="h-4 w-4 text-amber-600" />;
     return <span className="text-xs text-zinc-600 w-4 text-center tabular-nums">{rank}</span>;
@@ -229,7 +229,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                         className="absolute -top-2.5 flex size-5 items-center justify-center rounded-full border bg-[var(--card)]"
                         style={{ borderColor: metal, color: metal }}
                       >
-                        {first ? <Crown className="h-3 w-3" /> : <Medal className="h-3 w-3" />}
+                        {first ? <Crown className="crown-pop h-3 w-3" /> : <Medal className="h-3 w-3" />}
                       </span>
 
                       <Avatar

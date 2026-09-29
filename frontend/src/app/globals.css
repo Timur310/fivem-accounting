@@ -447,6 +447,52 @@
   animation: live-ring 1.8s ease-out infinite;
 }
 
+/* ── Small celebrations ──────────────────────────────
+   For real moments only — a quota reached, first place, a shift done — and
+   each plays once. A celebration that happens every time you look stops
+   meaning anything by the second evening. */
+
+/* Something earned arriving: overshoots a touch and settles. */
+@keyframes pop-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.pop-in {
+  animation: pop-in 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* The crown, which also tips its head once. */
+@keyframes crown-pop {
+  0% { transform: scale(0.4) rotate(-25deg); opacity: 0; }
+  60% { transform: scale(1.2) rotate(8deg); opacity: 1; }
+  100% { transform: none; }
+}
+.crown-pop {
+  animation: crown-pop 520ms cubic-bezier(0.22, 1, 0.36, 1) 150ms backwards;
+}
+
+/* A met quota's bar: one band of light across it, once, after it has grown.
+   ::before because the bar's ::after is already its gloss. */
+@keyframes bar-shine {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.bar-shine {
+  position: relative;
+  overflow: hidden;
+}
+.bar-shine::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+  transform: translateX(-100%);
+  animation: bar-shine 900ms ease-out 650ms 1 both;
+  pointer-events: none;
+}
+
 /* ── Bars growing to their value ─────────────────────
    On a progress bar's fill. Scales from the left edge rather than animating
    width, so it works whatever width the bar ends at and costs no layout. */

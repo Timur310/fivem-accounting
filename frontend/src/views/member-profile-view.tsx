@@ -463,7 +463,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             {/* Neutral until met, like the same bar on the
                                 dashboard — the faction accent must not stand in
                                 for "done". */}
-                            <div className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
+                            <div className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500 bar-shine' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
                           </div>
                           <div className="flex justify-between text-micro text-zinc-600 mt-0.5">
                             <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>

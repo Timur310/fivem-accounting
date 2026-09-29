@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatDateTime } from '@/lib/format';
+import { CountUp } from '@/components/ui/count-up';
 import { AlertTriangle, Clock, Coffee, Minus, Play, Square } from 'lucide-react';
 import type { Shift, ShiftKind } from '@/lib/api-types';
 
@@ -124,11 +125,22 @@ export function ShiftClock({ factionId }: { factionId: string }) {
       : {}),
     onSuccess: (shift) => {
       invalidate();
+      // The hours count up in the toast: the one moment in the evening that
+      // is about how much somebody did, so it gets to feel like it.
+      const [before, after] = t('shifts.workedToast').split('{time}');
       toast({
         title: t('shifts.clockedOut'),
-        description: shift.workedMinutes !== null
-          ? t('shifts.workedToast').replace('{time}', hoursAndMinutes(shift.workedMinutes))
-          : undefined,
+        description: shift.workedMinutes !== null ? (
+          <span>
+            {before}
+            <CountUp
+              value={shift.workedMinutes}
+              format={(n) => hoursAndMinutes(Math.round(n))}
+              className="font-medium tabular-nums text-zinc-100"
+            />
+            {after}
+          </span>
+        ) : undefined,
       });
     },
     onError: fail,

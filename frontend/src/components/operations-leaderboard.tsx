@@ -127,7 +127,7 @@ function BoardRow({ row, sort }: { row: OperationRanking; sort: 'operations' | '
   const name = displayName({ username: row.username, inGameName: row.inGameName });
 
   const rankMark = row.rank === 1
-    ? <Crown className="h-4 w-4 text-amber-400" />
+    ? <Crown className="crown-pop h-4 w-4 text-amber-400" />
     : row.rank === 2
       ? <Medal className="h-4 w-4 text-zinc-300" />
       : row.rank === 3

@@ -123,7 +123,7 @@ export function MyDayView({ factionId, canLogShifts }: Props) {
       {nothing && (
         <Card>
           <CardContent className="flex items-center gap-3 py-5">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            <CheckCircle2 className="pop-in h-5 w-5 text-emerald-400" />
             <div>
               <p className="text-sm text-zinc-200">{t('myDay.allQuiet')}</p>
               <p className="text-xs text-zinc-500">{t('myDay.allQuietHint')}</p>
@@ -290,7 +290,7 @@ function QuotaLine({ quota }: { quota: Quota }) {
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-[var(--fill-3)]">
         <div
-          className={`bar-grow h-full rounded-full ${met ? 'bg-emerald-500' : 'bg-brand'}`}
+          className={`bar-grow h-full rounded-full ${met ? 'bg-emerald-500 bar-shine' : 'bg-brand'}`}
           style={{ width: `${percentage}%` }}
         />
       </div>
