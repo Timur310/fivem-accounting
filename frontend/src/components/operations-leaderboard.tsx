@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -169,7 +170,7 @@ function BoardRow({ row, sort }: { row: OperationRanking; sort: 'operations' | '
                 <div className="flex items-center justify-end gap-1">
                   <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                   <span className="text-lg font-medium tabular-nums text-zinc-100">
-                    {row.ratingScore.toFixed(2)}
+                    <CountUp value={row.ratingScore} format={(n) => n.toFixed(2)} />
                   </span>
                 </div>
                 {/* The plain average and how many people it came from: the
@@ -183,7 +184,9 @@ function BoardRow({ row, sort }: { row: OperationRanking; sort: 'operations' | '
               </>
             )
           ) : (
-            <span className="text-lg font-medium tabular-nums text-zinc-100">{row.operationCount}</span>
+            <span className="text-lg font-medium tabular-nums text-zinc-100">
+              <CountUp value={row.operationCount} format={(n) => String(Math.round(n))} />
+            </span>
           )}
         </div>
       </div>

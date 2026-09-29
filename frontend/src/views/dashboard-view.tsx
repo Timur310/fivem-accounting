@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, leaderboardApi, membersApi, apiErrorMessage } from '@/lib/api-client';
@@ -484,7 +485,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       whose accent is green or red would otherwise colour an
                       ordinary balance as if it meant something. */}
                   <div className={cn("text-3xl font-medium tabular-nums tracking-tight", bal < 0 ? "text-negative" : "text-zinc-200")}>
-                    {fmt(displayBalance)}
+                    <CountUp value={displayBalance} format={fmt} />
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">
                     {hasTreasury
@@ -507,7 +508,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</CardTitle>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{formatCount(totalEntries)}</div>
+            <div className="text-2xl font-medium tabular-nums tracking-tight"><CountUp value={totalEntries} format={(n) => formatCount(Math.round(n))} /></div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.loggedContributions')}</p>
           </CardContent>
         </Card>
@@ -518,7 +519,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.members')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{memberCount}</div>
+            <div className="text-2xl font-medium tabular-nums tracking-tight"><CountUp value={memberCount} format={(n) => String(Math.round(n))} /></div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.adminCount', { count: adminCount })}</p>
           </CardContent>
         </Card>
@@ -529,7 +530,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.categories')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalsByType.length}</div>
+            <div className="text-2xl font-medium tabular-nums tracking-tight"><CountUp value={totalsByType.length} format={(n) => String(Math.round(n))} /></div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.activeItemTypes')}</p>
           </CardContent>
         </Card>

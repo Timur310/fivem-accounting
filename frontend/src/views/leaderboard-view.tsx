@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -243,7 +244,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                       </p>
 
                       <p className={`font-medium tabular-nums ${first ? 'text-base text-zinc-100' : 'text-sm text-zinc-300'}`}>
-                        {formatNumber(r.total)}
+                        <CountUp value={r.total} format={formatNumber} />
                       </p>
 
                       {/* The plinth. Its height is the whole point of the
@@ -320,7 +321,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
 
                     {/* Stats */}
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-medium tabular-nums text-zinc-100">{fmt(r.total)}</p>
+                      <p className="text-sm font-medium tabular-nums text-zinc-100"><CountUp value={r.total} format={fmt} /></p>
                       <p className="text-micro text-zinc-600">{t('entries.count', { count: r.entryCount })}</p>
                     </div>
                   </div>

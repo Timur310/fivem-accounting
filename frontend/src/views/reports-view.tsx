@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '@/lib/api-client';
@@ -113,7 +114,7 @@ export function ReportsView({ factionId }: Props) {
                 <Card className="border-highlight">
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.currencyTotal')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.currencyTotal)}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.currencyTotal} format={fmt} /></p>
                     <p className="text-meta text-zinc-600 mt-1 tabular-nums">
                       {t('entries.count', { count: summary.overview.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(summary.overview.avgPerCurrencyEntry) })}
                     </p>
@@ -122,7 +123,7 @@ export function ReportsView({ factionId }: Props) {
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.itemTotal')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmtItems(summary.overview.itemTotal)}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.itemTotal} format={(n) => fmtItems(Math.round(n))} /></p>
                     <p className="text-meta text-zinc-600 mt-1 tabular-nums">
                       {t('entries.count', { count: summary.overview.itemEntryCount })} &middot; {t('reports.avg', { amount: fmtItems(summary.overview.avgPerItemEntry) })}
                     </p>
@@ -131,14 +132,14 @@ export function ReportsView({ factionId }: Props) {
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.entryCount}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.entryCount} format={(n) => String(Math.round(n))} /></p>
                     <p className="text-meta text-zinc-600 mt-1 tabular-nums">{summary.from} → {summary.to}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.uniqueMembers')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.uniqueMembers}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.uniqueMembers} format={(n) => String(Math.round(n))} /></p>
                   </CardContent>
                 </Card>
               </div>

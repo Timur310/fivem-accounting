@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factionStrikesApi, memberStrikesApi } from '@/lib/api-client';
@@ -151,7 +152,7 @@ export function StrikesView({ factionId, canManageStrikes }: Props) {
             <CardContent className="py-4 flex items-center justify-between">
               <div>
                 <p className="text-xs text-zinc-500">{t(ACTIVE_SUMMARY_KEYS[sev])}</p>
-                <p className="text-2xl font-medium tabular-nums mt-0.5">{summary[sev]}</p>
+                <p className="text-2xl font-medium tabular-nums mt-0.5"><CountUp value={summary[sev]} format={(n) => String(Math.round(n))} /></p>
               </div>
               <AlertTriangle className={`h-5 w-5 ${summary[sev] > 0 ? 'opacity-80' : 'opacity-20'}`} />
             </CardContent>

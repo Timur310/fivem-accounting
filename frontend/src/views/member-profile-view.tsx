@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -346,7 +347,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <CardContent>
                 {/* Neutral like the three stat cards beside it: a score is
                     not a verdict the faction accent gets to colour. */}
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{performance.score}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100"><CountUp value={performance.score} format={(n) => String(Math.round(n))} /></div>
                 <p className="text-meta text-zinc-600 mt-1">{t('profile.outOf100')}</p>
               </CardContent>
             </Card>
@@ -380,7 +381,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.currencyContributed)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100"><CountUp value={contribution.currencyContributed} format={fmt} /></div>
                 <p className="text-meta text-zinc-600 mt-1">
                   {t('entries.count', { count: contribution.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(contribution.avgPerCurrencyEntry) })}
                 </p>
@@ -400,7 +401,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100"><CountUp value={payoutStats.currencyReceived} format={fmt} /></div>
                 <p className="text-meta text-zinc-600 mt-1">{t('payouts.count', { count: payoutStats.payoutCount })}</p>
                 {payoutStats.itemReceived > 0 && (
                   <p className="text-meta text-zinc-600 mt-0.5">+ {fmtItems(payoutStats.itemReceived)}</p>

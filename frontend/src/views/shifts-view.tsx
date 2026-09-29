@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -339,7 +340,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
                     {t('shifts.shiftCount').replace('{count}', String(row.shiftCount))}
                   </span>
                   <span className="w-20 text-right text-sm tabular-nums text-zinc-100">
-                    {hoursAndMinutes(row.minutes)}
+                    <CountUp value={row.minutes} format={(n) => hoursAndMinutes(Math.round(n))} />
                   </span>
                 </div>
               ))}

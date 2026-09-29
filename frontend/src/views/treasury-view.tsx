@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { treasuryApi, expensesApi, itemTypesApi, factionSettingsApi, apiErrorMessage } from '@/lib/api-client';
@@ -163,7 +164,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                 on the per-item balances below. */}
             <div className="flex flex-wrap items-center gap-3">
               <div className={cn("text-3xl font-medium tabular-nums tracking-tight", netBalance < 0 ? "text-negative" : "text-zinc-200")}>
-                {netBalance < 0 ? '-' : ''}{fmt(displayNetBalance)}
+                {netBalance < 0 ? '-' : ''}<CountUp value={displayNetBalance} format={fmt} />
               </div>
               {/* Decorative: the figure is already red and the line below says
                   the same thing in words, so this is hidden from readers. */}
@@ -194,7 +195,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                 <TrendingDown className="h-3.5 w-3.5 text-emerald-400 rotate-180" />
               </div>
               <span className="text-2xl font-medium tabular-nums tracking-tight text-emerald-400">
-                {fmt(totalInflow)}
+                <CountUp value={totalInflow} format={fmt} />
               </span>
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('treasury.inflowNote')}</p>
@@ -212,7 +213,7 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                 <ArrowDownToLine className="h-3.5 w-3.5 text-red-400" />
               </div>
               <span className="text-2xl font-medium tabular-nums tracking-tight text-red-400">
-                {fmt(totalOutflow)}
+                <CountUp value={totalOutflow} format={fmt} />
               </span>
             </div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('treasury.outflowNote')}</p>
@@ -342,7 +343,11 @@ export function TreasuryView({ factionId, canManageExpenses = false, canManageCh
                       thing in reverse whenever that accent was green — and the
                       opposite whenever it was red. */}
                   <div className={cn("text-2xl font-medium tabular-nums tracking-tight", b.balance < 0 ? "text-negative" : "text-zinc-200")}>
-                    {b.balance < 0 ? '-' : ''}{formatAmount(Math.abs(b.balance), b.unit, b.isCurrency)}
+                    {b.balance < 0 ? '-' : ''}
+                    <CountUp
+                      value={Math.abs(b.balance)}
+                      format={(n) => formatAmount(n, b.unit, b.isCurrency)}
+                    />
                   </div>
                   <div className="flex justify-between text-meta text-zinc-500 tabular-nums">
                     <span className="text-emerald-500/80">{t('treasury.inflowRow', { amount: formatAmount(b.inflow, b.unit, b.isCurrency) })}</span>
