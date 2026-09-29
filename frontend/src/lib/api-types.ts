@@ -2244,8 +2244,17 @@ export interface TakingsLine {
   entryCount: number;
 }
 
+/** What a brought item's cuts are paid in by default, when not itself. */
+export interface WagePayIn {
+  itemTypeId: string;
+  payItemTypeId: string;
+  /** How much of the paying item one unit of the brought item is worth. */
+  rate: string;
+}
+
 export interface Takings {
   hasRates: boolean;
+  payIn: WagePayIn[];
   lines: TakingsLine[];
 }
 
@@ -2254,6 +2263,8 @@ export interface WagePayLine {
   itemTypeId: string;
   percent: string;
   brought: string;
+  payItemTypeId?: string;
+  rate?: string;
 }
 
 export interface ShiftList {

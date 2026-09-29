@@ -24,9 +24,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatAmount } from '@/lib/format';
-import { cents, fromCents, isPercent, shareCents } from '@/lib/wage-math';
+import { cents, convertCents, fromCents, isPercent, isRate, rateUnits, shareCents } from '@/lib/wage-math';
 import { cn } from '@/lib/utils';
-import { HandCoins, Percent, Plus, Trash2 } from 'lucide-react';
+import { ArrowRight, HandCoins, Percent, Plus, Trash2 } from 'lucide-react';
 import type { CommissionRate, ItemType } from '@/lib/api-types';
 
 type Period = 'this-week' | 'last-week' | 'this-month' | 'last-month';
@@ -50,6 +50,9 @@ function daysFor(period: Period): { from: string; to: string } {
   sunday.setDate(monday.getDate() + 6);
   return { from: isoDay(monday), to: isoDay(sunday) };
 }
+
+/** "0.7500" as "0.75", the way somebody would have typed it. */
+const trimRate = (rate: string) => (rate.includes('.') ? rate.replace(/\.?0+$/, '') : rate);
 
 const lineKey = (l: { userId: string; itemTypeId: string }) => `${l.userId}:${l.itemTypeId}`;
 
@@ -76,6 +79,9 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
   const [pickedItem, setPickedItem] = usePersistedState<string>(`wages.item.${factionId}`, '');
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [everyone, setEveryone] = useState('');
+  // What each brought item is paid in, as changed on this screen and not yet
+  // saved. Kept across periods: it is how the faction pays, not what it owes.
+  const [payInEdits, setPayInEdits] = useState<Record<string, { payItemTypeId: string; rate: string }>>({});
   const [ratesOpen, setRatesOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -113,18 +119,32 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
   const item = itemById.get(itemId);
   const isCurrency = item?.isCurrency ?? true;
 
+  // Paid in: this screen's edit, else the saved default, else the item itself.
+  const savedPayIn = takings.data?.payIn.find((p) => p.itemTypeId === itemId);
+  const payIn = payInEdits[itemId]
+    ?? (savedPayIn ? { payItemTypeId: savedPayIn.payItemTypeId, rate: trimRate(savedPayIn.rate) } : { payItemTypeId: itemId, rate: '1' });
+  const payItem = itemById.get(payIn.payItemTypeId) ?? item;
+  const payIsCurrency = payItem?.isCurrency ?? true;
+  const converts = payIn.payItemTypeId !== itemId || (isRate(payIn.rate) && rateUnits(payIn.rate) !== 10_000);
+  const payInChanged = !!payInEdits[itemId] && (
+    savedPayIn
+      ? savedPayIn.payItemTypeId !== payIn.payItemTypeId || rateUnits(savedPayIn.rate) !== rateUnits(payIn.rate || '0')
+      : converts
+  );
+
   const rows = useMemo(() => lines
     .filter((l) => l.itemTypeId === itemId)
     .map((line) => {
       const percent = overrides[lineKey(line)] ?? line.ratePercent ?? '';
       const share = shareCents(line.brought, percent || '0', isCurrency);
-      return { line, percent, share };
-    }), [lines, itemId, overrides, isCurrency]);
+      const paid = converts ? convertCents(share, payIn.rate, payIsCurrency) : share;
+      return { line, percent, share, paid };
+    }), [lines, itemId, overrides, isCurrency, converts, payIn.rate, payIsCurrency]);
 
   const brought = rows.reduce((sum, r) => sum + cents(r.line.brought), 0);
-  const shares = rows.reduce((sum, r) => sum + r.share, 0);
-  const payable = rows.filter((r) => r.share > 0 && isPercent(r.percent));
-  const invalid = rows.some((r) => r.percent !== '' && !isPercent(r.percent));
+  const paidTotal = rows.reduce((sum, r) => sum + r.paid, 0);
+  const payable = rows.filter((r) => r.paid > 0 && isPercent(r.percent));
+  const invalid = rows.some((r) => r.percent !== '' && !isPercent(r.percent)) || !isRate(payIn.rate);
   const missingRates = rows.some((r) => r.line.ratePercent === null && overrides[lineKey(r.line)] === undefined);
 
   const pay = useMutation({
@@ -133,6 +153,7 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
       itemTypeId: r.line.itemTypeId,
       percent: r.percent.trim(),
       brought: r.line.brought,
+      ...(converts ? { payItemTypeId: payIn.payItemTypeId, rate: payIn.rate.trim() } : {}),
     }))),
     onSuccess: (result) => {
       setConfirming(false);
@@ -165,7 +186,26 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
     }));
   };
 
+  const savePayIn = useMutation({
+    mutationFn: () => wagesApi.savePayIn(factionId, itemId, payIn.payItemTypeId, payIn.rate.trim()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['wages', factionId] });
+      setPayInEdits((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+      toast({ title: t('wages.payInSaved') });
+    },
+    onError: (err) =>
+      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' }),
+  });
+
+  const editPayIn = (patch: Partial<{ payItemTypeId: string; rate: string }>) =>
+    setPayInEdits((current) => ({ ...current, [itemId]: { ...payIn, ...patch } }));
+
   const amount = (value: number) => formatAmount(fromCents(value), item?.unit ?? '', isCurrency);
+  const payAmount = (value: number) => formatAmount(fromCents(value), payItem?.unit ?? '', payIsCurrency);
   const payLabel = canPayDirect
     ? t('wages.pay', { count: payable.length })
     : t('wages.request', { count: payable.length });
@@ -243,15 +283,64 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
                 </div>
                 <div>
                   <dt className="text-xs text-zinc-500">{t('wages.memberGets')}</dt>
-                  <dd className="text-lg font-semibold tabular-nums text-emerald-300 sm:text-2xl">{amount(shares)}</dd>
+                  <dd className="text-lg font-semibold tabular-nums text-emerald-300 sm:text-2xl">{payAmount(paidTotal)}</dd>
+                  {converts && (
+                    <dd className="text-[11px] text-zinc-500">{t('wages.inItem', { item: payItem?.name ?? '' })}</dd>
+                  )}
                 </div>
                 <div>
                   <dt className="text-xs text-zinc-500">{t('wages.factionKeeps')}</dt>
-                  <dd className="text-lg font-semibold tabular-nums text-zinc-100 sm:text-2xl">{amount(brought - shares)}</dd>
+                  <dd className="text-lg font-semibold tabular-nums text-zinc-100 sm:text-2xl">{amount(payIn.payItemTypeId !== itemId ? brought : brought - paidTotal)}</dd>
                 </div>
               </dl>
 
+              {/* What the cut is paid in: the item itself, or another at a value. */}
               <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-4">
+                <span className="text-sm text-zinc-400">{t('wages.paidIn')}</span>
+                <SearchableSelect
+                  className="w-44"
+                  size="sm"
+                  value={payIn.payItemTypeId}
+                  onValueChange={(payItemTypeId) => editPayIn(
+                    payItemTypeId === itemId ? { payItemTypeId, rate: '1' } : { payItemTypeId },
+                  )}
+                  options={(itemsQuery.data ?? [])
+                    .filter((i: ItemType) => i.isActive !== false || i.id === itemId)
+                    .map((i: ItemType) => ({
+                      value: i.id,
+                      label: i.name,
+                      icon: <ItemIcon src={i.imageUrl} icon={i.icon} category={i.category} className="size-4" />,
+                    }))}
+                  aria-label={t('wages.paidIn')}
+                />
+                {payIn.payItemTypeId !== itemId && (
+                  <span className="flex flex-wrap items-center gap-1.5 text-sm text-zinc-400">
+                    <span>1 {item?.name}</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-zinc-600" />
+                    <Input
+                      className={cn('h-8 w-20', !isRate(payIn.rate) && 'border-red-500/60')}
+                      inputMode="decimal"
+                      value={payIn.rate}
+                      onChange={(e) => editPayIn({ rate: e.target.value })}
+                      placeholder="0.7"
+                      aria-label={t('wages.exchange')}
+                    />
+                    <span>{payItem?.name}</span>
+                  </span>
+                )}
+                {payInChanged && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => savePayIn.mutate()}
+                    disabled={!isRate(payIn.rate) || savePayIn.isPending}
+                  >
+                    {t('wages.saveDefault')}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-zinc-400">{t('wages.everyoneGets')}</span>
                 <Input
                   className="h-8 w-20"
@@ -313,9 +402,9 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
                         </span>
                         <span className={cn(
                           'text-right text-sm font-medium tabular-nums',
-                          row.share > 0 ? 'text-emerald-300' : 'text-zinc-600',
+                          row.paid > 0 ? 'text-emerald-300' : 'text-zinc-600',
                         )}>
-                          {amount(row.share)}
+                          {payAmount(row.paid)}
                         </span>
                       </div>
                     );
@@ -353,8 +442,8 @@ export function WagesView({ factionId, canPayDirect }: { factionId: string; canP
             </AlertDialogTitle>
             <AlertDialogDescription>
               {canPayDirect
-                ? t('wages.confirmPayBody', { count: payable.length, amount: amount(shares), item: item?.name ?? '' })
-                : t('wages.confirmRequestBody', { count: payable.length, amount: amount(shares), item: item?.name ?? '' })}
+                ? t('wages.confirmPayBody', { count: payable.length, amount: payAmount(paidTotal), item: payItem?.name ?? '' })
+                : t('wages.confirmRequestBody', { count: payable.length, amount: payAmount(paidTotal), item: payItem?.name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
