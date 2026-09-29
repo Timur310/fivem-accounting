@@ -181,6 +181,12 @@ sidebar shows exactly what your rank gives you:
 | `manage_crafting` | Writing and retiring recipes, and reverting a craft (§6.7) |
 | `craft` | Running a saved recipe (§6.7). Safe to hand out widely — it spends materials, it does not define what they cost |
 | `manage_map` | Creating maps and drawing on them (§6.8). Only on maps the holder can already open |
+| `manage_prices` | Setting prices, add-ons, partners and bulk discounts (§6.11), and reverting a booked sale |
+| `manage_vehicles` | Adding, editing and deleting vehicles in the registry (§6.12). Reading it needs nothing |
+| `update_storage` | Changing counts in the storage planner: putting in, taking out, moving between containers, min and max (§5.12) |
+| `manage_storage` | Drawing storage rooms: walls, doors, where each container stands and how much it holds (§6.13) |
+| `sell` | Booking a sale into the treasury (§6.11). Safe to hand out widely — it records what was sold, it does not decide what things cost |
+| *(rank, not a permission)* | Seeing cost and margin (§6.11). Set in the price list, and it works like a map's rank: at or above the level you pick |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
 | `manage_quotas` | Creating and editing quotas |
 | `manage_item_types` | The faction's item types |
@@ -457,6 +463,87 @@ The feed narrows itself to what you are allowed to see; a Discord channel shows
 the same message to everyone in it. Choose which channels get what accordingly.
 
 ---
+
+### 5.11 Operations — logging a job you did together
+
+You and three others hit the bank. The cash and the gold are in one person's
+pockets, and now four people have to log four numbers that add up. **Don't.**
+Open **Operations** and log it once.
+
+Fill in what it was (*Pacific Standard*), the kind, roughly where and when, add
+everybody who was on it, and list what came back — one line per item.
+
+**Shares.** Everybody starts on 1, which splits it evenly. Give somebody 2 and
+they take twice as much as somebody on 1. You don't have to make anything add
+up to 100.
+
+**Faction cut.** If your faction keeps a percentage, type it in. It comes off
+the top before the crew split, and it counts for nobody — it does not put the
+person filling in the form at the top of the leaderboard.
+
+**Check the split before you log it.** The bottom of the form shows exactly
+what each person will be credited with, worked out by the server. Every
+hundredth is handed out, so the shares always add back up to the haul.
+
+Press **Log it** and everybody's share is written into the books as a normal
+entry — it counts for quotas, the leaderboard and the treasury like anything
+else you log.
+
+**Nothing to divide?** Leave the haul empty. A job that went wrong, a favour,
+a fight — log who was there and what happened, and nothing touches the books.
+
+**Takings, but nobody is owed a share?** Add the haul and pick **All to the
+faction**. It goes into the vault, and nobody is credited, so no leaderboard
+moves.
+
+**Rating the crew.** Each person on the job has five stars and a note beside
+them. Both are optional, both are part of that operation rather than a score
+that follows the member around, and clicking the same star again clears it.
+
+**Got it wrong?** Somebody with *Revert Operations* can take the whole thing
+back out in one go from the card, and then you log it again with the right
+numbers. You cannot edit one person's share on its own — that is how a split
+stops adding up.
+
+### 5.12 Storage — which bench holds what *(beta)*
+
+> **Beta.** Storage is new. It may still change, and the page says so at the
+> top. The counts here are the faction's own: they **never** change the
+> treasury, and nothing you log elsewhere changes them. Found something odd?
+> Use the link in the beta notice, or Support (§5.8).
+
+Your depot, drawn as a floor plan: walls, doors, and every bench, chest, safe
+and locker where it really stands. Each container shows what is in it and how
+much.
+
+**Finding something.** Type in *Where is…?* — say `pistol`. Every container in
+the room holding it lights up and the rest fade, and underneath you see which
+**other** rooms have it too; click one to jump there.
+
+**Reading the plan.** A bar along the bottom of a container shows how full it
+is (green, then amber, then red). A **red dot** means something inside is below
+the minimum leadership set for it. *List* shows the same containers as cards
+grouped by tag, which is easier on a phone.
+
+**Taking or putting things back** (needs *Update Storage*). Click the
+container. **−** and **+** change a line by one — most trips to a bench. Click
+the line itself for more:
+
+- an amount, then **Add**, **Take**, or **It is exactly this** after counting;
+- **Move to…** another container (it joins the same item there if it is already
+  listed);
+- **Warn below** and **At most** for that item in that container.
+
+A container may hold at most a set number of units in total. Going over it,
+or over an item's *At most*, is refused — just like a full chest in game.
+
+**History** in the container shows who put in, took out, moved or corrected
+what, and when. **Everything in here is counted right** records that you
+checked it (a stocktake).
+
+**Books vs storage**, folded at the bottom of the page, puts what the treasury
+says the faction owns next to what is counted in containers — so *40 pistols
+in the books, 32 in storage* shows up as *8 not put away*.
 
 ## 6. For leaders — running the faction
 
@@ -758,6 +845,185 @@ The app's memory of who did what: actor, action, entity, timestamp, and
 before/after values for changes. Filterable and paginated. It is
 append-only — no editing, no deleting, for anyone. See §10.
 
+### 6.12 The vehicle registry (`manage_vehicles`)
+
+Every vehicle the faction keeps track of, in one searchable list. Anyone in the
+faction can open it and look a plate up; changing what is in it needs
+`manage_vehicles`.
+
+**The table** shows plate, make and model, colour, owner, year and status.
+Click any row for the full card, with the notes and the history.
+
+**Search is one box** over the four things you actually have in front of you:
+plate, owner, make, model. It matches part of a word, so `45AB` finds
+`45ABC123` and `vega` finds anything owned by Marco Vega — including vehicles
+whose owner is a member of the faction rather than a typed name.
+
+**Filters** sit beside it: status and category, with the number of vehicles in
+each status counted over the whole registry rather than the page you are
+looking at.
+
+**Status** is a fixed list, so that it means the same thing to everyone: in
+service, in repair, impounded, stolen, sold, scrapped. Beside it you can write
+a line of detail — "impounded at Mission Row, out on the 14th". The status is
+what colours the row, so a registry can be read down its right-hand edge.
+
+**The owner is either a member or a name.** Pick somebody from the roster and
+the link survives them changing their name; type a name for anyone who is not
+on it — an ally, a business, somebody you only half know.
+
+**Plates are unique.** The app refuses a second record for a plate it already
+holds, whatever the casing, and points you at the record that exists. Two cards
+for one car is the thing a registry is for preventing.
+
+**History** on each card says who added the vehicle, who changed it, when, and
+exactly what changed — "colour: Black → Red". Only the fields that actually
+moved are recorded, so the one change you are looking for is not buried. You
+need `manage_vehicles` or `view_audit_logs` to see it: whoever may change a
+record may see who changed it before them.
+
+**Deleting is permanent.** If the car is simply gone, set it to sold or
+scrapped instead — that keeps the record and its history.
+
+**Discord.** Adding and deleting a vehicle can both be announced in a channel,
+like the rest of the activity — switch them on under Settings → Discord. The
+message leads with the plate.
+
+---
+
+### 6.11 The price calculator (`manage_prices`)
+
+Somewhere to look up what something costs, so nobody has to do the maths in
+the middle of a deal. Every member can open it and build a quote; changing
+what things cost needs `manage_prices`.
+
+**Calculator.** Pick the buyer, add the items, read the total. If a product has
+extras — a suppressor, an extended magazine — they appear as buttons under the
+line; tick the ones being sold and the price follows. **Copy for Discord** puts
+the whole quote on your clipboard, itemised, ready to paste to the person
+you are talking to.
+
+**Price list.** One price per item, and the currency it is quoted in, so
+"$40,000 clean" and "$40,000 dirty" cannot be confused for each other. A price
+can carry a **floor** — the lowest it should ever go for. Discounts that fall
+under it are flagged in red, not blocked: the app tells you, and you decide.
+
+Retiring a price keeps it and hides it from the calculator. Deleting it takes
+its add-ons with it.
+
+**Bulk discounts** are rungs: "5 or more, 10% off". Set them for everything, or
+for one item. An item with its own rungs ignores the faction-wide ones
+completely — so a ladder on pistols replaces the general one rather than
+stacking with it.
+
+**Partners** are the crews you sell to on standing terms, each with their own
+discount. Pick one on the calculator and the discount applies to every line.
+Everyone else is a walk-in at full price.
+
+Two things worth knowing about the numbers:
+
+- **Discounts add up, they do not compound.** An ally at 15% buying in bulk at
+  10% off pays 25% less. Not 23.5% — you have to be able to say the number out
+  loud and have the buyer's own arithmetic agree with it.
+- **Everything in one quote has to be in the same currency.** Mixing them would
+  need an exchange rate, and the app will not invent one. Quote them
+  separately.
+
+Deactivating a partner is better than deleting them where the deal is only
+paused.
+
+### Booking a sale (`sell`)
+
+When the deal is done, press **Sold**. The payment goes into the treasury and
+the goods come out of it, in one act — no separate entry, no withdrawal per
+item. This is the part that removes the double bookkeeping.
+
+It asks two things first:
+
+- **Whose contribution it counts as.** *Nobody* moves the treasury and leaves
+  every leaderboard alone, the way laundering does. *The seller* credits you,
+  as a logged entry would. Pick whichever matches how your faction measures
+  work.
+- **A note**, if the sale needs one.
+
+**Selling more than the vault holds is allowed.** The app books it and tells
+you what is short, rather than refusing in front of the buyer — usually it
+means the stock is real and the books are behind.
+
+**Sales** lists what has been booked, newest first. **Revert** on any of them
+takes the payment back out and puts the goods back, together. Reverting needs
+`manage_prices`, not `sell`: the till takes money in, and moving it back out is
+a different decision. It is refused if the money has already been spent — the
+vault cannot give back what it no longer has.
+
+While a sale stands, the rows it wrote cannot be edited or deleted one at a
+time on the entries or withdrawals screens. Half an unpicked sale is money
+received for goods that never moved, and the app will not let the books say
+that. Revert the sale instead.
+
+### What the deal is worth
+
+If you have written crafting recipes and priced their materials, the
+calculator also shows **cost** and **margin** — what the goods cost the
+faction to make, and what is left after the discount. Nothing extra to enter:
+the recipe already says ten steel makes a pistol, and the price list already
+says what steel costs.
+
+Three things it will not do:
+
+- If any material in a recipe has no price, it shows **no cost for that item
+  at all** rather than a number that looks like a margin and is not one. It
+  says so under the total.
+- If two of your recipes make the same thing, it uses the **cheaper** one.
+- The margin is a percentage of the price, not of the cost — "we keep 40% of
+  what they pay".
+
+**Who sees it is up to you.** In the price list, *Who sees cost and margin*
+sets a rank: everyone, or only that rank and above. A soldier at the counter
+does not need to know the markup, and a screenshot from them should not reveal
+it. Below the line, the figures are not hidden on screen — they are never sent
+to that browser at all.
+
+### Selling in two kinds of money
+
+If your faction quotes some things in clean money and some in dirty, set the
+**exchange rates** in the price list. Then the calculator gets a *Quote in*
+picker: one basket, priced in whichever money the buyer is paying with, with
+each converted line marked.
+
+Each direction is its own rate. Dirty → clean does not give the app clean →
+dirty, on purpose: washing money takes a cut, so the reverse is a different
+deal and you should be the one to say what it is.
+
+Without a rate the app refuses rather than inventing one, and the message names
+the two currencies so you know which rate is missing.
+
+### 6.13 Drawing storage rooms (`manage_storage`) *(beta)*
+
+**New room** starts from a template — an empty grid, walls only (any size), a
+small garage, a big depot or a stash house — and everything in it can be
+changed afterwards. **Room settings** renames or deletes a room and links it to
+a pin on the map, which gives the room a *Show on map* button.
+
+**Edit room** opens the drawing on a copy; nobody sees it until you **Save**.
+
+- **Wall**, **Door**, **Erase**: drag across the grid to paint.
+- **Move**: drag a container to place it, drag its corner to resize it. A red
+  outline means it cannot stand there (a wall, a door or another container),
+  and letting go puts it back.
+- **Add** a bench, chest, safe, fridge, locker, rack or crate. Click one to
+  set its name, colour, tags, **holds at most** (total units) and notes.
+- **R** rotates, **Delete** removes, **Ctrl+Z** / **Ctrl+Y** undo and redo.
+  **Pan** lets a phone scroll a big room without moving anything.
+
+Removing a container removes what is recorded inside it, so saving a drawing
+that does that asks first and names the containers.
+
+Two permissions, on purpose: *Update Storage* is for whoever fetches from the
+benches, *Manage Storage Rooms* for whoever decides the layout. Looking needs
+nothing. With Discord connected, the **Running low in storage** event (§8.6)
+posts once when an item drops below its minimum.
+
 ---
 
 ## 7. Reports, exports and printing
@@ -988,6 +1254,44 @@ request through Support (§5.8) if you would like it turned on.
 
 ---
 
+### 8.7 Features this faction uses
+
+Not every faction wants every part of this app. A faction that only wants plates
+and a map should not be reading a menu of twenty-three screens.
+
+In **Settings → Features this faction uses**, tick what you need. Whatever you
+untick disappears from the menu for everybody, and its permissions disappear
+from the rank editor above — which is what makes setting up ranks short.
+
+**Nothing is deleted.** A switched-off feature stops accepting new records and
+keeps showing the old ones to anything that asks, and ticking it again finds
+everything exactly where you left it. Turn something off for a month and back
+on, and your ledger is untouched.
+
+Only a faction admin can change this.
+
+### 8.8 Starting from a rank template
+
+A blank rank list is the hardest part of setting a faction up. In **Settings →
+Rank hierarchy**, press **Start from a template** and pick the shape that fits:
+
+- **Crew** — a small group: someone runs it, someone helps, everybody else does
+  the work.
+- **Organisation** — a full hierarchy, with leadership and officers.
+- **Business** — a front or a real company: owner, managers, staff.
+
+The ranks appear **in the editor, not saved.** Rename them, change the levels,
+tick and untick permissions, then press Save. Members keep the rank they have
+until you do.
+
+The permissions each rank starts with follow the features your faction uses
+(§8.7), so a faction that only runs plates and a map is not handed a list of
+accounting permissions.
+
+The bottom rank deliberately holds nothing. Reading is open to members
+everywhere in this app, so a new recruit can already see the registry, the map,
+the noticeboard and the leaderboard on their first day.
+
 ## 9. For superadmins
 
 ### 9.1 Factions
@@ -1046,6 +1350,43 @@ Each ticket shows who sent it, which faction they were in, and the full message
 A ticket the reporter withdrew shows as **Withdrawn** and needs nothing from
 you.
 
+### 9.6 Backup
+
+**Download** gives you one file holding the entire database: every faction,
+every entry, every withdrawal, every member, every strike. **Restore** takes
+such a file and puts it back.
+
+Nothing is kept on the server. That is on purpose — a copy that lives on the
+machine it is protecting is not a backup, and a folder of database dumps
+sitting beside the database is the thing an intruder would want most. It has a
+cost, and it is yours to carry: **the backup is exactly as fresh as the last
+time you clicked Download.** Somebody has to do it, and nobody will be
+reminded.
+
+So: download regularly, and put the file somewhere else. Another machine,
+another drive, a cloud folder — anywhere the server cannot reach.
+
+The panel at the top says whether backups can run at all. If it reports that
+the tools are missing, or that it is pointed at the connection pooler, the
+buttons will not work until whoever deploys the app fixes it — the message
+names what to change.
+
+**Restoring replaces everything.** Anything entered between the moment that
+file was made and now is gone, with no way back. Because of that:
+
+- You have to type `RESTORE` before the button will do anything.
+- The file is checked before a single row is touched. Anything that is not a
+  backup this page produced is refused outright.
+- The server takes a copy of the current database first, automatically, and
+  refuses to restore at all if that copy fails. Where it put it is in the
+  message you get at the end — write it down if the restore turns out to be
+  the wrong file.
+- Either the whole file goes in or none of it does. A restore that fails
+  halfway leaves the database exactly as it was.
+
+One thing to expect: after a restore, the accounts that exist are the accounts
+in the file. If yours is not one of them, you will be signed out.
+
 ---
 
 ## 10. The audit log — who did what
@@ -1094,6 +1435,9 @@ action, the entity, when it happened, and before/after values for changes.
   it never colors a number.
 - **Private notes stay private.** A member can see their own strikes; they
   can never see the notes written about them.
+- **Only a superadmin can copy the database.** The backup page is the one
+  place the whole server leaves in one piece, so it is the one page no faction
+  admin can reach, in their own faction or anywhere else.
 - **A hidden map mark is absent, not hidden.** Marks on a map your rank
   cannot open are never sent to your browser, so there is nothing to find
   by looking harder. The same rule blocks editing one: you can only change

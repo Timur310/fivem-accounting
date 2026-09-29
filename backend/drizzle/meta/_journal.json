@@ -253,6 +253,13 @@
       "when": 1790681317336,
       "tag": "0035_wage_pay_in",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790706168674,
+      "tag": "0036_storage",
+      "breakpoints": true
     }
   ]
 }

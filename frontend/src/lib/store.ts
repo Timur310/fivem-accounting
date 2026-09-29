@@ -17,6 +17,7 @@ export type AppView =
   | 'operations'
   | 'shifts'
   | 'wages'
+  | 'storage'
   | 'complaints'
   | 'map'
   | 'members'
@@ -54,6 +55,9 @@ interface AppState {
 
   // Selected member (for profile view)
   selectedMemberUserId: string | null;
+  /** A map pin another screen asked the map to open on, once. */
+  focusMarkerId: string | null;
+  setFocusMarkerId: (id: string | null) => void;
   setSelectedMemberUserId: (id: string | null) => void;
 
   // Brand color
@@ -93,6 +97,8 @@ export const useAppStore = create<AppState>((set) => ({
   )),
 
   selectedMemberUserId: null,
+  focusMarkerId: null,
+  setFocusMarkerId: (id) => set({ focusMarkerId: id }),
   setSelectedMemberUserId: (id) => set({ selectedMemberUserId: id }),
 
   brandColor: DEFAULT_BRAND_COLOR,

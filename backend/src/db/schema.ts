@@ -192,6 +192,12 @@ export const FACTION_PERMISSIONS = [
   // paying it. Leadership: a percentage is a decision about the faction's
   // money, and the screen shows every member's takings side by side.
   'manage_wages',
+  // The storage planner. Looking at it needs nothing — the people fetching
+  // from a bench are the ones who need to know which bench — so there are two
+  // permissions for changing it: counting what is in a container, which is
+  // the shop floor, and redrawing the room, which is not.
+  'update_storage',
+  'manage_storage',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -223,6 +229,8 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_shifts: "Edit Everyone's Shifts",
   manage_complaints: 'Handle Complaints',
   manage_wages: 'Calculate Wages',
+  update_storage: 'Update Storage',
+  manage_storage: 'Manage Storage Rooms',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -798,6 +806,7 @@ export const DISCORD_EVENT_TYPES = [
   // whether it is about a member or the faction, and nothing else: the
   // complaint itself is read in the app, by the people who may read it.
   'complaint_filed',
+  'storage_low',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1975,3 +1984,122 @@ export const factionReportsRelations = relations(factionReports, ({ one }) => ({
 
 export type FactionReport = typeof factionReports.$inferSelect;
 export type NewFactionReport = typeof factionReports.$inferInsert;
+
+
+// ── storage planner ────────────────────────────────────
+// Which bench, chest or safe in the depot holds what.
+//
+// Its own inventory, counted by hand: nothing here writes to the ledger, and
+// nothing in the ledger moves a count here. The screen compares the two so a
+// faction can see what it owns but has not put anywhere.
+
+/** What a container is, for its icon. Changes no arithmetic. */
+export const STORAGE_CONTAINER_KINDS = [
+  'bench', 'chest', 'safe', 'fridge', 'locker', 'rack', 'crate', 'other',
+] as const;
+export type StorageContainerKind = (typeof STORAGE_CONTAINER_KINDS)[number];
+
+/** A painted grid cell. */
+export const STORAGE_TILE_KINDS = ['wall', 'door'] as const;
+export type StorageTileKind = (typeof STORAGE_TILE_KINDS)[number];
+
+export const storageRooms = pgTable('storage_rooms', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  name:        varchar('name', { length: 80 }).notNull(),
+  /** Grid size in cells. */
+  width:       integer('width').notNull(),
+  height:      integer('height').notNull(),
+  /** Walls and doors painted on the grid. Cells not listed are floor. */
+  tiles:       jsonb('tiles').$type<{ x: number; y: number; kind: StorageTileKind }[]>().notNull().default([]),
+  /** Where the room is in the city, if somebody pinned it on the map. */
+  mapMarkerId: uuid('map_marker_id').references(() => mapMarkers.id, { onDelete: 'set null' }),
+  sortOrder:   integer('sort_order').notNull().default(0),
+  createdBy:   uuid('created_by').notNull().references(() => users.id),
+  createdAt:   timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('storage_room_faction').on(table.factionId),
+}));
+
+export const storageContainers = pgTable('storage_containers', {
+  id:        uuid('id').defaultRandom().primaryKey(),
+  factionId: uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  roomId:    uuid('room_id').notNull().references(() => storageRooms.id, { onDelete: 'cascade' }),
+  kind:      varchar('kind', { length: 20 }).notNull().default('chest'),
+  name:      varchar('name', { length: 80 }).notNull(),
+  color:     varchar('color', { length: 7 }),
+  tags:      jsonb('tags').$type<string[]>().notNull().default([]),
+  /** Top-left cell and size in cells. Rotating swaps width and height. */
+  x:         integer('x').notNull(),
+  y:         integer('y').notNull(),
+  w:         integer('w').notNull().default(1),
+  h:         integer('h').notNull().default(1),
+  /** The most units it holds in total, or null for no limit. */
+  capacity:  decimal('capacity', { precision: 15, scale: 2 }),
+  notes:     text('notes'),
+  /** When somebody last confirmed every count in it (stocktake). */
+  checkedAt: timestamp('checked_at', { withTimezone: true }),
+  checkedBy: uuid('checked_by').references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  roomIndex: index('storage_container_room').on(table.roomId),
+}));
+
+export const storageContents = pgTable('storage_contents', {
+  id:          uuid('id').defaultRandom().primaryKey(),
+  factionId:   uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  containerId: uuid('container_id').notNull().references(() => storageContainers.id, { onDelete: 'cascade' }),
+  /** One of the faction's items, or null for something typed in. */
+  itemTypeId:  uuid('item_type_id').references(() => itemTypes.id, { onDelete: 'set null' }),
+  /** What it is called: the typed name, or the item's name when it was added. */
+  label:       varchar('label', { length: 100 }).notNull(),
+  quantity:    decimal('quantity', { precision: 15, scale: 2 }).notNull().default('0'),
+  /** Warn below this. */
+  minQuantity: decimal('min_quantity', { precision: 15, scale: 2 }),
+  /** Refuse above this. */
+  maxQuantity: decimal('max_quantity', { precision: 15, scale: 2 }),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  containerIndex: index('storage_content_container').on(table.containerId),
+  itemIndex:      index('storage_content_item').on(table.factionId, table.itemTypeId),
+}));
+
+/** What happened to a count. */
+export const STORAGE_MOVEMENT_KINDS = ['add', 'take', 'set', 'move', 'remove'] as const;
+export type StorageMovementKind = (typeof STORAGE_MOVEMENT_KINDS)[number];
+
+/**
+ * Every change to a count, for a container's history.
+ *
+ * Kept by name rather than by row: the content row can be removed and the
+ * container deleted, and "who took the last of the pistols" should still be
+ * answerable. Container ids are set null when the container goes; the names
+ * stay.
+ */
+export const storageMovements = pgTable('storage_movements', {
+  id:              uuid('id').defaultRandom().primaryKey(),
+  factionId:       uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  containerId:     uuid('container_id').references(() => storageContainers.id, { onDelete: 'set null' }),
+  /** For a move: where it went. */
+  toContainerId:   uuid('to_container_id').references(() => storageContainers.id, { onDelete: 'set null' }),
+  containerName:   varchar('container_name', { length: 80 }).notNull(),
+  toContainerName: varchar('to_container_name', { length: 80 }),
+  itemTypeId:      uuid('item_type_id').references(() => itemTypes.id, { onDelete: 'set null' }),
+  label:           varchar('label', { length: 100 }).notNull(),
+  kind:            varchar('kind', { length: 10 }).notNull(),
+  /** How much changed; for `set`, the count before is `before`. */
+  amount:          decimal('amount', { precision: 15, scale: 2 }).notNull(),
+  before:          decimal('before', { precision: 15, scale: 2 }),
+  userId:          uuid('user_id').notNull().references(() => users.id),
+  createdAt:       timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  containerIndex: index('storage_movement_container').on(table.containerId, table.createdAt),
+  factionIndex:   index('storage_movement_faction').on(table.factionId, table.createdAt),
+}));
+
+export type StorageRoom = typeof storageRooms.$inferSelect;
+export type StorageContainer = typeof storageContainers.$inferSelect;
+export type StorageContent = typeof storageContents.$inferSelect;
+export type StorageMovement = typeof storageMovements.$inferSelect;

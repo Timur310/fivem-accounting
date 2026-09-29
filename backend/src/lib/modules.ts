@@ -43,6 +43,7 @@ export const FACTION_MODULES = [
   'operations',
   'shifts',
   'wages',
+  'storage',
   'complaints',
   'vehicles',
   'map',
@@ -78,6 +79,8 @@ export const PERMISSION_MODULE: Partial<Record<string, FactionModule>> = {
   view_shifts: 'shifts',
   manage_shifts: 'shifts',
   manage_wages: 'wages',
+  update_storage: 'storage',
+  manage_storage: 'storage',
   manage_vehicles: 'vehicles',
   manage_map: 'map',
   view_reports: 'reports',
@@ -108,6 +111,7 @@ export const EVENT_MODULE: Partial<Record<string, FactionModule>> = {
   shift_started: 'shifts',
   shift_ended: 'shifts',
   complaint_filed: 'complaints',
+  storage_low: 'storage',
 };
 
 /**

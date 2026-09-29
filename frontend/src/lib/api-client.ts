@@ -97,6 +97,15 @@ import type {
   ShiftInput,
   ShiftRate,
   CommissionRate,
+  StorageCompareRow,
+  StorageContainerInput,
+  StorageContent,
+  StorageMovement,
+  StorageRoom,
+  StorageRoomDetail,
+  StorageRoomSummary,
+  StorageSearchResult,
+  StorageTile,
   Takings,
   WagePayLine,
   ShiftKind,
@@ -1376,6 +1385,61 @@ export const shiftsApi = {
         { from, to },
       )
       .then(unwrap),
+};
+
+/** The storage planner: rooms, the containers in them, and what they hold. */
+export const storageApi = {
+  rooms: (factionId: string) =>
+    api.get<ApiSuccessResponse<{ rooms: StorageRoomSummary[] }>>(`/factions/${factionId}/storage/rooms`).then(unwrap),
+
+  room: (factionId: string, roomId: string) =>
+    api.get<ApiSuccessResponse<StorageRoomDetail>>(`/factions/${factionId}/storage/rooms/${roomId}`).then(unwrap),
+
+  createRoom: (factionId: string, input: {
+    name: string; width: number; height: number; tiles?: StorageTile[]; containers?: Omit<StorageContainerInput, 'id'>[];
+  }) =>
+    api.post<ApiSuccessResponse<StorageRoom>>(`/factions/${factionId}/storage/rooms`, input).then(unwrap),
+
+  updateRoom: (factionId: string, roomId: string, input: { name?: string; mapMarkerId?: string | null }) =>
+    api.patch<ApiSuccessResponse<StorageRoom>>(`/factions/${factionId}/storage/rooms/${roomId}`, input).then(unwrap),
+
+  /** The whole drawing at once; containers left out are removed. */
+  saveLayout: (factionId: string, roomId: string, input: {
+    width: number; height: number; tiles: StorageTile[]; containers: StorageContainerInput[];
+  }) =>
+    api.put<ApiSuccessResponse<StorageRoomDetail>>(`/factions/${factionId}/storage/rooms/${roomId}/layout`, input).then(unwrap),
+
+  removeRoom: (factionId: string, roomId: string) =>
+    api.delete(`/factions/${factionId}/storage/rooms/${roomId}`),
+
+  search: (factionId: string, q: string) =>
+    api.get<ApiSuccessResponse<{ results: StorageSearchResult[] }>>(`/factions/${factionId}/storage/search`, { params: { q } }).then(unwrap),
+
+  compare: (factionId: string) =>
+    api.get<ApiSuccessResponse<{ items: StorageCompareRow[] }>>(`/factions/${factionId}/storage/compare`).then(unwrap),
+
+  history: (factionId: string, containerId: string) =>
+    api.get<ApiSuccessResponse<{ history: StorageMovement[] }>>(`/factions/${factionId}/storage/containers/${containerId}/history`).then(unwrap),
+
+  addContent: (factionId: string, containerId: string, input: {
+    itemTypeId?: string; label?: string; quantity: string; minQuantity?: string | null; maxQuantity?: string | null;
+  }) =>
+    api.post<ApiSuccessResponse<StorageContent>>(`/factions/${factionId}/storage/containers/${containerId}/contents`, input).then(unwrap),
+
+  /** `delta` adds or (negative) takes; `quantity` sets the count outright. */
+  changeContent: (factionId: string, contentId: string, input: {
+    delta?: string; quantity?: string; minQuantity?: string | null; maxQuantity?: string | null;
+  }) =>
+    api.patch<ApiSuccessResponse<StorageContent>>(`/factions/${factionId}/storage/contents/${contentId}`, input).then(unwrap),
+
+  removeContent: (factionId: string, contentId: string) =>
+    api.delete(`/factions/${factionId}/storage/contents/${contentId}`),
+
+  moveContent: (factionId: string, contentId: string, toContainerId: string, amount: string) =>
+    api.post<ApiSuccessResponse<{ moved: string }>>(`/factions/${factionId}/storage/contents/${contentId}/move`, { toContainerId, amount }).then(unwrap),
+
+  markChecked: (factionId: string, containerId: string) =>
+    api.post<ApiSuccessResponse<{ id: string; checkedAt: string }>>(`/factions/${factionId}/storage/containers/${containerId}/checked`).then(unwrap),
 };
 
 /** Wages from takings: a percentage of what each member brought in. */

@@ -934,6 +934,8 @@ export const FACTION_PERMISSIONS = [
   'log_shifts', 'view_shifts', 'manage_shifts',
   'manage_complaints',
   'manage_wages',
+  'update_storage',
+  'manage_storage',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -962,6 +964,8 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_shifts: 'permission.manageShifts',
   manage_complaints: 'permission.manageComplaints',
   manage_wages: 'permission.manageWages',
+  update_storage: 'permission.updateStorage',
+  manage_storage: 'permission.manageStorage',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1696,6 +1700,7 @@ export const DISCORD_EVENT_TYPES = [
   'shift_started',
   'shift_ended',
   'complaint_filed',
+  'storage_low',
 ] as const;
 export type DiscordEventType = (typeof DISCORD_EVENT_TYPES)[number];
 
@@ -1743,6 +1748,7 @@ export const DISCORD_EVENT_LABEL_KEYS: Record<DiscordEventType, TranslationKey> 
   shift_started: 'discord.event.shiftStarted',
   shift_ended: 'discord.event.shiftEnded',
   complaint_filed: 'discord.event.complaintFiled',
+  storage_low: 'discord.event.storageLow',
 };
 
 export interface DiscordIntegration {
@@ -2219,6 +2225,117 @@ export interface Payroll {
   unrated: { userId: string; userName: string; minutes: number; shiftCount: number }[];
 }
 
+// ── storage planner ────────────────────────────────────
+
+export const STORAGE_CONTAINER_KINDS = ['bench', 'chest', 'safe', 'fridge', 'locker', 'rack', 'crate', 'other'] as const;
+export type StorageContainerKind = (typeof STORAGE_CONTAINER_KINDS)[number];
+
+export interface StorageTile { x: number; y: number; kind: 'wall' | 'door' }
+
+export interface StorageRoomSummary {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  mapMarkerId: string | null;
+  sortOrder: number;
+  containerCount: number;
+}
+
+export interface StorageRoom {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  tiles: StorageTile[];
+  mapMarkerId: string | null;
+}
+
+export interface StorageContent {
+  id: string;
+  containerId: string;
+  itemTypeId: string | null;
+  label: string;
+  /** Decimal strings, exact. */
+  quantity: string;
+  minQuantity: string | null;
+  maxQuantity: string | null;
+  updatedAt: string;
+}
+
+export interface StorageContainer {
+  id: string;
+  kind: StorageContainerKind;
+  name: string;
+  color: string | null;
+  tags: string[];
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  capacity: string | null;
+  notes: string | null;
+  checkedAt: string | null;
+  checkedByName: string | null;
+  contents: StorageContent[];
+}
+
+export interface StorageRoomDetail {
+  room: StorageRoom;
+  containers: StorageContainer[];
+}
+
+/** A container as the layout editor saves it. No id: a new one. */
+export interface StorageContainerInput {
+  id?: string;
+  kind: StorageContainerKind;
+  name: string;
+  color: string | null;
+  tags: string[];
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  capacity: string | null;
+  notes: string | null;
+}
+
+export interface StorageSearchResult {
+  roomId: string;
+  roomName: string;
+  containerId: string;
+  containerName: string;
+  contentId: string;
+  itemTypeId: string | null;
+  label: string;
+  quantity: string;
+}
+
+export interface StorageMovement {
+  id: string;
+  kind: 'add' | 'take' | 'set' | 'move' | 'remove';
+  label: string;
+  amount: string;
+  before: string | null;
+  containerId: string | null;
+  containerName: string;
+  toContainerId: string | null;
+  toContainerName: string | null;
+  userName: string;
+  createdAt: string;
+}
+
+export interface StorageCompareRow {
+  itemTypeId: string;
+  name: string;
+  unit: string;
+  isCurrency: boolean;
+  /** What the treasury holds, or null when the books have never seen it. */
+  inBooks: string | null;
+  inStorage: string;
+  containers: number;
+}
+
 // ── wages from takings ─────────────────────────────────
 
 /** A member's cut of an item, for a rank or (rank null) everyone else. */
@@ -2376,7 +2493,7 @@ export interface ComplaintInput {
 
 export const FACTION_MODULES = [
   'entries', 'payouts', 'treasury', 'expenses', 'quotas', 'strikes',
-  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'wages', 'complaints', 'vehicles', 'map',
+  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'wages', 'storage', 'complaints', 'vehicles', 'map',
   'leaderboard', 'announcements', 'feed', 'reports',
 ] as const;
 export type FactionModule = (typeof FACTION_MODULES)[number];
@@ -2394,6 +2511,7 @@ export const MODULE_LABEL_KEYS: Record<FactionModule, TranslationKey> = {
   operations: 'nav.operations',
   shifts: 'nav.shifts',
   wages: 'nav.wages',
+  storage: 'nav.storage',
   complaints: 'nav.complaints',
   vehicles: 'nav.vehicles',
   map: 'nav.map',
@@ -2416,6 +2534,7 @@ export const MODULE_HINT_KEYS: Record<FactionModule, TranslationKey> = {
   operations: 'module.hint.operations',
   shifts: 'module.hint.shifts',
   wages: 'module.hint.wages',
+  storage: 'module.hint.storage',
   complaints: 'module.hint.complaints',
   vehicles: 'module.hint.vehicles',
   map: 'module.hint.map',
@@ -2443,6 +2562,8 @@ export const PERMISSION_MODULE: Partial<Record<FactionPermission, FactionModule>
   view_shifts: 'shifts',
   manage_shifts: 'shifts',
   manage_wages: 'wages',
+  update_storage: 'storage',
+  manage_storage: 'storage',
   manage_complaints: 'complaints',
   manage_vehicles: 'vehicles',
   manage_map: 'map',

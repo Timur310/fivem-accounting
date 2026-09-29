@@ -47,6 +47,7 @@ import pricingRoutes from './routes/pricing.js';
 import operationRoutes from './routes/operations.js';
 import shiftRoutes from './routes/shifts.js';
 import wageRoutes from './routes/wages.js';
+import storageRoutes from './routes/storage.js';
 import complaintRoutes from './routes/complaints.js';
 import vehicleRoutes from './routes/vehicles.js';
 
@@ -82,7 +83,7 @@ const allowedOrigins = env.CORS_ORIGINS.split(',').map(s => s.trim());
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   exposedHeaders: ['X-Request-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
 }));
@@ -184,6 +185,7 @@ app.use('/api/v1/factions/:id/pricing', pricingRoutes);
 app.use('/api/v1/factions/:id/operations', operationRoutes);
 app.use('/api/v1/factions/:id/shifts', shiftRoutes);
 app.use('/api/v1/factions/:id/wages', wageRoutes);
+app.use('/api/v1/factions/:id/storage', storageRoutes);
 app.use('/api/v1/factions/:id/complaints', complaintRoutes);
 app.use('/api/v1/factions/:id/vehicles', vehicleRoutes);
 app.use('/api/v1/factions/:id/map', mapRoutes);
