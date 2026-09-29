@@ -4,7 +4,8 @@ import * as m from 'motion/react-m';
 import { glide, screenIn } from '@/lib/motion';
 import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
 import { APP_COPYRIGHT, APP_VERSION, APP_VERSION_LABEL } from '@/lib/app-meta';
-import { authApi, factionSettingsApi, supportApi } from '@/lib/api-client';
+import { authApi, complaintsApi, factionSettingsApi, shiftsApi, supportApi } from '@/lib/api-client';
+import { useBump } from '@/hooks/use-bump';
 import type { FactionPermission } from '@/lib/api-types';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -158,6 +159,8 @@ interface NavItem {
   superadminOnly?: boolean;
   /** Unread-style count rendered on the right of the item, when above zero. */
   badgeCount?: number;
+  /** Something is happening here right now: a breathing dot. */
+  live?: boolean;
 }
 
 export function AppShell() {
@@ -339,6 +342,36 @@ export function AppShell() {
   });
   const openTicketCount = openTickets?.open ?? 0;
 
+  const moduleOn = (module: FactionModule) =>
+    isModuleEnabled(factionSettings?.enabledModules, module);
+
+  // Complaints still waiting, for the people who settle them — the same idea
+  // as the support inbox badge, one level down. One row is asked for; the
+  // count comes with it.
+  const handlesComplaints = !!currentFactionMembership
+    && hasPermission('manage_complaints') && moduleOn('complaints');
+  const { data: complaintQueue } = useQuery({
+    queryKey: ['complaints-open-count', selectedFactionId],
+    queryFn: () => complaintsApi.list(selectedFactionId!, { limit: 1 }),
+    enabled: handlesComplaints && !!selectedFactionId,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const openComplaintCount = complaintQueue?.openCount ?? 0;
+
+  // Whether the caller is on shift, for a live dot beside Shifts wherever
+  // they are in the app. Shares the clock's own query, so the dot and the
+  // clock can never disagree.
+  const tracksShifts = !!currentFactionMembership && moduleOn('shifts')
+    && (hasPermission('log_shifts') || hasPermission('manage_shifts'));
+  const { data: dutyData } = useQuery({
+    queryKey: ['shifts-on-duty', selectedFactionId],
+    queryFn: () => shiftsApi.onDuty(selectedFactionId!),
+    enabled: tracksShifts && !!selectedFactionId,
+    refetchInterval: 60_000,
+  });
+  const onShift = !!dutyData?.mine;
+
   const navItems: NavItem[] = [
     // First in the list: what is going on with *me*, before what is going on
     // with the faction. Members-only because it is all about the caller's own
@@ -377,11 +410,18 @@ export function AppShell() {
     // No permission: everybody with a timesheet has one of their own to read,
     // and the screen narrows itself to it. Whose hours you can see and whose
     // you can correct are decided inside the view.
-    { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts' },
+    { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts', live: onShift },
     // No permission: anybody may raise something, and the screen narrows to
     // what they filed unless they hold manage_complaints. A complaints box
     // only some ranks can open is not one.
-    { group: 'people', view: 'complaints', label: 'nav.complaints', icon: MessageSquareWarning, module: 'complaints' },
+    {
+      group: 'people',
+      view: 'complaints',
+      label: 'nav.complaints',
+      icon: MessageSquareWarning,
+      module: 'complaints',
+      badgeCount: openComplaintCount,
+    },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
@@ -784,14 +824,16 @@ export function AppShell() {
                       )}
                       <item.icon className={`relative h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
                       {sidebarOpen && <span className="relative truncate">{t(item.label)}</span>}
-                      {!!item.badgeCount && (
+                      {item.live && !item.badgeCount && (
                         <span
-                          className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-micro tabular-nums ${
-                            sidebarOpen ? 'px-1.5 py-0.5' : 'absolute translate-x-3 -translate-y-2 px-1'
-                          }`}
+                          className={sidebarOpen ? 'relative ml-auto mr-1' : 'absolute right-2 top-2'}
+                          aria-label={t('nav.liveNow')}
                         >
-                          {item.badgeCount}
+                          <span className="live-dot" />
                         </span>
+                      )}
+                      {!!item.badgeCount && (
+                        <NavBadge count={item.badgeCount} collapsed={!sidebarOpen} />
                       )}
                     </button>
                   );
@@ -950,5 +992,25 @@ export function AppShell() {
         </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * The count beside a sidebar item, bumping when it rises.
+ *
+ * Its own component because each item needs its own memory of the last
+ * count, and hooks cannot be called inside the loop that draws the sidebar.
+ */
+function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
+  const bump = useBump(count);
+  return (
+    <span
+      key={bump}
+      className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-micro tabular-nums ${
+        collapsed ? 'absolute translate-x-3 -translate-y-2 px-1' : 'relative px-1.5 py-0.5'
+      } ${bump > 0 ? 'badge-bump' : ''}`}
+    >
+      {count}
+    </span>
   );
 }
