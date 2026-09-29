@@ -1,5 +1,6 @@
 'use client';
 
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
@@ -18,10 +19,6 @@ import { EmptyState, ErrorState, ListSkeleton } from '@/components/ui/empty-stat
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Megaphone, Pin, Plus, Pencil, Trash2, Eye, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
@@ -68,7 +65,6 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
   const [includeExpired, setIncludeExpired] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [editing, setEditing] = useState<Announcement | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
   const [readsFor, setReadsFor] = useState<Announcement | null>(null);
 
   const [title, setTitle] = useState('');
@@ -77,7 +73,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
   const [isPinned, setIsPinned] = useState(false);
   const [expiresAt, setExpiresAt] = useState('');
 
-  const { data: items = [], isLoading, isError, error, refetch } = useQuery({
+  const { data: allItems = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['announcements', factionId, includeExpired],
     queryFn: () => announcementsApi.list(factionId, { include_expired: includeExpired }),
     staleTime: 0,
@@ -123,17 +119,12 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => announcementsApi.remove(factionId, id),
-    onSuccess: () => {
-      toast({ title: t('announcements.removed') });
-      setDeleteTarget(null);
-      invalidate();
-    },
-    onError: (err: unknown) => {
-      toast({ title: t('common.failed'), description: apiErrorMessage(err), variant: 'destructive' });
-    },
+  // Deleted at once, with a few seconds to take it back. See useUndoableDelete.
+  const removal = useUndoableDelete({
+    run: (id) => announcementsApi.remove(factionId, id),
+    onDone: () => invalidate(),
   });
+  const items = allItems.filter((a) => !removal.hidden.has(a.id));
 
   const markRead = useMutation({
     mutationFn: (id: string) => announcementsApi.markRead(factionId, id),
@@ -278,7 +269,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
                           variant="ghost" size="icon"
                           className="h-6 w-6 text-zinc-500 hover:text-red-300"
                           aria-label={t('common.delete')}
-                          onClick={() => setDeleteTarget(a)}
+                          onClick={() => removal.request(a.id)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -392,23 +383,6 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('announcements.removeTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('announcements.removeConfirm')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleteMutation.isPending}
-              onClick={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); }}
-            >
-              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

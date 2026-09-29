@@ -1,5 +1,6 @@
 'use client';
 
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { entriesApi, itemTypesApi, exportApi, factionsApi, membersApi } from '@/lib/api-client';
@@ -26,10 +27,6 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
@@ -120,8 +117,6 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
   const [editDate, setEditDate] = useState('');
   const [editCustomValues, setEditCustomValues] = useState<Record<string, string>>({});
 
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
 
   const { data: entriesData, isLoading, isError, error: entriesError, refetch: refetchEntries } = useQuery({
     queryKey: ['entries', factionId, page, itemTypeIdFilter, dateFrom, dateTo, searchQuery, sort],
@@ -231,18 +226,16 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => entriesApi.remove(factionId, deleteEntryId!),
-    onSuccess: () => {
+  // Deleted at once, with a few seconds to take it back. See useUndoableDelete.
+  // An entry held by a sale or an operation is refused by the server; the
+  // hook puts it back and says why.
+  const removal = useUndoableDelete({
+    run: (id) => entriesApi.remove(factionId, id),
+    onDone: () => {
       queryClient.invalidateQueries({ queryKey: ['entries', factionId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
       queryClient.invalidateQueries({ queryKey: ['quotas', factionId] });
       queryClient.invalidateQueries({ queryKey: ['charts', factionId] });
-      setDeleteOpen(false);
-      toast({ title: t('entries.deleted') });
-    },
-    onError: (err: any) => {
-      toast({ title: t('common.deleteFailed'), description: err.response?.data?.error?.message || t('common.unknownError'), variant: 'destructive' });
     },
   });
 
@@ -265,7 +258,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
     setEditOpen(true);
   };
 
-  const entries = entriesData?.data ?? [];
+  const entries = (entriesData?.data ?? []).filter((e) => !removal.hidden.has(e.id));
 
   const user = useAppStore((s) => s.user);
   // Mid-roleplay friction is the enemy: the dialog opens pre-filled with the
@@ -521,7 +514,7 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
                                 <Button
                                   variant="ghost" size="icon-xs" className="text-zinc-500 hover:text-red-400"
                                   title={isAdmin ? undefined : t('entries.undo')}
-                                  onClick={() => { setDeleteEntryId(entry.id); setDeleteOpen(true); }}
+                                  onClick={() => removal.request(entry.id)}
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
@@ -731,20 +724,6 @@ export function EntriesView({ factionId, isAdmin, canLogEntries, canCreditSelf =
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('entries.deleteEntry')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('entries.deleteConfirm')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="bg-red-500 text-white hover:bg-red-600">
-              {deleteMutation.isPending ? t('common.deleting') : t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

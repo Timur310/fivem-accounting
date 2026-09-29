@@ -21,10 +21,6 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { displayName } from '@/lib/format';
@@ -34,6 +30,7 @@ import {
 import { useAppStore } from '@/lib/store';
 import { dayKey, minutesByDay } from '@/lib/shift-days';
 import { ShiftPayroll } from '@/components/shift-payroll';
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import {
   ShiftClock, hoursAndMinutes, likelyEnd, shiftQueryKeys, toLocalInput,
 } from '@/components/shift-clock';
@@ -99,7 +96,6 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage, canPayDir
   const [memberFilter, setMemberFilter] = usePersistedState<string>(`shifts.member.${factionId}`, '');
   const [editing, setEditing] = useState<Shift | null>(null);
   const [adding, setAdding] = useState(false);
-  const [removing, setRemoving] = useState<Shift | null>(null);
 
   // The month as exact instants in the viewer's own timezone. Sending bare
   // days had the server read them as UTC midnight — two in the morning in
@@ -154,17 +150,14 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage, canPayDir
   const fail = (err: unknown) =>
     toast({ title: t('shifts.failed'), description: apiErrorMessage(err), variant: 'destructive' });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => shiftsApi.remove(factionId, id),
-    onSuccess: () => {
-      invalidate();
-      setRemoving(null);
-      toast({ title: t('shifts.removed') });
-    },
-    onError: fail,
+  // Deleted at once, with a few seconds to take it back, instead of asked
+  // about first. See useUndoableDelete.
+  const removal = useUndoableDelete({
+    run: (id) => shiftsApi.remove(factionId, id),
+    onDone: invalidate,
   });
 
-  const shifts = list.data?.shifts ?? [];
+  const shifts = (list.data?.shifts ?? []).filter((s) => !removal.hidden.has(s.id));
 
   // Ticks once a minute so a shift still running keeps growing on the
   // calendar, including onto the next day once it passes midnight.
@@ -385,7 +378,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage, canPayDir
               // else's rota does not come with a pencil on it.
               canEdit={canManage || (canLog && shift.userId === user?.id)}
               onEdit={() => setEditing(shift)}
-              onRemove={() => setRemoving(shift)}
+              onRemove={() => removal.request(shift.id)}
             />
           ))}
           </div>
@@ -403,24 +396,6 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage, canPayDir
         />
       )}
 
-      <AlertDialog open={!!removing} onOpenChange={(open) => !open && setRemoving(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('shifts.removeTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('shifts.removeBody')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => removing && remove.mutate(removing.id)}
-              disabled={remove.isPending}
-              className="bg-red-600 text-white hover:bg-red-500"
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

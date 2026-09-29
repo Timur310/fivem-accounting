@@ -1,5 +1,6 @@
 'use client';
 
+import { useUndoableDelete } from '@/hooks/use-undoable-delete';
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -97,7 +98,6 @@ export function MapView({ factionId, canManage }: Props) {
   const [pending, setPending] = useState<MapMarkerInput | null>(null);
   /** The editor is naming a batch of pins rather than one marker. */
   const [pendingBulk, setPendingBulk] = useState(false);
-  const [deleting, setDeleting] = useState<MapMarker | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [editingLayer, setEditingLayer] = useState<MapLayer | 'new' | null>(null);
   const [deletingLayer, setDeletingLayer] = useState<MapLayer | null>(null);
@@ -139,7 +139,15 @@ export function MapView({ factionId, canManage }: Props) {
   });
 
   const layers = useMemo(() => layersQuery.data?.layers ?? [], [layersQuery.data]);
-  const allMarkers = useMemo(() => markersQuery.data?.markers ?? [], [markersQuery.data]);
+  // Deleted at once, with a few seconds to take it back. See useUndoableDelete.
+  const removal = useUndoableDelete({
+    run: (id) => mapApi.remove(factionId, id),
+    onDone: () => invalidate(),
+  });
+  const allMarkers = useMemo(
+    () => (markersQuery.data?.markers ?? []).filter((m) => !removal.hidden.has(m.id)),
+    [markersQuery.data, removal.hidden],
+  );
   // Hidden layers are a view setting, not a permission: the server already
   // withheld anything this viewer may not open.
   // Finding one marker among hundreds. Bulk placement made layers of fifty
@@ -237,15 +245,6 @@ export function MapView({ factionId, canManage }: Props) {
     mutationFn: (id: string) => mapApi.removeLayer(factionId, id),
     onSuccess: () => {
       setDeletingLayer(null);
-      invalidate();
-    },
-    onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
-  });
-
-  const remove = useMutation({
-    mutationFn: (id: string) => mapApi.remove(factionId, id),
-    onSuccess: () => {
-      setDeleting(null);
       invalidate();
     },
     onError: (e) => toast({ title: apiErrorMessage(e), variant: 'destructive' }),
@@ -888,7 +887,7 @@ export function MapView({ factionId, canManage }: Props) {
                         />
                         <Trash2
                           className="h-3.5 w-3.5 text-zinc-500 hover:text-red-400"
-                          onClick={(e) => { e.stopPropagation(); setDeleting(marker); }}
+                          onClick={(e) => { e.stopPropagation(); removal.request(marker.id); }}
                         />
                       </span>
                     )}
@@ -953,20 +952,6 @@ export function MapView({ factionId, canManage }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('map.deleteConfirm', { name: deleting?.name ?? '' })}</AlertDialogTitle>
-            <AlertDialogDescription>{t('map.deleteBody')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleting && remove.mutate(deleting.id)}>
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
