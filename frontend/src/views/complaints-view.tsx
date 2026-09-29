@@ -1,5 +1,6 @@
 'use client';
 
+import { Segmented } from '@/components/ui/segmented';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { complaintsApi, membersApi, apiErrorMessage } from '@/lib/api-client';
@@ -102,22 +103,15 @@ export function ComplaintsView({ factionId, canHandle }: Props) {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('common.status')}>
-          {(['', 'open', 'in_review', 'resolved', 'dismissed'] as const).map((value) => (
-            <button
-              key={value || 'all'}
-              role="tab"
-              type="button"
-              aria-selected={statusFilter === value}
-              onClick={() => setStatusFilter(value)}
-              className={`h-7 rounded-md px-3 text-xs font-medium transition-colors ${
-                statusFilter === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {value ? t(COMPLAINT_STATUS_KEYS[value]) : t('complaints.allStatuses')}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label={t('common.status')}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={(['', 'open', 'in_review', 'resolved', 'dismissed'] as const).map((value) => ({
+            value,
+            label: value ? t(COMPLAINT_STATUS_KEYS[value]) : t('complaints.allStatuses'),
+          }))}
+        />
       </div>
 
       {query.isLoading ? (
@@ -275,22 +269,17 @@ function ComposeDialog({
         <div className="space-y-3">
           <div className="space-y-1">
             <Label>{t('complaints.about')}</Label>
-            <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('complaints.about')}>
-              {(['faction', 'member'] as const).map((value) => (
-                <button
-                  key={value}
-                  role="tab"
-                  type="button"
-                  aria-selected={about === value}
-                  onClick={() => setAbout(value)}
-                  className={`h-8 flex-1 rounded-md px-3 text-xs font-medium transition-colors ${
-                    about === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {t(value === 'faction' ? 'complaints.aboutFaction' : 'complaints.aboutMember')}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label={t('complaints.about')}
+              size="md"
+              fill
+              value={about}
+              onChange={setAbout}
+              options={[
+                { value: 'faction', label: t('complaints.aboutFaction') },
+                { value: 'member', label: t('complaints.aboutMember') },
+              ]}
+            />
           </div>
 
           {about === 'member' && (

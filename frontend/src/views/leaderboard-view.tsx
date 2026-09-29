@@ -1,5 +1,6 @@
 'use client';
 
+import { Segmented } from '@/components/ui/segmented';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
@@ -126,19 +127,15 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
             </Button>
           )}
           {/* Segmented period control — a race you can flip with a tap. */}
-          <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('leaderboard.period')}>
-            {(Object.keys(PERIOD_KEYS) as string[]).map((value) => (
-              <button
-                key={value}
-                role="tab"
-                aria-selected={period === value}
-                onClick={() => setPeriod(value)}
-                className={`h-7 px-3 rounded-md text-xs font-medium transition-colors ${period === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                {t(PERIOD_KEYS[value])}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label={t('leaderboard.period')}
+            value={period}
+            onChange={setPeriod}
+            options={(Object.keys(PERIOD_KEYS) as string[]).map((value) => ({
+              value,
+              label: t(PERIOD_KEYS[value]),
+            }))}
+          />
           {!showGlobal && (
             <SearchableSelect
               className="w-[140px]"

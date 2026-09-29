@@ -1,5 +1,6 @@
 'use client';
 
+import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shiftsApi, apiErrorMessage } from '@/lib/api-client';
@@ -236,22 +237,16 @@ export function ShiftClock({ factionId }: { factionId: string }) {
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <Label className="text-xs">{t('shifts.forWhom')}</Label>
-              <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('shifts.forWhom')}>
-                {(['faction', 'side'] as const).map((value) => (
-                  <button
-                    key={value}
-                    role="tab"
-                    type="button"
-                    aria-selected={kind === value}
-                    onClick={() => setKind(value)}
-                    className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${
-                      kind === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                    }`}
-                  >
-                    {t(value === 'faction' ? 'shifts.kindFaction' : 'shifts.kindSide')}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                label={t('shifts.forWhom')}
+                size="md"
+                value={kind}
+                onChange={setKind}
+                options={[
+                  { value: 'faction', label: t('shifts.kindFaction') },
+                  { value: 'side', label: t('shifts.kindSide') },
+                ]}
+              />
             </div>
             <div className="min-w-[10rem] flex-1 space-y-1">
               <Label htmlFor="shift-position" className="text-xs">{t('shifts.position')}</Label>

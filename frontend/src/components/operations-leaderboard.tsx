@@ -1,5 +1,6 @@
 'use client';
 
+import { Segmented } from '@/components/ui/segmented';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { operationsApi } from '@/lib/api-client';
@@ -62,13 +63,13 @@ export function OperationsLeaderboard({ factionId }: { factionId: string }) {
             label={t('operations.board.sortBy')}
             options={SORTS.map((s) => ({ value: s.value, label: t(s.key) }))}
             value={sort}
-            onChange={(value) => setSort(value as 'operations' | 'rating')}
+            onChange={setSort}
           />
           <Segmented
             label={t('leaderboard.period')}
             options={PERIODS.map((p) => ({ value: p.value, label: t(p.key) }))}
             value={period}
-            onChange={(value) => setPeriod(value as 'week' | 'month' | 'all')}
+            onChange={setPeriod}
           />
         </div>
       </div>
@@ -116,37 +117,6 @@ export function OperationsLeaderboard({ factionId }: { factionId: string }) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/** The period and sort switches, which are the same control twice. */
-function Segmented({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={label}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          role="tab"
-          aria-selected={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={`h-7 rounded-md px-3 text-xs font-medium transition-colors ${
-            value === option.value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
     </div>
   );
 }
