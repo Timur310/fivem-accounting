@@ -626,6 +626,7 @@ export function AppShell() {
             canLog={hasPermission('log_shifts') || hasPermission('manage_shifts')}
             canViewAll={hasPermission('view_shifts') || hasPermission('manage_shifts')}
             canManage={hasPermission('manage_shifts')}
+            canPayDirect={hasPermission('manage_payouts')}
           /> : null;
       case 'my-day':
         return selectedFactionId ? <MyDayView

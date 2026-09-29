@@ -2182,6 +2182,39 @@ export interface Shift {
   workedMinutes: number | null;
   /** Still open after twelve hours, which usually means somebody forgot. */
   stale: boolean;
+  /** The payout that paid for it, once payroll has run over it. */
+  payoutId: string | null;
+}
+
+/** What an hour is worth at one position; `position` null is the default. */
+export interface ShiftRate {
+  position: string | null;
+  itemTypeId: string;
+  hourlyRate: string;
+  itemTypeName?: string;
+  unit?: string;
+  isCurrency?: boolean;
+}
+
+export interface PayrollLine {
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+  itemTypeId: string;
+  itemTypeName: string;
+  unit: string;
+  isCurrency: boolean;
+  /** Decimal string, exact. */
+  amount: string;
+  minutes: number;
+  shiftCount: number;
+}
+
+export interface Payroll {
+  hasRates: boolean;
+  lines: PayrollLine[];
+  /** Worked and recorded, but no rate covers it. */
+  unrated: { userId: string; userName: string; minutes: number; shiftCount: number }[];
 }
 
 export interface ShiftList {

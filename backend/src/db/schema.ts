@@ -1805,6 +1805,15 @@ export const shifts = pgTable('shifts', {
    */
   editedBy:  uuid('edited_by').references(() => users.id, { onDelete: 'set null' }),
 
+  /**
+   * The payout that paid for this shift, once payroll has been run over it.
+   *
+   * What stops a shift being paid twice. Only counts while that payout is
+   * live: a payout deleted or rejected afterwards leaves the shift unpaid
+   * again, so the next payroll picks it back up rather than losing it.
+   */
+  payoutId:  uuid('payout_id').references(() => payouts.id, { onDelete: 'set null' }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -1816,6 +1825,28 @@ export const shiftsRelations = relations(shifts, ({ one }) => ({
   faction: one(factions, { fields: [shifts.factionId], references: [factions.id] }),
   member:  one(users,    { fields: [shifts.userId],    references: [users.id] }),
 }));
+
+// ── shift_rates ────────────────────────────────────────
+// What an hour is worth, per position, for the factions that pay wages.
+//
+// Optional in every sense: a faction with no rates has a timesheet and nothing
+// else, exactly as before. The position is matched against the free text on
+// a shift, ignoring case; a row with no position is the rate for everything
+// that matches nothing else.
+export const shiftRates = pgTable('shift_rates', {
+  id:         uuid('id').defaultRandom().primaryKey(),
+  factionId:  uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  /** Null is the default rate, for any position without one of its own. */
+  position:   varchar('position', { length: 60 }),
+  /** Paid in this — one of the faction's currencies. */
+  itemTypeId: uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  hourlyRate: decimal('hourly_rate', { precision: 15, scale: 2 }).notNull(),
+  updatedAt:  timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('shift_rate_faction').on(table.factionId),
+}));
+
+export type ShiftRate = typeof shiftRates.$inferSelect;
 
 /** Whose work it was. Free text says *what*; this says *for whom*. */
 export const SHIFT_KINDS = ['faction', 'side'] as const;

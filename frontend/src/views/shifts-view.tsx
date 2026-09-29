@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 import { dayKey, minutesByDay } from '@/lib/shift-days';
+import { ShiftPayroll } from '@/components/shift-payroll';
 import {
   ShiftClock, hoursAndMinutes, likelyEnd, shiftQueryKeys, toLocalInput,
 } from '@/components/shift-clock';
@@ -44,8 +45,10 @@ interface Props {
   canLog: boolean;
   /** May read the whole rota rather than only their own hours. */
   canViewAll: boolean;
-  /** May correct and remove anybody's shift. */
+  /** May correct and remove anybody's shift, and run payroll. */
   canManage: boolean;
+  /** May settle payouts, so payroll pays rather than requests. */
+  canPayDirect?: boolean;
 }
 
 /** What the calendar knows about one day. */
@@ -82,7 +85,7 @@ function timeOnly(value: string): string {
  * screen — the calendar, the rota, the totals — is there for the conversation
  * afterwards about who actually turned up.
  */
-export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) {
+export function ShiftsView({ factionId, canLog, canViewAll, canManage, canPayDirect = false }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -350,6 +353,8 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         </Card>
       )}
 
+      {canManage && <ShiftPayroll factionId={factionId} canPayDirect={canPayDirect} />}
+
       {/* ── The shifts themselves ───────────────────── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -559,6 +564,11 @@ function ShiftRow({
           {shift.stale && (
             <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-[10px] text-amber-300">
               {t('shifts.probablyForgotten')}
+            </Badge>
+          )}
+          {shift.payoutId && (
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-[10px] text-emerald-400">
+              {t('payroll.paidBadge')}
             </Badge>
           )}
           {/* A timesheet somebody else corrected is a different thing from one

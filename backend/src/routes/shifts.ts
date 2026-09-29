@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
-import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
-import { shifts, users, SHIFT_KINDS } from '../db/schema.js';
+import { itemTypes, payouts, shiftRates, shifts, users, SHIFT_KINDS } from '../db/schema.js';
+import { computePayroll } from '../lib/payroll.js';
+import { toCents } from '../lib/treasury.js';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
@@ -247,6 +249,8 @@ const shiftColumns = {
   breakMinutes: shifts.breakMinutes,
   notes: shifts.notes,
   editedBy: shifts.editedBy,
+  /** Set once payroll has paid for it. */
+  payoutId: shifts.payoutId,
   createdAt: shifts.createdAt,
 };
 
@@ -330,6 +334,296 @@ router.get('/on-duty', async (req: Request, res: Response) => {
     mine: rows.filter((r) => r.userId === req.user!.id).map(present)[0] ?? null,
     seesEveryone: everyone,
   });
+});
+
+// ── Wages ─────────────────────────────────────────────
+//
+// Optional. A faction with no rates has a timesheet and nothing more, which
+// is what it had before. Rates and payroll are `manage_shifts`: what somebody
+// earns is between them and whoever runs the rota.
+
+const rateSchema = z.object({
+  position: z.string().trim().max(60).nullable(),
+  itemTypeId: z.string().uuid(),
+  hourlyRate: z.string().trim().regex(/^\d+(\.\d{1,2})?$/, 'A rate looks like 150 or 150.50'),
+});
+
+const ratesSchema = z.object({ rates: z.array(rateSchema).max(50) });
+
+const payrollSchema = z.object({
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+router.get('/rates', requirePermission('manage_shifts'), async (req: Request, res: Response) => {
+  const rows = await db
+    .select({
+      id: shiftRates.id,
+      position: shiftRates.position,
+      itemTypeId: shiftRates.itemTypeId,
+      itemTypeName: itemTypes.name,
+      unit: itemTypes.unit,
+      isCurrency: itemTypes.isCurrency,
+      hourlyRate: shiftRates.hourlyRate,
+    })
+    .from(shiftRates)
+    .innerJoin(itemTypes, eq(shiftRates.itemTypeId, itemTypes.id))
+    .where(eq(shiftRates.factionId, factionId(req)))
+    .orderBy(asc(shiftRates.position));
+  success(res, { rates: rows });
+});
+
+// The whole list at once: a rate table is edited as a table, and saving it
+// row by row would leave it half-changed if one row were refused.
+router.put('/rates', requirePermission('manage_shifts'), async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const parsed = ratesSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  const rates = parsed.data.rates.map((r) => ({
+    ...r,
+    position: r.position && r.position.length > 0 ? r.position : null,
+  }));
+
+  // One rate per position, matched the way payroll matches them — ignoring
+  // case — and one default. Two rates for "Cook" would leave payroll guessing.
+  const seen = new Set<string>();
+  for (const rate of rates) {
+    const key = (rate.position ?? '').toLowerCase();
+    if (seen.has(key)) {
+      error(res, 'VALIDATION_ERROR', rate.position
+        ? `"${rate.position}" has two rates`
+        : 'There can only be one default rate');
+      return;
+    }
+    seen.add(key);
+  }
+
+  // Paid in something that is money, and this faction's own.
+  const ids = [...new Set(rates.map((r) => r.itemTypeId))];
+  if (ids.length > 0) {
+    const owned = await db
+      .select({ id: itemTypes.id })
+      .from(itemTypes)
+      .where(and(eq(itemTypes.factionId, id), inArray(itemTypes.id, ids), eq(itemTypes.isCurrency, true)));
+    if (owned.length !== ids.length) {
+      error(res, 'VALIDATION_ERROR', 'Wages have to be paid in one of this faction\'s currencies');
+      return;
+    }
+  }
+
+  await db.transaction(async (tx: TransactionLike) => {
+    await tx.delete(shiftRates).where(eq(shiftRates.factionId, id));
+    if (rates.length > 0) {
+      await tx.insert(shiftRates).values(rates.map((r) => ({
+        factionId: id,
+        position: r.position,
+        itemTypeId: r.itemTypeId,
+        hourlyRate: r.hourlyRate,
+      })));
+    }
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId: id,
+      action: 'update',
+      entityType: 'shift_rates',
+      entityId: id,
+      details: { count: rates.length },
+      req,
+      tx,
+    });
+  });
+
+  success(res, { saved: rates.length });
+});
+
+/**
+ * The shifts payroll may pay: finished, faction work (never a side job),
+ * started inside the window, and not already paid.
+ *
+ * By start time, not split across midnight the way the calendar splits them:
+ * a night shift is paid once, in the period it began, rather than half in
+ * one week and half in the next.
+ */
+async function payableShifts(id: string, from: Date, to: Date, tx: TransactionLike | typeof db = db) {
+  const rows = await tx
+    .select({
+      id: shifts.id,
+      userId: shifts.userId,
+      position: shifts.position,
+      startedAt: shifts.startedAt,
+      endedAt: shifts.endedAt,
+      breakMinutes: shifts.breakMinutes,
+    })
+    .from(shifts)
+    .where(and(
+      eq(shifts.factionId, id),
+      eq(shifts.kind, 'faction'),
+      isNotNull(shifts.endedAt),
+      isNull(shifts.payoutId),
+      gte(shifts.startedAt, from),
+      lt(shifts.startedAt, to),
+    ));
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    position: r.position,
+    workedMinutes: workedMinutes(r) ?? 0,
+  }));
+}
+
+async function loadRates(id: string, tx: TransactionLike | typeof db = db) {
+  return tx
+    .select({ position: shiftRates.position, itemTypeId: shiftRates.itemTypeId, hourlyRate: shiftRates.hourlyRate })
+    .from(shiftRates)
+    .where(eq(shiftRates.factionId, id));
+}
+
+// ── GET /payroll — what is owed for a window ──────────
+
+router.get('/payroll', requirePermission('manage_shifts'), async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const parsed = payrollSchema.safeParse(req.query);
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+
+  const [payable, rates] = await Promise.all([
+    payableShifts(id, new Date(parsed.data.from), new Date(parsed.data.to)),
+    loadRates(id),
+  ]);
+  const payroll = computePayroll(payable, rates);
+
+  const userIds = [...new Set([...payroll.lines, ...payroll.unrated].map((l) => l.userId))];
+  const itemIds = [...new Set(payroll.lines.map((l) => l.itemTypeId))];
+  const [people, items] = await Promise.all([
+    userIds.length
+      ? db.select({ id: users.id, name: memberName, avatarUrl: users.avatarUrl })
+        .from(users).where(inArray(users.id, userIds))
+      : Promise.resolve([]),
+    itemIds.length
+      ? db.select({ id: itemTypes.id, name: itemTypes.name, unit: itemTypes.unit, isCurrency: itemTypes.isCurrency })
+        .from(itemTypes).where(inArray(itemTypes.id, itemIds))
+      : Promise.resolve([]),
+  ]);
+  const person = new Map(people.map((p) => [p.id, p]));
+  const item = new Map(items.map((i) => [i.id, i]));
+
+  success(res, {
+    hasRates: rates.length > 0,
+    lines: payroll.lines.map((l) => ({
+      userId: l.userId,
+      userName: person.get(l.userId)?.name ?? '',
+      avatarUrl: person.get(l.userId)?.avatarUrl ?? null,
+      itemTypeId: l.itemTypeId,
+      itemTypeName: item.get(l.itemTypeId)?.name ?? '',
+      unit: item.get(l.itemTypeId)?.unit ?? '',
+      isCurrency: item.get(l.itemTypeId)?.isCurrency ?? true,
+      amount: l.amount,
+      minutes: l.minutes,
+      shiftCount: l.shiftIds.length,
+    })),
+    unrated: payroll.unrated.map((u) => ({
+      userId: u.userId,
+      userName: person.get(u.userId)?.name ?? '',
+      minutes: u.minutes,
+      shiftCount: u.shiftIds.length,
+    })),
+  });
+});
+
+// ── POST /payroll — pay it ─────────────────────────────
+//
+// One payout per member per currency, and every shift it covers marked with
+// it, all in one transaction: the shifts are locked first, so two people
+// pressing Pay at the same moment cannot both pay the same week.
+//
+// The payout's status follows the rule every payout already follows. Somebody
+// who may also settle payouts is paying, so it is completed and leaves the
+// treasury; somebody who may only run the rota is asking, and it waits on the
+// payouts screen for a person who can grant it.
+
+router.post('/payroll', requirePermission('manage_shifts'), async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const parsed = payrollSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+  const from = new Date(parsed.data.from);
+  const to = new Date(parsed.data.to);
+  const status = holds(req, 'manage_payouts') ? 'completed' : 'pending';
+
+  const created = await db.transaction(async (tx: TransactionLike) => {
+    // Lock the rows this payroll is about to pay, so a second run waits and
+    // then finds them already paid.
+    await tx.execute(sql`
+      SELECT id FROM shifts
+      WHERE faction_id = ${id} AND kind = 'faction' AND ended_at IS NOT NULL
+        AND payout_id IS NULL AND started_at >= ${from} AND started_at < ${to}
+      FOR UPDATE`);
+
+    const payable = await payableShifts(id, from, to, tx);
+    const payroll = computePayroll(payable, await loadRates(id, tx));
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = [];
+
+    for (const line of payroll.lines) {
+      const hours = Math.floor(line.minutes / 60);
+      const minutes = line.minutes % 60;
+      const [payout] = await tx.insert(payouts).values({
+        factionId: id,
+        recipientUserId: line.userId,
+        createdBy: req.user!.id,
+        itemTypeId: line.itemTypeId,
+        amount: line.amount,
+        description: `Wages: ${hours}h ${minutes}m over ${line.shiftIds.length} shift${line.shiftIds.length === 1 ? '' : 's'}`,
+        payoutDate: today,
+        status,
+      }).returning();
+
+      await tx.update(shifts)
+        .set({ payoutId: payout!.id, updatedAt: new Date() })
+        .where(inArray(shifts.id, line.shiftIds));
+
+      await createAuditLog({
+        userId: req.user!.id,
+        factionId: id,
+        action: 'create',
+        entityType: 'payout',
+        entityId: payout!.id,
+        details: {
+          recipientUserId: line.userId,
+          itemTypeId: line.itemTypeId,
+          amount: line.amount,
+          status,
+          payroll: { shifts: line.shiftIds.length, minutes: line.minutes },
+        },
+        req,
+        tx,
+      });
+
+      rows.push(payout!);
+    }
+    return rows;
+  });
+
+  for (const payout of created) {
+    void dispatchDiscord(id, {
+      type: status === 'completed' ? 'payout_completed' : 'payout_requested',
+      actorUserId: req.user!.id,
+      recipientUserId: payout.recipientUserId,
+      itemTypeId: payout.itemTypeId,
+      amount: payout.amount,
+      description: payout.description,
+    });
+  }
+
+  success(res, { created: created.length, status, payouts: created }, 201);
 });
 
 // ── GET /positions — what this faction calls its jobs ──
@@ -646,6 +940,14 @@ router.patch('/:shiftId', async (req: Request, res: Response) => {
     error(res, 'FORBIDDEN', "You can only change your own shifts", 403);
     return;
   }
+  const changesPay = parsed.data.startedAt !== undefined || parsed.data.endedAt !== undefined
+    || parsed.data.breakMinutes !== undefined || parsed.data.position !== undefined
+    || parsed.data.kind !== undefined;
+  if (existing.payoutId && changesPay) {
+    error(res, 'VALIDATION_ERROR',
+      'This shift has been paid. Reject or delete its payout first, then correct it.', 409);
+    return;
+  }
   if (mine && !holds(req, 'log_shifts') && !canManage(req)) {
     error(res, 'FORBIDDEN', 'You do not have permission to record shifts', 403);
     return;
@@ -738,6 +1040,11 @@ router.delete('/:shiftId', async (req: Request, res: Response) => {
 
   if (existing.userId !== req.user!.id && !canManage(req)) {
     error(res, 'FORBIDDEN', "You can only remove your own shifts", 403);
+    return;
+  }
+  if (existing.payoutId) {
+    error(res, 'VALIDATION_ERROR',
+      'This shift has been paid. Reject or delete its payout first, then remove it.', 409);
     return;
   }
 

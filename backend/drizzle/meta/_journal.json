@@ -232,6 +232,13 @@
       "when": 1790251270879,
       "tag": "0032_faction_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790677796282,
+      "tag": "0033_shift_wages",
+      "breakpoints": true
     }
   ]
 }

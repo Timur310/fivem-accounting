@@ -92,8 +92,10 @@ import type {
   ComplaintInput,
   ComplaintList,
   ComplaintStatus,
+  Payroll,
   Shift,
   ShiftInput,
+  ShiftRate,
   ShiftKind,
   ShiftList,
   ShiftOnDuty,
@@ -1344,6 +1346,32 @@ export const shiftsApi = {
   remove: (factionId: string, id: string) =>
     api
       .delete<ApiSuccessResponse<{ deleted: boolean }>>(`/factions/${factionId}/shifts/${id}`)
+      .then(unwrap),
+
+  rates: (factionId: string) =>
+    api
+      .get<ApiSuccessResponse<{ rates: ShiftRate[] }>>(`/factions/${factionId}/shifts/rates`)
+      .then(unwrap),
+
+  /** The whole table at once, so it is never saved half-changed. */
+  saveRates: (factionId: string, rates: ShiftRate[]) =>
+    api
+      .put<ApiSuccessResponse<{ saved: number }>>(`/factions/${factionId}/shifts/rates`, {
+        rates: rates.map((r) => ({ position: r.position, itemTypeId: r.itemTypeId, hourlyRate: r.hourlyRate })),
+      })
+      .then(unwrap),
+
+  payroll: (factionId: string, from: string, to: string) =>
+    api
+      .get<ApiSuccessResponse<Payroll>>(`/factions/${factionId}/shifts/payroll`, { params: { from, to } })
+      .then(unwrap),
+
+  runPayroll: (factionId: string, from: string, to: string) =>
+    api
+      .post<ApiSuccessResponse<{ created: number; status: 'completed' | 'pending' }>>(
+        `/factions/${factionId}/shifts/payroll`,
+        { from, to },
+      )
       .then(unwrap),
 };
 
