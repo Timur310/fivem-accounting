@@ -338,9 +338,12 @@
     50% { opacity: 1; }
   }
 
-  /* Fade in for view transitions */
+  /* Fade in for view transitions. From a few pixels *above*: something
+     arriving from below overflows the bottom edge of whatever scrolls around
+     it, and the browser shows a scrollbar until the animation ends. Overflow
+     past the top edge never scrolls, so settling down into place is free. */
   @keyframes fade-in {
-    from { opacity: 0; transform: translateY(4px); }
+    from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
@@ -376,7 +379,10 @@
    delay stops growing after the twelfth child; the rest appear together
    rather than keeping anybody waiting for the bottom of a long list. */
 @keyframes item-in {
-  from { opacity: 0; transform: translateY(4px); }
+  /* Above, not below — see fade-in. Rows arriving from below pushed past the
+     bottom of scrolling lists and tables, and a scrollbar blinked in and out
+     while they settled. */
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
 }
 .stagger > * {

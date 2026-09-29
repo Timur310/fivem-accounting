@@ -42,15 +42,22 @@ export const ease = {
 /** A spring for things that slide between positions. Settles without bouncing. */
 export const glide: Transition = { type: 'spring', stiffness: 520, damping: 42, mass: 0.8 };
 
-/** A screen arriving: a short rise and a fade. */
+/**
+ * A screen arriving: a short settle and a fade.
+ *
+ * Every entrance moves *down* into place, never up. Something arriving from
+ * below overflows the bottom of whatever scrolls around it for the length of
+ * the animation, and the browser shows a scrollbar that blinks away again;
+ * overflow past the top edge never scrolls.
+ */
 export const screenIn: Variants = {
-  hidden: { opacity: 0, y: 6 },
+  hidden: { opacity: 0, y: -6 },
   shown: { opacity: 1, y: 0, transition: { duration: duration.screen, ease: ease.out } },
 };
 
 /** One item in a list or grid arriving, all at once. */
 export const itemIn: Variants = {
-  hidden: { opacity: 0, y: 4 },
+  hidden: { opacity: 0, y: -4 },
   shown: { opacity: 1, y: 0, transition: { duration: duration.quick, ease: ease.out } },
 };
 
@@ -64,7 +71,7 @@ export const itemIn: Variants = {
 export function itemAt(index: number, step = 0.025, cap = 12): Variants {
   const delay = Math.min(index, cap) * step;
   return {
-    hidden: { opacity: 0, y: 4 },
+    hidden: { opacity: 0, y: -4 },
     shown: { opacity: 1, y: 0, transition: { duration: duration.quick, ease: ease.out, delay } },
   };
 }
