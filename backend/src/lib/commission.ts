@@ -139,3 +139,23 @@ export async function commissionHolding(
 
 export const COMMISSION_HOLDING_MESSAGE =
   'A share of this entry has already been paid out as wages. Reject or delete that wage payout first, and the entry can be changed again.';
+
+/** An exchange value in ten-thousandths: "0.7" is 7000. */
+export function rateUnits(rate: string): bigint {
+  const [whole = '0', fraction = ''] = rate.trim().split('.');
+  return BigInt(whole) * 10_000n + BigInt((fraction + '0000').slice(0, 4));
+}
+
+/**
+ * A share, in cents of the brought item, as cents of the item it is paid in.
+ *
+ * "30% of the dirty money, paid in cash at 0.7 each." The share is worked out
+ * in the brought item first — that is what the faction gives up — and then
+ * converted, rounded the way the paying item rounds: money to the cent (half
+ * up), counted goods down to a whole one.
+ */
+export function convertShare(shareCents: bigint, rate: string, payIsCurrency: boolean): bigint {
+  const r = rateUnits(rate);
+  if (!payIsCurrency) return ((shareCents * r) / 1_000_000n) * 100n;
+  return (shareCents * r * 2n + 10_000n) / 20_000n;
+}

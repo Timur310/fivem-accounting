@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { api, resetDatabase, seedBasicWorld, createItemType, createEntry, type BasicWorld } from './helpers.js';
+import { api, resetDatabase, seedBasicWorld, createItemType, createEntry, createFaction, createUser, type BasicWorld } from './helpers.js';
 import { db } from '../src/db/index.js';
 import { entries } from '../src/db/schema.js';
-import { basisPoints, computeTakings, percentFor, shareOf } from '../src/lib/commission.js';
+import { basisPoints, computeTakings, convertShare, percentFor, rateUnits, shareOf } from '../src/lib/commission.js';
 
 describe('the arithmetic', () => {
   const rates = [
@@ -39,6 +39,14 @@ describe('the arithmetic', () => {
     expect(shareOf('7', '50', false)).toBe(300n);
   });
 
+  it('converts a share into the paying item', () => {
+    expect(rateUnits('0.7')).toBe(7000n);
+    // 300.00 dirty at 0.7 each is 210.00 clean.
+    expect(convertShare(30000n, '0.7', true)).toBe(21000n);
+    // Paid in counted goods: 250 at 0.01 each is 2.5 bars, so 2.
+    expect(convertShare(25000n, '0.01', false)).toBe(200n);
+  });
+
   it('adds up per member per item, and leaves out non-members', () => {
     const rankOf = new Map<string, string | null>([['u', 'Soldier']]);
     const lines = computeTakings([
@@ -71,6 +79,8 @@ describe('wages through the API', () => {
       .set('Cookie', w.admin.cookie).send({ rank: 'Soldier' });
     expect(assigned.status).toBe(200);
   });
+
+  const seedOther = async () => createFaction('Other faction', (await createUser('other_admin')).id);
 
   const setRates = (rates: unknown[]) =>
     api().put(`${base()}/rates`).set('Cookie', w.admin.cookie).send({ rates });
@@ -168,6 +178,39 @@ describe('wages through the API', () => {
     });
     expect(res.body.data.created).toBe(0);
     expect((await look()).body.data.lines).toHaveLength(1);
+  });
+
+  it('pays a cut of dirty money in clean cash, at the value given', async () => {
+    await createEntry(w.faction.id, w.member.id, dirty, '1000.00');
+    const res = await api().post(`${base()}/pay`).set('Cookie', w.admin.cookie).send({
+      from: today, to: today,
+      lines: [{ userId: w.member.id, itemTypeId: dirty, percent: '30', brought: '1000.00', payItemTypeId: w.itemTypeId, rate: '0.7' }],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.payouts[0].itemTypeId).toBe(w.itemTypeId);
+    expect(res.body.data.payouts[0].amount).toBe('210.00');
+    expect(res.body.data.payouts[0].description).toMatch(/paid as Cash at 0.7 each/);
+  });
+
+  it('refuses to pay in an item from another faction', async () => {
+    await createEntry(w.faction.id, w.member.id, dirty, '1000.00');
+    const other = await createItemType((await seedOther()).id, 'Foreign cash');
+    const res = await api().post(`${base()}/pay`).set('Cookie', w.admin.cookie).send({
+      from: today, to: today,
+      lines: [{ userId: w.member.id, itemTypeId: dirty, percent: '30', brought: '1000.00', payItemTypeId: other, rate: '1' }],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('remembers what an item is paid in, and forgets the plain default', async () => {
+    const saved = await api().put(`${base()}/pay-in/${dirty}`).set('Cookie', w.admin.cookie)
+      .send({ payItemTypeId: w.itemTypeId, rate: '0.75' });
+    expect(saved.status).toBe(200);
+    await createEntry(w.faction.id, w.member.id, dirty, '10.00');
+    expect((await look()).body.data.payIn).toEqual([{ itemTypeId: dirty, payItemTypeId: w.itemTypeId, rate: '0.7500' }]);
+
+    await api().put(`${base()}/pay-in/${dirty}`).set('Cookie', w.admin.cookie).send({ payItemTypeId: dirty, rate: '1' });
+    expect((await look()).body.data.payIn).toEqual([]);
   });
 
   it('needs manage_wages', async () => {

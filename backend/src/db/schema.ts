@@ -1881,6 +1881,23 @@ export const commissionRates = pgTable('commission_rates', {
 
 export type CommissionRate = typeof commissionRates.$inferSelect;
 
+// ── wage_pay_in ────────────────────────────────────────
+// What a cut of an item is paid out as, when it is not the item itself: the
+// dirty money a member brought in, paid to them in clean cash. `rate` is how
+// much of the paying item one unit of the brought item is worth — 0.7 when
+// washing costs the faction 30%. One row per brought item; without one, a cut
+// is paid in the item it came in as.
+export const wagePayIn = pgTable('wage_pay_in', {
+  id:             uuid('id').defaultRandom().primaryKey(),
+  factionId:      uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  itemTypeId:     uuid('item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  payItemTypeId:  uuid('pay_item_type_id').notNull().references(() => itemTypes.id, { onDelete: 'cascade' }),
+  rate:           decimal('rate', { precision: 15, scale: 4 }).notNull(),
+  updatedAt:      timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  oneEach: uniqueIndex('wage_pay_in_item').on(table.factionId, table.itemTypeId),
+}));
+
 /** Whose work it was. Free text says *what*; this says *for whom*. */
 export const SHIFT_KINDS = ['faction', 'side'] as const;
 export type ShiftKind = (typeof SHIFT_KINDS)[number];

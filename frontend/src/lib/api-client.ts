@@ -1401,6 +1401,15 @@ export const wagesApi = {
       })
       .then(unwrap),
 
+  /** Remember what an item's cuts are paid in. The item itself at 1 each clears it. */
+  savePayIn: (factionId: string, itemTypeId: string, payItemTypeId: string, rate: string) =>
+    api
+      .put<ApiSuccessResponse<{ itemTypeId: string }>>(`/factions/${factionId}/wages/pay-in/${itemTypeId}`, {
+        payItemTypeId,
+        rate,
+      })
+      .then(unwrap),
+
   pay: (factionId: string, from: string, to: string, lines: WagePayLine[]) =>
     api
       .post<ApiSuccessResponse<{ created: number; status: 'completed' | 'pending' }>>(

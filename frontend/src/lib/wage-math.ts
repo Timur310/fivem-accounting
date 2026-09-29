@@ -37,3 +37,26 @@ export function shareCents(brought: string, percent: string, isCurrency: boolean
   if (!isCurrency) return Math.floor((total * bp) / 1_000_000) * 100;
   return Math.floor((total * bp * 2 + 10_000) / 20_000);
 }
+
+/** Is this something the server will take as an exchange value (up to 4 decimals, above 0)? */
+export function isRate(value: string): boolean {
+  return /^\d{1,9}(\.\d{1,4})?$/.test(value.trim()) && rateUnits(value) > 0;
+}
+
+/** "0.7" as 7000 ten-thousandths. */
+export function rateUnits(rate: string): number {
+  const [whole = '0', fraction = ''] = rate.trim().split('.');
+  return Number(whole) * 10_000 + Number((fraction + '0000').slice(0, 4));
+}
+
+/**
+ * A share in cents of the brought item, as cents of the item it is paid in:
+ * money to the cent (half up), counted goods down to a whole one. The same as
+ * the server's convertShare.
+ */
+export function convertCents(share: number, rate: string, payIsCurrency: boolean): number {
+  if (!isRate(rate)) return 0;
+  const r = rateUnits(rate);
+  if (!payIsCurrency) return Math.floor((share * r) / 1_000_000) * 100;
+  return Math.floor((share * r * 2 + 10_000) / 20_000);
+}

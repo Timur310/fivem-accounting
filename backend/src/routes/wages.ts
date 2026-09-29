@@ -3,8 +3,8 @@ import { asyncRouter } from '../lib/asyncRouter.js';
 import { z } from 'zod';
 import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
-import { commissionRates, entries, factionMembers, factions, itemTypes, payouts, users } from '../db/schema.js';
-import { basisPoints, computeTakings, shareOf, type CommissionRate } from '../lib/commission.js';
+import { commissionRates, entries, factionMembers, factions, itemTypes, payouts, users, wagePayIn } from '../db/schema.js';
+import { basisPoints, computeTakings, convertShare, rateUnits, shareOf, type CommissionRate } from '../lib/commission.js';
 import { fromCents, toCents } from '../lib/treasury.js';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -67,6 +67,18 @@ const windowSchema = z.object({
   items: z.string().optional(),
 });
 
+/** How much of the paying item one unit of the brought item is worth. */
+const rateField = z
+  .string()
+  .trim()
+  .regex(/^\d{1,9}(\.\d{1,4})?$/, 'An exchange value looks like 1 or 0.75')
+  .refine((v) => rateUnits(v) > 0n, 'An exchange value has to be more than zero');
+
+const payInSchema = z.object({
+  payItemTypeId: z.string().uuid(),
+  rate: rateField,
+});
+
 const paySchema = z.object({
   from: day,
   to: day,
@@ -76,6 +88,9 @@ const paySchema = z.object({
     percent: percentField,
     /** What the screen showed as brought in, so nothing is paid on numbers nobody saw. */
     brought: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/),
+    /** Paid in another item than the one brought in, at this value each. */
+    payItemTypeId: z.string().uuid().optional(),
+    rate: rateField.optional(),
   })).min(1).max(500),
 });
 
@@ -180,6 +195,54 @@ router.put('/rates', async (req: Request, res: Response) => {
   success(res, { saved: rates.length });
 });
 
+// ── What a cut is paid in ─────────────────────────────
+//
+// One default per brought item, set from the wages screen. Paying an item in
+// itself at 1 each is the default, so saving exactly that removes the row
+// rather than storing it.
+
+router.put('/pay-in/:itemTypeId', async (req: Request, res: Response) => {
+  const id = factionId(req);
+  const itemTypeId = req.params.itemTypeId as string;
+  const parsed = payInSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', parsed.error.issues[0]!.message);
+    return;
+  }
+  if (!z.string().uuid().safeParse(itemTypeId).success) {
+    error(res, 'VALIDATION_ERROR', 'Unknown item');
+    return;
+  }
+  const { payItemTypeId, rate } = parsed.data;
+  const ids = [...new Set([itemTypeId, payItemTypeId])];
+  const owned = await db.select({ id: itemTypes.id }).from(itemTypes)
+    .where(and(eq(itemTypes.factionId, id), inArray(itemTypes.id, ids)));
+  if (owned.length !== ids.length) {
+    error(res, 'VALIDATION_ERROR', "Both items have to be this faction's own");
+    return;
+  }
+
+  await db.transaction(async (tx: TransactionLike) => {
+    await tx.delete(wagePayIn).where(and(eq(wagePayIn.factionId, id), eq(wagePayIn.itemTypeId, itemTypeId)));
+    const plain = payItemTypeId === itemTypeId && rateUnits(rate) === 10_000n;
+    if (!plain) {
+      await tx.insert(wagePayIn).values({ factionId: id, itemTypeId, payItemTypeId, rate });
+    }
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId: id,
+      action: 'update',
+      entityType: 'wage_pay_in',
+      entityId: itemTypeId,
+      details: { payItemTypeId, rate },
+      req,
+      tx,
+    });
+  });
+
+  success(res, { itemTypeId, payItemTypeId, rate });
+});
+
 // ── Takings ───────────────────────────────────────────
 
 /**
@@ -246,8 +309,14 @@ router.get('/', async (req: Request, res: Response) => {
     : [];
   const person = new Map(people.map((p) => [p.id, p]));
 
+  const payIn = await db
+    .select({ itemTypeId: wagePayIn.itemTypeId, payItemTypeId: wagePayIn.payItemTypeId, rate: wagePayIn.rate })
+    .from(wagePayIn)
+    .where(eq(wagePayIn.factionId, id));
+
   success(res, {
     hasRates,
+    payIn,
     lines: lines
       .map((l) => ({
         userId: l.userId,
@@ -288,6 +357,7 @@ router.post('/pay', async (req: Request, res: Response) => {
     return;
   }
   const itemIds = [...new Set(parsed.data.lines.map((l) => l.itemTypeId))];
+  const payItemIds = [...new Set(parsed.data.lines.map((l) => l.payItemTypeId ?? l.itemTypeId))];
   const status = holds(req, 'manage_payouts') ? 'completed' : 'pending';
 
   const result = await db.transaction(async (tx: TransactionLike) => {
@@ -302,14 +372,15 @@ router.post('/pay', async (req: Request, res: Response) => {
 
     for (const [key, line] of wanted) {
       const now = current.get(key);
-      if (!now || toCents(now.brought) !== toCents(line.brought)) return { stale: true as const };
+      if (!now || toCents(now.brought) !== toCents(line.brought)) return { stale: true as const, badItem: false, created: [] };
     }
 
     const items = await tx
       .select({ id: itemTypes.id, name: itemTypes.name, isCurrency: itemTypes.isCurrency })
       .from(itemTypes)
-      .where(and(eq(itemTypes.factionId, id), inArray(itemTypes.id, itemIds)));
+      .where(and(eq(itemTypes.factionId, id), inArray(itemTypes.id, [...new Set([...itemIds, ...payItemIds])])));
     const item = new Map(items.map((i) => [i.id, i]));
+    if (payItemIds.some((p) => !item.has(p))) return { stale: false as const, badItem: true, created: [] };
 
     const today = new Date().toISOString().slice(0, 10);
     const created = [];
@@ -318,15 +389,22 @@ router.post('/pay', async (req: Request, res: Response) => {
       const info = item.get(line.itemTypeId);
       if (!info) continue;
       const share = shareOf(now.brought, line.percent, info.isCurrency);
-      if (share <= 0n) continue;
+      const payItem = item.get(line.payItemTypeId ?? line.itemTypeId)!;
+      const rate = line.rate ?? '1';
+      const converted = payItem.id !== info.id || rateUnits(rate) !== 10_000n;
+      const paid = converted ? convertShare(share, rate, payItem.isCurrency) : share;
+      if (paid <= 0n) continue;
+      const span = `${from} – ${to}, ${now.entryIds.length} ${now.entryIds.length === 1 ? 'entry' : 'entries'}`;
 
       const [payout] = await tx.insert(payouts).values({
         factionId: id,
         recipientUserId: line.userId,
         createdBy: req.user!.id,
-        itemTypeId: line.itemTypeId,
-        amount: fromCents(share),
-        description: `Wages: ${line.percent}% of ${now.brought} ${info.name} (${from} – ${to}, ${now.entryIds.length} ${now.entryIds.length === 1 ? 'entry' : 'entries'})`,
+        itemTypeId: payItem.id,
+        amount: fromCents(paid),
+        description: converted
+          ? `Wages: ${line.percent}% of ${now.brought} ${info.name} = ${fromCents(share)}, paid as ${payItem.name} at ${rate} each (${span})`
+          : `Wages: ${line.percent}% of ${now.brought} ${info.name} (${span})`,
         payoutDate: today,
         status,
       }).returning();
@@ -343,18 +421,31 @@ router.post('/pay', async (req: Request, res: Response) => {
         entityId: payout!.id,
         details: {
           recipientUserId: line.userId,
-          itemTypeId: line.itemTypeId,
+          itemTypeId: payItem.id,
           amount: payout!.amount,
           status,
-          wages: { percent: line.percent, brought: now.brought, entries: now.entryIds.length, from, to },
+          wages: {
+            percent: line.percent,
+            brought: now.brought,
+            broughtItemTypeId: info.id,
+            ...(converted ? { share: fromCents(share), rate } : {}),
+            entries: now.entryIds.length,
+            from,
+            to,
+          },
         },
         req,
         tx,
       });
       created.push(payout!);
     }
-    return { stale: false as const, created };
+    return { stale: false as const, badItem: false, created };
   });
+
+  if (result.badItem) {
+    error(res, 'VALIDATION_ERROR', "Wages can only be paid in one of this faction's items");
+    return;
+  }
 
   if (result.stale) {
     error(res, 'VALIDATION_ERROR', 'The takings changed since this was worked out — refresh and check the numbers again.', 409);
