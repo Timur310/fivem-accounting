@@ -1630,6 +1630,8 @@ export const hu: Translations = {
   'storage.deleteRoomTitle': 'Törlöd: {name}?',
   'storage.deleteRoomBody': 'A benne lévő összes tároló és minden rögzített tartalmuk is törlődik. Ez nem vonható vissza.',
   'storage.editor.tool': 'Eszköz',
+  'storage.editor.pan': 'Görgetés',
+  'storage.editor.tipPan': 'Telefonon a Görgetés eszközzel mozoghatsz egy nagy helyiségben.',
   'storage.editor.select': 'Mozgatás',
   'storage.editor.wall': 'Fal',
   'storage.editor.door': 'Ajtó',

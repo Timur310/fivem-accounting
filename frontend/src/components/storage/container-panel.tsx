@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
-import { formatDate } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { cents, fullness, plainNumber } from '@/lib/storage-layout';
 import { KIND_ICON } from '@/components/storage/room-grid';
@@ -134,7 +134,7 @@ export function ContainerPanel({
                 : t('storage.unitsNoLimit', { count: plainNumber((total / 100).toFixed(2)) })}
             </span>
             {container.checkedAt && (
-              <span>{t('storage.lastChecked', { date: formatDate(container.checkedAt), name: container.checkedByName ?? '' })}</span>
+              <span>{t('storage.lastChecked', { date: formatDateTime(container.checkedAt), name: container.checkedByName ?? '' })}</span>
             )}
           </div>
           {fill !== null && (
@@ -248,7 +248,7 @@ export function ContainerPanel({
                       amount: plainNumber(h.amount), label: h.label, before: plainNumber(h.before ?? '0'),
                     })}
                 </span>
-                <span className="shrink-0 text-[11px] text-zinc-500">{formatDate(h.createdAt)}</span>
+                <span className="shrink-0 text-[11px] text-zinc-500">{formatDateTime(h.createdAt)}</span>
               </li>
             ))}
           </ul>
@@ -281,6 +281,8 @@ function ContentRow({
   const low = line.minQuantity !== null && cents(line.quantity) < cents(line.minQuantity);
   const validAmount = COUNT.test(amount.trim()) && cents(amount) > 0;
   const limitOk = (v: string) => v.trim() === '' || COUNT.test(v.trim());
+  const limitsChanged = min.trim() !== (line.minQuantity ? plainNumber(line.minQuantity) : '')
+    || max.trim() !== (line.maxQuantity ? plainNumber(line.maxQuantity) : '');
 
   return (
     <div className={cn('rounded-md border px-3 py-2', low ? 'border-red-500/40 bg-red-500/5' : 'border-zinc-800')}>
@@ -338,7 +340,7 @@ function ContentRow({
                 options={others.map((c) => ({ value: c.id, label: c.name }))}
                 aria-label={t('storage.moveTo')}
               />
-              <Button size="sm" variant="outline" disabled={!to || !validAmount || busy} onClick={() => onMove(to, amount.trim())}>
+              <Button size="sm" variant="outline" disabled={!to || !validAmount || busy} onClick={() => { onMove(to, amount.trim()); setAmount(''); setTo(''); }}>
                 {t('storage.move')}
               </Button>
             </div>
@@ -347,16 +349,16 @@ function ContentRow({
           <div className="flex flex-wrap items-end gap-2">
             <label className="space-y-1 text-[11px] text-zinc-500">
               <span>{t('storage.min')}</span>
-              <Input className={cn('h-8 w-20', !limitOk(min) && 'border-red-500/60')} inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+              <Input className={cn('h-8 w-20', !limitOk(min) && 'border-red-500/60')} inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} aria-label={`${t('storage.min')} — ${line.label}`} />
             </label>
             <label className="space-y-1 text-[11px] text-zinc-500">
               <span>{t('storage.max')}</span>
-              <Input className={cn('h-8 w-20', !limitOk(max) && 'border-red-500/60')} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} />
+              <Input className={cn('h-8 w-20', !limitOk(max) && 'border-red-500/60')} inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} aria-label={`${t('storage.max')} — ${line.label}`} />
             </label>
             <Button
               size="sm"
               variant="ghost"
-              disabled={!limitOk(min) || !limitOk(max) || busy}
+              disabled={!limitsChanged || !limitOk(min) || !limitOk(max) || busy}
               onClick={() => onChange({ minQuantity: min.trim() || null, maxQuantity: max.trim() || null })}
             >
               {t('storage.saveLimits')}

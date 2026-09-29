@@ -1651,6 +1651,8 @@ export const en = {
   'storage.deleteRoomTitle': 'Delete {name}?',
   'storage.deleteRoomBody': 'Every container in it and everything recorded inside them goes too. This cannot be undone.',
   'storage.editor.tool': 'Tool',
+  'storage.editor.pan': 'Pan',
+  'storage.editor.tipPan': 'On a phone, use Pan to scroll around a big room.',
   'storage.editor.select': 'Move',
   'storage.editor.wall': 'Wall',
   'storage.editor.door': 'Door',

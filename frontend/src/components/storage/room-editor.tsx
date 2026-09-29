@@ -26,7 +26,7 @@ import {
 } from '@/lib/storage-layout';
 import { KIND_ICON, RoomGrid, type GridTool } from '@/components/storage/room-grid';
 import {
-  BrickWall, Copy, DoorOpen, Eraser, MousePointer2, Plus, Redo2, RotateCw, Save, Square, Trash2, Undo2, X, ZoomIn, ZoomOut,
+  BrickWall, Copy, DoorOpen, Eraser, Hand, MousePointer2, Plus, Redo2, RotateCw, Save, Square, Trash2, Undo2, X, ZoomIn, ZoomOut,
 } from 'lucide-react';
 import {
   STORAGE_CONTAINER_KINDS,
@@ -279,6 +279,7 @@ export function RoomEditor({
             value={tool}
             onChange={setTool}
             options={[
+              { value: 'pan', label: t('storage.editor.pan'), icon: <Hand className="h-3.5 w-3.5" /> },
               { value: 'select', label: t('storage.editor.select'), icon: <MousePointer2 className="h-3.5 w-3.5" /> },
               { value: 'wall', label: t('storage.editor.wall'), icon: <BrickWall className="h-3.5 w-3.5" /> },
               { value: 'door', label: t('storage.editor.door'), icon: <DoorOpen className="h-3.5 w-3.5" /> },
@@ -458,6 +459,7 @@ export function RoomEditor({
                   <li>{t('storage.editor.tipPaint')}</li>
                   <li>{t('storage.editor.tipDrag')}</li>
                   <li>{t('storage.editor.tipKeys')}</li>
+                  <li>{t('storage.editor.tipPan')}</li>
                 </ul>
               </>
             )}

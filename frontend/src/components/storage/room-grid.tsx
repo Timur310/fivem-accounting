@@ -30,7 +30,8 @@ export interface GridContainer extends GridBox {
   hit: boolean;
 }
 
-export type GridTool = 'select' | 'wall' | 'door' | 'erase';
+/** `pan` edits nothing, so a finger can scroll a big room while drawing it. */
+export type GridTool = 'pan' | 'select' | 'wall' | 'door' | 'erase';
 
 type Gesture =
   | { type: 'paint'; last: string }
@@ -96,7 +97,7 @@ export function RoomGrid({
   const inRoom = (p: { x: number; y: number }) => p.x >= 0 && p.y >= 0 && p.x < width && p.y < height;
 
   const onGridDown = (e: React.PointerEvent) => {
-    if (!editing) return;
+    if (!editing || tool === 'pan') return;
     if (tool === 'select') {
       if (e.target === ref.current) onSelect(null);
       return;
@@ -171,7 +172,12 @@ export function RoomGrid({
       <div
         ref={ref}
         role={editing ? 'application' : undefined}
-        className={cn('relative select-none', editing ? 'touch-none' : '', editing && tool !== 'select' && 'cursor-crosshair')}
+        className={cn(
+          'relative select-none',
+          editing && tool !== 'pan' && 'touch-none',
+          editing && tool !== 'select' && tool !== 'pan' && 'cursor-crosshair',
+          editing && tool === 'pan' && 'cursor-grab',
+        )}
         style={{
           width: width * cell,
           height: height * cell,
@@ -220,7 +226,7 @@ export function RoomGrid({
                 box.dim && 'opacity-25',
                 box.hit && 'ring-2 ring-amber-300',
                 hidden && 'opacity-30',
-                editing && tool !== 'select' && 'pointer-events-none',
+                editing && tool !== 'select' && tool !== 'pan' && 'pointer-events-none',
               )}
               style={{
                 left: box.x * cell + 1,
