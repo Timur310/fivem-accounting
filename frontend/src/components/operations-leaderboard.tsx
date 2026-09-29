@@ -112,7 +112,7 @@ export function OperationsLeaderboard({ factionId }: { factionId: string }) {
           hint={t('operations.board.emptyHint')}
         />
       ) : (
-        <div className="stagger space-y-2">
+        <div key={`${sort}:${period}`} className="stagger space-y-2">
           {rankings.map((row) => (
             <BoardRow key={row.userId} row={row} sort={sort} />
           ))}

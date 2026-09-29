@@ -145,6 +145,9 @@ export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = f
         )}
       </div>
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={activeTab} className="animate-fade-in">
       {activeTab === 'item-types' && <ItemTypesSection factionId={factionId} canManage={canManageItemTypes} />}
       {activeTab === 'quotas' && <QuotasSection factionId={factionId} canManage={canManageQuotas} />}
       {activeTab === 'customization' && <CustomizationSection factionId={factionId} />}
@@ -152,6 +155,7 @@ export function SettingsView({ factionId, isFactionAdmin, canManageItemTypes = f
         <FactionSettingsSection factionId={factionId} isFactionAdmin={!!isFactionAdmin} canManage={canManageSettings} />
       )}
       {activeTab === 'discord' && canManageDiscord && <DiscordSettingsSection factionId={factionId} />}
+      </div>
     </div>
   );
 }

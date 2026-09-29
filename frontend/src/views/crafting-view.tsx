@@ -153,6 +153,9 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
 
       {recipesQuery.isError && <ErrorState error={recipesQuery.error} onRetry={() => void recipesQuery.refetch()} />}
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={tab} className="animate-fade-in">
       {tab === 'bench' && (
         recipesQuery.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -257,6 +260,7 @@ export function CraftingView({ factionId, canManageRecipes, canCraft }: Props) {
           </div>
         )
       )}
+      </div>
 
       {editing && (
         <RecipeEditor

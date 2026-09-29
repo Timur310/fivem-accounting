@@ -127,7 +127,7 @@ export function ComplaintsView({ factionId, canHandle }: Props) {
           hint={canHandle ? t('complaints.emptyHintHandler') : t('complaints.emptyHintMember')}
         />
       ) : (
-        <div className="stagger space-y-2">
+        <div key={statusFilter || 'all'} className="stagger space-y-2">
           {complaints.map((complaint) => (
             <ComplaintRow key={complaint.id} complaint={complaint} onOpen={() => setReading(complaint)} />
           ))}

@@ -89,6 +89,9 @@ export function ReportsView({ factionId }: Props) {
         {t('reports.print')}
       </Button>
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={tab} className="animate-fade-in">
       {tab === 'summary' && (
         <>
           <div className="flex flex-wrap gap-1.5">
@@ -312,6 +315,7 @@ export function ReportsView({ factionId }: Props) {
           ) : null}
         </>
       )}
+      </div>
     </div>
   );
 }

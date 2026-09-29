@@ -333,6 +333,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
         </div>
       )}
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={activeTab} className="animate-fade-in">
       {activeTab === 'overview' && (
         <div className="space-y-4">
           {/* ── Top Stats Row ── */}
@@ -711,6 +714,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </CardContent>
         </Card>
       )}
+      </div>
 
       {/* ── Note Dialog ── */}
       <Dialog open={noteOpen} onOpenChange={setNoteOpen}>

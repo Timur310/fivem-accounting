@@ -167,7 +167,10 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
       )}
 
       {/* Rankings List */}
-      <Card className="py-0 gap-0">
+      {/* Keyed on what is being ranked, so changing the period or the item
+          plays the board in again — podium and all — rather than swapping
+          numbers under people's names in place. */}
+      <Card key={`${showGlobal}:${period}:${itemTypeId}`} className="py-0 gap-0">
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>

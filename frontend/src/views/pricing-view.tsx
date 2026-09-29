@@ -211,6 +211,9 @@ export function PricingView({
         ))}
       </div>
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={tab} className="animate-fade-in">
       {tab === 'calculator' && (
         prices.filter((p) => p.isActive).length === 0 ? (
           <EmptyState
@@ -460,6 +463,7 @@ export function PricingView({
       {tab === 'sales' && (
         <SalesTab factionId={factionId} canRevert={canManage} />
       )}
+      </div>
 
       {selling && quote && (
         <SellDialog

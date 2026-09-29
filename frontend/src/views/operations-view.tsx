@@ -191,7 +191,7 @@ export function OperationsView({
         </div>
       </div>
 
-      {tab === 'board' && <OperationsLeaderboard factionId={factionId} />}
+      {tab === 'board' && <div className="animate-fade-in"><OperationsLeaderboard factionId={factionId} /></div>}
 
       {tab === 'log' && query.isLoading && (
         <div className="space-y-3">
