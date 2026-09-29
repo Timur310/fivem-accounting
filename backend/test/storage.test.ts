@@ -61,7 +61,9 @@ describe('storage through the API', () => {
 
   it('lets every member look, and nobody without the permission draw', async () => {
     const { roomId } = await room();
-    expect((await api().get(`${base()}/rooms`).set('Cookie', w.member.cookie)).body.data.rooms).toHaveLength(1);
+    const listed = (await api().get(`${base()}/rooms`).set('Cookie', w.member.cookie)).body.data.rooms;
+    expect(listed).toHaveLength(1);
+    expect(listed[0].containerCount).toBe(1);
     const drawn = await api().put(`${base()}/rooms/${roomId}/layout`).set('Cookie', w.member.cookie)
       .send({ width: 12, height: 8, tiles: [], containers: [] });
     expect(drawn.status).toBe(403);

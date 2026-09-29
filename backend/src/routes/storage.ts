@@ -213,7 +213,9 @@ router.get('/rooms', async (req: Request, res: Response) => {
     height: storageRooms.height,
     mapMarkerId: storageRooms.mapMarkerId,
     sortOrder: storageRooms.sortOrder,
-    containerCount: sql<number>`(SELECT COUNT(*)::int FROM storage_containers c WHERE c.room_id = ${storageRooms.id})`,
+    // Spelled out: inside a subquery Drizzle writes the column unqualified,
+    // and a bare "id" there means the container's own id.
+    containerCount: sql<number>`(SELECT COUNT(*)::int FROM storage_containers c WHERE c.room_id = storage_rooms.id)`,
   })
     .from(storageRooms)
     .where(eq(storageRooms.factionId, factionId(req)))
