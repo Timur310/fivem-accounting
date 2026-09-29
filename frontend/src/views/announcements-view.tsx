@@ -213,7 +213,7 @@ export function AnnouncementsView({ factionId, canManage = false }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="stagger space-y-3">
           {items.map((a) => {
             const style = PRIORITY_STYLE[a.priority];
             const expired = !!a.expiresAt && new Date(a.expiresAt) <= new Date();

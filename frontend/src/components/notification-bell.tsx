@@ -1,5 +1,6 @@
 'use client';
 
+import { useBump } from '@/hooks/use-bump';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notificationsApi } from '@/lib/api-client';
@@ -48,6 +49,7 @@ export function NotificationBell() {
     refetchOnWindowFocus: true,
   });
   const unread = countData?.unread ?? 0;
+  const bump = useBump(unread);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['notifications'],
@@ -139,7 +141,8 @@ export function NotificationBell() {
           <Bell className="h-4 w-4" />
           {unread > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-amber-500/90 px-1 text-[9px] font-medium leading-4 text-zinc-950 tabular-nums"
+              key={bump}
+              className={`absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-amber-500/90 px-1 text-[9px] font-medium leading-4 text-zinc-950 tabular-nums ${bump > 0 ? 'badge-bump' : ''}`}
               aria-label={t('notification.unreadCount', { count: unread })}
             >
               {unread > 99 ? '99+' : unread}

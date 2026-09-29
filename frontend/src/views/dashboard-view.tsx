@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { dashboardApi, quotasApi, exportApi, entriesApi, itemTypesApi, leaderboardApi, membersApi, apiErrorMessage } from '@/lib/api-client';
@@ -484,7 +485,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       whose accent is green or red would otherwise colour an
                       ordinary balance as if it meant something. */}
                   <div className={cn("text-3xl font-medium tabular-nums tracking-tight", bal < 0 ? "text-negative" : "text-zinc-200")}>
-                    {fmt(displayBalance)}
+                    <CountUp value={displayBalance} format={fmt} />
                   </div>
                   <p className="text-xs text-zinc-500 mt-1.5">
                     {hasTreasury
@@ -507,7 +508,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</CardTitle>
           </CardHeader>
           <CardContent className="relative z-10">
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{formatCount(totalEntries)}</div>
+            <div className="text-2xl font-medium tabular-nums tracking-tight"><CountUp value={totalEntries} format={(n) => formatCount(Math.round(n))} /></div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.loggedContributions')}</p>
           </CardContent>
         </Card>
@@ -518,7 +519,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('nav.members')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{memberCount}</div>
+            <div className="text-2xl font-medium tabular-nums tracking-tight"><CountUp value={memberCount} format={(n) => String(Math.round(n))} /></div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.adminCount', { count: adminCount })}</p>
           </CardContent>
         </Card>
@@ -529,7 +530,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             <CardTitle className="text-xs font-normal text-zinc-500 uppercase tracking-wider">{t('dashboard.categories')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-medium tabular-nums tracking-tight">{totalsByType.length}</div>
+            <div className="text-2xl font-medium tabular-nums tracking-tight"><CountUp value={totalsByType.length} format={(n) => String(Math.round(n))} /></div>
             <p className="text-xs text-zinc-500 mt-1.5">{t('dashboard.activeItemTypes')}</p>
           </CardContent>
         </Card>
@@ -545,7 +546,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {activeQuotas.map((q) => {
                 const pct = q.percentage ?? 0;
                 const met = pct >= 100;
@@ -562,7 +563,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                       {/* Only "met" earns a colour. The percentage used to wear
                           the faction accent, which read as a verdict on the
                           number whenever that accent was green or red. */}
-                      <Badge variant="outline" className={met ? 'border-emerald-500/30 text-emerald-400' : 'text-zinc-300'}>
+                      <Badge variant="outline" className={met ? 'pop-in border-emerald-500/30 text-emerald-400' : 'text-zinc-300'}>
                         {met ? t('quota.met') : `${pct.toFixed(1)}%`}
                       </Badge>
                     </div>
@@ -575,7 +576,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
                           one whose colour is red. Matches the quota bar in
                           Settings, which was already neutral. */}
                       <div
-                        className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`}
+                        className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500 bar-shine' : 'bg-primary'}`}
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
@@ -603,7 +604,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
+            <div className="stagger space-y-1">
               {missedQuotas.map((q) => {
                 const prev = q.previousPeriod!;
                 return (
@@ -646,7 +647,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               <EmptyState icon={Trophy} title={t('dashboard.noContributions')}
               hint={t('dashboard.noContributionsHint')} compact />
             ) : (
-              <div className="space-y-1">
+              <div className="stagger space-y-1">
                 {topContributors.slice(0, 7).map((c, i) => (
                   <div key={c.userId} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">{i + 1}</span>
@@ -689,7 +690,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
               <EmptyState icon={List} title={t('entries.noneYet')}
               hint={t('entries.noneYetHint')} compact />
             ) : (
-              <div className="space-y-1 max-h-[320px] overflow-y-auto">
+              <div className="stagger space-y-1 max-h-[320px] overflow-y-auto">
                 {recentEntries.map((e) => (
                   <div key={e.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                     <Avatar className="h-7 w-7 shrink-0">
@@ -806,7 +807,7 @@ export function DashboardView({ factionId, canLogEntries = false, isFactionMembe
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
+            <div className="stagger space-y-1">
               {inactiveMembers.slice(0, 5).map((m) => (
                 <div key={m.userId} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                   <Avatar className="h-6 w-6">

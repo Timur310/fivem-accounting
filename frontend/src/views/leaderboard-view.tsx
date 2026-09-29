@@ -1,5 +1,7 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
+import { Segmented } from '@/components/ui/segmented';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi, globalLeaderboardApi, itemTypesApi } from '@/lib/api-client';
@@ -100,7 +102,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
   const fmt = formatNumber;
 
   const rankIcon = (rank: number) => {
-    if (rank === 1) return <Crown className="h-4 w-4 text-amber-400" />;
+    if (rank === 1) return <Crown className="crown-pop h-4 w-4 text-amber-400" />;
     if (rank === 2) return <Medal className="h-4 w-4 text-zinc-300" />;
     if (rank === 3) return <Medal className="h-4 w-4 text-amber-600" />;
     return <span className="text-xs text-zinc-600 w-4 text-center tabular-nums">{rank}</span>;
@@ -126,19 +128,15 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
             </Button>
           )}
           {/* Segmented period control — a race you can flip with a tap. */}
-          <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('leaderboard.period')}>
-            {(Object.keys(PERIOD_KEYS) as string[]).map((value) => (
-              <button
-                key={value}
-                role="tab"
-                aria-selected={period === value}
-                onClick={() => setPeriod(value)}
-                className={`h-7 px-3 rounded-md text-xs font-medium transition-colors ${period === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                {t(PERIOD_KEYS[value])}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label={t('leaderboard.period')}
+            value={period}
+            onChange={setPeriod}
+            options={(Object.keys(PERIOD_KEYS) as string[]).map((value) => ({
+              value,
+              label: t(PERIOD_KEYS[value]),
+            }))}
+          />
           {!showGlobal && (
             <SearchableSelect
               className="w-[140px]"
@@ -169,7 +167,10 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
       )}
 
       {/* Rankings List */}
-      <Card className="py-0 gap-0">
+      {/* Keyed on what is being ranked, so changing the period or the item
+          plays the board in again — podium and all — rather than swapping
+          numbers under people's names in place. */}
+      <Card key={`${showGlobal}:${period}:${itemTypeId}`} className="py-0 gap-0">
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
@@ -228,7 +229,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                         className="absolute -top-2.5 flex size-5 items-center justify-center rounded-full border bg-[var(--card)]"
                         style={{ borderColor: metal, color: metal }}
                       >
-                        {first ? <Crown className="h-3 w-3" /> : <Medal className="h-3 w-3" />}
+                        {first ? <Crown className="crown-pop h-3 w-3" /> : <Medal className="h-3 w-3" />}
                       </span>
 
                       <Avatar
@@ -246,7 +247,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                       </p>
 
                       <p className={`font-medium tabular-nums ${first ? 'text-base text-zinc-100' : 'text-sm text-zinc-300'}`}>
-                        {formatNumber(r.total)}
+                        <CountUp value={r.total} format={formatNumber} />
                       </p>
 
                       {/* The plinth. Its height is the whole point of the
@@ -264,7 +265,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
                 })}
               </div>
             )}
-            <div className="divide-y divide-[var(--line-1)]">
+            <div className="stagger divide-y divide-[var(--line-1)]">
               {rankings.map((r) => {
                 const isMe = 'isMe' in r && r.isMe;
                 return (
@@ -323,7 +324,7 @@ export function LeaderboardView({ factionId, isSuperadmin }: Props) {
 
                     {/* Stats */}
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-medium tabular-nums text-zinc-100">{fmt(r.total)}</p>
+                      <p className="text-sm font-medium tabular-nums text-zinc-100"><CountUp value={r.total} format={fmt} /></p>
                       <p className="text-micro text-zinc-600">{t('entries.count', { count: r.entryCount })}</p>
                     </div>
                   </div>

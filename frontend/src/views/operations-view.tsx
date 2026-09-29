@@ -1,5 +1,6 @@
 'use client';
 
+import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { operationsApi, membersApi, itemTypesApi, apiErrorMessage } from '@/lib/api-client';
@@ -172,22 +173,15 @@ export function OperationsView({
           <p className="mt-1 max-w-2xl text-sm text-zinc-400">{t('operations.subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('operations.title')}>
-            {([['log', 'operations.tabLog'], ['board', 'operations.tabBoard']] as const).map(([value, key]) => (
-              <button
-                key={value}
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value)}
-                className={`flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors ${
-                  tab === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {value === 'board' ? <Trophy className="h-3.5 w-3.5" /> : <Crosshair className="h-3.5 w-3.5" />}
-                {t(key)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            label={t('operations.title')}
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'log', label: t('operations.tabLog'), icon: <Crosshair className="h-3.5 w-3.5" /> },
+              { value: 'board', label: t('operations.tabBoard'), icon: <Trophy className="h-3.5 w-3.5" /> },
+            ]}
+          />
           {canLog && (
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
@@ -197,7 +191,7 @@ export function OperationsView({
         </div>
       </div>
 
-      {tab === 'board' && <OperationsLeaderboard factionId={factionId} />}
+      {tab === 'board' && <div className="animate-fade-in"><OperationsLeaderboard factionId={factionId} /></div>}
 
       {tab === 'log' && query.isLoading && (
         <div className="space-y-3">
@@ -216,7 +210,7 @@ export function OperationsView({
         />
       )}
 
-      <div className="space-y-3">
+      <div className="stagger space-y-3">
         {tab === 'log' && operations.map((operation) => (
           <OperationCard
             key={operation.id}

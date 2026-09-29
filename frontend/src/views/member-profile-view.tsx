@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -332,6 +333,9 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
         </div>
       )}
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={activeTab} className="animate-fade-in">
       {activeTab === 'overview' && (
         <div className="space-y-4">
           {/* ── Top Stats Row ── */}
@@ -346,7 +350,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <CardContent>
                 {/* Neutral like the three stat cards beside it: a score is
                     not a verdict the faction accent gets to colour. */}
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{performance.score}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100"><CountUp value={performance.score} format={(n) => String(Math.round(n))} /></div>
                 <p className="text-meta text-zinc-600 mt-1">{t('profile.outOf100')}</p>
               </CardContent>
             </Card>
@@ -380,7 +384,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(contribution.currencyContributed)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100"><CountUp value={contribution.currencyContributed} format={fmt} /></div>
                 <p className="text-meta text-zinc-600 mt-1">
                   {t('entries.count', { count: contribution.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(contribution.avgPerCurrencyEntry) })}
                 </p>
@@ -400,7 +404,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-medium tabular-nums text-zinc-100">{fmt(payoutStats.currencyReceived)}</div>
+                <div className="text-2xl font-medium tabular-nums text-zinc-100"><CountUp value={payoutStats.currencyReceived} format={fmt} /></div>
                 <p className="text-meta text-zinc-600 mt-1">{t('payouts.count', { count: payoutStats.payoutCount })}</p>
                 {payoutStats.itemReceived > 0 && (
                   <p className="text-meta text-zinc-600 mt-0.5">+ {fmtItems(payoutStats.itemReceived)}</p>
@@ -415,12 +419,12 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <CardTitle className="text-sm text-zinc-200">{t('profile.performanceBreakdown')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 sm:grid-cols-5">
+              <div className="stagger grid gap-3 sm:grid-cols-5">
                 {Object.entries(performance.breakdown).map(([key, val]) => (
                   <div key={key} className="text-center">
                     <div className="text-xs text-zinc-500 mb-1">{PERFORMANCE_KEYS[key] ? t(PERFORMANCE_KEYS[key]) : key}</div>
                     <div className="relative h-2 bg-[var(--fill-2)] rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500 bg-brand" style={{ width: `${Math.round(val * 100)}%` }} />
+                      <div className="bar-grow h-full rounded-full transition-all duration-500 bg-brand" style={{ width: `${Math.round(val * 100)}%` }} />
                     </div>
                     <div className="text-xs text-zinc-400 mt-1 tabular-nums">{Math.round(val * 100)}%</div>
                   </div>
@@ -443,7 +447,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   <EmptyState icon={Target} title={t('quota.noneActive')}
               hint={t('quota.noneActiveHint')} compact />
                 ) : (
-                  <div className="space-y-3">
+                  <div className="stagger space-y-3">
                     {quotaProgress.map((q) => {
                       const met = q.percentage >= 100;
                       return (
@@ -459,7 +463,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             {/* Neutral until met, like the same bar on the
                                 dashboard — the faction accent must not stand in
                                 for "done". */}
-                            <div className={`h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
+                            <div className={`bar-grow h-full rounded-full energy-bar transition-all duration-500 ${met ? 'bg-emerald-500 bar-shine' : 'bg-primary'}`} style={{ width: `${Math.min(q.percentage, 100)}%` }} />
                           </div>
                           <div className="flex justify-between text-micro text-zinc-600 mt-0.5">
                             <span>{formatAmount(q.contributed, q.unit, q.isCurrency)}</span>
@@ -492,7 +496,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                   // Every strike, not the newest five. The list already scrolls,
                   // and a member reading their own record should not find the
                   // oldest ones missing from it with nothing saying so.
-                  <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                  <div className="stagger space-y-2 max-h-[320px] overflow-y-auto">
                     {strikes.map((s) => (
                       // Clicking it opens the reason in full. Two clamped
                       // lines is a summary, and the person carrying the strike
@@ -508,7 +512,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                             setViewingStrike(s);
                           }
                         }}
-                        className="cursor-pointer rounded-lg border border-[var(--line-1)] p-3 space-y-1.5 transition-colors hover:border-[var(--line-2)] hover:bg-[var(--fill-1)]"
+                        className="lift cursor-pointer rounded-lg border border-[var(--line-1)] p-3 space-y-1.5 hover:border-[var(--line-2)] hover:bg-[var(--fill-1)]"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -542,7 +546,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 <CardTitle className="text-sm text-zinc-200">{t('profile.contributionByType')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="stagger grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {contribution.byItemType.map((row) => {
                     const isTop = contribution.mostActiveItemType?.itemTypeName === row.itemTypeName;
                     return (
@@ -623,7 +627,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-1 max-h-[240px] overflow-y-auto">
+                <div className="stagger space-y-1 max-h-[240px] overflow-y-auto">
                   {recentEntries.map((e) => (
                     <div key={e.id} className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                       <div className="flex items-center gap-2 min-w-0">
@@ -657,7 +661,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
             <Card><CardContent className="p-0"><EmptyState icon={StickyNote} title={t('notes.none')}
               hint={t('notes.noneHint')} compact /></CardContent></Card>
           ) : (
-            <div className="space-y-2">
+            <div className="stagger space-y-2">
               {notes.map((n) => (
                 <Card key={n.id} className={n.isFlagged ? 'border-amber-500/20' : ''}>
                   <CardContent className="py-3">
@@ -694,7 +698,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               <EmptyState icon={Clock} title={t('profile.noHistory')}
               hint={t('profile.noHistoryHint')} compact />
             ) : (
-              <div className="space-y-2">
+              <div className="stagger space-y-2">
                 {historyData.data.map((h) => (
                   <div key={h.id} className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)]">
                     <Avatar className="h-6 w-6"><AvatarImage src={h.actorAvatarUrl ?? undefined} /><AvatarFallback className="text-[8px]">{(h.actorInGameName?.trim() || h.actorUsername || '?').slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
@@ -710,6 +714,7 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
           </CardContent>
         </Card>
       )}
+      </div>
 
       {/* ── Note Dialog ── */}
       <Dialog open={noteOpen} onOpenChange={setNoteOpen}>

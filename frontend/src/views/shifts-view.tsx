@@ -1,5 +1,7 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
+import { Segmented } from '@/components/ui/segmented';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shiftsApi, membersApi, apiErrorMessage } from '@/lib/api-client';
@@ -326,7 +328,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         <Card>
           <CardContent className="py-4">
             <p className="text-xs uppercase tracking-wide text-zinc-500">{t('shifts.hoursThisMonth')}</p>
-            <div className="mt-3 space-y-2">
+            <div className="stagger mt-3 space-y-2">
               {summary.data!.members.map((row) => (
                 <div key={row.userId} className="flex items-center gap-3">
                   <Avatar className="h-6 w-6">
@@ -338,7 +340,7 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
                     {t('shifts.shiftCount').replace('{count}', String(row.shiftCount))}
                   </span>
                   <span className="w-20 text-right text-sm tabular-nums text-zinc-100">
-                    {hoursAndMinutes(row.minutes)}
+                    <CountUp value={row.minutes} format={(n) => hoursAndMinutes(Math.round(n))} />
                   </span>
                 </div>
               ))}
@@ -365,7 +367,10 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
         {dayShifts.length === 0 ? (
           <EmptyState icon={CalendarDays} title={t('shifts.empty')} hint={t('shifts.emptyHint')} />
         ) : (
-          dayShifts.map((shift) => (
+          // Keyed on the day, so picking another day on the calendar plays
+          // the list in again rather than swapping rows in place.
+          <div key={selectedDay ?? 'month'} className="stagger space-y-2">
+          {dayShifts.map((shift) => (
             <ShiftRow
               key={shift.id}
               shift={shift}
@@ -376,7 +381,8 @@ export function ShiftsView({ factionId, canLog, canViewAll, canManage }: Props) 
               onEdit={() => setEditing(shift)}
               onRemove={() => setRemoving(shift)}
             />
-          ))
+          ))}
+          </div>
         )}
       </div>
 
@@ -730,22 +736,17 @@ function ShiftDialog({
 
           <div className="space-y-1">
             <Label>{t('shifts.forWhom')}</Label>
-            <div className="flex rounded-lg border border-[var(--line-2)] p-0.5" role="tablist" aria-label={t('shifts.forWhom')}>
-              {(['faction', 'side'] as const).map((value) => (
-                <button
-                  key={value}
-                  role="tab"
-                  type="button"
-                  aria-selected={kind === value}
-                  onClick={() => setKind(value)}
-                  className={`h-8 flex-1 rounded-md px-3 text-xs font-medium transition-colors ${
-                    kind === value ? 'bg-[var(--fill-4)] text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {t(value === 'faction' ? 'shifts.kindFaction' : 'shifts.kindSide')}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label={t('shifts.forWhom')}
+              size="md"
+              fill
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: 'faction', label: t('shifts.kindFaction') },
+                { value: 'side', label: t('shifts.kindSide') },
+              ]}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

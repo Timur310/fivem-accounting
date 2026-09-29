@@ -1525,6 +1525,7 @@ export const en = {
   'shifts.endsNextDay': 'Ends the next morning',
   'nav.complaints': 'Complaints',
   'nav.myDay': 'My day',
+  'nav.liveNow': 'Happening now',
   'myDay.greeting': 'Hey, {name}',
   'myDay.subtitle': 'What is going on with you, in one place.',
   'myDay.allQuiet': 'Nothing needs you right now',

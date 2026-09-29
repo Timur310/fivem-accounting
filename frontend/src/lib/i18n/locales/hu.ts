@@ -1504,6 +1504,7 @@ export const hu: Translations = {
   'shifts.endsNextDay': 'Másnap reggel ér véget',
   'nav.complaints': 'Panaszok',
   'nav.myDay': 'Az én napom',
+  'nav.liveNow': 'Most zajlik',
   'myDay.greeting': 'Szia, {name}',
   'myDay.subtitle': 'Minden, ami veled kapcsolatos, egy helyen.',
   'myDay.allQuiet': 'Most semmi nem vár rád',

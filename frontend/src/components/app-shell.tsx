@@ -1,8 +1,11 @@
 'use client';
 
+import * as m from 'motion/react-m';
+import { glide, screenIn } from '@/lib/motion';
 import { useAppStore, DEFAULT_BRAND_COLOR } from '@/lib/store';
 import { APP_COPYRIGHT, APP_VERSION, APP_VERSION_LABEL } from '@/lib/app-meta';
-import { authApi, factionSettingsApi, supportApi } from '@/lib/api-client';
+import { authApi, complaintsApi, factionSettingsApi, shiftsApi, supportApi } from '@/lib/api-client';
+import { useBump } from '@/hooks/use-bump';
 import type { FactionPermission } from '@/lib/api-types';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -156,6 +159,8 @@ interface NavItem {
   superadminOnly?: boolean;
   /** Unread-style count rendered on the right of the item, when above zero. */
   badgeCount?: number;
+  /** Something is happening here right now: a breathing dot. */
+  live?: boolean;
 }
 
 export function AppShell() {
@@ -337,6 +342,36 @@ export function AppShell() {
   });
   const openTicketCount = openTickets?.open ?? 0;
 
+  const moduleOn = (module: FactionModule) =>
+    isModuleEnabled(factionSettings?.enabledModules, module);
+
+  // Complaints still waiting, for the people who settle them — the same idea
+  // as the support inbox badge, one level down. One row is asked for; the
+  // count comes with it.
+  const handlesComplaints = !!currentFactionMembership
+    && hasPermission('manage_complaints') && moduleOn('complaints');
+  const { data: complaintQueue } = useQuery({
+    queryKey: ['complaints-open-count', selectedFactionId],
+    queryFn: () => complaintsApi.list(selectedFactionId!, { limit: 1 }),
+    enabled: handlesComplaints && !!selectedFactionId,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const openComplaintCount = complaintQueue?.openCount ?? 0;
+
+  // Whether the caller is on shift, for a live dot beside Shifts wherever
+  // they are in the app. Shares the clock's own query, so the dot and the
+  // clock can never disagree.
+  const tracksShifts = !!currentFactionMembership && moduleOn('shifts')
+    && (hasPermission('log_shifts') || hasPermission('manage_shifts'));
+  const { data: dutyData } = useQuery({
+    queryKey: ['shifts-on-duty', selectedFactionId],
+    queryFn: () => shiftsApi.onDuty(selectedFactionId!),
+    enabled: tracksShifts && !!selectedFactionId,
+    refetchInterval: 60_000,
+  });
+  const onShift = !!dutyData?.mine;
+
   const navItems: NavItem[] = [
     // First in the list: what is going on with *me*, before what is going on
     // with the faction. Members-only because it is all about the caller's own
@@ -375,11 +410,18 @@ export function AppShell() {
     // No permission: everybody with a timesheet has one of their own to read,
     // and the screen narrows itself to it. Whose hours you can see and whose
     // you can correct are decided inside the view.
-    { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts' },
+    { group: 'field', view: 'shifts', label: 'nav.shifts', icon: CalendarClock, module: 'shifts', live: onShift },
     // No permission: anybody may raise something, and the screen narrows to
     // what they filed unless they hold manage_complaints. A complaints box
     // only some ranks can open is not one.
-    { group: 'people', view: 'complaints', label: 'nav.complaints', icon: MessageSquareWarning, module: 'complaints' },
+    {
+      group: 'people',
+      view: 'complaints',
+      label: 'nav.complaints',
+      icon: MessageSquareWarning,
+      module: 'complaints',
+      badgeCount: openComplaintCount,
+    },
     // No permission: a price list nobody may read is a price list nobody can
     // sell from, and the people at the counter hold the fewest rights. Editing
     // it is gated inside the view.
@@ -755,28 +797,43 @@ export function AppShell() {
                       key={item.view}
                       onClick={() => handleNavClick(item.view)}
                       aria-current={active ? 'page' : undefined}
-                      className={`w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-all duration-150 ${
+                      className={`relative w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-normal transition-colors duration-150 ${
                         active
                           ? 'text-white font-medium'
                           : 'text-zinc-500 hover:text-zinc-200 hover:bg-[var(--fill-2)]'
                       } ${!sidebarOpen ? 'justify-center' : ''}`}
-                      style={active ? {
-                        backgroundColor: `${brandColor}12`,
-                        boxShadow: `inset 0 0 0 1px ${brandColor}25`,
-                        color: brandColor,
-                      } : undefined}
+                      style={active ? { color: brandColor } : undefined}
                       title={!sidebarOpen ? t(item.label) : undefined}
                     >
-                      <item.icon className={`h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
-                      {sidebarOpen && <span className="truncate">{t(item.label)}</span>}
-                      {!!item.badgeCount && (
+                      {/* One highlight for the whole sidebar, which slides to
+                          the item you pick instead of blinking off in one
+                          place and on in another. Shared by layoutId, so the
+                          movement is Motion's and the resting state is the
+                          same tint and ring the item always had. */}
+                      {active && (
+                        <m.span
+                          layoutId="nav-active"
+                          aria-hidden
+                          className="absolute inset-0 rounded-md"
+                          style={{
+                            backgroundColor: `${brandColor}12`,
+                            boxShadow: `inset 0 0 0 1px ${brandColor}25`,
+                          }}
+                          transition={glide}
+                        />
+                      )}
+                      <item.icon className={`relative h-4 w-4 shrink-0 ${active ? '' : 'opacity-60'}`} />
+                      {sidebarOpen && <span className="relative truncate">{t(item.label)}</span>}
+                      {item.live && !item.badgeCount && (
                         <span
-                          className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-micro tabular-nums ${
-                            sidebarOpen ? 'px-1.5 py-0.5' : 'absolute translate-x-3 -translate-y-2 px-1'
-                          }`}
+                          className={sidebarOpen ? 'relative ml-auto mr-1' : 'absolute right-2 top-2'}
+                          aria-label={t('nav.liveNow')}
                         >
-                          {item.badgeCount}
+                          <span className="live-dot" />
                         </span>
+                      )}
+                      {!!item.badgeCount && (
+                        <NavBadge count={item.badgeCount} collapsed={!sidebarOpen} />
                       )}
                     </button>
                   );
@@ -919,11 +976,41 @@ export function AppShell() {
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           {/* Capped reading width: on a wide desktop the views otherwise
               stretch edge-to-edge and the first glance has nowhere to land. */}
-          <div className="animate-fade-in w-full max-w-7xl mx-auto">
+          {/* Keyed on the screen, so each one rises in as it opens. Enter
+              only, deliberately: an exit animation would hold the next screen
+              back until the last one had finished leaving, and nobody should
+              wait for a screen they have already left. */}
+          <m.div
+            key={`${selectedFactionId ?? ''}:${currentView}:${selectedMemberUserId ?? ''}`}
+            variants={screenIn}
+            initial="hidden"
+            animate="shown"
+            className="w-full max-w-7xl mx-auto"
+          >
             {renderView()}
-          </div>
+          </m.div>
         </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * The count beside a sidebar item, bumping when it rises.
+ *
+ * Its own component because each item needs its own memory of the last
+ * count, and hooks cannot be called inside the loop that draws the sidebar.
+ */
+function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
+  const bump = useBump(count);
+  return (
+    <span
+      key={bump}
+      className={`ml-auto shrink-0 rounded-full bg-amber-500/15 text-amber-300 text-micro tabular-nums ${
+        collapsed ? 'absolute translate-x-3 -translate-y-2 px-1' : 'relative px-1.5 py-0.5'
+      } ${bump > 0 ? 'badge-bump' : ''}`}
+    >
+      {count}
+    </span>
   );
 }

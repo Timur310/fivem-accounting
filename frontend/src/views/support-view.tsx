@@ -202,7 +202,7 @@ export function SupportView() {
           ) : tickets.length === 0 ? (
             <EmptyState icon={LifeBuoy} title={t('support.noneYet')} hint={t('support.noneYetHint')} />
           ) : (
-            <div className="divide-y divide-[var(--line-1)]">
+            <div className="stagger divide-y divide-[var(--line-1)]">
               {tickets.map((ticket) => (
                 <article key={ticket.id} className="p-4 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">

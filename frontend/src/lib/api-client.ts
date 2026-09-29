@@ -1242,7 +1242,13 @@ export { api };
 export const complaintsApi = {
   list: (
     factionId: string,
-    params: { status?: ComplaintStatus; category?: ComplaintCategory; mine?: 'true' } = {},
+    params: {
+      status?: ComplaintStatus;
+      category?: ComplaintCategory;
+      mine?: 'true';
+      /** One is enough when all that is wanted is `openCount`. */
+      limit?: number;
+    } = {},
   ) =>
     api
       .get<ApiSuccessResponse<ComplaintList>>(`/factions/${factionId}/complaints`, { params })

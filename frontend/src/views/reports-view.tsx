@@ -1,5 +1,6 @@
 'use client';
 
+import { CountUp } from '@/components/ui/count-up';
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '@/lib/api-client';
@@ -88,6 +89,9 @@ export function ReportsView({ factionId }: Props) {
         {t('reports.print')}
       </Button>
 
+      {/* Keyed on the tab, so switching fades the new one in. Enter only:
+          the old tab goes at once, the way screens do. */}
+      <div key={tab} className="animate-fade-in">
       {tab === 'summary' && (
         <>
           <div className="flex flex-wrap gap-1.5">
@@ -113,7 +117,7 @@ export function ReportsView({ factionId }: Props) {
                 <Card className="border-highlight">
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.currencyTotal')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmt(summary.overview.currencyTotal)}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.currencyTotal} format={fmt} /></p>
                     <p className="text-meta text-zinc-600 mt-1 tabular-nums">
                       {t('entries.count', { count: summary.overview.currencyEntryCount })} &middot; {t('reports.avg', { amount: fmt(summary.overview.avgPerCurrencyEntry) })}
                     </p>
@@ -122,7 +126,7 @@ export function ReportsView({ factionId }: Props) {
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.itemTotal')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{fmtItems(summary.overview.itemTotal)}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.itemTotal} format={(n) => fmtItems(Math.round(n))} /></p>
                     <p className="text-meta text-zinc-600 mt-1 tabular-nums">
                       {t('entries.count', { count: summary.overview.itemEntryCount })} &middot; {t('reports.avg', { amount: fmtItems(summary.overview.avgPerItemEntry) })}
                     </p>
@@ -131,14 +135,14 @@ export function ReportsView({ factionId }: Props) {
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('nav.entries')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.entryCount}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.entryCount} format={(n) => String(Math.round(n))} /></p>
                     <p className="text-meta text-zinc-600 mt-1 tabular-nums">{summary.from} → {summary.to}</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-4">
                     <p className="text-meta text-zinc-500 uppercase tracking-wider">{t('reports.uniqueMembers')}</p>
-                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100">{summary.overview.uniqueMembers}</p>
+                    <p className="text-xl font-medium tabular-nums tracking-tight mt-1 text-zinc-100"><CountUp value={summary.overview.uniqueMembers} format={(n) => String(Math.round(n))} /></p>
                   </CardContent>
                 </Card>
               </div>
@@ -150,7 +154,7 @@ export function ReportsView({ factionId }: Props) {
                     {summary.byType.length === 0 ? (
                       <EmptyState icon={FileBarChart} title={t('common.noData')} compact />
                     ) : (
-                      <div className="space-y-2">
+                      <div className="stagger space-y-2">
                         {summary.byType.map((row) => (
                           <div key={row.itemTypeName} className="flex items-center justify-between rounded-lg border border-[var(--line-1)] p-3 transition-all duration-150 hover:border-[var(--line-3)]">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -174,7 +178,7 @@ export function ReportsView({ factionId }: Props) {
                     {summary.memberRanking.length === 0 ? (
                       <EmptyState icon={FileBarChart} title={t('common.noData')} compact />
                     ) : (
-                      <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                      <div className="stagger space-y-1 max-h-[400px] overflow-y-auto">
                         {summary.memberRanking.map((m, i) => (
                           <div key={m.username} className="flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--fill-1)] transition-colors duration-100">
                             <span className="text-xs font-medium text-zinc-600 w-4 tabular-nums">#{i + 1}</span>
@@ -311,6 +315,7 @@ export function ReportsView({ factionId }: Props) {
           ) : null}
         </>
       )}
+      </div>
     </div>
   );
 }

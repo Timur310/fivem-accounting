@@ -120,7 +120,7 @@ export function LaunderingView({ factionId }: Props) {
 
       {/* What there is to work with */}
       {currencies.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {currencies.map((c) => (
             <Card key={c.itemTypeId}>
               <CardContent className="py-3">

@@ -148,7 +148,7 @@ export function FeedView({ factionId }: { factionId: string }) {
           ) : items.length === 0 ? (
             <EmptyState icon={Activity} title={t('feed.none')} hint={t('feed.noneHint')} />
           ) : (
-            <ol className="divide-y divide-[var(--line-1)]">
+            <ol className="stagger divide-y divide-[var(--line-1)]">
               {items.map((item) => {
                 const Icon = TYPE_ICON[item.type] ?? Activity;
                 const tint = TYPE_TINT[item.type] ?? 'bg-[var(--fill-2)] text-zinc-400';
