@@ -12,6 +12,7 @@ import { useAppStore } from '@/lib/store';
 import type { Member, ItemType } from '@/lib/api-types';
 import { formatDate, displayName } from '@/lib/format';
 import { useTranslation } from '@/providers/i18n-provider';
+import { TreasuryResetCard } from '@/components/treasury-reset-card';
 
 export function AdminFactionDetailView() {
   const { t } = useTranslation();
@@ -112,6 +113,8 @@ export function AdminFactionDetailView() {
           </CardContent>
         </Card>
       </div>
+
+      <TreasuryResetCard factionId={data.id} factionName={data.name} />
     </div>
   );
 }

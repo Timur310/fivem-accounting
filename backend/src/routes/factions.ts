@@ -8,6 +8,7 @@ import { success, error } from '../lib/response.js';
 import { parsePagination } from '../lib/types.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth.js';
 import { createAuditLog } from '../lib/audit.js';
+import { resetTreasury } from '../lib/treasuryReset.js';
 
 const router = asyncRouter({ mergeParams: true });
 
@@ -317,6 +318,51 @@ router.delete('/:id', requireAuth, requireSuperadmin, async (req: Request, res: 
   }
 
   success(res, { id, deleted: true });
+});
+
+// ── POST /:id/reset-treasury — empty the treasury ─────
+//
+// Superadmin only, on a faction's request: every entry, payout, expense and
+// treasury check, and the crafts, sales and operations that wrote them, are
+// deleted for good. Item types and everything else stay (lib/treasuryReset.ts).
+//
+// The caller types the faction's name to confirm — the same guard the screen
+// shows — so a stray request or a wrong id cannot empty a treasury.
+const resetSchema = z.object({ confirmName: z.string() });
+
+router.post('/:id/reset-treasury', requireAuth, requireSuperadmin, async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const parsed = resetSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', 'Type the faction name to confirm');
+    return;
+  }
+  const [existing] = await db.select().from(factions).where(eq(factions.id, id)).limit(1);
+  if (!existing) {
+    error(res, 'NOT_FOUND', 'Faction not found', 404);
+    return;
+  }
+  if (parsed.data.confirmName.trim() !== existing.name) {
+    error(res, 'VALIDATION_ERROR', 'The name does not match — nothing was reset');
+    return;
+  }
+
+  const removed = await db.transaction(async (tx: TransactionLike) => {
+    const counts = await resetTreasury(tx, id);
+    await createAuditLog({
+      userId: req.user!.id,
+      factionId: id,
+      action: 'delete',
+      entityType: 'treasury_reset',
+      entityId: id,
+      details: { name: existing.name, removed: counts },
+      req,
+      tx,
+    });
+    return counts;
+  });
+
+  success(res, { id, removed });
 });
 
 export default router;

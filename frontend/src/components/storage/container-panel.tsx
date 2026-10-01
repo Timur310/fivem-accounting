@@ -40,6 +40,7 @@ export function ContainerPanel({
   containers,
   items,
   canUpdate,
+  linked = false,
   onClose,
 }: {
   factionId: string;
@@ -49,6 +50,8 @@ export function ContainerPanel({
   containers: StorageContainer[];
   items: ItemType[];
   canUpdate: boolean;
+  /** Storage is held to the treasury: taking out is a withdrawal. */
+  linked?: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -77,7 +80,15 @@ export function ContainerPanel({
   const change = useMutation({
     mutationFn: (v: { id: string; delta?: string; quantity?: string; minQuantity?: string | null; maxQuantity?: string | null }) =>
       storageApi.changeContent(factionId, v.id, v),
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      invalidate();
+      if (result.withdrawal) {
+        void queryClient.invalidateQueries({ queryKey: ['payouts'] });
+        void queryClient.invalidateQueries({ queryKey: ['treasury'] });
+        void queryClient.invalidateQueries({ queryKey: ['dashboard', factionId] });
+        toast({ title: t('storage.withdrawn', { amount: plainNumber(result.withdrawal.amount), label: result.label }) });
+      }
+    },
     onError: fail,
   });
   const remove = useMutation({
@@ -171,6 +182,7 @@ export function ContainerPanel({
                 expanded={open === line.id}
                 onToggle={() => setOpen(open === line.id ? null : line.id)}
                 canUpdate={canUpdate}
+                withdraws={linked && line.itemTypeId !== null}
                 others={containers.filter((c) => c.id !== container.id)}
                 busy={change.isPending || move.isPending || remove.isPending}
                 onChange={(v) => change.mutate({ id: line.id, ...v })}
@@ -259,13 +271,15 @@ export function ContainerPanel({
 }
 
 function ContentRow({
-  line, item, expanded, onToggle, canUpdate, others, busy, onChange, onMove, onRemove,
+  line, item, expanded, onToggle, canUpdate, withdraws, others, busy, onChange, onMove, onRemove,
 }: {
   line: StorageContent;
   item?: ItemType;
   expanded: boolean;
   onToggle: () => void;
   canUpdate: boolean;
+  /** Taking this out is a withdrawal from the treasury. */
+  withdraws: boolean;
   others: StorageContainer[];
   busy: boolean;
   onChange: (v: { delta?: string; quantity?: string; minQuantity?: string | null; maxQuantity?: string | null }) => void;
@@ -327,6 +341,7 @@ function ContentRow({
               {t('storage.setExactly')}
             </Button>
           </div>
+          {withdraws && <p className="text-[11px] text-emerald-300/80">{t('storage.takeIsWithdrawal')}</p>}
 
           {others.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">

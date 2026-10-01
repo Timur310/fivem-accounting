@@ -509,9 +509,22 @@ stops adding up.
 ### 5.12 Storage — which bench holds what *(beta)*
 
 > **Beta.** Storage is new. It may still change, and the page says so at the
-> top. The counts here are the faction's own: they **never** change the
-> treasury, and nothing you log elsewhere changes them. Found something odd?
-> Use the link in the beta notice, or Support (§5.8).
+> top. Found something odd? Use the link in the beta notice, or Support (§5.8).
+
+**Held to the treasury.** Unless leadership switched it off (the badge next to
+the title says which), storage follows the treasury for the faction's own
+items:
+
+- you can only **put away** what the treasury holds — 20 pistols in the books
+  means at most 20 pistols across all containers;
+- **taking something out** (−, or *Take*) is a **withdrawal** from the treasury
+  made out to you, shown on the Withdrawals page and in the container's
+  history. If that withdrawal is later **deleted** on the Withdrawals page,
+  the items go back into the container they came from;
+- **moving** between containers, **It is exactly this** corrections down, and
+  removing a line only say where things are — no withdrawal;
+- things typed in by name instead of picked from the faction's items are never
+  linked.
 
 Your depot, drawn as a floor plan: walls, doors, and every bench, chest, safe
 and locker where it really stands. Each container shows what is in it and how
@@ -541,6 +554,9 @@ or over an item's *At most*, is refused — just like a full chest in game.
 **History** in the container shows who put in, took out, moved or corrected
 what, and when. **Everything in here is counted right** records that you
 checked it (a stocktake).
+
+Leadership turns the treasury link on or off under **Room settings** →
+*Link storage to the treasury* (needs *Manage Storage Rooms*).
 
 **Books vs storage**, folded at the bottom of the page, puts what the treasury
 says the faction owns next to what is counted in containers — so *40 pistols
@@ -1349,6 +1365,18 @@ roster and ledger are invisible to everyone except superadmins.
 When creating or editing a faction you can also set a **logo image URL** — it
 appears in that faction's dashboard masthead alongside its accent color, so
 each faction's app feels like its own rather than a shared shell.
+
+### 9.1a Resetting a faction's treasury
+
+On a faction's request, **Reset treasury** at the bottom of its admin page
+empties the treasury and every record that moved it: entries, withdrawals and
+payouts (wages too), expenses, treasury checks, the craft, sale, operation and
+laundering history, and storage counts of the faction's items. **Item types,
+crafting recipes, the price list,** members, ranks, settings, quotas, strikes,
+the map, vehicles, storage rooms, shifts and mentoring all stay; quota
+progress and leaderboards start again from zero because they are counted from
+entries. You must type the faction's name to confirm. **There is no backup and
+no undo** — the reset itself is recorded in the faction's audit log.
 
 ### 9.2 Users panel
 

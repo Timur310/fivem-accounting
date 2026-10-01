@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { and, asc, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { db, type TransactionLike } from '../db/index.js';
 import {
+  factions,
   itemTypes,
   mapMarkers,
+  payouts,
   storageContainers,
   storageContents,
   storageMovements,
@@ -15,7 +17,7 @@ import {
   STORAGE_TILE_KINDS,
   type StorageMovementKind,
 } from '../db/schema.js';
-import { fromCents, toCents, computeTreasuryBalances } from '../lib/treasury.js';
+import { fromCents, toCents, computeTreasuryBalances, balancesFor, lockItemTypes } from '../lib/treasury.js';
 import { success, error } from '../lib/response.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireFactionMember, requirePermission } from '../middleware/factionAccess.js';
@@ -205,7 +207,14 @@ async function roomDetail(id: string, roomId: string) {
   };
 }
 
+/** Is this faction's storage held to its treasury? */
+async function isLinked(id: string, handle: TransactionLike | typeof db = db): Promise<boolean> {
+  const [row] = await handle.select({ linked: factions.storageLinked }).from(factions).where(eq(factions.id, id));
+  return row?.linked ?? true;
+}
+
 router.get('/rooms', async (req: Request, res: Response) => {
+  const linked = await isLinked(factionId(req));
   const rows = await db.select({
     id: storageRooms.id,
     name: storageRooms.name,
@@ -220,7 +229,23 @@ router.get('/rooms', async (req: Request, res: Response) => {
     .from(storageRooms)
     .where(eq(storageRooms.factionId, factionId(req)))
     .orderBy(asc(storageRooms.sortOrder), asc(storageRooms.createdAt));
-  success(res, { rooms: rows });
+  success(res, { rooms: rows, linked });
+});
+
+// Linking storage to the treasury, or not. Drawing rooms is the authority
+// that decides how storage works, so it is the same permission.
+router.patch('/settings', requirePermission('manage_storage'), async (req: Request, res: Response) => {
+  const parsed = z.object({ linked: z.boolean() }).safeParse(req.body ?? {});
+  if (!parsed.success) {
+    error(res, 'VALIDATION_ERROR', 'Say whether storage is linked to the treasury');
+    return;
+  }
+  await db.update(factions).set({ storageLinked: parsed.data.linked }).where(eq(factions.id, factionId(req)));
+  await createAuditLog({
+    userId: req.user!.id, factionId: factionId(req), action: 'update', entityType: 'storage_settings',
+    entityId: factionId(req), details: { linked: parsed.data.linked }, req,
+  });
+  success(res, { linked: parsed.data.linked });
 });
 
 router.get('/rooms/:roomId', async (req: Request, res: Response) => {
@@ -516,9 +541,81 @@ interface LowStock { roomName: string; containerName: string; label: string; qua
 async function logMovement(tx: TransactionLike, row: {
   factionId: string; userId: string; kind: StorageMovementKind;
   containerId: string; containerName: string; toContainerId?: string; toContainerName?: string;
-  itemTypeId: string | null; label: string; amount: string; before?: string;
+  itemTypeId: string | null; label: string; amount: string; before?: string; payoutId?: string;
 }) {
   await tx.insert(storageMovements).values(row);
+}
+
+// ── storage held to the treasury ──────────────────────
+//
+// With the faction's storage linked (the default), a line of one of its own
+// items is a place where part of the treasury physically is. So:
+//
+// - putting more away is refused past what the treasury holds, counted over
+//   every container — nobody can store pistols the books never had;
+// - taking some out is a withdrawal: a completed payout to whoever took it,
+//   linked from the container's history;
+// - moving between containers, correcting a count down and removing a line
+//   are bookkeeping about *where* things are, and touch nothing.
+//
+// Typed-in items that are not one of the faction's item types have no
+// treasury to be held to and are never linked. The item type is locked first,
+// the way crafting locks it, so two people storing at once cannot both use
+// the same last units.
+
+async function storedTotal(tx: TransactionLike, id: string, itemTypeId: string): Promise<bigint> {
+  const [row] = await tx.select({ total: sql<string>`COALESCE(SUM(${storageContents.quantity}), 0)::text` })
+    .from(storageContents)
+    .where(and(eq(storageContents.factionId, id), eq(storageContents.itemTypeId, itemTypeId)));
+  return toCents(row?.total ?? '0');
+}
+
+/** Refuse putting `growth` more of an item away than the treasury holds. */
+async function ensureTreasuryHolds(tx: TransactionLike, id: string, itemTypeId: string, label: string, growth: bigint) {
+  await lockItemTypes(tx, [itemTypeId]);
+  const balance = toCents((await balancesFor(id, [itemTypeId], tx)).get(itemTypeId) ?? '0');
+  const stored = await storedTotal(tx, id, itemTypeId);
+  if (stored + growth > balance) {
+    const room = balance - stored > 0n ? balance - stored : 0n;
+    throw new Refusal(
+      `The treasury holds ${fromCents(balance)} ${label} and ${fromCents(stored)} are already in storage, so at most ${fromCents(room)} more can go in. Log them into the treasury first.`,
+    );
+  }
+}
+
+/** Taking out of storage: a completed withdrawal to whoever took it. */
+async function withdrawFromTreasury(
+  tx: TransactionLike,
+  req: Request,
+  id: string,
+  line: { itemTypeId: string; label: string },
+  where: { containerName: string; roomName: string },
+  amount: bigint,
+) {
+  await lockItemTypes(tx, [line.itemTypeId]);
+  const balance = toCents((await balancesFor(id, [line.itemTypeId], tx)).get(line.itemTypeId) ?? '0');
+  if (balance < amount) {
+    throw new Refusal(
+      `The treasury shows only ${fromCents(balance > 0n ? balance : 0n)} ${line.label}, so ${fromCents(amount)} cannot be withdrawn. If the count here is wrong, correct it with "It is exactly this" instead.`,
+    );
+  }
+  const [payout] = await tx.insert(payouts).values({
+    factionId: id,
+    recipientUserId: req.user!.id,
+    createdBy: req.user!.id,
+    itemTypeId: line.itemTypeId,
+    amount: fromCents(amount),
+    description: `Taken from storage: ${where.containerName} (${where.roomName})`,
+    payoutDate: new Date().toISOString().slice(0, 10),
+    status: 'completed',
+    approvedBy: req.user!.id,
+    approvedAt: new Date(),
+  }).returning();
+  await createAuditLog({
+    userId: req.user!.id, factionId: id, action: 'create', entityType: 'payout', entityId: payout!.id,
+    details: { itemTypeId: line.itemTypeId, amount: payout!.amount, status: 'completed', storage: where }, req, tx,
+  });
+  return payout!;
 }
 
 function alertLow(id: string, actorUserId: string, low: LowStock | null) {
@@ -564,6 +661,9 @@ router.post('/containers/:containerId/contents', requirePermission('update_stora
         capacity: container.capacity, maxQuantity,
       });
       if (problem) throw new Refusal(problem);
+      if (itemTypeId && await isLinked(id, tx)) {
+        await ensureTreasuryHolds(tx, id, itemTypeId, label, toCents(quantity));
+      }
 
       const [created] = await tx.insert(storageContents).values({
         factionId: id, containerId: container.id, itemTypeId: itemTypeId ?? null, label,
@@ -605,6 +705,7 @@ router.patch('/contents/:contentId', requirePermission('update_storage'), async 
   }
 
   let low: LowStock | null = null;
+  let withdrawal: typeof payouts.$inferSelect | null = null;
   try {
     const row = await db.transaction(async (tx: TransactionLike) => {
       const locked = await lockContainer(tx, id, found.containerId);
@@ -634,12 +735,24 @@ router.patch('/contents/:contentId', requirePermission('update_storage'), async 
       });
       if (problem) throw new Refusal(problem);
 
+      const change = next - toCents(line.quantity);
+      const linked = line.itemTypeId !== null && await isLinked(id, tx);
+      if (linked && change > 0n) {
+        await ensureTreasuryHolds(tx, id, line.itemTypeId!, line.label, change);
+      }
+      // Only taking is a withdrawal; a correction down says where things are not.
+      if (linked && change < 0n && setTo === undefined) {
+        withdrawal = await withdrawFromTreasury(
+          tx, req, id, { itemTypeId: line.itemTypeId!, label: line.label },
+          { containerName: container.name, roomName: container.roomName }, -change,
+        );
+      }
+
       const [updated] = await tx.update(storageContents)
         .set({ quantity: fromCents(next), minQuantity, maxQuantity, updatedAt: new Date() })
         .where(eq(storageContents.id, line.id))
         .returning();
 
-      const change = next - toCents(line.quantity);
       if (change !== 0n) {
         await logMovement(tx, {
           factionId: id, userId: req.user!.id,
@@ -648,6 +761,7 @@ router.patch('/contents/:contentId', requirePermission('update_storage'), async 
           itemTypeId: line.itemTypeId, label: line.label,
           amount: fromCents(change < 0n ? -change : change),
           ...(setTo !== undefined ? { before: line.quantity } : {}),
+          ...(withdrawal ? { payoutId: (withdrawal as { id: string }).id } : {}),
         });
       }
       if (droppedBelowMin(line.quantity, fromCents(next), minQuantity)) {
@@ -659,7 +773,14 @@ router.patch('/contents/:contentId', requirePermission('update_storage'), async 
       return updated!;
     });
     alertLow(id, req.user!.id, low);
-    success(res, row);
+    const paid = withdrawal as (typeof payouts.$inferSelect) | null;
+    if (paid) {
+      void dispatchDiscord(id, {
+        type: 'payout_completed', actorUserId: req.user!.id, recipientUserId: paid.recipientUserId,
+        itemTypeId: paid.itemTypeId, amount: paid.amount,
+      });
+    }
+    success(res, { ...row, withdrawal: paid ? { id: paid.id, amount: paid.amount } : null });
   } catch (err) {
     if (err instanceof Refusal) {
       error(res, err.status === 404 ? 'NOT_FOUND' : 'VALIDATION_ERROR', err.message, err.status);

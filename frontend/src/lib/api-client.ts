@@ -225,6 +225,10 @@ export const factionsApi = {
     api.patch<ApiSuccessResponse<Faction>>(`/factions/${id}`, input).then(unwrap),
 
   remove: (id: string) => api.delete(`/factions/${id}`),
+
+  /** Superadmin: empty a faction's treasury and the history that moved it. */
+  resetTreasury: (id: string, confirmName: string) =>
+    api.post<ApiSuccessResponse<{ id: string; removed: Record<string, number> }>>(`/factions/${id}/reset-treasury`, { confirmName }).then(unwrap),
 };
 
 // ── Members ──
@@ -1433,7 +1437,11 @@ export const mentoringApi = {
 /** The storage planner: rooms, the containers in them, and what they hold. */
 export const storageApi = {
   rooms: (factionId: string) =>
-    api.get<ApiSuccessResponse<{ rooms: StorageRoomSummary[] }>>(`/factions/${factionId}/storage/rooms`).then(unwrap),
+    api.get<ApiSuccessResponse<{ rooms: StorageRoomSummary[]; linked: boolean }>>(`/factions/${factionId}/storage/rooms`).then(unwrap),
+
+  /** Whether storage counts are held to the treasury. */
+  setLinked: (factionId: string, linked: boolean) =>
+    api.patch<ApiSuccessResponse<{ linked: boolean }>>(`/factions/${factionId}/storage/settings`, { linked }).then(unwrap),
 
   room: (factionId: string, roomId: string) =>
     api.get<ApiSuccessResponse<StorageRoomDetail>>(`/factions/${factionId}/storage/rooms/${roomId}`).then(unwrap),
@@ -1473,7 +1481,9 @@ export const storageApi = {
   changeContent: (factionId: string, contentId: string, input: {
     delta?: string; quantity?: string; minQuantity?: string | null; maxQuantity?: string | null;
   }) =>
-    api.patch<ApiSuccessResponse<StorageContent>>(`/factions/${factionId}/storage/contents/${contentId}`, input).then(unwrap),
+    api.patch<ApiSuccessResponse<StorageContent & { withdrawal: { id: string; amount: string } | null }>>(
+      `/factions/${factionId}/storage/contents/${contentId}`, input,
+    ).then(unwrap),
 
   removeContent: (factionId: string, contentId: string) =>
     api.delete(`/factions/${factionId}/storage/contents/${contentId}`),

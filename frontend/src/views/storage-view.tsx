@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Segmented } from '@/components/ui/segmented';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Switch } from '@/components/ui/switch';
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -80,6 +81,11 @@ export function StorageView({
     queryFn: () => storageApi.rooms(factionId),
   });
   const roomList = rooms.data?.rooms ?? [];
+  const linked = rooms.data?.linked ?? true;
+  const setLinked = useMutation({
+    mutationFn: (next: boolean) => storageApi.setLinked(factionId, next),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['storage-rooms', factionId] }),
+  });
   const roomId = roomList.some((r) => r.id === roomPick) ? roomPick : roomList[0]?.id ?? '';
 
   const detail = useQuery({
@@ -141,7 +147,7 @@ export function StorageView({
         <div className="text-sm">
           <p className="font-medium text-amber-200">{t('storage.betaTitle')}</p>
           <p className="text-amber-100/70">
-            {t('storage.betaBody')}{' '}
+            {linked ? t('storage.betaBodyLinked') : t('storage.betaBody')}{' '}
             <button type="button" className="underline underline-offset-2 hover:text-amber-100" onClick={() => setCurrentView('support')}>
               {t('storage.betaFeedback')}
             </button>
@@ -154,6 +160,15 @@ export function StorageView({
           <h1 className="flex items-center gap-2 text-xl font-medium tracking-tight text-zinc-100">
             {t('storage.title')}
             <Badge variant="outline" className="border-amber-500/40 text-[10px] uppercase text-amber-300">{t('common.beta')}</Badge>
+            <span
+              className={cn(
+                'rounded-full border px-2 py-0.5 text-[10px] font-normal',
+                linked ? 'border-emerald-500/40 text-emerald-300' : 'border-zinc-700 text-zinc-500',
+              )}
+              title={linked ? t('storage.linkedHint') : t('storage.unlinkedHint')}
+            >
+              {linked ? t('storage.linked') : t('storage.unlinked')}
+            </span>
           </h1>
           <p className="text-meta mt-1 max-w-xl text-zinc-500">{t('storage.subtitle')}</p>
         </div>
@@ -310,6 +325,7 @@ export function StorageView({
 
       {opened && room && (
         <ContainerPanel
+          linked={linked}
           factionId={factionId}
           roomId={room.id}
           container={opened}
@@ -332,6 +348,8 @@ export function StorageView({
           factionId={factionId}
           room={room}
           mapOn={mapOn}
+          linked={linked}
+          setLinked={setLinked}
           onClose={() => setSettingsOpen(false)}
         />
       )}
@@ -494,7 +512,7 @@ function CompareCard({ factionId }: { factionId: string }) {
         </button>
         {open && (
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-zinc-500">{t('storage.compareHint')}</p>
+            <p className="text-xs text-zinc-500">{t('storage.compareHintLinked')}</p>
             {compare.isLoading ? (
               <Skeleton className="h-24 w-full" />
             ) : rows.length === 0 ? (
@@ -647,11 +665,15 @@ function RoomSettingsDialog({
   factionId,
   room,
   mapOn,
+  linked,
+  setLinked,
   onClose,
 }: {
   factionId: string;
   room: { id: string; name: string; mapMarkerId: string | null };
   mapOn: boolean;
+  linked: boolean;
+  setLinked: { mutate: (next: boolean) => void };
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -721,6 +743,13 @@ function RoomSettingsDialog({
               <p className="text-[11px] text-zinc-500">{t('storage.mapPinHint')}</p>
             </div>
           )}
+          <div className="flex items-start justify-between gap-3 rounded-md border border-zinc-800 p-3">
+            <div>
+              <p className="text-sm text-zinc-200">{t('storage.linkSwitch')}</p>
+              <p className="text-[11px] text-zinc-500">{t('storage.linkSwitchHint')}</p>
+            </div>
+            <Switch checked={linked} onCheckedChange={(next) => setLinked.mutate(next)} aria-label={t('storage.linkSwitch')} />
+          </div>
           <div className="rounded-md border border-red-500/30 p-3">
             <p className="text-sm text-zinc-200">{t('storage.deleteRoom')}</p>
             <p className="mb-2 text-[11px] text-zinc-500">{t('storage.deleteRoomHint')}</p>

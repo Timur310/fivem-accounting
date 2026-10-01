@@ -108,6 +108,13 @@ export const factions = pgTable('factions', {
    */
   mentorPointLimit: integer('mentor_point_limit'),
   /**
+   * Whether storage counts of the faction's own items are held to the
+   * treasury: nothing can be put away that the treasury does not hold, and
+   * taking something out is a withdrawal. On by default; a faction that keeps
+   * an off-the-books stash turns it off.
+   */
+  storageLinked: boolean('storage_linked').notNull().default(true),
+  /**
    * Which parts of the app this faction uses, or null for all of them.
    *
    * Null rather than a filled-in default, and no backfill: every faction that
@@ -2078,7 +2085,8 @@ export const storageContents = pgTable('storage_contents', {
 }));
 
 /** What happened to a count. */
-export const STORAGE_MOVEMENT_KINDS = ['add', 'take', 'set', 'move', 'remove'] as const;
+/** `return`: a deleted storage withdrawal put back where it was taken from. */
+export const STORAGE_MOVEMENT_KINDS = ['add', 'take', 'set', 'move', 'remove', 'return'] as const;
 export type StorageMovementKind = (typeof STORAGE_MOVEMENT_KINDS)[number];
 
 /**
@@ -2104,6 +2112,8 @@ export const storageMovements = pgTable('storage_movements', {
   amount:          decimal('amount', { precision: 15, scale: 2 }).notNull(),
   before:          decimal('before', { precision: 15, scale: 2 }),
   userId:          uuid('user_id').notNull().references(() => users.id),
+  /** The withdrawal a take made, when storage is linked to the treasury. */
+  payoutId:        uuid('payout_id').references(() => payouts.id, { onDelete: 'set null' }),
   createdAt:       timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   containerIndex: index('storage_movement_container').on(table.containerId, table.createdAt),
