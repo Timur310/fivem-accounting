@@ -26,6 +26,7 @@ import {
 import { EmptyState, ErrorState } from '@/components/ui/empty-state';
 import { useToast } from '@/hooks/use-toast';
 import { StrikeDetailDialog } from '@/components/strike-detail-dialog';
+import { MentoringHistory } from '@/components/mentoring-history';
 import type { NoteCategory, Strike, StrikeEffectiveStatus } from '@/lib/api-types';
 import { useAppStore } from '@/lib/store';
 import { formatAmount, displayName, formatDate, formatNumber, formatCount } from '@/lib/format';
@@ -42,6 +43,8 @@ interface Props {
    * from a rank that was allowed to use them.
    */
   canManageStrikes?: boolean;
+  /** Leadership may read this member's mentoring history. */
+  canManageMentoring?: boolean;
 }
 
 type ProfileTab = 'overview' | 'notes' | 'history';
@@ -95,7 +98,7 @@ const EFFECTIVE_STATUS_COLORS: Record<StrikeEffectiveStatus, string> = {
   expired: 'text-zinc-600',
 };
 
-export function MemberProfileView({ factionId, userId, canManageStrikes }: Props) {
+export function MemberProfileView({ factionId, userId, canManageStrikes, canManageMentoring }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -639,6 +642,8 @@ export function MemberProfileView({ factionId, userId, canManageStrikes }: Props
               </CardContent>
             </Card>
           )}
+
+          {canManageMentoring && <MentoringHistory factionId={factionId} userId={userId} />}
         </div>
       )}
 

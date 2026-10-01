@@ -185,6 +185,7 @@ sidebar shows exactly what your rank gives you:
 | `manage_vehicles` | Adding, editing and deleting vehicles in the registry (§6.12). Reading it needs nothing |
 | `update_storage` | Changing counts in the storage planner: putting in, taking out, moving between containers, min and max (§5.12) |
 | `manage_storage` | Drawing storage rooms: walls, doors, where each container stands and how much it holds (§6.13) |
+| `manage_mentoring` | Pairing newcomers with mentors, reading every mentor's notes, and extending, reassigning or closing a mentorship (§6.14). A mentor needs nothing to write about their own mentee |
 | `sell` | Booking a sale into the treasury (§6.11). Safe to hand out widely — it records what was sold, it does not decide what things cost |
 | *(rank, not a permission)* | Seeing cost and margin (§6.11). Set in the price list, and it works like a map's rank: at or above the level you pick |
 | `manage_strikes` | Issuing and settling strikes, the faction strike list |
@@ -544,6 +545,25 @@ checked it (a stocktake).
 **Books vs storage**, folded at the bottom of the page, puts what the treasury
 says the faction owns next to what is counted in containers — so *40 pistols
 in the books, 32 in storage* shows up as *8 not put away*.
+
+### 5.13 Mentoring — being a mentor, or being mentored
+
+**If you are being mentored**, *Mentoring* shows who your mentor is, since
+when, and what the mentorship is for. That is all you see: what your mentor
+writes goes to leadership only.
+
+**If you are a mentor**, leadership has paired you with a newcomer and you got
+a notification. Open the card to write about how it is going. Each note is one
+of:
+
+- **Good at** and **Not so good at** — what you notice;
+- **To change** — what they should do differently;
+- **Mistake** — with **1 to 5 points** for how serious it was;
+- **Note** — anything else leadership should know.
+
+Write honestly: your mentee cannot read any of it. You can edit or delete your
+own notes while the mentorship is running. Once leadership closes it, the notes
+are kept exactly as they were.
 
 ## 6. For leaders — running the faction
 
@@ -1023,6 +1043,24 @@ Two permissions, on purpose: *Update Storage* is for whoever fetches from the
 benches, *Manage Storage Rooms* for whoever decides the layout. Looking needs
 nothing. With Discord connected, the **Running low in storage** event (§8.6)
 posts once when an item drops below its minimum.
+
+### 6.14 Mentoring (`manage_mentoring`)
+
+**New mentorship** pairs a newcomer with a mentor, with an optional **goal**
+(the mentee can read it) and **due date**. A newcomer has one mentor at a time.
+The mentor is notified.
+
+The board shows every running mentorship: how many notes of each kind, the
+**mistake points** so far, and the due date (amber once it has passed). Set a
+**point limit** and a mentee who reaches it is marked **Review** in red. Points
+count per mentorship and are not strikes — what they mean is up to you.
+
+Open a card to read the notes, **reassign** the mentor (the new one is notified
+and the old one loses access), move the due date, or **close** it as
+**Passed**, **Failed** or **Cancelled** — with a summary and, if you like, a
+1–5 score for roleplay, rules, teamwork and communication. The history shows on
+the member's profile, for leadership only. **Delete** removes a mentorship and
+every note in it for good; closing keeps the record.
 
 ---
 

@@ -2,6 +2,7 @@
 
 import { usePersistedState } from '@/hooks/use-persisted-state';
 import { Segmented } from '@/components/ui/segmented';
+import { RatingStars } from '@/components/ui/rating-stars';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { operationsApi, membersApi, itemTypesApi, apiErrorMessage } from '@/lib/api-client';
@@ -37,42 +38,6 @@ interface CrewRow {
   /** 1 to 5, or null for not rated — which is most of the time. */
   rating: number | null;
   ratingNote: string;
-}
-
-/**
- * Five stars, clicked to set and clicked again to clear.
- *
- * Clearing matters more than it sounds: rating somebody is optional, and a
- * control you cannot take back turns a misclick into a permanent two out of
- * five on a record other people read.
- */
-function RatingStars({
-  value,
-  onChange,
-  label,
-}: {
-  value: number | null;
-  onChange: (value: number | null) => void;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-0.5" role="group" aria-label={label}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          type="button"
-          onClick={() => onChange(value === star ? null : star)}
-          aria-label={`${label}: ${star}`}
-          aria-pressed={value !== null && star <= value}
-          className="p-0.5 text-zinc-600 transition-colors hover:text-amber-300"
-        >
-          <Star
-            className={`h-4 w-4 ${value !== null && star <= value ? 'fill-amber-400 text-amber-400' : ''}`}
-          />
-        </button>
-      ))}
-    </div>
-  );
 }
 
 /** A row in the haul list. Quantity stays a string — it is money. */

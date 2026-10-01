@@ -18,6 +18,7 @@ export type AppView =
   | 'shifts'
   | 'wages'
   | 'storage'
+  | 'mentoring'
   | 'complaints'
   | 'map'
   | 'members'

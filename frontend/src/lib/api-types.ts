@@ -936,6 +936,7 @@ export const FACTION_PERMISSIONS = [
   'manage_wages',
   'update_storage',
   'manage_storage',
+  'manage_mentoring',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 /**
@@ -966,6 +967,7 @@ export const PERMISSION_LABEL_KEYS: Record<FactionPermission, TranslationKey> = 
   manage_wages: 'permission.manageWages',
   update_storage: 'permission.updateStorage',
   manage_storage: 'permission.manageStorage',
+  manage_mentoring: 'permission.manageMentoring',
 };
 
 // ── Provisional users (superadmin) ─────────────────────
@@ -1579,6 +1581,7 @@ export const NOTIFICATION_TYPES = [
   'operation_credited',
   'operation_rated',
   'quota_reached',
+  'mentor_assigned',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -2225,6 +2228,63 @@ export interface Payroll {
   unrated: { userId: string; userName: string; minutes: number; shiftCount: number }[];
 }
 
+// ── mentoring ──────────────────────────────────────────
+
+export const MENTOR_NOTE_KINDS = ['strength', 'weakness', 'improve', 'mistake', 'note'] as const;
+export type MentorNoteKind = (typeof MENTOR_NOTE_KINDS)[number];
+export const MENTOR_SCORE_AREAS = ['roleplay', 'rules', 'teamwork', 'communication'] as const;
+export type MentorScoreArea = (typeof MENTOR_SCORE_AREAS)[number];
+export type MentorshipStatus = 'active' | 'passed' | 'failed' | 'cancelled';
+
+export interface Mentorship {
+  id: string;
+  status: MentorshipStatus;
+  goal: string | null;
+  dueAt: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  summary: string | null;
+  scores: Partial<Record<MentorScoreArea, number>> | null;
+  menteeUserId: string;
+  menteeName: string;
+  menteeAvatarUrl: string | null;
+  mentorUserId: string;
+  mentorName: string;
+  mentorAvatarUrl: string | null;
+  counts: Record<MentorNoteKind, number>;
+  /** Mistake points added up. */
+  points: number;
+  lastNoteAt: string | null;
+}
+
+export interface MentorNote {
+  id: string;
+  kind: MentorNoteKind;
+  body: string;
+  points: number;
+  authorUserId: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** What a mentee is told about their own mentorship: who, and what for. */
+export interface MyMentor {
+  id: string;
+  mentorName: string;
+  mentorAvatarUrl: string | null;
+  goal: string | null;
+  startedAt: string;
+  dueAt: string | null;
+}
+
+export interface MentoringBoard {
+  mentorships: Mentorship[];
+  asMentee: MyMentor | null;
+  pointLimit: number | null;
+  canManage: boolean;
+}
+
 // ── storage planner ────────────────────────────────────
 
 export const STORAGE_CONTAINER_KINDS = ['bench', 'chest', 'safe', 'fridge', 'locker', 'rack', 'crate', 'other'] as const;
@@ -2493,7 +2553,7 @@ export interface ComplaintInput {
 
 export const FACTION_MODULES = [
   'entries', 'payouts', 'treasury', 'expenses', 'quotas', 'strikes',
-  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'wages', 'storage', 'complaints', 'vehicles', 'map',
+  'laundering', 'crafting', 'pricing', 'operations', 'shifts', 'wages', 'storage', 'mentoring', 'complaints', 'vehicles', 'map',
   'leaderboard', 'announcements', 'feed', 'reports',
 ] as const;
 export type FactionModule = (typeof FACTION_MODULES)[number];
@@ -2512,6 +2572,7 @@ export const MODULE_LABEL_KEYS: Record<FactionModule, TranslationKey> = {
   shifts: 'nav.shifts',
   wages: 'nav.wages',
   storage: 'nav.storage',
+  mentoring: 'nav.mentoring',
   complaints: 'nav.complaints',
   vehicles: 'nav.vehicles',
   map: 'nav.map',
@@ -2535,6 +2596,7 @@ export const MODULE_HINT_KEYS: Record<FactionModule, TranslationKey> = {
   shifts: 'module.hint.shifts',
   wages: 'module.hint.wages',
   storage: 'module.hint.storage',
+  mentoring: 'module.hint.mentoring',
   complaints: 'module.hint.complaints',
   vehicles: 'module.hint.vehicles',
   map: 'module.hint.map',
@@ -2564,6 +2626,7 @@ export const PERMISSION_MODULE: Partial<Record<FactionPermission, FactionModule>
   manage_wages: 'wages',
   update_storage: 'storage',
   manage_storage: 'storage',
+  manage_mentoring: 'mentoring',
   manage_complaints: 'complaints',
   manage_vehicles: 'vehicles',
   manage_map: 'map',
