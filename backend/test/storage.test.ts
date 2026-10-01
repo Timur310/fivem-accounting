@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { api, resetDatabase, seedBasicWorld, createItemType, createEntry, type BasicWorld } from './helpers.js';
 import { droppedBelowMin, fitProblem, layoutProblem } from '../src/lib/storage.js';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../src/db/index.js';
+import { factions, payouts } from '../src/db/schema.js';
 
 describe('layout rules', () => {
   const box = (name: string, x: number, y: number, w = 1, h = 1) => ({ name, x, y, w, h });
@@ -46,6 +49,8 @@ describe('storage through the API', () => {
     await resetDatabase();
     w = await seedBasicWorld();
     pistol = await createItemType(w.faction.id, 'Pistol', { isCurrency: false, unit: 'x' });
+    // These are about rooms and counting; the treasury link has its own tests.
+    await db.update(factions).set({ storageLinked: false }).where(eq(factions.id, w.faction.id));
   });
 
   async function room(containers: unknown[] = [{ kind: 'bench', name: 'Bench 1', x: 1, y: 1, w: 2, h: 1, capacity: '50' }]) {
@@ -168,5 +173,104 @@ describe('storage through the API', () => {
     const detail = await api().get(`${base()}/rooms/${roomId}`).set('Cookie', w.member.cookie);
     expect(detail.body.data.containers[0].checkedAt).not.toBeNull();
     expect(detail.body.data.containers[0].checkedByName).toBeTruthy();
+  });
+});
+
+describe('storage held to the treasury', () => {
+  let w: BasicWorld;
+  let pistol: string;
+  let bench: string;
+  let chest: string;
+  const base = () => `/api/v1/factions/${w.faction.id}/storage`;
+  const add = (containerId: string, body: Record<string, unknown>) =>
+    api().post(`${base()}/containers/${containerId}/contents`).set('Cookie', w.admin.cookie).send(body);
+  const change = (contentId: string, body: Record<string, unknown>) =>
+    api().patch(`${base()}/contents/${contentId}`).set('Cookie', w.admin.cookie).send(body);
+  const withdrawals = () => db.select().from(payouts).where(and(eq(payouts.factionId, w.faction.id), eq(payouts.itemTypeId, pistol)));
+
+  beforeEach(async () => {
+    await resetDatabase();
+    w = await seedBasicWorld();
+    pistol = await createItemType(w.faction.id, 'Pistol', { isCurrency: false, unit: 'x' });
+    // The treasury holds 20 pistols.
+    await createEntry(w.faction.id, w.member.id, pistol, '20');
+    const res = await api().post(`${base()}/rooms`).set('Cookie', w.admin.cookie).send({
+      name: 'Depot', width: 10, height: 6,
+      containers: [
+        { kind: 'bench', name: 'Bench', x: 1, y: 1, w: 1, h: 1 },
+        { kind: 'chest', name: 'Chest', x: 3, y: 1, w: 1, h: 1 },
+      ],
+    });
+    const detail = await api().get(`${base()}/rooms/${res.body.data.id}`).set('Cookie', w.admin.cookie);
+    [bench, chest] = detail.body.data.containers.map((c: { id: string }) => c.id);
+  });
+
+  it('is on by default', async () => {
+    expect((await api().get(`${base()}/rooms`).set('Cookie', w.member.cookie)).body.data.linked).toBe(true);
+  });
+
+  it('refuses storing more than the treasury holds, across every container', async () => {
+    expect((await add(bench, { itemTypeId: pistol, quantity: '15' })).status).toBe(201);
+    const over = await add(chest!, { itemTypeId: pistol, quantity: '6' });
+    expect(over.status).toBe(400);
+    expect(over.body.error.message).toMatch(/at most 5\.00 more/);
+    expect((await add(chest!, { itemTypeId: pistol, quantity: '5' })).status).toBe(201);
+  });
+
+  it('withdraws from the treasury when something is taken out', async () => {
+    const line = await add(bench, { itemTypeId: pistol, quantity: '10' });
+    const taken = await change(line.body.data.id, { delta: '-3' });
+    expect(taken.status).toBe(200);
+    expect(taken.body.data.withdrawal.amount).toBe('3.00');
+
+    const [payout] = await withdrawals();
+    expect(payout).toMatchObject({ amount: '3.00', status: 'completed', recipientUserId: w.admin.id });
+    expect(payout!.description).toMatch(/Taken from storage: Bench \(Depot\)/);
+
+    const history = (await api().get(`${base()}/containers/${bench}/history`).set('Cookie', w.admin.cookie)).body.data.history;
+    expect(history[0]).toMatchObject({ kind: 'take', amount: '3.00' });
+  });
+
+  // Where things are is not what the faction owns.
+  it('does not withdraw for a move, a correction down, or removing a line', async () => {
+    const line = await add(bench, { itemTypeId: pistol, quantity: '10' });
+    await api().post(`${base()}/contents/${line.body.data.id}/move`).set('Cookie', w.admin.cookie).send({ toContainerId: chest, amount: '4' });
+    await change(line.body.data.id, { quantity: '5' });
+    await api().delete(`${base()}/contents/${line.body.data.id}`).set('Cookie', w.admin.cookie);
+    expect(await withdrawals()).toHaveLength(0);
+  });
+
+  it('refuses a withdrawal the treasury cannot cover', async () => {
+    await db.update(factions).set({ storageLinked: false }).where(eq(factions.id, w.faction.id));
+    const line = await add(bench, { itemTypeId: pistol, quantity: '30' });
+    await db.update(factions).set({ storageLinked: true }).where(eq(factions.id, w.faction.id));
+    const res = await change(line.body.data.id, { delta: '-25' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toMatch(/shows only 20\.00/);
+  });
+
+  it('leaves typed-in things alone', async () => {
+    const line = await add(bench, { label: 'Spare tyres', quantity: '99' });
+    expect(line.status).toBe(201);
+    await change(line.body.data.id, { delta: '-9' });
+    expect(await db.select().from(payouts).where(eq(payouts.factionId, w.faction.id))).toHaveLength(0);
+  });
+
+  it('can be switched off by whoever manages storage', async () => {
+    expect((await api().patch(`${base()}/settings`).set('Cookie', w.member.cookie).send({ linked: false })).status).toBe(403);
+    expect((await api().patch(`${base()}/settings`).set('Cookie', w.admin.cookie).send({ linked: false })).status).toBe(200);
+    expect((await add(bench, { itemTypeId: pistol, quantity: '500' })).status).toBe(201);
+  });
+
+  it('is cleared with the treasury, keeping typed-in lines', async () => {
+    await add(bench, { itemTypeId: pistol, quantity: '10' });
+    await add(bench, { label: 'Spare tyres', quantity: '4' });
+    const res = await api().post(`/api/v1/factions/${w.faction.id}/reset-treasury`).set('Cookie', w.superadmin.cookie)
+      .send({ confirmName: 'Test Faction' });
+    expect(res.body.data.removed.storageLines).toBe(1);
+    const tyres = (await api().get(`${base()}/search?q=tyres`).set('Cookie', w.admin.cookie)).body.data.results;
+    const pistols = (await api().get(`${base()}/search?q=pistol`).set('Cookie', w.admin.cookie)).body.data.results;
+    expect(tyres).toHaveLength(1);
+    expect(pistols).toHaveLength(0);
   });
 });
