@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { cn } from '@/lib/utils';
 import {
-  canPlace, clipTiles, MAX_ROOM_H, MAX_ROOM_W, MAX_SIDE, MIN_ROOM, outerWalls, paint, rotated,
+  canPlace, clipTiles, isCount, normalizeCount, MAX_ROOM_H, MAX_ROOM_W, MAX_SIDE, MIN_ROOM, outerWalls, paint, rotated,
   type Tile,
 } from '@/lib/storage-layout';
 import { KIND_ICON, NEUTRAL, RoomGrid, type GridTool } from '@/components/storage/room-grid';
@@ -339,7 +339,7 @@ export function RoomEditor({
       containers: layout.containers.map(({ key: _key, lineCount: _lines, ...c }) => ({
         ...c,
         name: c.name.trim() || t('storage.kind.other'),
-        capacity: c.capacity && c.capacity.trim() ? c.capacity.trim() : null,
+        capacity: c.capacity && c.capacity.trim() ? normalizeCount(c.capacity) : null,
         notes: c.notes && c.notes.trim() ? c.notes : null,
       })),
     }),
@@ -351,13 +351,21 @@ export function RoomEditor({
   });
 
   const trySave = () => {
+    // Say which container is wrong here, rather than send it and get back a
+    // refusal nobody can place.
+    const bad = layout.containers.find((c) => c.capacity && c.capacity.trim() && !isCount(c.capacity));
+    if (bad) {
+      setSelected(bad.key);
+      toast({ title: t('storage.editor.badCapacity', { name: bad.name }), variant: 'destructive' });
+      return;
+    }
     const keptIds = new Set(layout.containers.map((c) => c.id).filter(Boolean));
     const lost = initial.containers.filter((c) => c.id && !keptIds.has(c.id) && c.lineCount > 0);
     if (lost.length > 0) setConfirmRemoval(lost);
     else save.mutate();
   };
 
-  const capacityOk = !box?.capacity || /^\d{1,13}(\.\d{1,2})?$/.test(box.capacity.trim());
+  const capacityOk = !box?.capacity || !box.capacity.trim() || isCount(box.capacity);
   const addTag = () => {
     if (!box) return;
     const tag = tagDraft.trim();

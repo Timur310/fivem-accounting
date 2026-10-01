@@ -97,3 +97,23 @@ export function droppedBelowMin(before: string, after: string, min: string | nul
   const m = toCents(min);
   return toCents(before) >= m && toCents(after) < m;
 }
+
+/**
+ * A count as people type it, made into the form the server takes.
+ *
+ * Hungarian writes 12,5 for twelve and a half and 1 000 for a thousand; others
+ * write 1,000 or 1.000. A count has at most two decimals, so a comma or dot
+ * followed by groups of exactly three digits can only be thousands, and any
+ * other comma is a decimal point. Spaces (including the narrow ones a phone
+ * keyboard inserts) and apostrophes are dropped. A minus sign is kept, for
+ * add/take deltas.
+ */
+export function normalizeCount(value: string): string {
+  let s = value.trim().replace(/[\s  ']/g, '');
+  const sign = s.startsWith('-') ? '-' : '';
+  if (sign) s = s.slice(1);
+  if (/^\d{1,3}([.,]\d{3})+$/.test(s)) s = s.replace(/[.,]/g, '');
+  else if (s.includes(',') && s.includes('.')) s = s.replace(/,/g, '');
+  else s = s.replace(',', '.');
+  return sign + s;
+}

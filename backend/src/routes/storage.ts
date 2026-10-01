@@ -25,6 +25,7 @@ import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import {
+  normalizeCount,
   droppedBelowMin,
   fitProblem,
   layoutProblem,
@@ -62,10 +63,14 @@ router.use(requireAuth, requireFactionMember, requireModule('storage'));
 const factionId = (req: Request) => req.params.id as string;
 const memberName = sql<string>`COALESCE(${users.inGameName}, ${users.username})`;
 
-const quantityField = z
-  .string()
-  .trim()
-  .regex(/^\d{1,13}(\.\d{1,2})?$/, 'A count looks like 12 or 12.5');
+// Typed the way people type numbers — "12,5", "1 000" — and read as 12.5 and
+// 1000 before checking, rather than refused for the way they were written.
+const asCount = (v: unknown) => (typeof v === 'string' ? normalizeCount(v) : v);
+
+const quantityField = z.preprocess(
+  asCount,
+  z.string().regex(/^\d{1,13}(\.\d{1,2})?$/, 'A count looks like 12 or 12.5'),
+);
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colour must be a hex value like #a855f7');
 
@@ -124,7 +129,7 @@ const addContentSchema = z.object({
 
 const changeContentSchema = z.object({
   /** Add (positive) or take (negative), relative to what is there now. */
-  delta: z.string().trim().regex(/^-?\d{1,13}(\.\d{1,2})?$/).optional(),
+  delta: z.preprocess(asCount, z.string().regex(/^-?\d{1,13}(\.\d{1,2})?$/, 'A count looks like 12 or 12.5')).optional(),
   /** Or: this is what is there now (a count). */
   quantity: quantityField.optional(),
   minQuantity: quantityField.nullable().optional(),
@@ -141,8 +146,17 @@ function holds(req: Request, permission: string): boolean {
   return (req.factionPermissions ?? []).includes(permission);
 }
 
-function firstIssue(err: z.ZodError): string {
-  return err.issues[0]?.message ?? 'Invalid input';
+function firstIssue(err: z.ZodError, body?: unknown): string {
+  const issue = err.issues[0];
+  if (!issue) return 'Invalid input';
+  // A layout is a list of containers: say which one, or nobody can find it.
+  if (issue.path[0] === 'containers' && typeof issue.path[1] === 'number') {
+    const containers = (body as { containers?: { name?: unknown }[] } | undefined)?.containers;
+    const name = containers?.[issue.path[1]]?.name;
+    const field = issue.path[2] === 'capacity' ? ' (holds at most)' : '';
+    if (typeof name === 'string' && name.trim()) return `"${name.trim()}"${field}: ${issue.message}`;
+  }
+  return issue.message;
 }
 
 // ── reading ───────────────────────────────────────────
@@ -372,7 +386,7 @@ router.post('/rooms', requirePermission('manage_storage'), async (req: Request, 
   const id = factionId(req);
   const parsed = createRoomSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    error(res, 'VALIDATION_ERROR', firstIssue(parsed.error));
+    error(res, 'VALIDATION_ERROR', firstIssue(parsed.error, req.body));
     return;
   }
   const { name, width, height, tiles = [], containers = [] } = parsed.data;
@@ -441,7 +455,7 @@ router.put('/rooms/:roomId/layout', requirePermission('manage_storage'), async (
   const id = factionId(req);
   const parsed = layoutSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
-    error(res, 'VALIDATION_ERROR', firstIssue(parsed.error));
+    error(res, 'VALIDATION_ERROR', firstIssue(parsed.error, req.body));
     return;
   }
   const room = await roomOf(id, req.params.roomId as string);

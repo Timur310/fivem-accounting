@@ -1764,6 +1764,7 @@ export const en = {
   'storage.deleteRoomTitle': 'Delete {name}?',
   'storage.deleteRoomBody': 'Every container in it and everything recorded inside them goes too. This cannot be undone.',
   'storage.editor.tool': 'Tool',
+  'storage.editor.badCapacity': '"{name}": "Holds at most" has to be a number, like 50 or 12.5.',
   'storage.editor.resize': 'Resize room',
   'storage.editor.cannotPlace': 'It does not fit there. Pick a free spot.',
   'storage.editor.editing': 'Editing',

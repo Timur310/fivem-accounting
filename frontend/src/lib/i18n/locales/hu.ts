@@ -1743,6 +1743,7 @@ export const hu: Translations = {
   'storage.deleteRoomTitle': 'Törlöd: {name}?',
   'storage.deleteRoomBody': 'A benne lévő összes tároló és minden rögzített tartalmuk is törlődik. Ez nem vonható vissza.',
   'storage.editor.tool': 'Eszköz',
+  'storage.editor.badCapacity': '„{name}”: a „Legfeljebb ennyit tárol” mezőbe számot írj, pl. 50 vagy 12,5.',
   'storage.editor.resize': 'Méret módosítása',
   'storage.editor.cannotPlace': 'Oda nem fér el. Válassz szabad helyet.',
   'storage.editor.editing': 'Szerkesztés',

@@ -111,3 +111,23 @@ export function isLow(contents: { quantity: string; minQuantity: string | null }
 export function plainNumber(v: string): string {
   return v.includes('.') ? v.replace(/\.?0+$/, '') : v;
 }
+
+/**
+ * A count as people type it, made into the form the server takes: 12,5 is
+ * 12.5, and 1 000, 1,000 and 1.000 are a thousand. The same rule as the
+ * server's normalizeCount (backend lib/storage.ts).
+ */
+export function normalizeCount(value: string): string {
+  let s = value.trim().replace(/[\s  ']/g, '');
+  const sign = s.startsWith('-') ? '-' : '';
+  if (sign) s = s.slice(1);
+  if (/^\d{1,3}([.,]\d{3})+$/.test(s)) s = s.replace(/[.,]/g, '');
+  else if (s.includes(',') && s.includes('.')) s = s.replace(/,/g, '');
+  else s = s.replace(',', '.');
+  return sign + s;
+}
+
+/** Is this, once normalised, a count the server takes? */
+export function isCount(value: string): boolean {
+  return /^\d{1,13}(\.\d{1,2})?$/.test(normalizeCount(value));
+}

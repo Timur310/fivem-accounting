@@ -152,6 +152,33 @@ describe('storage through the API', () => {
     expect(history[0]).toMatchObject({ kind: 'move', containerName: 'Bench 1', toContainerName: 'Chest', amount: '4.00' });
   });
 
+  // The faction that hit this typed capacities the Hungarian way.
+  it('takes counts written as 12,5 or 1 000, and names the container when one is wrong', async () => {
+    const res = await api().post(`${base()}/rooms`).set('Cookie', asAdmin.cookie()).send({
+      name: 'Depot', width: 12, height: 8,
+      containers: [
+        { kind: 'chest', name: 'Big chest', x: 1, y: 1, w: 1, h: 1, capacity: '1 000' },
+        { kind: 'chest', name: 'Small chest', x: 3, y: 1, w: 1, h: 1, capacity: '12,5' },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const detail = (await api().get(`${base()}/rooms/${res.body.data.id}`).set('Cookie', asAdmin.cookie())).body.data;
+    const caps = Object.fromEntries(detail.containers.map((c: { name: string; capacity: string }) => [c.name, c.capacity]));
+    expect(caps).toEqual({ 'Big chest': '1000.00', 'Small chest': '12.50' });
+
+    const line = await add(detail.containers[0].id, { label: 'Rope', quantity: '2,5' });
+    expect(line.body.data.quantity).toBe('2.50');
+    const taken = await api().patch(`${base()}/contents/${line.body.data.id}`).set('Cookie', asAdmin.cookie()).send({ delta: '-1,5' });
+    expect(taken.body.data.quantity).toBe('1.00');
+
+    const bad = await api().put(`${base()}/rooms/${res.body.data.id}/layout`).set('Cookie', asAdmin.cookie()).send({
+      width: 12, height: 8, tiles: [],
+      containers: [{ kind: 'chest', name: 'Odd chest', x: 1, y: 1, w: 1, h: 1, capacity: 'lots' }],
+    });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.message).toBe('"Odd chest" (holds at most): A count looks like 12 or 12.5');
+  });
+
   it('needs update_storage to change a count', async () => {
     const { containers } = await room();
     const res = await api().post(`${base()}/containers/${containers[0]!.id}/contents`).set('Cookie', w.member.cookie)

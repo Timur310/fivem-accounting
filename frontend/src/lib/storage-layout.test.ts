@@ -62,3 +62,19 @@ describe('room templates', () => {
     }
   });
 });
+
+describe('counts as people type them', () => {
+  it('reads Hungarian and English number styles', async () => {
+    const { normalizeCount, isCount } = await import('./storage-layout');
+    expect(normalizeCount('12,5')).toBe('12.5');
+    expect(normalizeCount('1 000')).toBe('1000');
+    expect(normalizeCount('1,000')).toBe('1000');
+    expect(normalizeCount('1.000')).toBe('1000');
+    expect(normalizeCount('1,000.50')).toBe('1000.50');
+    expect(normalizeCount(' 50 ')).toBe('50');
+    expect(normalizeCount('-3,5')).toBe('-3.5');
+    expect(isCount('12,5')).toBe(true);
+    expect(isCount('abc')).toBe(false);
+    expect(isCount('1,2345')).toBe(false);
+  });
+});

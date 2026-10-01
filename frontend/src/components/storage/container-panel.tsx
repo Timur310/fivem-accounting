@@ -17,12 +17,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/providers/i18n-provider';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { cents, fullness, plainNumber } from '@/lib/storage-layout';
+import { cents, fullness, isCount, normalizeCount, plainNumber } from '@/lib/storage-layout';
 import { KIND_ICON } from '@/components/storage/room-grid';
 import { ArrowLeftRight, ClipboardCheck, Minus, Plus, Square, Trash2 } from 'lucide-react';
 import type { ItemType, StorageContainer, StorageContent } from '@/lib/api-types';
 
-const COUNT = /^\d{1,13}(\.\d{1,2})?$/;
 const OTHER = '__other__';
 
 /**
@@ -104,7 +103,7 @@ export function ContainerPanel({
   const add = useMutation({
     mutationFn: () => storageApi.addContent(factionId, container.id, {
       ...(adding.item && adding.item !== OTHER ? { itemTypeId: adding.item } : { label: adding.label.trim() }),
-      quantity: adding.quantity.trim(),
+      quantity: normalizeCount(adding.quantity),
     }),
     onSuccess: () => { setAdding({ item: '', label: '', quantity: '' }); invalidate(); },
     onError: fail,
@@ -119,7 +118,7 @@ export function ContainerPanel({
   const total = container.contents.reduce((s, c) => s + cents(c.quantity), 0);
   const fill = fullness(container.contents, container.capacity);
   const itemById = new Map(items.map((i) => [i.id, i]));
-  const canAdd = COUNT.test(adding.quantity.trim()) && cents(adding.quantity) > 0
+  const canAdd = isCount(adding.quantity) && cents(normalizeCount(adding.quantity)) > 0
     && (adding.item && adding.item !== OTHER ? true : adding.label.trim().length > 0);
 
   return (
@@ -293,8 +292,8 @@ function ContentRow({
   const [to, setTo] = useState('');
 
   const low = line.minQuantity !== null && cents(line.quantity) < cents(line.minQuantity);
-  const validAmount = COUNT.test(amount.trim()) && cents(amount) > 0;
-  const limitOk = (v: string) => v.trim() === '' || COUNT.test(v.trim());
+  const validAmount = isCount(amount) && cents(normalizeCount(amount)) > 0;
+  const limitOk = (v: string) => v.trim() === '' || isCount(v);
   const limitsChanged = min.trim() !== (line.minQuantity ? plainNumber(line.minQuantity) : '')
     || max.trim() !== (line.maxQuantity ? plainNumber(line.maxQuantity) : '');
 
@@ -331,13 +330,13 @@ function ContentRow({
         <div className="mt-3 space-y-3 border-t border-zinc-800 pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <Input className="h-8 w-24" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t('storage.amount')} />
-            <Button size="sm" variant="outline" disabled={!validAmount || busy} onClick={() => { onChange({ delta: amount.trim() }); setAmount(''); }}>
+            <Button size="sm" variant="outline" disabled={!validAmount || busy} onClick={() => { onChange({ delta: normalizeCount(amount) }); setAmount(''); }}>
               {t('storage.add')}
             </Button>
-            <Button size="sm" variant="outline" disabled={!validAmount || busy} onClick={() => { onChange({ delta: `-${amount.trim()}` }); setAmount(''); }}>
+            <Button size="sm" variant="outline" disabled={!validAmount || busy} onClick={() => { onChange({ delta: `-${normalizeCount(amount)}` }); setAmount(''); }}>
               {t('storage.take')}
             </Button>
-            <Button size="sm" variant="ghost" disabled={!COUNT.test(amount.trim()) || busy} onClick={() => { onChange({ quantity: amount.trim() }); setAmount(''); }}>
+            <Button size="sm" variant="ghost" disabled={!isCount(amount) || busy} onClick={() => { onChange({ quantity: normalizeCount(amount) }); setAmount(''); }}>
               {t('storage.setExactly')}
             </Button>
           </div>
@@ -355,7 +354,7 @@ function ContentRow({
                 options={others.map((c) => ({ value: c.id, label: c.name }))}
                 aria-label={t('storage.moveTo')}
               />
-              <Button size="sm" variant="outline" disabled={!to || !validAmount || busy} onClick={() => { onMove(to, amount.trim()); setAmount(''); setTo(''); }}>
+              <Button size="sm" variant="outline" disabled={!to || !validAmount || busy} onClick={() => { onMove(to, normalizeCount(amount)); setAmount(''); setTo(''); }}>
                 {t('storage.move')}
               </Button>
             </div>
@@ -374,7 +373,7 @@ function ContentRow({
               size="sm"
               variant="ghost"
               disabled={!limitsChanged || !limitOk(min) || !limitOk(max) || busy}
-              onClick={() => onChange({ minQuantity: min.trim() || null, maxQuantity: max.trim() || null })}
+              onClick={() => onChange({ minQuantity: min.trim() ? normalizeCount(min) : null, maxQuantity: max.trim() ? normalizeCount(max) : null })}
             >
               {t('storage.saveLimits')}
             </Button>
