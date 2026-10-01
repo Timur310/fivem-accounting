@@ -29,6 +29,7 @@ const TONE: Record<string, string> = {
   operation_credited: 'bg-emerald-500/15 text-emerald-300',
   operation_rated: 'bg-amber-500/15 text-amber-300',
   quota_reached: 'bg-emerald-500/15 text-emerald-300',
+  mentor_assigned: 'bg-sky-500/15 text-sky-300',
 };
 
 /**

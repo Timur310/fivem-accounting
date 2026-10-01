@@ -49,6 +49,7 @@ import {
   CalendarClock,
   HandCoins,
   Warehouse,
+  GraduationCap,
   Sun,
   MessageSquareWarning,
   Crosshair,
@@ -80,6 +81,7 @@ import { OperationsView } from '@/views/operations-view';
 import { ShiftsView } from '@/views/shifts-view';
 import { WagesView } from '@/views/wages-view';
 import { StorageView } from '@/views/storage-view';
+import { MentoringView } from '@/views/mentoring-view';
 import { ComplaintsView } from '@/views/complaints-view';
 import { MyDayView } from '@/views/my-day-view';
 import { isModuleEnabled, type FactionModule } from '@/lib/api-types';
@@ -422,6 +424,9 @@ export function AppShell() {
     { group: 'field', view: 'storage', label: 'nav.storage', icon: Warehouse, module: 'storage', beta: true },
     // Leadership only: it lays every member's takings side by side.
     { group: 'ledger', view: 'wages', label: 'nav.wages', icon: HandCoins, module: 'wages', anyPermission: ['manage_wages'] },
+    // No permission: leadership sees the board, a mentor their own mentees, a
+    // mentee who their mentor is. What is written is narrowed by the server.
+    { group: 'people', view: 'mentoring', label: 'nav.mentoring', icon: GraduationCap, module: 'mentoring' },
     // No permission: anybody may raise something, and the screen narrows to
     // what they filed unless they hold manage_complaints. A complaints box
     // only some ranks can open is not one.
@@ -639,6 +644,8 @@ export function AppShell() {
             canManage={hasPermission('manage_shifts')}
             canPayDirect={hasPermission('manage_payouts')}
           /> : null;
+      case 'mentoring':
+        return selectedFactionId ? <MentoringView factionId={selectedFactionId} /> : null;
       case 'storage':
         return selectedFactionId ? <StorageView
             factionId={selectedFactionId}
@@ -676,6 +683,7 @@ export function AppShell() {
             factionId={selectedFactionId}
             userId={selectedMemberUserId}
             canManageStrikes={hasPermission('manage_strikes')}
+            canManageMentoring={hasPermission('manage_mentoring') && moduleOn('mentoring')}
           /> : null;
       case 'strikes':
         return selectedFactionId ? <StrikesView factionId={selectedFactionId} canManageStrikes={hasPermission('manage_strikes')} /> : null;

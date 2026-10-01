@@ -103,6 +103,11 @@ export const factions = pgTable('factions', {
    */
   marginMinRankLevel: integer('margin_min_rank_level'),
   /**
+   * Mistake points that flag a mentee for review, or null for no flag. Counted
+   * per mentorship: a new mentorship starts from nothing.
+   */
+  mentorPointLimit: integer('mentor_point_limit'),
+  /**
    * Which parts of the app this faction uses, or null for all of them.
    *
    * Null rather than a filled-in default, and no backfill: every faction that
@@ -198,6 +203,10 @@ export const FACTION_PERMISSIONS = [
   // the shop floor, and redrawing the room, which is not.
   'update_storage',
   'manage_storage',
+  // Pairing newcomers with mentors, reading what mentors write, and closing a
+  // mentorship. A mentor needs nothing to write about their own mentee: being
+  // assigned is the permission.
+  'manage_mentoring',
 ] as const;
 export type FactionPermission = (typeof FACTION_PERMISSIONS)[number];
 
@@ -231,6 +240,7 @@ export const PERMISSION_LABELS: Record<FactionPermission, string> = {
   manage_wages: 'Calculate Wages',
   update_storage: 'Update Storage',
   manage_storage: 'Manage Storage Rooms',
+  manage_mentoring: 'Manage Mentoring',
 };
 
 // ── faction_members ────────────────────────────────────
@@ -639,6 +649,7 @@ export const NOTIFICATION_TYPES = [
   'operation_credited',
   'operation_rated',
   'quota_reached',
+  'mentor_assigned',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -2103,3 +2114,61 @@ export type StorageRoom = typeof storageRooms.$inferSelect;
 export type StorageContainer = typeof storageContainers.$inferSelect;
 export type StorageContent = typeof storageContents.$inferSelect;
 export type StorageMovement = typeof storageMovements.$inferSelect;
+
+
+// ── mentoring ──────────────────────────────────────────
+// A newcomer paired with an experienced member, and what the mentor writes
+// about how it is going — for leadership, never for the mentee.
+
+export const MENTORSHIP_STATUSES = ['active', 'passed', 'failed', 'cancelled'] as const;
+export type MentorshipStatus = (typeof MENTORSHIP_STATUSES)[number];
+
+/** What a mentor's note is about. Only `mistake` carries points. */
+export const MENTOR_NOTE_KINDS = ['strength', 'weakness', 'improve', 'mistake', 'note'] as const;
+export type MentorNoteKind = (typeof MENTOR_NOTE_KINDS)[number];
+
+/** The areas a closed mentorship can be scored on, 1 to 5 each. */
+export const MENTOR_SCORE_AREAS = ['roleplay', 'rules', 'teamwork', 'communication'] as const;
+export type MentorScoreArea = (typeof MENTOR_SCORE_AREAS)[number];
+
+export const mentorships = pgTable('mentorships', {
+  id:           uuid('id').defaultRandom().primaryKey(),
+  factionId:    uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  menteeUserId: uuid('mentee_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mentorUserId: uuid('mentor_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status:       varchar('status', { length: 12 }).notNull().default('active'),
+  /** What the mentee is meant to learn, in leadership's words. */
+  goal:         text('goal'),
+  /** When the trial is meant to be over. Extending moves it. */
+  dueAt:        timestamp('due_at', { withTimezone: true }),
+  startedAt:    timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  endedAt:      timestamp('ended_at', { withTimezone: true }),
+  endedBy:      uuid('ended_by').references(() => users.id, { onDelete: 'set null' }),
+  /** Leadership's final word, written when closing. */
+  summary:      text('summary'),
+  scores:       jsonb('scores').$type<Partial<Record<MentorScoreArea, number>>>(),
+  createdBy:    uuid('created_by').notNull().references(() => users.id),
+  updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  factionIndex: index('mentorship_faction').on(table.factionId, table.status),
+  // A newcomer has one mentor at a time.
+  oneActive:    uniqueIndex('mentorship_one_active').on(table.factionId, table.menteeUserId).where(sql`status = 'active'`),
+}));
+
+export const mentorNotes = pgTable('mentor_notes', {
+  id:            uuid('id').defaultRandom().primaryKey(),
+  factionId:     uuid('faction_id').notNull().references(() => factions.id, { onDelete: 'cascade' }),
+  mentorshipId:  uuid('mentorship_id').notNull().references(() => mentorships.id, { onDelete: 'cascade' }),
+  authorUserId:  uuid('author_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  kind:          varchar('kind', { length: 12 }).notNull(),
+  body:          text('body').notNull(),
+  /** Mistake points, 1 to 5; zero for every other kind. */
+  points:        integer('points').notNull().default(0),
+  createdAt:     timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at', { withTimezone: true }),
+}, (table) => ({
+  mentorshipIndex: index('mentor_note_mentorship').on(table.mentorshipId, table.createdAt),
+}));
+
+export type Mentorship = typeof mentorships.$inferSelect;
+export type MentorNote = typeof mentorNotes.$inferSelect;

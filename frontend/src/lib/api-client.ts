@@ -97,6 +97,11 @@ import type {
   ShiftInput,
   ShiftRate,
   CommissionRate,
+  MentorNote,
+  MentorNoteKind,
+  MentorScoreArea,
+  MentoringBoard,
+  Mentorship,
   StorageCompareRow,
   StorageContainerInput,
   StorageContent,
@@ -1385,6 +1390,44 @@ export const shiftsApi = {
         { from, to },
       )
       .then(unwrap),
+};
+
+/** Mentoring: mentors, mentees, and what mentors write for leadership. */
+export const mentoringApi = {
+  board: (factionId: string, status: 'active' | 'finished') =>
+    api.get<ApiSuccessResponse<MentoringBoard>>(`/factions/${factionId}/mentoring`, { params: { status } }).then(unwrap),
+
+  detail: (factionId: string, id: string) =>
+    api.get<ApiSuccessResponse<{ mentorship: Mentorship; notes: MentorNote[]; pointLimit: number | null; canManage: boolean }>>(
+      `/factions/${factionId}/mentoring/${id}`,
+    ).then(unwrap),
+
+  history: (factionId: string, userId: string) =>
+    api.get<ApiSuccessResponse<{ mentorships: Mentorship[] }>>(`/factions/${factionId}/mentoring/member/${userId}`).then(unwrap),
+
+  create: (factionId: string, input: { menteeUserId: string; mentorUserId: string; goal?: string; dueAt?: string | null }) =>
+    api.post<ApiSuccessResponse<{ id: string }>>(`/factions/${factionId}/mentoring`, input).then(unwrap),
+
+  update: (factionId: string, id: string, input: { mentorUserId?: string; goal?: string | null; dueAt?: string | null }) =>
+    api.patch<ApiSuccessResponse<{ id: string }>>(`/factions/${factionId}/mentoring/${id}`, input).then(unwrap),
+
+  close: (factionId: string, id: string, input: {
+    outcome: 'passed' | 'failed' | 'cancelled'; summary?: string; scores?: Partial<Record<MentorScoreArea, number>>;
+  }) =>
+    api.post<ApiSuccessResponse<{ id: string }>>(`/factions/${factionId}/mentoring/${id}/close`, input).then(unwrap),
+
+  remove: (factionId: string, id: string) => api.delete(`/factions/${factionId}/mentoring/${id}`),
+
+  setLimit: (factionId: string, pointLimit: number | null) =>
+    api.patch<ApiSuccessResponse<{ pointLimit: number | null }>>(`/factions/${factionId}/mentoring/settings/limit`, { pointLimit }).then(unwrap),
+
+  addNote: (factionId: string, id: string, input: { kind: MentorNoteKind; body: string; points?: number }) =>
+    api.post<ApiSuccessResponse<MentorNote>>(`/factions/${factionId}/mentoring/${id}/notes`, input).then(unwrap),
+
+  updateNote: (factionId: string, noteId: string, input: { kind?: MentorNoteKind; body?: string; points?: number }) =>
+    api.patch<ApiSuccessResponse<MentorNote>>(`/factions/${factionId}/mentoring/notes/${noteId}`, input).then(unwrap),
+
+  removeNote: (factionId: string, noteId: string) => api.delete(`/factions/${factionId}/mentoring/notes/${noteId}`),
 };
 
 /** The storage planner: rooms, the containers in them, and what they hold. */
