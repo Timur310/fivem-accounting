@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { itemTypesApi, mapApi, storageApi, apiErrorMessage } from '@/lib/api-client';
 import { usePersistedState } from '@/hooks/use-persisted-state';
@@ -28,10 +28,11 @@ import { cn } from '@/lib/utils';
 import { cents, fullness, isLow, MAX_ROOM_H, MAX_ROOM_W, MIN_ROOM, plainNumber } from '@/lib/storage-layout';
 import { STORAGE_TEMPLATES } from '@/lib/storage-templates';
 import { KIND_ICON, RoomGrid } from '@/components/storage/room-grid';
+import { ZoomControls, fitCell, MAX_CELL, MIN_CELL } from '@/components/storage/zoom-controls';
 import { RoomEditor } from '@/components/storage/room-editor';
 import { ContainerPanel } from '@/components/storage/container-panel';
 import {
-  ChevronDown, FlaskConical, LayoutGrid, List, MapPin, Pencil, Plus, Scale, Search, Settings2, Square, Warehouse, X, ZoomIn, ZoomOut,
+  ChevronDown, FlaskConical, LayoutGrid, List, MapPin, Pencil, Plus, Scale, Search, Settings2, Square, Warehouse, X,
 } from 'lucide-react';
 import type { ItemType, StorageContainer, StorageRoomDetail } from '@/lib/api-types';
 
@@ -65,7 +66,9 @@ export function StorageView({
 
   const [roomPick, setRoomPick] = usePersistedState<string>(`storage.room.${factionId}`, '');
   const [display, setDisplay] = usePersistedState<'grid' | 'list'>(`storage.display.${factionId}`, 'grid');
-  const [cell, setCell] = usePersistedState<number>(`storage.zoom.${factionId}`, 36);
+  const [cell, setCell] = useState(36);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const zoom = (direction: 1 | -1) => setCell((c) => Math.min(MAX_CELL, Math.max(MIN_CELL, c + direction * 4)));
   const [query, setQuery] = useState('');
   const [openContainer, setOpenContainer] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -120,6 +123,15 @@ export function StorageView({
   };
 
   const room = detail.data?.room;
+  const fit = () => {
+    if (canvasRef.current && room) setCell(fitCell(canvasRef.current, room.width, room.height));
+  };
+
+  // Each room opens fitted to the screen; zooming afterwards is the viewer's own.
+  useEffect(() => {
+    if (display === 'grid') fit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id, room?.width, room?.height, display]);
 
   return (
     <div className="space-y-4">
@@ -219,16 +231,6 @@ export function StorageView({
                     { value: 'list', label: t('storage.displayList'), icon: <List className="h-3.5 w-3.5" /> },
                   ]}
                 />
-                {display === 'grid' && (
-                  <div className="flex items-center">
-                    <Button size="icon-sm" variant="ghost" onClick={() => setCell(Math.max(20, cell - 6))} aria-label={t('storage.zoomOut')}>
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon-sm" variant="ghost" onClick={() => setCell(Math.min(64, cell + 6))} aria-label={t('storage.zoomIn')}>
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
                 <div className="ml-auto flex items-center gap-2">
                   {room?.mapMarkerId && mapOn && (
                     <Button size="sm" variant="ghost" onClick={() => { setFocusMarkerId(room.mapMarkerId); setCurrentView('map'); }}>
@@ -263,7 +265,7 @@ export function StorageView({
               ) : !room ? null : containers.length === 0 && display === 'list' ? (
                 <EmptyState icon={Warehouse} title={t('storage.emptyRoom')} hint={canManage ? t('storage.emptyRoomManager') : undefined} />
               ) : display === 'grid' ? (
-                <div key={roomId} className="animate-fade-in space-y-2">
+                <div key={roomId} ref={canvasRef} className="animate-fade-in">
                   <RoomGrid
                     width={room.width}
                     height={room.height}
@@ -275,13 +277,26 @@ export function StorageView({
                       low: isLow(c.contents),
                       dim: !!q && !matches(c),
                       hit: !!q && matches(c),
+                      caption: captionFor(c),
+                      preview: c.contents.map((line) => ({
+                        label: line.label,
+                        quantity: plainNumber(line.quantity),
+                        low: line.minQuantity !== null && cents(line.quantity) < cents(line.minQuantity),
+                      })),
                     }))}
                     cell={cell}
                     editing={false}
                     selectedKey={openContainer}
                     onSelect={setOpenContainer}
+                    onZoom={zoom}
+                    emptyLabel={t('storage.emptyContainer')}
+                    overlay={
+                      <>
+                        <Legend />
+                        <ZoomControls cell={cell} onZoom={zoom} onFit={fit} />
+                      </>
+                    }
                   />
-                  <Legend />
                 </div>
               ) : (
                 <ListView containers={containers} q={q} matches={matches} onOpen={setOpenContainer} />
@@ -358,12 +373,19 @@ function SearchSummary({
   );
 }
 
+/** "45 / 50" when it has a limit, "12 items" when it does not, nothing when empty. */
+function captionFor(c: StorageContainer): string | undefined {
+  if (c.contents.length === 0) return undefined;
+  const total = plainNumber((c.contents.reduce((s, l) => s + cents(l.quantity), 0) / 100).toFixed(2));
+  return c.capacity ? `${total} / ${plainNumber(c.capacity)}` : `${total}`;
+}
+
 function Legend() {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-      <span className="flex items-center gap-1.5"><span className="inline-block size-3 rounded-sm bg-zinc-600" />{t('storage.editor.wall')}</span>
-      <span className="flex items-center gap-1.5"><span className="inline-block size-3 rounded-sm bg-amber-700/60" />{t('storage.editor.door')}</span>
+    <div className="absolute bottom-3 left-3 z-10 hidden flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-zinc-700/70 bg-zinc-900/90 px-3 py-1.5 text-[11px] text-zinc-400 shadow-xl backdrop-blur sm:flex">
+      <span className="flex items-center gap-1.5"><span className="inline-block h-1.5 w-3 rounded-full bg-zinc-500" />{t('storage.editor.wall')}</span>
+      <span className="flex items-center gap-1.5"><span className="inline-block h-1.5 w-3 rounded-full bg-amber-400" />{t('storage.editor.door')}</span>
       <span className="flex items-center gap-1.5"><span className="inline-block h-1 w-4 rounded-full bg-emerald-400" />{t('storage.legendFill')}</span>
       <span className="flex items-center gap-1.5"><span className="inline-block size-2 rounded-full bg-red-500" />{t('storage.legendLow')}</span>
     </div>
