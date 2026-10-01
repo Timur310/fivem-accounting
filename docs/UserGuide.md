@@ -1027,14 +1027,22 @@ a pin on the map, which gives the room a *Show on map* button.
 
 **Edit room** opens the drawing on a copy; nobody sees it until you **Save**.
 
-- **Wall**, **Door**, **Erase**: drag across the grid to paint.
-- **Move**: drag a container to place it, drag its corner to resize it. A red
-  outline means it cannot stand there (a wall, a door or another container),
-  and letting go puts it back.
-- **Add** a bench, chest, safe, fridge, locker, rack or crate. Click one to
-  set its name, colour, tags, **holds at most** (total units) and notes.
-- **R** rotates, **Delete** removes, **Ctrl+Z** / **Ctrl+Y** undo and redo.
-  **Pan** lets a phone scroll a big room without moving anything.
+The tools float over the top of the canvas, each with a key:
+
+- **Wall** (W), **Door** (D), **Erase** (E): drag across the grid to paint.
+  Hold **Shift** for a perfectly straight line.
+- **Room outline** (B): drag out a rectangle and it is walled in, in one go.
+- **Move** (V): drag a container to place it, drag its corner to resize it. A
+  red outline means it cannot stand there (a wall, a door or another
+  container), and letting go puts it back.
+- **Pan** (H) scrolls a big room on a phone without moving anything.
+
+To add a container, pick one in the **Containers** palette — bench, chest,
+safe, fridge, locker, rack or crate — and click on the floor where it goes.
+Click any container to set its name, type, colour, size, tags, **holds at
+most** (total units) and notes. **R** rotates, **Ctrl+D** duplicates,
+**Delete** removes, **Ctrl+Z** / **Ctrl+Y** undo and redo. **Ctrl+scroll** or
+**+**/**−** zoom, and **0** fits the room to the screen.
 
 Removing a container removes what is recorded inside it, so saving a drawing
 that does that asks first and names the containers.
