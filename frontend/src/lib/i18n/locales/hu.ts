@@ -1827,6 +1827,7 @@ export const hu: Translations = {
   'storage.h.take': 'kivett {amount} {label}',
   'storage.h.set': 'javította: {label} ({amount} változás, előtte {before})',
   'storage.h.remove': 'törölte: {label} ({amount})',
+  'storage.h.return': 'törölt egy kifizetést, így visszakerült {amount} {label}',
   'storage.h.move': 'áthelyezett {amount} {label}',
   'storage.h.movedIn': 'áthozott {amount} {label} innen: {other}',
   'storage.h.movedOut': 'átvitt {amount} {label} ide: {other}',

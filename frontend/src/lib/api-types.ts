@@ -2373,7 +2373,7 @@ export interface StorageSearchResult {
 
 export interface StorageMovement {
   id: string;
-  kind: 'add' | 'take' | 'set' | 'move' | 'remove';
+  kind: 'add' | 'take' | 'set' | 'move' | 'remove' | 'return';
   label: string;
   amount: string;
   before: string | null;

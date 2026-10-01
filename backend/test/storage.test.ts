@@ -256,6 +256,50 @@ describe('storage held to the treasury', () => {
     expect(await db.select().from(payouts).where(eq(payouts.factionId, w.faction.id))).toHaveLength(0);
   });
 
+  const deletePayout = (payoutId: string) =>
+    api().delete(`/api/v1/factions/${w.faction.id}/payouts/${payoutId}`).set('Cookie', w.admin.cookie);
+  const pistolsIn = async (containerId: string) => {
+    const results = (await api().get(`${base()}/search?q=pistol`).set('Cookie', w.admin.cookie)).body.data.results;
+    return results.find((r: { containerId: string }) => r.containerId === containerId)?.quantity ?? null;
+  };
+
+  // A withdrawal that is deleted never happened: the pistols are back in the chest.
+  it('puts the items back when the withdrawal is deleted', async () => {
+    const line = await add(bench, { itemTypeId: pistol, quantity: '10' });
+    const taken = await change(line.body.data.id, { delta: '-3' });
+    expect(await pistolsIn(bench)).toBe('7.00');
+
+    expect((await deletePayout(taken.body.data.withdrawal.id)).status).toBe(200);
+    expect(await pistolsIn(bench)).toBe('10.00');
+
+    const history = (await api().get(`${base()}/containers/${bench}/history`).set('Cookie', w.admin.cookie)).body.data.history;
+    expect(history[0]).toMatchObject({ kind: 'return', amount: '3.00' });
+  });
+
+  it('brings a removed line back, and never returns the same withdrawal twice', async () => {
+    const line = await add(bench, { itemTypeId: pistol, quantity: '4' });
+    const taken = await change(line.body.data.id, { delta: '-4' });
+    await api().delete(`${base()}/contents/${line.body.data.id}`).set('Cookie', w.admin.cookie);
+    expect(await pistolsIn(bench)).toBeNull();
+
+    await deletePayout(taken.body.data.withdrawal.id);
+    expect(await pistolsIn(bench)).toBe('4.00');
+    // Deleting it again changes nothing.
+    await deletePayout(taken.body.data.withdrawal.id);
+    expect(await pistolsIn(bench)).toBe('4.00');
+  });
+
+  it('copes with the container being gone', async () => {
+    const line = await add(chest!, { itemTypeId: pistol, quantity: '5' });
+    const taken = await change(line.body.data.id, { delta: '-2' });
+    const roomId = (await api().get(`${base()}/rooms`).set('Cookie', w.admin.cookie)).body.data.rooms[0].id;
+    await api().put(`${base()}/rooms/${roomId}/layout`).set('Cookie', w.admin.cookie).send({
+      width: 10, height: 6, tiles: [], containers: [{ id: bench, kind: 'bench', name: 'Bench', x: 1, y: 1, w: 1, h: 1 }],
+    });
+    expect((await deletePayout(taken.body.data.withdrawal.id)).status).toBe(200);
+    expect(await pistolsIn(bench)).toBeNull();
+  });
+
   it('can be switched off by whoever manages storage', async () => {
     expect((await api().patch(`${base()}/settings`).set('Cookie', w.member.cookie).send({ linked: false })).status).toBe(403);
     expect((await api().patch(`${base()}/settings`).set('Cookie', w.admin.cookie).send({ linked: false })).status).toBe(200);

@@ -1848,6 +1848,7 @@ export const en = {
   'storage.h.take': 'took {amount} {label}',
   'storage.h.set': 'corrected {label} (changed by {amount}, was {before})',
   'storage.h.remove': 'removed {label} ({amount})',
+  'storage.h.return': 'deleted a withdrawal, so {amount} {label} came back',
   'storage.h.move': 'moved {amount} {label}',
   'storage.h.movedIn': 'brought {amount} {label} from {other}',
   'storage.h.movedOut': 'moved {amount} {label} to {other}',

@@ -519,7 +519,8 @@ items:
   means at most 20 pistols across all containers;
 - **taking something out** (−, or *Take*) is a **withdrawal** from the treasury
   made out to you, shown on the Withdrawals page and in the container's
-  history;
+  history. If that withdrawal is later **deleted** on the Withdrawals page,
+  the items go back into the container they came from;
 - **moving** between containers, **It is exactly this** corrections down, and
   removing a line only say where things are — no withdrawal;
 - things typed in by name instead of picked from the faction's items are never

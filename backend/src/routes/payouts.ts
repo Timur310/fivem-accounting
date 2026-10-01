@@ -12,6 +12,7 @@ import { requireFactionMember, requirePermission } from '../middleware/factionAc
 import { requireModule } from '../lib/modules.js';
 import { createAuditLog } from '../lib/audit.js';
 import { ledgerHoldMessage } from '../lib/ledgerHold.js';
+import { restoreStorageWithdrawal } from '../lib/storageRestore.js';
 import { dispatchDiscord } from '../lib/discordDispatch.js';
 import { notify } from '../lib/notify.js';
 import { buildWhere } from '../lib/query.js';
@@ -529,6 +530,7 @@ router.patch('/:payoutId', requirePermission('manage_payouts'), async (req: Requ
       if (updates.status === 'rejected') {
         await tx.update(shifts).set({ payoutId: null }).where(eq(shifts.payoutId, payoutId));
         await tx.update(entries).set({ commissionPayoutId: null }).where(eq(entries.commissionPayoutId, payoutId));
+        await restoreStorageWithdrawal(tx, payoutId, req.user!.id);
       }
 
       await createAuditLog({
@@ -669,6 +671,8 @@ router.delete('/:payoutId', async (req: Request, res: Response) => {
       // Same for a deleted one: its shifts go back to waiting for payroll.
       await tx.update(shifts).set({ payoutId: null }).where(eq(shifts.payoutId, payoutId));
       await tx.update(entries).set({ commissionPayoutId: null }).where(eq(entries.commissionPayoutId, payoutId));
+      // A storage withdrawal that did not happen: the items go back.
+      await restoreStorageWithdrawal(tx, payoutId, req.user!.id);
 
       await createAuditLog({
         userId: req.user!.id,

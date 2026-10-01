@@ -2085,7 +2085,8 @@ export const storageContents = pgTable('storage_contents', {
 }));
 
 /** What happened to a count. */
-export const STORAGE_MOVEMENT_KINDS = ['add', 'take', 'set', 'move', 'remove'] as const;
+/** `return`: a deleted storage withdrawal put back where it was taken from. */
+export const STORAGE_MOVEMENT_KINDS = ['add', 'take', 'set', 'move', 'remove', 'return'] as const;
 export type StorageMovementKind = (typeof STORAGE_MOVEMENT_KINDS)[number];
 
 /**
